@@ -3,7 +3,10 @@ import { useAuth } from "../context/AuthContext";
 
 export default function Sidebar() {
   const { auth } = useAuth();
-  const role = auth.user.role;
+  const role = auth.user?.role;
+
+  // Dynamic label for tasks tab
+  const tasksLabel = role === "user" ? "My Tasks" : "Tasks";
 
   const isAdmin = role === "admin";
   const isManager = role === "manager";
@@ -14,7 +17,6 @@ export default function Sidebar() {
       <h1 className="text-xl font-bold mb-6 text-slate-800">TaskManager</h1>
 
       <nav className="flex-1 space-y-1">
-
         {(isAdmin || isManager) && (
           <NavLink
             to="/dashboard"
@@ -39,6 +41,7 @@ export default function Sidebar() {
           Projects
         </NavLink>
 
+        {/* ✅ Same route as before, only label is dynamic */}
         <NavLink
           to="/my-tasks"
           className={({ isActive }) =>
@@ -47,7 +50,7 @@ export default function Sidebar() {
             }`
           }
         >
-          My Tasks
+          {tasksLabel}
         </NavLink>
 
         <NavLink

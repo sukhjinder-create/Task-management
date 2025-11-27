@@ -8,6 +8,8 @@ import toast from "react-hot-toast";
 
 function formatType(type) {
   switch (type) {
+    case "project_assigned":
+      return "Project assigned";
     case "task_assigned":
       return "Task assigned";
     case "task_updated":
@@ -31,7 +33,6 @@ export default function Notifications() {
   const [marking, setMarking] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
 
-  // load initial list
   useEffect(() => {
     async function loadNotifications() {
       setLoading(true);
@@ -50,22 +51,15 @@ export default function Notifications() {
     loadNotifications();
   }, []);
 
-  // setup socket
   useEffect(() => {
     let socket = getSocket();
     if (!socket && auth.token) {
       socket = initSocket(auth.token);
     }
-
     if (!socket) return;
 
-    socket.on("connect", () => {
-      setSocketConnected(true);
-    });
-
-    socket.on("disconnect", () => {
-      setSocketConnected(false);
-    });
+    socket.on("connect", () => setSocketConnected(true));
+    socket.on("disconnect", () => setSocketConnected(false));
 
     const handler = (notif) => {
       setNotifications((prev) => [notif, ...prev]);
@@ -92,7 +86,7 @@ export default function Notifications() {
       toast.error(msg);
     } finally {
       setMarking(false);
-    };
+    }
   };
 
   const handleMarkOneRead = async (id) => {
@@ -104,22 +98,24 @@ export default function Notifications() {
       );
     } catch (err) {
       console.error(err);
-      toast.error("Failed to update notification");
     }
   };
 
   const handleOpen = async (notif) => {
-    // Mark read when opened
     if (!notif.is_read) {
       await handleMarkOneRead(notif.id);
     }
 
-    // Navigate based on data
-    if (notif.project_id) {
-      // go to project page (tasks + comments)
+    if (notif.task_id) {
+      // we don't have dedicated task detail page, so just go to project page
+      if (notif.project_id) {
+        navigate(`/projects/${notif.project_id}`);
+      } else {
+        navigate("/my-tasks");
+      }
+    } else if (notif.project_id) {
       navigate(`/projects/${notif.project_id}`);
     } else {
-      // default -> dashboard
       navigate("/");
     }
   };

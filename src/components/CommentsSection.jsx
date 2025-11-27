@@ -1,111 +1,100 @@
+// src/components/CommentsSection.jsx
 import { useEffect, useState } from "react";
 import { useApi } from "../api";
-import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 
 export default function CommentsSection({ taskId }) {
   const api = useApi();
-  const { auth } = useAuth();
-
   const [comments, setComments] = useState([]);
+  const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [error, setError] = useState("");
-  const [newComment, setNewComment] = useState("");
-  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    async function fetchComments() {
+    async function load() {
+      setLoading(true);
       try {
-        setLoading(true);
         const res = await api.get(`/comments/${taskId}`);
         setComments(res.data || []);
       } catch (err) {
         console.error(err);
-        setError(err.response?.data?.error || "Failed to load comments");
       } finally {
         setLoading(false);
       }
     }
-    fetchComments();
-  }, [open, taskId]);
+    load();
+  }, [taskId, api]);
 
-  const handleAddComment = async (e) => {
+  const handleAdd = async (e) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    // ❗️Important: don't let this click bubble to the card
+    e.stopPropagation();
+
+    if (!text.trim()) return;
     setAdding(true);
-    setError("");
     try {
-      const res = await api.post("/comments", {
-        task_id: taskId,
-        comment_text: newComment.trim(),
-        added_by: auth.user.username,
+      const res = await api.post(`/comments/${taskId}`, {
+        comment_text: text,
       });
-      setComments((prev) => [res.data, ...prev]);
-      setNewComment("");
+      setComments((prev) => [...prev, res.data]);
+      setText("");
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || "Failed to add comment");
+      const msg = err.response?.data?.error || "Failed to add comment";
+      toast.error(msg);
     } finally {
       setAdding(false);
     }
   };
 
   return (
-    <div className="mt-2">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="text-xs text-blue-600 hover:underline"
-      >
-        {open ? "Hide comments" : `Comments (${comments.length})`}
-      </button>
-
-      {open && (
-        <div className="mt-2 border-t border-slate-100 pt-2">
-          {error && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1 mb-2">
-              {error}
+    <div
+      className="mt-2 border-t border-slate-100 pt-2"
+      // also block any clicks inside this area from triggering card onClick
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="text-[11px] font-semibold mb-1">Comments</div>
+      {loading ? (
+        <div className="text-[11px] text-slate-400">Loading comments...</div>
+      ) : comments.length === 0 ? (
+        <div className="text-[11px] text-slate-400">No comments yet.</div>
+      ) : (
+        <div className="space-y-1 mb-2 max-h-40 overflow-y-auto">
+          {comments.map((c) => (
+            <div key={c.id} className="text-[11px]">
+              <span className="font-semibold">{c.username}:</span>{" "}
+              <span>{c.comment_text}</span>
+              <span className="text-[9px] text-slate-400 ml-1">
+                {c.created_at
+                  ? new Date(c.created_at).toLocaleString()
+                  : ""}
+              </span>
             </div>
-          )}
-
-          {loading ? (
-            <div className="text-xs text-slate-500">Loading comments...</div>
-          ) : comments.length === 0 ? (
-            <div className="text-xs text-slate-500">No comments yet.</div>
-          ) : (
-            <div className="space-y-1 mb-2 max-h-40 overflow-y-auto">
-              {comments.map((c) => (
-                <div key={c.id} className="text-xs border border-slate-100 rounded px-2 py-1">
-                  <div>{c.comment_text}</div>
-                  <div className="text-[10px] text-slate-400">
-                    by {c.added_by} •{" "}
-                    {c.created_at
-                      ? new Date(c.created_at).toLocaleString()
-                      : ""}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <form onSubmit={handleAddComment} className="flex gap-1">
-            <input
-              type="text"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
-              className="flex-1 border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              disabled={adding}
-              className="text-xs bg-blue-600 text-white rounded-lg px-2 py-1 hover:bg-blue-700 disabled:opacity-50"
-            >
-              {adding ? "..." : "Add"}
-            </button>
-          </form>
+          ))}
         </div>
       )}
+
+      <form
+        onSubmit={handleAdd}
+        className="flex gap-1"
+        // extra safety: clicks in form don't bubble to card
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Add a comment..."
+          className="flex-1 border rounded-lg px-2 py-1 text-[11px]"
+        />
+        <button
+          type="submit"
+          disabled={adding}
+          className="text-[11px] border border-slate-300 rounded px-2 py-1 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {adding ? "Adding..." : "Add"}
+        </button>
+      </form>
     </div>
   );
 }

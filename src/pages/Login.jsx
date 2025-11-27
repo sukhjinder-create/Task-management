@@ -29,10 +29,15 @@ export default function Login() {
         password,
       });
 
-      // res.data should be: { token, user }
-      login(res.data);
-      toast.success(`Logged in as ${res.data.user.username}`);
-      navigate("/");
+      // Backend returns: { token, user }
+      const { token, user } = res.data;
+
+      // ✅ Pass correct arguments to AuthContext
+      login(user, token);
+
+      toast.success(`Logged in as ${user.username}`);
+      // ✅ Go straight to projects (your main working page)
+      navigate("/projects", { replace: true });
     } catch (err) {
       console.error("Login error:", err);
       const msg = err.response?.data?.error || "Login failed";

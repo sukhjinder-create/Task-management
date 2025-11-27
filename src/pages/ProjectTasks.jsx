@@ -1,134 +1,153 @@
 // src/pages/ProjectTasks.jsx
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
-import CommentsSection from "../components/CommentsSection.jsx";
 import toast from "react-hot-toast";
+import CommentsSection from "../components/CommentsSection.jsx";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 
-const STATUS_OPTIONS = ["pending", "in-progress", "completed"];
+const STATUS_COLUMNS = ["pending", "in-progress", "completed"];
 
-function isTaskOverdue(task) {
-  if (!task.due_date) return false;
-  if (task.status === "completed") return false;
-  const due = new Date(task.due_date);
-  const today = new Date();
-  const dueDateOnly = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  const todayOnly = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
-  return dueDateOnly < todayOnly;
+function statusLabel(status) {
+  if (status === "pending") return "Pending";
+  if (status === "in-progress") return "In Progress";
+  if (status === "completed") return "Completed";
+  return status;
 }
+
+// Simple Quill config – no custom handlers (keeps things stable)
+const quillModules = {
+  toolbar: [
+    [{ header: [1, 2, 3, false] }],
+    ["bold", "italic", "underline"],
+    [{ list: "ordered" }, { list: "bullet" }],
+    ["link", "image"],
+    ["clean"],
+  ],
+};
+
+const quillFormats = [
+  "header",
+  "bold",
+  "italic",
+  "underline",
+  "list",
+  "bullet",
+  "link",
+  "image",
+];
 
 export default function ProjectTasks() {
   const { projectId } = useParams();
   const api = useApi();
   const { auth } = useAuth();
+  const user = auth.user;
+  const role = user?.role;
 
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loadingProject, setLoadingProject] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(true);
-  const [error, setError] = useState("");
 
-  const [statusFilter, setStatusFilter] = useState("");
-  const [assignedToFilter, setAssignedToFilter] = useState("");
-  const [overdueFilter, setOverdueFilter] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const [newTask, setNewTask] = useState({
     task: "",
-    status: "pending",
-    assigned_to: "",
+    description: "",
     due_date: "",
+    assigned_to: "",
   });
-  const [creating, setCreating] = useState(false);
 
-  const [users, setUsers] = useState([]);
-  const [canSeeUsers, setCanSeeUsers] = useState(true);
+  const [selectedTaskForComments, setSelectedTaskForComments] =
+    useState(null);
 
-  const [draggedTaskId, setDraggedTaskId] = useState(null);
-  const [viewMode, setViewMode] = useState("board"); // "board" | "list"
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
 
-  const role = auth.user.role;
-  const isAdmin = role === "admin";
-  const isManager = role === "manager";
-  const isUser = role === "user";
+  // Attachments panel state for existing tasks
+  const [attachments, setAttachments] = useState([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
-  const canManageTasks = isAdmin || isManager;
+  // Admin edit state (full CRUD in UI)
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTask, setEditTask] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
-  // 🔹 Helper: show username instead of raw UUID
-  const getAssigneeLabel = (task) => {
-    if (!task.assigned_to) return "Unassigned";
-    const user = users.find((u) => u.id === task.assigned_to);
-    if (!user) return task.assigned_to; // fallback to UUID if user isn't loaded
-    return `${user.username} (${user.role})`;
-  };
+  const canEdit = role === "admin" || role === "manager"; // user just sees tasks here
 
-  // Fetch project
+  // ===== Load project + tasks =====
   useEffect(() => {
-    async function fetchProject() {
+    async function loadProject() {
+      setLoadingProject(true);
       try {
         const res = await api.get(`/projects/${projectId}`);
         setProject(res.data);
       } catch (err) {
-        console.error(err);
-        const msg = err.response?.data?.error || "Failed to load project";
-        setError(msg);
-        toast.error(msg);
+        console.error("Error fetching project:", err);
+        toast.error("Failed to load project");
       } finally {
         setLoadingProject(false);
       }
     }
-    fetchProject();
-  }, [projectId]);
 
-  // Fetch users (for assigning / labels). If 403 -> just hide list and show raw id.
+    async function loadTasks() {
+      setLoadingTasks(true);
+      try {
+        const res = await api.get(`/tasks/${projectId}`);
+        setTasks(res.data || []);
+      } catch (err) {
+        console.error("Error fetching tasks:", err);
+        toast.error("Failed to load tasks");
+      } finally {
+        setLoadingTasks(false);
+      }
+    }
+
+    if (projectId) {
+      loadProject();
+      loadTasks();
+    }
+  }, [projectId, api]);
+
+  // ===== Load users for assignment (admin/manager only) =====
   useEffect(() => {
-    async function fetchUsers() {
+    if (!canEdit) return;
+
+    async function loadUsers() {
+      setLoadingUsers(true);
       try {
         const res = await api.get("/users");
         setUsers(res.data || []);
-        setCanSeeUsers(true);
       } catch (err) {
-        console.warn(
-          "Could not load users (probably not admin/manager):",
-          err?.response?.status
-        );
-        setCanSeeUsers(false);
+        console.error("Error fetching users:", err);
+        toast.error("Failed to load users for assignment");
+      } finally {
+        setLoadingUsers(false);
       }
     }
-    fetchUsers();
-  }, []);
 
-  async function loadTasks() {
-    setLoadingTasks(true);
-    setError("");
-    try {
-      const params = {};
-      if (statusFilter) params.status = statusFilter;
-      if (assignedToFilter) params.assigned_to = assignedToFilter;
-      if (overdueFilter) params.overdue = true;
+    loadUsers();
+  }, [canEdit, api]);
 
-      const res = await api.get(`/tasks/${projectId}`, { params });
-      setTasks(res.data || []);
-    } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Failed to load tasks";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoadingTasks(false);
+  const grouped = useMemo(() => {
+    const result = {
+      pending: [],
+      "in-progress": [],
+      completed: [],
+    };
+    for (const t of tasks) {
+      if (!result[t.status]) result[t.status] = [];
+      result[t.status].push(t);
     }
-  }
+    return result;
+  }, [tasks]);
 
-  // initial + on filters change
-  useEffect(() => {
-    loadTasks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, assignedToFilter, overdueFilter, projectId]);
-
+  // ===== Create task form handlers =====
   const handleNewTaskChange = (e) => {
     const { name, value } = e.target;
     setNewTask((prev) => ({
@@ -137,312 +156,269 @@ export default function ProjectTasks() {
     }));
   };
 
+  const handleDescriptionChange = (value) => {
+    setNewTask((prev) => ({
+      ...prev,
+      description: value,
+    }));
+  };
+
   const handleCreateTask = async (e) => {
     e.preventDefault();
-    if (!canManageTasks) {
-      toast.error("You don't have permission to create tasks.");
+    if (!newTask.task.trim()) {
+      toast.error("Task title is required");
       return;
     }
-    if (!newTask.task.trim()) return;
 
     setCreating(true);
-    setError("");
     try {
-      const body = {
-        task: newTask.task,
-        project_id: projectId,
-        status: newTask.status,
-        added_by: auth.user.username,
-        assigned_to: newTask.assigned_to || undefined,
-        due_date: newTask.due_date || undefined,
+      const payload = {
+        task: newTask.task.trim(),
+        description: newTask.description,
+        due_date: newTask.due_date || null,
+        assigned_to: newTask.assigned_to || null,
       };
 
-      const res = await api.post("/tasks", body);
-      setTasks((prev) => [res.data, ...prev]);
+      const res = await api.post(`/tasks/${projectId}`, payload);
+      const created = res.data;
+
+      setTasks((prev) => [created, ...prev]);
       setNewTask({
         task: "",
-        status: "pending",
-        assigned_to: "",
+        description: "",
         due_date: "",
+        assigned_to: "",
       });
+
       toast.success("Task created");
     } catch (err) {
-      console.error(err);
-      const msg =
-        err.response?.data?.error ||
-        "Failed to create task (check assigned_to / permissions)";
-      setError(msg);
+      console.error("Error creating task:", err);
+      const msg = err.response?.data?.error || "Failed to create task";
       toast.error(msg);
     } finally {
       setCreating(false);
     }
   };
 
-  const handleMarkCompleted = async (task) => {
-    const isMine = task.assigned_to === auth.user.id;
-
-    if (!canManageTasks && !(isUser && isMine)) {
-      toast.error("You don't have permission to update this task.");
-      return;
-    }
-
+  // ===== Status change from board =====
+  const handleStatusChange = async (taskId, newStatus) => {
     try {
-      const res = await api.put(`/tasks/${task.id}`, {
-        task: task.task,
-        status: "completed",
-        assigned_to: task.assigned_to || null,
-        due_date: task.due_date || null,
-      });
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? res.data : t)));
-      toast.success("Task marked as completed");
+      const res = await api.put(`/tasks/${taskId}`, { status: newStatus });
+      const updated = res.data;
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? updated : t))
+      );
+      setSelectedTaskDetails((prev) =>
+        prev && prev.id === taskId ? { ...prev, status: newStatus } : prev
+      );
     } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Failed to update task";
-      setError(msg);
+      console.error("Failed to update status:", err);
+      const msg =
+        err.response?.data?.error || "Failed to update status";
       toast.error(msg);
     }
   };
 
-  const handleDeleteTask = async (task) => {
-    if (!canManageTasks) {
-      toast.error("You don't have permission to delete tasks.");
-      return;
-    }
-    if (!window.confirm("Delete this task?")) return;
+  // ===== Attachments for selected task =====
+  const loadAttachmentsForTask = async (taskId) => {
+    setLoadingAttachments(true);
+    setAttachments([]);
     try {
-      await api.delete(`/tasks/${task.id}`);
-      setTasks((prev) => prev.filter((t) => t.id !== task.id));
-      toast.success("Task deleted");
+      const res = await api.get(`/tasks/${taskId}/attachments`);
+      setAttachments(res.data || []);
     } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Failed to delete task";
-      setError(msg);
-      toast.error(msg);
+      console.error("Failed to load attachments:", err);
+      toast.error("Failed to load attachments");
+    } finally {
+      setLoadingAttachments(false);
     }
   };
 
-  // Kanban drag handlers
-  const handleDragStart = (taskId) => {
-    setDraggedTaskId(taskId);
+  const handleCardClick = (task) => {
+    setSelectedTaskDetails(task);
+    setIsEditing(false);
+    setEditTask({
+      task: task.task || "",
+      status: task.status || "pending",
+      assigned_to: task.assigned_to || "",
+      due_date: task.due_date ? task.due_date.slice(0, 10) : "",
+      description: task.description || "",
+    });
+    loadAttachmentsForTask(task.id);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const handleDropOnColumn = async (newStatus) => {
-    if (!draggedTaskId) return;
-    const task = tasks.find((t) => t.id === draggedTaskId);
-    if (!task) return;
-
-    const isMine = task.assigned_to === auth.user.id;
-
-    if (!canManageTasks && !(isUser && isMine)) {
-      toast.error("You don't have permission to move this task.");
-      setDraggedTaskId(null);
+  const handleUploadAttachment = async () => {
+    if (!selectedTaskDetails) return;
+    if (!uploadFile) {
+      toast.error("Please select a file first");
       return;
     }
-
-    if (task.status === newStatus) {
-      setDraggedTaskId(null);
-      return;
-    }
-
+    setUploading(true);
     try {
-      const res = await api.put(`/tasks/${task.id}`, {
-        task: task.task,
-        status: newStatus,
-        assigned_to: task.assigned_to || null,
-        due_date: task.due_date || null,
-      });
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? res.data : t)));
-      toast.success(`Task moved to "${newStatus}"`);
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+      await api.post(
+        `/tasks/${selectedTaskDetails.id}/attachments`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      setUploadFile(null);
+      await loadAttachmentsForTask(selectedTaskDetails.id);
+      toast.success("Attachment uploaded");
     } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Failed to move task";
-      setError(msg);
+      console.error("Failed to upload attachment:", err);
+      const msg =
+        err.response?.data?.error || "Failed to upload attachment";
       toast.error(msg);
     } finally {
-      setDraggedTaskId(null);
+      setUploading(false);
     }
   };
 
-  // dashboard stats
-  const { totalTasks, pendingCount, inProgressCount, completedCount, overdueCount } =
-    useMemo(() => {
-      const total = tasks.length;
-      let pending = 0;
-      let inProgress = 0;
-      let completed = 0;
-      let overdue = 0;
+  // ===== Admin edit handlers (full CRUD in UI) =====
+  const handleEditFieldChange = (e) => {
+    const { name, value } = e.target;
+    setEditTask((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
-      tasks.forEach((t) => {
-        if (t.status === "pending") pending++;
-        else if (t.status === "in-progress") inProgress++;
-        else if (t.status === "completed") completed++;
-
-        if (isTaskOverdue(t)) overdue++;
-      });
-
-      return {
-        totalTasks: total,
-        pendingCount: pending,
-        inProgressCount: inProgress,
-        completedCount: completed,
-        overdueCount: overdue,
+  const handleSaveEdit = async () => {
+    if (!selectedTaskDetails || !editTask) return;
+    setSavingEdit(true);
+    try {
+      const payload = {
+        task: editTask.task,
+        status: editTask.status,
+        assigned_to: editTask.assigned_to || null,
+        due_date: editTask.due_date || null,
+        description: editTask.description,
       };
-    }, [tasks]);
+      const res = await api.put(`/tasks/${selectedTaskDetails.id}`, payload);
+      const updated = res.data;
 
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
-      if (statusFilter && t.status !== statusFilter) return false;
-      if (assignedToFilter && t.assigned_to !== assignedToFilter) return false;
-      if (overdueFilter && !isTaskOverdue(t)) return false;
-      return true;
-    });
-  }, [tasks, statusFilter, assignedToFilter, overdueFilter]);
+      setTasks((prev) =>
+        prev.map((t) => (t.id === updated.id ? updated : t))
+      );
+      setSelectedTaskDetails(updated);
+      setIsEditing(false);
+      toast.success("Task updated");
+    } catch (err) {
+      console.error("Failed to save task:", err);
+      const msg = err.response?.data?.error || "Failed to save task";
+      toast.error(msg);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
-  const columns = [
-    { key: "pending", label: "Pending" },
-    { key: "in-progress", label: "In Progress" },
-    { key: "completed", label: "Completed" },
-  ];
+  const handleDeleteTask = async () => {
+    if (!selectedTaskDetails) return;
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
+
+    try {
+      await api.delete(`/tasks/${selectedTaskDetails.id}`);
+      setTasks((prev) =>
+        prev.filter((t) => t.id !== selectedTaskDetails.id)
+      );
+      setSelectedTaskDetails(null);
+      setAttachments([]);
+      toast.success("Task deleted");
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+      const msg = err.response?.data?.error || "Failed to delete task";
+      toast.error(msg);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* PROJECT HEADER */}
+      {/* Header */}
       <section className="bg-white rounded-xl shadow p-4 flex justify-between items-center">
         <div>
           <h1 className="text-lg font-semibold">
-            {loadingProject ? "Loading project..." : project?.name || "Project"}
+            {loadingProject
+              ? "Loading project..."
+              : project?.name || "Project"}
           </h1>
           <p className="text-xs text-slate-500">
-            Role: {role} • Tasks in this project only
+            Manage tasks for this project. New tasks are created in
+            &quot;pending&quot; status by default.
           </p>
         </div>
-        <div className="text-xs space-x-2">
-          <button
-            onClick={() => setViewMode("board")}
-            className={`px-3 py-1 rounded-lg border text-xs ${
-              viewMode === "board"
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-slate-700 border-slate-300"
-            }`}
-          >
-            Kanban
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={`px-3 py-1 rounded-lg border text-xs ${
-              viewMode === "list"
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-slate-700 border-slate-300"
-            }`}
-          >
-            List
-          </button>
-        </div>
       </section>
 
-      {/* DASHBOARD STATS */}
-      <section className="bg-white rounded-xl shadow p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-        <div>
-          <div className="text-slate-500">Total tasks</div>
-          <div className="text-lg font-semibold">{totalTasks}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Pending</div>
-          <div className="text-lg font-semibold">{pendingCount}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">In progress</div>
-          <div className="text-lg font-semibold">{inProgressCount}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Completed</div>
-          <div className="text-lg font-semibold">{completedCount}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Overdue</div>
-          <div className="text-lg font-semibold text-red-600">
-            {overdueCount}
-          </div>
-        </div>
-      </section>
-
-      {/* CREATE TASK – ONLY ADMIN/MANAGER */}
-      {canManageTasks && (
+      {/* Create Task Form (admins + managers only) */}
+      {canEdit && (
         <section className="bg-white rounded-xl shadow p-4">
           <h2 className="text-sm font-semibold mb-3">Create Task</h2>
-          <form onSubmit={handleCreateTask} className="grid md:grid-cols-4 gap-3">
-            <div className="md:col-span-2">
+          <form
+            onSubmit={handleCreateTask}
+            className="grid md:grid-cols-2 gap-4 text-sm"
+          >
+            <div className="space-y-2">
+              <label className="block text-xs">Task title</label>
               <input
                 type="text"
                 name="task"
-                placeholder="Task description"
                 value={newTask.task}
                 onChange={handleNewTaskChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="Enter task title"
               />
-            </div>
 
-            <div>
-              <select
-                name="status"
-                value={newTask.status}
-                onChange={handleNewTaskChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
+              <label className="block text-xs mt-3">Due date</label>
               <input
                 type="date"
                 name="due_date"
                 value={newTask.due_date}
                 onChange={handleNewTaskChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
               />
+
+              <label className="block text-xs mt-3">Assign to</label>
+              <select
+                name="assigned_to"
+                value={newTask.assigned_to}
+                onChange={handleNewTaskChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">Unassigned</option>
+                {loadingUsers ? (
+                  <option disabled>Loading users...</option>
+                ) : (
+                  users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.username} ({u.email})
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
 
-            <div className="md:col-span-2">
-              {canSeeUsers && users.length > 0 ? (
-                <select
-                  name="assigned_to"
-                  value={newTask.assigned_to}
-                  onChange={handleNewTaskChange}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Unassigned</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.username} ({u.role})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  name="assigned_to"
-                  placeholder="Assigned to (user id, optional)"
-                  value={newTask.assigned_to}
-                  onChange={handleNewTaskChange}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <div className="space-y-2 md:col-span-1">
+              <label className="block text-xs mb-1">Description</label>
+              <div className="border rounded-lg">
+                <ReactQuill
+                  theme="snow"
+                  value={newTask.description}
+                  onChange={handleDescriptionChange}
+                  className="text-sm min-h-[160px]"
+                  placeholder="Describe the task..."
+                  modules={quillModules}
+                  formats={quillFormats}
                 />
-              )}
+              </div>
             </div>
 
             <div className="md:col-span-2 flex justify-end">
               <button
                 type="submit"
                 disabled={creating}
-                className="bg-blue-600 text-white text-sm rounded-lg px-4 py-2 hover:bg-blue-700 disabled:opacity-50"
+                className="bg-blue-600 text-white text-xs rounded-lg px-4 py-2 hover:bg-blue-700 disabled:opacity-50"
               >
                 {creating ? "Creating..." : "Create Task"}
               </button>
@@ -451,211 +427,288 @@ export default function ProjectTasks() {
         </section>
       )}
 
-      {/* FILTERS */}
-      <section className="bg-white rounded-xl shadow p-4 flex flex-wrap gap-3 items-center">
-        <span className="text-sm font-semibold mr-2">Filters:</span>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border rounded-lg px-3 py-1 text-sm"
-        >
-          <option value="">All statuses</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        {canSeeUsers && users.length > 0 ? (
-          <select
-            value={assignedToFilter}
-            onChange={(e) => setAssignedToFilter(e.target.value)}
-            className="border rounded-lg px-3 py-1 text-sm"
-          >
-            <option value="">All assignees</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.username} ({u.role})
-              </option>
-            ))}
-          </select>
+      {/* Tasks Board */}
+      <section className="bg-white rounded-xl shadow p-4">
+        <h2 className="text-sm font-semibold mb-3">Tasks</h2>
+        {loadingTasks ? (
+          <div className="text-sm text-slate-500">Loading tasks...</div>
+        ) : tasks.length === 0 ? (
+          <div className="text-sm text-slate-500">
+            No tasks for this project yet.
+          </div>
         ) : (
-          <input
-            type="text"
-            placeholder="Assigned to (user id)"
-            value={assignedToFilter}
-            onChange={(e) => setAssignedToFilter(e.target.value)}
-            className="border rounded-lg px-3 py-1 text-sm"
-          />
-        )}
-
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={overdueFilter}
-            onChange={(e) => setOverdueFilter(e.target.checked)}
-          />
-          Overdue only
-        </label>
-
-        <button
-          onClick={loadTasks}
-          className="ml-auto text-xs border border-slate-300 rounded-lg px-3 py-1 hover:bg-slate-50"
-        >
-          Refresh
-        </button>
-      </section>
-
-      {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {error}
-        </div>
-      )}
-
-      {/* VIEW: KANBAN or LIST */}
-      {viewMode === "board" ? (
-        <section className="bg-white rounded-xl shadow p-4">
-          <h2 className="text-sm font-semibold mb-3">Kanban Board</h2>
           <div className="grid md:grid-cols-3 gap-3">
-            {columns.map((col) => (
+            {STATUS_COLUMNS.map((status) => (
               <div
-                key={col.key}
+                key={status}
                 className="border border-slate-200 rounded-lg min-h-[200px] p-2 bg-slate-50"
-                onDragOver={handleDragOver}
-                onDrop={() => handleDropOnColumn(col.key)}
               >
-                <div className="text-xs font-semibold mb-2 flex justify-between items-center">
-                  <span>{col.label}</span>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold">
+                    {statusLabel(status)}
+                  </span>
                   <span className="text-[10px] text-slate-500">
-                    {
-                      filteredTasks.filter((t) => t.status === col.key).length
-                    }{" "}
-                    tasks
+                    {grouped[status]?.length || 0} tasks
                   </span>
                 </div>
-                <div className="space-y-2">
-                  {filteredTasks
-                    .filter((t) => t.status === col.key)
-                    .map((t) => {
-                      const overdue = isTaskOverdue(t);
-                      const isMine = t.assigned_to === auth.user.id;
-                      const canDrag =
-                        canManageTasks || (isUser && isMine);
 
-                      return (
-                        <div
-                          key={t.id}
-                          draggable={canDrag}
-                          onDragStart={() => handleDragStart(t.id)}
-                          className={`border rounded-lg px-2 py-2 text-xs cursor-grab ${
-                            overdue
-                              ? "border-red-300 bg-red-50"
-                              : "border-slate-200 bg-white"
-                          }`}
-                        >
-                          <div className="font-medium text-[11px] flex items-center gap-1">
-                            {t.task}
-                            {overdue && (
-                              <span className="text-[9px] text-red-700 border border-red-300 bg-red-50 rounded px-1">
-                                Overdue
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            Assigned: {getAssigneeLabel(t)}
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            {t.due_date && (
-                              <>Due: {new Date(t.due_date).toLocaleDateString()}</>
-                            )}
-                          </div>
+                <div className="space-y-2">
+                  {grouped[status]?.map((t) => (
+                    <div
+                      key={t.id}
+                      className="border border-slate-200 rounded-lg px-2 py-2 bg-white text-xs cursor-pointer hover:bg-slate-50"
+                      onClick={() => handleCardClick(t)}
+                    >
+                      <div className="font-medium text-[11px]">
+                        {t.task}
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Status: {statusLabel(t.status)}
+                      </div>
+                      {t.due_date && (
+                        <div className="text-[10px] text-slate-400">
+                          Due:{" "}
+                          {new Date(t.due_date).toLocaleDateString()}
                         </div>
-                      );
-                    })}
+                      )}
+                      {t.assigned_to && (
+                        <div className="text-[10px] text-slate-400">
+                          Assigned to: {t.assigned_to}
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center mt-2">
+                        {canEdit && (
+                          <select
+                            className="border rounded px-2 py-1 text-[10px]"
+                            value={t.status}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleStatusChange(t.id, e.target.value);
+                            }}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="in-progress">In progress</option>
+                            <option value="completed">Completed</option>
+                          </select>
+                        )}
+                        <button
+                          className="text-[10px] text-blue-600 underline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTaskForComments(
+                              selectedTaskForComments === t.id
+                                ? null
+                                : t.id
+                            );
+                          }}
+                        >
+                          {selectedTaskForComments === t.id
+                            ? "Hide comments"
+                            : "Comments"}
+                        </button>
+                      </div>
+
+                      {selectedTaskForComments === t.id && (
+                        <div className="mt-2 border-t pt-2">
+                          <CommentsSection taskId={t.id} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
           </div>
-        </section>
-      ) : (
+        )}
+      </section>
+
+      {/* Task details panel + admin CRUD */}
+      {selectedTaskDetails && (
         <section className="bg-white rounded-xl shadow p-4">
-          <h2 className="text-sm font-semibold mb-3">Tasks (List)</h2>
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h2 className="text-sm font-semibold">
+                Task Details: {selectedTaskDetails.task}
+              </h2>
+              <p className="text-[11px] text-slate-500">
+                Status: {statusLabel(selectedTaskDetails.status)}{" "}
+                {selectedTaskDetails.due_date &&
+                  ` • Due: ${new Date(
+                    selectedTaskDetails.due_date
+                  ).toLocaleDateString()}`}
+              </p>
+              {selectedTaskDetails.assigned_to && (
+                <p className="text-[11px] text-slate-500">
+                  Assigned to: {selectedTaskDetails.assigned_to}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              {canEdit && (
+                <div className="flex gap-2">
+                  <button
+                    className="text-[11px] text-blue-600 underline"
+                    onClick={() => setIsEditing((v) => !v)}
+                  >
+                    {isEditing ? "Cancel edit" : "Edit task"}
+                  </button>
+                  <button
+                    className="text-[11px] text-red-600 underline"
+                    onClick={handleDeleteTask}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+              <button
+                className="text-[11px] text-slate-500 underline"
+                onClick={() => {
+                  setSelectedTaskDetails(null);
+                  setAttachments([]);
+                  setIsEditing(false);
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
 
-          {loadingTasks && (
-            <div className="text-sm text-slate-500">Loading tasks...</div>
-          )}
-
-          {!loadingTasks && filteredTasks.length === 0 && (
-            <div className="text-sm text-slate-500">
-              No tasks for this project with current filters.
+          {/* Read-only description */}
+          {!isEditing && (
+            <div className="mt-3">
+              <h3 className="text-xs font-semibold mb-1">Description</h3>
+              {selectedTaskDetails.description ? (
+                <div
+                  className="prose prose-sm max-w-none text-xs"
+                  dangerouslySetInnerHTML={{
+                    __html: selectedTaskDetails.description,
+                  }}
+                />
+              ) : (
+                <p className="text-[11px] text-slate-500">
+                  No description provided.
+                </p>
+              )}
             </div>
           )}
 
-          <div className="space-y-3">
-            {filteredTasks.map((t) => {
-              const overdue = isTaskOverdue(t);
-              const isMine = t.assigned_to === auth.user.id;
-              const canUpdateStatus =
-                canManageTasks || (isUser && isMine);
+          {/* Edit form for admin/manager (simple) */}
+          {isEditing && editTask && (
+            <div className="mt-3 border-t pt-3">
+              <h3 className="text-xs font-semibold mb-2">
+                Edit task (admin / manager)
+              </h3>
+              <div className="grid md:grid-cols-2 gap-3 text-xs">
+                <div className="space-y-2">
+                  <label className="block">Title</label>
+                  <input
+                    type="text"
+                    name="task"
+                    value={editTask.task}
+                    onChange={handleEditFieldChange}
+                    className="w-full border rounded px-2 py-1"
+                  />
 
-              return (
-                <div
-                  key={t.id}
-                  className={`border rounded-lg px-3 py-2 ${
-                    overdue
-                      ? "border-red-300 bg-red-50"
-                      : "border-slate-100 bg-white"
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-medium text-sm flex items-center gap-2">
-                        {t.task}
-                        {overdue && (
-                          <span className="text-[10px] text-red-700 border border-red-300 bg-red-50 rounded px-1">
-                            Overdue
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Status: {t.status} • Assigned to: {getAssigneeLabel(t)}
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        Created:{" "}
-                        {t.created_at
-                          ? new Date(t.created_at).toLocaleString()
-                          : "N/A"}
-                        {t.due_date && (
-                          <> • Due: {new Date(t.due_date).toLocaleDateString()}</>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      {canUpdateStatus && t.status !== "completed" && (
-                        <button
-                          onClick={() => handleMarkCompleted(t)}
-                          className="text-[11px] border border-green-300 text-green-700 rounded px-2 py-1 hover:bg-green-50"
-                        >
-                          Mark completed
-                        </button>
-                      )}
-                      {canManageTasks && (
-                        <button
-                          onClick={() => handleDeleteTask(t)}
-                          className="text-[11px] border border-red-300 text-red-600 rounded px-2 py-1 hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  <label className="block mt-2">Status</label>
+                  <select
+                    name="status"
+                    value={editTask.status}
+                    onChange={handleEditFieldChange}
+                    className="w-full border rounded px-2 py-1"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in-progress">In progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
 
-                  <CommentsSection taskId={t.id} />
+                  <label className="block mt-2">Due date</label>
+                  <input
+                    type="date"
+                    name="due_date"
+                    value={editTask.due_date || ""}
+                    onChange={handleEditFieldChange}
+                    className="w-full border rounded px-2 py-1"
+                  />
                 </div>
-              );
-            })}
+
+                <div className="space-y-2">
+                  <label className="block">Assign to</label>
+                  <select
+                    name="assigned_to"
+                    value={editTask.assigned_to || ""}
+                    onChange={handleEditFieldChange}
+                    className="w-full border rounded px-2 py-1"
+                  >
+                    <option value="">Unassigned</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.username} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="block mt-2">Description (HTML)</label>
+                  <textarea
+                    name="description"
+                    value={editTask.description || ""}
+                    onChange={handleEditFieldChange}
+                    className="w-full border rounded px-2 py-1 min-h-[80px]"
+                    placeholder="You can paste updated HTML or simple text here."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  disabled={savingEdit}
+                  onClick={handleSaveEdit}
+                  className="bg-blue-600 text-white text-[11px] rounded px-3 py-1 disabled:opacity-50"
+                >
+                  {savingEdit ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Attachments panel */}
+          <div className="mt-3 border-t pt-3">
+            <h3 className="text-xs font-semibold mb-1">Attachments</h3>
+
+            {loadingAttachments ? (
+              <p className="text-[11px] text-slate-400">
+                Loading attachments...
+              </p>
+            ) : attachments.length === 0 ? (
+              <p className="text-[11px] text-slate-400">No attachments.</p>
+            ) : (
+              <ul className="text-[11px] text-slate-600 list-disc ml-4">
+                {attachments.map((att) => (
+                  <li key={att.id}>{att.original_name}</li>
+                ))}
+              </ul>
+            )}
+
+            {selectedTaskDetails && (
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="file"
+                  className="text-[11px]"
+                  onChange={(e) =>
+                    setUploadFile(e.target.files?.[0] || null)
+                  }
+                />
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={handleUploadAttachment}
+                  className="bg-slate-800 text-white text-[11px] rounded px-3 py-1 disabled:opacity-50"
+                >
+                  {uploading ? "Uploading..." : "Upload"}
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}

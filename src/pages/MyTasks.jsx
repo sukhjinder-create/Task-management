@@ -1,294 +1,290 @@
 // src/pages/MyTasks.jsx
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 
-const STATUS_OPTIONS = ["pending", "in-progress", "completed"];
+const STATUS_COLUMNS = ["pending", "in-progress", "completed"];
 
-function isTaskOverdue(task) {
-  if (!task.due_date) return false;
-  if (task.status === "completed") return false;
-  const due = new Date(task.due_date);
-  const today = new Date();
-  const dueDateOnly = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  const todayOnly = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
-  return dueDateOnly < todayOnly;
+function statusLabel(status) {
+  if (status === "pending") return "Pending";
+  if (status === "in-progress") return "In Progress";
+  if (status === "completed") return "Completed";
+  return status;
 }
 
 export default function MyTasks() {
   const api = useApi();
   const { auth } = useAuth();
+  const user = auth.user;
+  const role = user?.role;
 
+  const canDrag =
+    role === "admin" || role === "manager" || role === "user";
+
+  const title = role === "user" ? "My Tasks" : "Tasks";
+  const subtitle =
+    role === "user"
+      ? "You only see tasks assigned to you. Drag cards between columns to update status."
+      : "You can see tasks across your visible projects. Drag cards between columns to update status.";
+
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [projectTasks, setProjectTasks] = useState([]); // [{ project, tasks: [] }]
+  const [dragTaskId, setDragTaskId] = useState(null);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
 
-  const [statusFilter, setStatusFilter] = useState("");
-  const [overdueFilter, setOverdueFilter] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
 
-  const role = auth.user.role;
-  const isAdmin = role === "admin";
-  const isManager = role === "manager";
-  const canManageTasks = isAdmin || isManager;
-
-  // Load all projects user can see, then only tasks assigned to this user
   useEffect(() => {
-    async function loadMyTasks() {
+    async function load() {
       setLoading(true);
-      setError("");
       try {
         const projectsRes = await api.get("/projects");
         const projects = projectsRes.data || [];
-
-        const allProjectTasks = [];
+        const allTasks = [];
 
         for (const p of projects) {
           try {
-            const tasksRes = await api.get(`/tasks/${p.id}`);
-            const allTasks = tasksRes.data || [];
-            const myTasks = allTasks.filter(
-              (t) => t.assigned_to === auth.user.id
-            );
-            if (myTasks.length > 0) {
-              allProjectTasks.push({ project: p, tasks: myTasks });
-            }
+            const res = await api.get(`/tasks/${p.id}`);
+            const projectTasks = (res.data || []).map((t) => ({
+              ...t,
+              project_name: p.name,
+            }));
+            allTasks.push(...projectTasks);
           } catch (err) {
             console.error("Failed to load tasks for project", p.id, err);
           }
         }
 
-        setProjectTasks(allProjectTasks);
+        setTasks(allTasks);
       } catch (err) {
         console.error(err);
-        const msg = err.response?.data?.error || "Failed to load my tasks";
-        setError(msg);
+        const msg = err.response?.data?.error || "Failed to load tasks";
         toast.error(msg);
       } finally {
         setLoading(false);
       }
     }
 
-    loadMyTasks();
-  }, []);
+    if (user) {
+      load();
+    }
+  }, [user, api]);
 
-  // Flatten into a list for easier filtering
-  const flatTasks = useMemo(() => {
-    const list = [];
-    projectTasks.forEach(({ project, tasks }) => {
-      tasks.forEach((t) => {
-        list.push({ ...t, _project: project });
-      });
-    });
-    return list;
-  }, [projectTasks]);
+  const grouped = useMemo(() => {
+    const result = {
+      pending: [],
+      "in-progress": [],
+      completed: [],
+    };
+    for (const t of tasks) {
+      if (!result[t.status]) result[t.status] = [];
+      result[t.status].push(t);
+    }
+    return result;
+  }, [tasks]);
 
-  const filteredTasks = useMemo(() => {
-    return flatTasks.filter((t) => {
-      if (statusFilter && t.status !== statusFilter) return false;
-      if (overdueFilter && !isTaskOverdue(t)) return false;
-      return true;
-    });
-  }, [flatTasks, statusFilter, overdueFilter]);
+  const onDragStart = (taskId) => {
+    if (!canDrag) return;
+    setDragTaskId(taskId);
+  };
 
-  const totalTasks = filteredTasks.length;
-  const pendingCount = filteredTasks.filter((t) => t.status === "pending").length;
-  const inProgressCount = filteredTasks.filter(
-    (t) => t.status === "in-progress"
-  ).length;
-  const completedCount = filteredTasks.filter(
-    (t) => t.status === "completed"
-  ).length;
-  const overdueCount = filteredTasks.filter((t) => isTaskOverdue(t)).length;
+  const onDragOver = (e) => {
+    if (!canDrag) return;
+    e.preventDefault();
+  };
 
-  const handleMarkCompleted = async (task) => {
-    // MyTasks only shows tasks assigned to current user,
-    // but allow admin/manager to also act logically.
-    const isMine = task.assigned_to === auth.user.id;
-    if (!isMine && !canManageTasks) {
-      toast.error("You don't have permission to update this task.");
+  const onDragEnd = () => {
+    setDragTaskId(null);
+  };
+
+  const onDrop = async (newStatus) => {
+    if (!canDrag) return;
+    if (!dragTaskId) return;
+
+    const task = tasks.find((t) => t.id === dragTaskId);
+    if (!task) return;
+    if (task.status === newStatus) {
+      setDragTaskId(null);
       return;
     }
 
     try {
-      const res = await api.put(`/tasks/${task.id}`, {
-        task: task.task,
-        status: "completed",
-        assigned_to: task.assigned_to || null,
-        due_date: task.due_date || null,
-      });
+      await api.put(`/tasks/${task.id}`, { status: newStatus });
 
-      // update in projectTasks state
-      setProjectTasks((prev) =>
-        prev.map(({ project, tasks }) => ({
-          project,
-          tasks: tasks.map((t) => (t.id === task.id ? res.data : t)),
-        }))
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === task.id ? { ...t, status: newStatus } : t
+        )
       );
-      toast.success("Task marked as completed");
+
+      setSelectedTaskDetails((prev) =>
+        prev && prev.id === task.id ? { ...prev, status: newStatus } : prev
+      );
     } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Failed to update task";
-      setError(msg);
+      console.error("Failed to update task status:", err);
+      const msg =
+        err.response?.data?.error || "Failed to update task status";
       toast.error(msg);
+    } finally {
+      setDragTaskId(null);
     }
+  };
+
+  const loadAttachmentsForTask = async (taskId) => {
+    setLoadingAttachments(true);
+    setAttachments([]);
+    try {
+      const res = await api.get(`/tasks/${taskId}/attachments`);
+      setAttachments(res.data || []);
+    } catch (err) {
+      console.error("Failed to load attachments:", err);
+      toast.error("Failed to load attachments");
+    } finally {
+      setLoadingAttachments(false);
+    }
+  };
+
+  const handleCardClick = (task) => {
+    setSelectedTaskDetails(task);
+    loadAttachmentsForTask(task.id);
   };
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
+      {/* Header */}
       <section className="bg-white rounded-xl shadow p-4 flex justify-between items-center">
         <div>
-          <h1 className="text-lg font-semibold">My Tasks</h1>
-          <p className="text-xs text-slate-500">
-            Tasks assigned to you across all accessible projects.
-          </p>
-        </div>
-        <div className="text-xs text-slate-500">
-          Logged in as <span className="font-semibold">{auth.user.username}</span> ({role})
+          <h1 className="text-lg font-semibold">{title}</h1>
+          <p className="text-xs text-slate-500">{subtitle}</p>
         </div>
       </section>
 
-      {/* DASHBOARD */}
-      <section className="bg-white rounded-xl shadow p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-        <div>
-          <div className="text-slate-500">Total tasks</div>
-          <div className="text-lg font-semibold">{totalTasks}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Pending</div>
-          <div className="text-lg font-semibold">{pendingCount}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">In progress</div>
-          <div className="text-lg font-semibold">{inProgressCount}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Completed</div>
-          <div className="text-lg font-semibold">{completedCount}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Overdue</div>
-          <div className="text-lg font-semibold text-red-600">
-            {overdueCount}
-          </div>
-        </div>
-      </section>
-
-      {/* FILTERS */}
-      <section className="bg-white rounded-xl shadow p-4 flex flex-wrap gap-3 items-center">
-        <span className="text-sm font-semibold mr-2">Filters:</span>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border rounded-lg px-3 py-1 text-sm"
-        >
-          <option value="">All statuses</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={overdueFilter}
-            onChange={(e) => setOverdueFilter(e.target.checked)}
-          />
-          Overdue only
-        </label>
-      </section>
-
-      {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {error}
-        </div>
-      )}
-
-      {/* TASK LIST */}
+      {/* Board */}
       <section className="bg-white rounded-xl shadow p-4">
-        <h2 className="text-sm font-semibold mb-3">Tasks</h2>
-
-        {loading && (
-          <div className="text-sm text-slate-500">Loading your tasks...</div>
-        )}
-
-        {!loading && filteredTasks.length === 0 && (
+        {loading ? (
+          <div className="text-sm text-slate-500">Loading tasks...</div>
+        ) : tasks.length === 0 ? (
           <div className="text-sm text-slate-500">
-            No tasks assigned to you with current filters.
+            No tasks found for your projects.
           </div>
-        )}
-
-        <div className="space-y-3">
-          {filteredTasks.map((t) => {
-            const overdue = isTaskOverdue(t);
-            const canUpdateStatus =
-              t.assigned_to === auth.user.id || canManageTasks;
-
-            return (
+        ) : (
+          <div className="grid md:grid-cols-3 gap-3">
+            {STATUS_COLUMNS.map((status) => (
               <div
-                key={t.id}
-                className={`border rounded-lg px-3 py-2 ${
-                  overdue
-                    ? "border-red-300 bg-red-50"
-                    : "border-slate-100 bg-white"
-                }`}
+                key={status}
+                className="border border-slate-200 rounded-lg min-h-[200px] p-2 bg-slate-50"
+                onDragOver={onDragOver}
+                onDrop={() => onDrop(status)}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-xs text-slate-500 mb-1">
-                      Project:{" "}
-                      <span className="font-semibold">
-                        {t._project?.name || "Unknown"}
-                      </span>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold">
+                    {statusLabel(status)}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {grouped[status]?.length || 0} tasks
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {grouped[status]?.map((t) => (
+                    <div
+                      key={t.id}
+                      draggable={canDrag}
+                      onDragStart={() => onDragStart(t.id)}
+                      onDragEnd={onDragEnd}
+                      onClick={() => handleCardClick(t)}
+                      className={
+                        "border border-slate-200 rounded-lg px-2 py-2 bg-white text-xs " +
+                        (canDrag
+                          ? "cursor-grab active:cursor-grabbing"
+                          : "cursor-pointer")
+                      }
+                    >
+                      <div className="font-medium text-[11px]">
+                        {t.task}
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Project: {t.project_name}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {t.due_date &&
+                          `Due: ${new Date(
+                            t.due_date
+                          ).toLocaleDateString()}`}
+                      </div>
                     </div>
-                    <div className="font-medium text-sm flex items-center gap-2">
-                      {t.task}
-                      {overdue && (
-                        <span className="text-[10px] text-red-700 border border-red-300 bg-red-50 rounded px-1">
-                          Overdue
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      Status: {t.status} • Assigned to:{" "}
-                      <span className="font-semibold">
-                        {auth.user.username} ({role})
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400">
-                      Created:{" "}
-                      {t.created_at
-                        ? new Date(t.created_at).toLocaleString()
-                        : "N/A"}
-                      {t.due_date && (
-                        <> • Due: {new Date(t.due_date).toLocaleDateString()}</>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {canUpdateStatus && t.status !== "completed" && (
-                      <button
-                        onClick={() => handleMarkCompleted(t)}
-                        className="text-[11px] border border-green-300 text-green-700 rounded px-2 py-1 hover:bg-green-50"
-                      >
-                        Mark completed
-                      </button>
-                    )}
-                  </div>
+                  ))}
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
+
+      {/* Task details panel */}
+      {selectedTaskDetails && (
+        <section className="bg-white rounded-xl shadow p-4">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h2 className="text-sm font-semibold">
+                Task Details: {selectedTaskDetails.task}
+              </h2>
+              <p className="text-[11px] text-slate-500">
+                Status: {statusLabel(selectedTaskDetails.status)} • Project:{" "}
+                {selectedTaskDetails.project_name}
+                {selectedTaskDetails.due_date &&
+                  ` • Due: ${new Date(
+                    selectedTaskDetails.due_date
+                  ).toLocaleDateString()}`}
+              </p>
+            </div>
+            <button
+              className="text-[11px] text-slate-500 underline"
+              onClick={() => {
+                setSelectedTaskDetails(null);
+                setAttachments([]);
+              }}
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="mt-3">
+            <h3 className="text-xs font-semibold mb-1">Description</h3>
+            {selectedTaskDetails.description ? (
+              <div
+                className="prose prose-sm max-w-none text-xs"
+                dangerouslySetInnerHTML={{
+                  __html: selectedTaskDetails.description,
+                }}
+              />
+            ) : (
+              <p className="text-[11px] text-slate-500">
+                No description provided.
+              </p>
+            )}
+          </div>
+
+          <div className="mt-3">
+            <h3 className="text-xs font-semibold mb-1">Attachments</h3>
+            {loadingAttachments ? (
+              <p className="text-[11px] text-slate-400">
+                Loading attachments...
+              </p>
+            ) : attachments.length === 0 ? (
+              <p className="text-[11px] text-slate-400">No attachments.</p>
+            ) : (
+              <ul className="text-[11px] text-slate-600 list-disc ml-4">
+                {attachments.map((att) => (
+                  <li key={att.id}>{att.original_name}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
