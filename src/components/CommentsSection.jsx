@@ -1,14 +1,18 @@
 // src/components/CommentsSection.jsx
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useApi } from "../api";
 import toast from "react-hot-toast";
 
 export default function CommentsSection({ taskId }) {
   const api = useApi();
+  const location = useLocation();
+
   const [comments, setComments] = useState([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [highlightId, setHighlightId] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -25,9 +29,30 @@ export default function CommentsSection({ taskId }) {
     load();
   }, [taskId, api]);
 
+  // Deep-link highlight for ?comment=<id>
+  useEffect(() => {
+    if (!comments || comments.length === 0) return;
+
+    const params = new URLSearchParams(location.search);
+    const commentId = params.get("comment");
+    if (!commentId) return;
+
+    const exists = comments.some((c) => String(c.id) === commentId);
+    if (!exists) return;
+
+    setHighlightId(commentId);
+
+    const el = document.getElementById(`comment-${commentId}`);
+    if (el && el.scrollIntoView) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    const timeout = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(timeout);
+  }, [comments, location.search]);
+
   const handleAdd = async (e) => {
     e.preventDefault();
-    // ❗️Important: don't let this click bubble to the card
     e.stopPropagation();
 
     if (!text.trim()) return;
@@ -50,7 +75,6 @@ export default function CommentsSection({ taskId }) {
   return (
     <div
       className="mt-2 border-t border-slate-100 pt-2"
-      // also block any clicks inside this area from triggering card onClick
       onClick={(e) => e.stopPropagation()}
     >
       <div className="text-[11px] font-semibold mb-1">Comments</div>
@@ -61,8 +85,19 @@ export default function CommentsSection({ taskId }) {
       ) : (
         <div className="space-y-1 mb-2 max-h-40 overflow-y-auto">
           {comments.map((c) => (
-            <div key={c.id} className="text-[11px]">
-              <span className="font-semibold">{c.username}:</span>{" "}
+            <div
+              key={c.id}
+              id={`comment-${c.id}`}
+              className={
+                "text-[11px] rounded px-1 " +
+                (highlightId === String(c.id)
+                  ? "bg-yellow-50 border border-yellow-200"
+                  : "")
+              }
+            >
+              <span className="font-semibold">
+                {c.username || c.added_by}:
+              </span>{" "}
               <span>{c.comment_text}</span>
               <span className="text-[9px] text-slate-400 ml-1">
                 {c.created_at
@@ -77,14 +112,13 @@ export default function CommentsSection({ taskId }) {
       <form
         onSubmit={handleAdd}
         className="flex gap-1"
-        // extra safety: clicks in form don't bubble to card
         onClick={(e) => e.stopPropagation()}
       >
         <input
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Add a comment..."
+          placeholder='Add a comment... (use @username to mention)'
           className="flex-1 border rounded-lg px-2 py-1 text-[11px]"
         />
         <button

@@ -8,6 +8,7 @@ import MyTasks from "./pages/MyTasks";          // (to be created later)
 import Notifications from "./pages/Notifications"; // later
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./layouts/AppLayout";
+import Profile from "./pages/Profile";
 
 export default function App() {
   return (
@@ -92,6 +93,17 @@ export default function App() {
             </AppLayout>
           </ProtectedRoute>
         }
+      />
+
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <Profile />
+            </AppLayout>
+          </ProtectedRoute>
+         }
       />
 
       <Route path="*" element={<Navigate to="/projects" />} />
