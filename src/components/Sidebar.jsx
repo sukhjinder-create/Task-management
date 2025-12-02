@@ -110,6 +110,18 @@ export default function Sidebar() {
           {tasksLabel}
         </NavLink>
 
+        {/* NEW: Team Chat (we will wire /chat route later) */}
+        <NavLink
+          to="/chat"
+          className={({ isActive }) =>
+            `block px-3 py-2 rounded-lg text-sm ${
+              isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
+            }`
+          }
+        >
+          Team Chat
+        </NavLink>
+
         <NavLink
           to="/notifications"
           className={({ isActive }) =>
@@ -128,7 +140,7 @@ export default function Sidebar() {
           </div>
         </NavLink>
 
-        {/* Optional: explicit Profile nav item if you want it in the menu as well */}
+        {/* Optional: explicit Profile nav item */}
         <NavLink
           to="/profile"
           className={({ isActive }) =>
@@ -154,10 +166,9 @@ export default function Sidebar() {
         )}
       </nav>
 
-      {/* FOOTER with very explicit profile link */}
+      {/* FOOTER with explicit profile link */}
       <div className="text-xs text-slate-500 border-t border-slate-200 pt-4">
-        Logged in as{" "}
-        <b>{auth.user?.username}</b> ({auth.user?.role}){" "}
+        Logged in as <b>{auth.user?.username}</b> ({auth.user?.role}){" "}
         <Link
           to="/profile"
           className="ml-1 text-blue-600 underline font-semibold"

@@ -1,19 +1,20 @@
+// src/App.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Projects from "./pages/Projects";
 import ProjectTasks from "./pages/ProjectTasks";
 import UsersAdmin from "./pages/UsersAdmin";
-import Dashboard from "./pages/Dashboard";      // (to be created later)
-import MyTasks from "./pages/MyTasks";          // (to be created later)
-import Notifications from "./pages/Notifications"; // later
+import Dashboard from "./pages/Dashboard";
+import MyTasks from "./pages/MyTasks";
+import Notifications from "./pages/Notifications";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./layouts/AppLayout";
 import Profile from "./pages/Profile";
+import Chat from "./pages/Chat"; // 🔹 NEW: Team Chat page
 
 export default function App() {
   return (
     <Routes>
-
       {/* LOGIN (no layout) */}
       <Route path="/login" element={<Login />} />
 
@@ -103,7 +104,19 @@ export default function App() {
               <Profile />
             </AppLayout>
           </ProtectedRoute>
-         }
+        }
+      />
+
+      {/* 🔹 NEW: Team Chat route */}
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <Chat />
+            </AppLayout>
+          </ProtectedRoute>
+        }
       />
 
       <Route path="*" element={<Navigate to="/projects" />} />
