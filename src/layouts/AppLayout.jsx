@@ -6,6 +6,9 @@ import { useNavigate } from "react-router-dom";
 import { useApi } from "../api";
 import toast from "react-hot-toast";
 
+// ⭐ ADDED (do not remove anything else)
+import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow";
+
 export default function AppLayout({ children }) {
   const { logout, auth } = useAuth();
   const navigate = useNavigate();
@@ -77,19 +80,16 @@ export default function AppLayout({ children }) {
       setToggleLoading(true);
 
       if (attendanceStatus === "offline") {
-        // SIGN IN
         await api.post("/attendance/sign-in");
         setAttendanceStatus("available");
         toast.success("Signed in. Slack updated.");
       } else {
-        // SIGN OFF
         await api.post("/attendance/sign-off");
         setAttendanceStatus("offline");
         toast.success("Signed off. Slack updated.");
       }
     } catch (err) {
-      const msg =
-        err.response?.data?.error || "Failed to update attendance";
+      const msg = err.response?.data?.error || "Failed to update attendance";
       toast.error(msg);
     } finally {
       setToggleLoading(false);
@@ -107,8 +107,7 @@ export default function AppLayout({ children }) {
       toast.success(`AWS for ${minutes} minutes.`);
       setAwsOpen(false);
     } catch (err) {
-      const msg =
-        err.response?.data?.error || "Failed to record AWS";
+      const msg = err.response?.data?.error || "Failed to record AWS";
       toast.error(msg);
     } finally {
       setAwsLoading(false);
@@ -136,8 +135,7 @@ export default function AppLayout({ children }) {
       setAttendanceStatus("lunch");
       toast.success("Lunch break started.");
     } catch (err) {
-      const msg =
-        err.response?.data?.error || "Failed to start lunch break";
+      const msg = err.response?.data?.error || "Failed to start lunch break";
       toast.error(msg);
     } finally {
       setLunchLoading(false);
@@ -170,12 +168,14 @@ export default function AppLayout({ children }) {
     <div className="flex">
       <Sidebar />
 
-      <div className="ml-60 w-full min-h-screen bg-slate-100">
+      <div className="ml-60 w-full min-h-screen bg-slate-100 relative">
+
+        {/* ⭐ ADDED — Floating Global Huddle Window */}
+        <GlobalHuddleWindow />
+
         {/* HEADER */}
         <header className="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center">
-          {/* LEFT: User + status + attendance controls */}
           <div className="flex items-center gap-4">
-            {/* User chip */}
             {user && (
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-slate-800 text-white text-xs flex items-center justify-center font-semibold">
@@ -194,7 +194,6 @@ export default function AppLayout({ children }) {
               </div>
             )}
 
-            {/* Status pill */}
             <div
               className={`inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full border text-[11px] ${statusMeta.pillClass}`}
             >
@@ -204,9 +203,7 @@ export default function AppLayout({ children }) {
               <span>{statusMeta.label}</span>
             </div>
 
-            {/* Attendance controls */}
             <div className="flex items-center gap-2">
-              {/* Toggle SIGN IN / SIGN OFF */}
               <button
                 onClick={handleToggleSign}
                 disabled={toggleLoading}
@@ -225,10 +222,8 @@ export default function AppLayout({ children }) {
                   : "Sign off"}
               </button>
 
-              {/* When offline, hide other controls */}
               {attendanceStatus !== "offline" && (
                 <>
-                  {/* AWS - only from Available */}
                   {attendanceStatus === "available" && (
                     <div className="relative">
                       <button
@@ -276,7 +271,6 @@ export default function AppLayout({ children }) {
                     </div>
                   )}
 
-                  {/* Lunch - only from Available */}
                   {attendanceStatus === "available" && (
                     <button
                       type="button"
@@ -291,7 +285,6 @@ export default function AppLayout({ children }) {
                     </button>
                   )}
 
-                  {/* Available button for AWS / Lunch */}
                   {(attendanceStatus === "aws" ||
                     attendanceStatus === "lunch") && (
                     <button
@@ -311,7 +304,6 @@ export default function AppLayout({ children }) {
             </div>
           </div>
 
-          {/* RIGHT: Logout */}
           <button
             onClick={logout}
             className="text-sm bg-red-100 text-red-600 px-4 py-1.5 rounded-lg hover:bg-red-200 border border-red-200"
@@ -320,7 +312,6 @@ export default function AppLayout({ children }) {
           </button>
         </header>
 
-        {/* MAIN PAGE CONTENT */}
         <main className="px-6 py-6">{children}</main>
       </div>
     </div>

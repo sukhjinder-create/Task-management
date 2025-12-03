@@ -14,6 +14,7 @@ import {
   endHuddle,
   sendReaction,
 } from "../socket";
+import useHuddleWebRTC from "../webrtc/huddleRTC"; // NOTE: default import now
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 
@@ -61,6 +62,41 @@ function presenceLabel(status) {
   return "Unknown";
 }
 
+// Small reusable video tile for huddles
+function HuddleVideoTile({ stream, label, isYou, muted }) {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  return (
+    <div className="relative bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-700">
+      {stream ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={muted}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <div className="flex flex-col items-center justify-center text-slate-400 text-xs py-6">
+          <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center mb-2">
+            {label?.[0]?.toUpperCase() || "?"}
+          </div>
+          <span>{isYou ? "Waiting for your media..." : "Connecting..."}</span>
+        </div>
+      )}
+      <div className="absolute bottom-1 left-2 text-[10px] px-2 py-[2px] rounded-full bg-black/60 text-slate-100">
+        {isYou ? "You" : label || "Teammate"}
+      </div>
+    </div>
+  );
+}
+
 export default function Chat() {
   const { auth } = useAuth();
   const api = useApi();
@@ -93,7 +129,7 @@ export default function Chat() {
   // Read receipts: channelId -> { userId -> { at } }
   const [readReceiptsByChannel, setReadReceiptsByChannel] = useState({});
 
-  // Huddle metadata (channel-level)
+  // Huddle metadata (GLOBAL: can be from any channel)
   const [activeHuddle, setActiveHuddle] = useState(null);
 
   // small tick just to let typing timeouts refresh
@@ -104,6 +140,18 @@ export default function Chat() {
   const fileInputRef = useRef(null);
   const lastTypingSentRef = useRef(0);
 
+  // For draggable huddle panel
+  const huddlePanelRef = useRef(null);
+  const huddleLastMousePosRef = useRef({ x: 0, y: 0 });
+  const [huddleDrag, setHuddleDrag] = useState({
+    dragging: false,
+    x: 0,
+    y: 0,
+  });
+
+  // NEW: fullscreen state for huddle panel
+  const [isHuddleFullscreen, setIsHuddleFullscreen] = useState(false);
+
   // Which message's emoji picker is open
   const [openReactionFor, setOpenReactionFor] = useState(null);
 
@@ -113,20 +161,6 @@ export default function Chat() {
   // Edit state
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingOriginalChannel, setEditingOriginalChannel] = useState(null);
-
-  // ----- Huddle WebRTC state -----
-  const [currentHuddleId, setCurrentHuddleId] = useState(null);
-  const [isInHuddleCall, setIsInHuddleCall] = useState(false);
-  const [isHuddleHost, setIsHuddleHost] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const peerConnectionRef = useRef(null);
-  const cameraStreamRef = useRef(null);
-  const screenStreamRef = useRef(null);
 
   // ----- DERIVED -----
   const activeMessages = messagesByChannel[activeChannelKey] || [];
@@ -181,270 +215,34 @@ export default function Chat() {
       ? activeMessages[activeMessages.length - 1].id
       : null;
 
-  // ----- Huddle / WebRTC helpers -----
+  // ----- Huddle WebRTC hook (multi-user, join button) -----
+  const {
+    joined: huddleJoined,
+    connecting: huddleConnecting,
+    error: huddleError,
+    localStream,
+    remotePeers,
+    isMuted,
+    isCameraOff,
+    isScreenSharing,
+    joinHuddle,
+    leaveHuddle,
+    toggleMute,
+    toggleCamera,
+    startScreenShare,
+    stopScreenShare,
+  } = useHuddleWebRTC({
+    channelId: activeChannelKey, // view channel
+    user,
+    activeHuddle, // source of truth for actual huddle channel/id
+  });
 
-  function cleanupHuddleMedia() {
-    try {
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
-        cameraStreamRef.current = null;
-      }
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.onicecandidate = null;
-        peerConnectionRef.current.ontrack = null;
-        peerConnectionRef.current.onconnectionstatechange = null;
-        peerConnectionRef.current.close();
-        peerConnectionRef.current = null;
-      }
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
-      }
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = null;
-      }
-    } catch (err) {
-      console.error("cleanupHuddleMedia error:", err);
-    }
-    setIsInHuddleCall(false);
-    setIsScreenSharing(false);
-    setIsMuted(false);
-    setIsCameraOff(false);
-  }
+  const isHuddleActiveHere =
+    activeHuddle && activeHuddle.channelId === activeChannelKey;
 
-  async function ensureCameraStream() {
-    if (cameraStreamRef.current) return cameraStreamRef.current;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
-      });
-      cameraStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-      return stream;
-    } catch (err) {
-      console.error("Error accessing camera/mic:", err);
-      throw err;
-    }
-  }
-
-  async function ensurePeerConnection(channelId, huddleId) {
-    if (peerConnectionRef.current) return peerConnectionRef.current;
-
-    const socket = getSocket();
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate && socket) {
-        socket.emit("huddle:signal", {
-          channelId,
-          huddleId,
-          data: { type: "candidate", candidate: event.candidate },
-        });
-      }
-    };
-
-    pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = stream;
-      }
-    };
-
-    pc.onconnectionstatechange = () => {
-      const state = pc.connectionState;
-      if (state === "failed" || state === "disconnected") {
-        console.warn("Huddle connection state:", state);
-      }
-    };
-
-    peerConnectionRef.current = pc;
-
-    // Attach local media
-    const stream = await ensureCameraStream();
-    stream.getTracks().forEach((track) => {
-      pc.addTrack(track, stream);
-    });
-
-    setIsInHuddleCall(true);
-    setIsMuted(false);
-    setIsCameraOff(false);
-    return pc;
-  }
-
-  async function startHuddleCallAsHost(channelId, huddleId) {
-    try {
-      const pc = await ensurePeerConnection(channelId, huddleId);
-      const socket = getSocket();
-      if (!socket) return;
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      socket.emit("huddle:signal", {
-        channelId,
-        huddleId,
-        data: { type: "offer", sdp: offer },
-      });
-    } catch (err) {
-      console.error("startHuddleCallAsHost error:", err);
-    }
-  }
-
-  async function handleIncomingHuddleSignal(payload) {
-    const { channelId, huddleId, fromUserId, data } = payload || {};
-    if (!data || !channelId || !huddleId) return;
-
-    // Only react for current channel
-    if (channelId !== activeChannelRef.current) return;
-
-    // Ignore our own signals
-    if (String(fromUserId) === String(user.id)) return;
-
-    try {
-      if (data.type === "offer") {
-        // We are the callee
-        const pc = await ensurePeerConnection(channelId, huddleId);
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-
-        const socket = getSocket();
-        if (!socket) return;
-
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-
-        socket.emit("huddle:signal", {
-          channelId,
-          huddleId,
-          data: { type: "answer", sdp: answer },
-        });
-
-        setCurrentHuddleId(huddleId);
-        setIsInHuddleCall(true);
-        setIsHuddleHost(false);
-      } else if (data.type === "answer") {
-        // We are the caller
-        const pc = peerConnectionRef.current;
-        if (!pc) return;
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-      } else if (data.type === "candidate") {
-        const pc = peerConnectionRef.current;
-        if (!pc) return;
-        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-      }
-    } catch (err) {
-      console.error("handleIncomingHuddleSignal error:", err);
-    }
-  }
-
-  function leaveHuddleCall() {
-    cleanupHuddleMedia();
-    setCurrentHuddleId(null);
-    setIsHuddleHost(false);
-  }
-
-  async function handleToggleScreenShare() {
-    const pc = peerConnectionRef.current;
-    if (!pc) return;
-
-    // Stop sharing
-    if (isScreenSharing) {
-      try {
-        const videoTrack =
-          cameraStreamRef.current &&
-          cameraStreamRef.current.getVideoTracks()[0];
-
-        if (videoTrack) {
-          const sender = pc
-            .getSenders()
-            .find((s) => s.track && s.track.kind === "video");
-          if (sender) {
-            await sender.replaceTrack(videoTrack);
-          }
-        }
-
-        if (screenStreamRef.current) {
-          screenStreamRef.current.getTracks().forEach((t) => t.stop());
-          screenStreamRef.current = null;
-        }
-
-        if (localVideoRef.current && cameraStreamRef.current) {
-          localVideoRef.current.srcObject = cameraStreamRef.current;
-        }
-
-        setIsScreenSharing(false);
-      } catch (err) {
-        console.error("Stop screen share error:", err);
-      }
-      return;
-    }
-
-    // Start sharing
-    try {
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false,
-      });
-      screenStreamRef.current = displayStream;
-
-      const displayTrack = displayStream.getVideoTracks()[0];
-      if (!displayTrack) return;
-
-      const sender = pc
-        .getSenders()
-        .find((s) => s.track && s.track.kind === "video");
-      if (sender) {
-        await sender.replaceTrack(displayTrack);
-      }
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = displayStream;
-      }
-
-      displayTrack.addEventListener("ended", () => {
-        handleToggleScreenShare().catch((err) =>
-          console.error("Auto-stop screen share error:", err)
-        );
-      });
-
-      setIsScreenSharing(true);
-    } catch (err) {
-      console.error("Start screen share error:", err);
-    }
-  }
-
-  function handleToggleMute() {
-    const stream = cameraStreamRef.current;
-    if (!stream) return;
-    const audioTracks = stream.getAudioTracks();
-    if (!audioTracks.length) return;
-
-    const nextMuted = !isMuted;
-    audioTracks.forEach((t) => {
-      t.enabled = !nextMuted;
-    });
-    setIsMuted(nextMuted);
-  }
-
-  function handleToggleCamera() {
-    const stream = cameraStreamRef.current;
-    if (!stream) return;
-    const videoTracks = stream.getVideoTracks();
-    if (!videoTracks.length) return;
-
-    const nextOff = !isCameraOff;
-    videoTracks.forEach((t) => {
-      t.enabled = !nextOff;
-    });
-    setIsCameraOff(nextOff);
-  }
+  const isHuddleOwner =
+    activeHuddle &&
+    String(activeHuddle.startedBy?.userId) === String(user.id);
 
   // force re-render to allow typing timers to expire
   useEffect(() => {
@@ -452,12 +250,15 @@ export default function Chat() {
     return () => clearInterval(id);
   }, []);
 
-  // Cleanup on unmount
+  // 🔹 Keep fullscreen state in sync if user presses ESC
   useEffect(() => {
-    return () => {
-      cleanupHuddleMedia();
+    const handleFsChange = () => {
+      if (!document.fullscreenElement) {
+        setIsHuddleFullscreen(false);
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
   // ----- SCROLL ON NEW MESSAGES -----
@@ -690,27 +491,33 @@ export default function Chat() {
 
     // Huddle events
     const handleHuddleStarted = (payload) => {
-      if (!payload || !payload.channelId) return;
-      if (payload.channelId !== activeChannelRef.current) return;
+      if (!payload || !payload.channelId || !payload.huddleId) return;
 
+      // This is GLOBAL: if a huddle starts in any channel, remember it
       setActiveHuddle({
         channelId: payload.channelId,
         huddleId: payload.huddleId,
         startedBy: payload.startedBy,
         at: payload.at,
       });
-      setCurrentHuddleId(payload.huddleId);
-
-      // If we are the starter, we already kicked off WebRTC in handleToggleHuddle.
-      // If not, WebRTC will start when we receive an offer via huddle:signal.
     };
 
     const handleHuddleEnded = (payload) => {
-      if (!payload || !payload.channelId) return;
-      if (payload.channelId !== activeChannelRef.current) return;
-      setActiveHuddle(null);
-      setCurrentHuddleId(null);
-      leaveHuddleCall();
+      if (!payload || !payload.channelId || !payload.huddleId) return;
+
+      // If this is the same huddle we know about, clear it
+      setActiveHuddle((prev) => {
+        if (
+          prev &&
+          prev.channelId === payload.channelId &&
+          prev.huddleId === payload.huddleId
+        ) {
+          // Also leave WebRTC locally
+          leaveHuddle();
+          return null;
+        }
+        return prev;
+      });
     };
 
     // Reactions from others
@@ -798,9 +605,7 @@ export default function Chat() {
       });
     };
 
-    const handleHuddleSignal = (payload) => {
-      handleIncomingHuddleSignal(payload);
-    };
+    // WebRTC signaling handled inside useHuddleWebRTC via socket.on("huddle:signal")
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
@@ -815,7 +620,6 @@ export default function Chat() {
     socket.on("chat:reaction", handleReaction);
     socket.on("chat:messageEdited", handleMessageEdited);
     socket.on("chat:messageDeleted", handleMessageDeleted);
-    socket.on("huddle:signal", handleHuddleSignal);
 
     if (socket.connected) {
       handleConnect();
@@ -835,9 +639,8 @@ export default function Chat() {
       socket.off("chat:reaction", handleReaction);
       socket.off("chat:messageEdited", handleMessageEdited);
       socket.off("chat:messageDeleted", handleMessageDeleted);
-      socket.off("huddle:signal", handleHuddleSignal);
     };
-  }, [auth.token, user.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth.token, user.id, leaveHuddle]);
 
   // ----- JOIN / LEAVE WHEN ACTIVE CHANNEL CHANGES -----
   useEffect(() => {
@@ -861,15 +664,13 @@ export default function Chat() {
       ...prev,
       [activeChannelKey]: {},
     }));
-    // huddle is per-channel
-    setActiveHuddle(null);
-    setCurrentHuddleId(null);
+
+    // ❗️IMPORTANT: we NO LONGER clear activeHuddle here
+    // This keeps the huddle global across channels
+
     // close any open reaction picker
     setOpenReactionFor(null);
-
-    // clean up any ongoing call when switching channel
-    cleanupHuddleMedia();
-  }, [activeChannelKey, auth.token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeChannelKey, auth.token]);
 
   // ----- SEND MESSAGE -----
   const handleSend = async (e) => {
@@ -1037,42 +838,36 @@ export default function Chat() {
     const at = last.createdAt || new Date().toISOString();
     if (!activeChannelKey) return;
     sendReadReceipt(activeChannelKey, at);
-  }, [connected, activeChannelKey, activeMessages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [connected, activeChannelKey, activeMessages]);
 
-  // Huddle start/end handler (button)
-  const handleToggleHuddle = async () => {
+  // Huddle start/end handler (GLOBAL)
+  const handleToggleHuddle = () => {
     if (!connected) return;
 
-    // End current huddle
-    if (activeHuddle && activeHuddle.channelId === activeChannelKey) {
-      const isHost =
-        String(activeHuddle.startedBy?.userId) === String(user.id);
-
-      if (isHost) {
-        endHuddle(activeChannelKey, activeHuddle.huddleId);
+    // If there is an active huddle (in ANY channel)
+    if (activeHuddle) {
+      // If I own it, end for everyone on the original channel
+      if (isHuddleOwner) {
+        endHuddle(activeHuddle.channelId, activeHuddle.huddleId);
       }
-      leaveHuddleCall();
+      // Leave locally
+      leaveHuddle();
       setActiveHuddle(null);
-      setCurrentHuddleId(null);
+      setIsHuddleFullscreen(false);
       return;
     }
 
-    // Start new huddle as host
+    // No huddle yet -> start one in the CURRENT channel and auto-join
     const huddleId = createUniqueId("huddle");
     startHuddle(activeChannelKey, huddleId);
-
-    const newHuddle = {
+    setActiveHuddle({
       channelId: activeChannelKey,
       huddleId,
       startedBy: { userId: user.id, username: user.username },
       at: new Date().toISOString(),
-    };
-
-    setActiveHuddle(newHuddle);
-    setCurrentHuddleId(huddleId);
-    setIsHuddleHost(true);
-
-    await startHuddleCallAsHost(activeChannelKey, huddleId);
+    });
+    // creator joins immediately
+    joinHuddle();
   };
 
   // Toggle reaction for a message
@@ -1174,575 +969,697 @@ export default function Chat() {
     }
   };
 
-  return (
-    <>
-      <div className="h-[calc(100vh-80px)] flex gap-4">
-        {/* LEFT: channels + DMs */}
-        <aside className="w-64 bg-white rounded-xl shadow p-3 flex flex-col text-xs">
-          <div className="mb-4">
-            <div className="text-[11px] font-semibold text-slate-500 mb-1">
-              Channels
-            </div>
-            <button
-              type="button"
-              onClick={handleSelectGeneral}
-              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
-                isGeneralChannel
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <span className="text-base">#</span>
-                <span>team-general</span>
-              </span>
+  // Header huddle button label
+  let huddleButtonLabel = "Start huddle";
+  if (isHuddleActiveHere) {
+    if (huddleJoined || huddleConnecting) {
+      huddleButtonLabel = isHuddleOwner ? "End huddle" : "Leave huddle";
+    } else {
+      huddleButtonLabel = "Join huddle";
+    }
+  } else if (activeHuddle) {
+    // huddle active in another channel
+    huddleButtonLabel = "Huddle in another channel";
+  }
 
-              <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
-                <span className={`w-2 h-2 rounded-full ${statusDotClass}`} />
-                {statusLabel}
-              </span>
-            </button>
+  // ----- DRAG HANDLERS FOR HUDDLE PANEL -----
+  const handleHuddleMouseDown = (e) => {
+    if (isHuddleFullscreen) return; // no dragging in fullscreen
+    e.preventDefault();
+    huddleLastMousePosRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+    };
+    setHuddleDrag((prev) => ({ ...prev, dragging: true }));
+  };
+
+  useEffect(() => {
+    if (!huddleDrag.dragging) return;
+
+    const handleMouseMove = (e) => {
+      e.preventDefault();
+      const { x: lastX, y: lastY } = huddleLastMousePosRef.current;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      huddleLastMousePosRef.current = { x: e.clientX, y: e.clientY };
+
+      setHuddleDrag((prev) => ({
+        ...prev,
+        x: prev.x + dx,
+        y: prev.y + dy,
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setHuddleDrag((prev) => ({ ...prev, dragging: false }));
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [huddleDrag.dragging]);
+
+  // ----- FULLSCREEN HANDLERS -----
+  const handleEnterHuddleFullscreen = () => {
+    setIsHuddleFullscreen(true);
+    const el = huddlePanelRef.current;
+    if (el && el.requestFullscreen) {
+      try {
+        el.requestFullscreen();
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const handleExitHuddleFullscreen = () => {
+    setIsHuddleFullscreen(false);
+    if (document.fullscreenElement) {
+      try {
+        document.exitFullscreen();
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  return (
+    <div className="h-[calc(100vh-80px)] flex gap-4">
+      {/* LEFT: channels + DMs */}
+      <aside className="w-64 bg-white rounded-xl shadow p-3 flex flex-col text-xs">
+        <div className="mb-4">
+          <div className="text-[11px] font-semibold text-slate-500 mb-1">
+            Channels
+          </div>
+          <button
+            type="button"
+            onClick={handleSelectGeneral}
+            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
+              isGeneralChannel
+                ? "bg-blue-50 text-blue-700"
+                : "text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-base">#</span>
+              <span>team-general</span>
+            </span>
+
+            <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+              <span className={`w-2 h-2 rounded-full ${statusDotClass}`} />
+              {statusLabel}
+            </span>
+          </button>
+        </div>
+
+        {/* DMs with proper scroll / no shifting */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="text-[11px] font-semibold text-slate-500 mb-1">
+            Direct messages
           </div>
 
-          {/* DMs with proper scroll / no shifting */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            <div className="text-[11px] font-semibold text-slate-500 mb-1">
-              Direct messages
-            </div>
+          <div className="space-y-1 flex-1 overflow-y-auto pr-1 pb-6">
+            {loadingUsers ? (
+              <div className="text-[11px] text-slate-400">
+                Loading teammates...
+              </div>
+            ) : sortedTeammates.length === 0 ? (
+              <div className="text-[11px] text-slate-400">
+                No teammates found.
+              </div>
+            ) : (
+              sortedTeammates.map((u) => {
+                const presence = presenceMap[u.id]?.status || "offline";
+                const color = presenceColor(presence);
+                const label = presenceLabel(presence);
+                const key = dmKeyFor(user.id, u.id);
+                const isActive = activeChannelKey === key;
 
-            <div className="space-y-1 flex-1 overflow-y-auto pr-1 pb-6">
-              {loadingUsers ? (
-                <div className="text-[11px] text-slate-400">
-                  Loading teammates...
-                </div>
-              ) : sortedTeammates.length === 0 ? (
-                <div className="text-[11px] text-slate-400">
-                  No teammates found.
-                </div>
-              ) : (
-                sortedTeammates.map((u) => {
-                  const presence = presenceMap[u.id]?.status || "offline";
-                  const color = presenceColor(presence);
-                  const label = presenceLabel(presence);
-                  const key = dmKeyFor(user.id, u.id);
-                  const isActive = activeChannelKey === key;
-
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => handleSelectDm(u)}
-                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left ${
-                        isActive
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[11px] font-semibold">
-                          {u.username?.[0]?.toUpperCase() || "?"}
-                        </div>
-
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[11px] font-medium truncate">
-                            {u.username}
-                          </span>
-                          <span className="text-[10px] text-slate-400 truncate">
-                            {label}
-                          </span>
-                        </div>
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => handleSelectDm(u)}
+                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left ${
+                      isActive
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[11px] font-semibold">
+                        {u.username?.[0]?.toUpperCase() || "?"}
                       </div>
 
-                      <span
-                        className={`w-2 h-2 rounded-full ${color}`}
-                      ></span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[11px] font-medium truncate">
+                          {u.username}
+                        </span>
+                        <span className="text-[10px] text-slate-400 truncate">
+                          {label}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`w-2 h-2 rounded-full ${color}`}
+                    ></span>
+                  </button>
+                );
+              })
+            )}
           </div>
-        </aside>
+        </div>
+      </aside>
 
-        {/* RIGHT SIDE */}
-        <div className="flex-1 flex flex-col space-y-4">
-          {/* Header */}
-          <section className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
-            <div>
-              <h1 className="text-lg font-semibold">{activeChannelTitle}</h1>
-              <p className="text-xs text-slate-500">
-                {isThreadChannel
-                  ? "Threaded conversation for a specific message."
-                  : isGeneralChannel
-                  ? "Team-wide real-time chat. Everyone sees the same messages."
-                  : "Private 1:1 conversation between you and your teammate."}
-              </p>
-            </div>
+      {/* RIGHT SIDE */}
+      <div className="flex-1 flex flex-col space-y-4">
+        {/* Header */}
+        <section className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold">{activeChannelTitle}</h1>
+            <p className="text-xs text-slate-500">
+              {isThreadChannel
+                ? "Threaded conversation for a specific message."
+                : isGeneralChannel
+                ? "Team-wide real-time chat. Everyone sees the same messages."
+                : "Private 1:1 conversation between you and your teammate."}
+            </p>
+          </div>
 
-            <div className="flex items-center gap-3 text-xs">
-              {!isGeneralChannel && activeDmUser && (
-                <div className="flex items-center gap-1">
-                  <span
-                    className={`w-2 h-2 rounded-full ${dmPresenceClass}`}
-                  ></span>
-                  <span className="text-slate-600">{dmPresenceText}</span>
-                </div>
-              )}
-
-              {/* Search */}
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search in channel..."
-                className="text-xs border rounded-full px-2 py-[2px] w-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-
-              <button
-                type="button"
-                onClick={handleToggleHuddle}
-                className="inline-flex items-center gap-1 rounded-full border px-3 py-[4px] text-[11px] hover:bg-slate-50"
-              >
-                <span>🔊</span>
-                <span>
-                  {activeHuddle && activeHuddle.channelId === activeChannelKey
-                    ? "End huddle"
-                    : "Start huddle"}
-                </span>
-              </button>
-
-              <span className="inline-flex items-center gap-1 rounded-full border px-2 py-[2px]">
+          <div className="flex items-center gap-3 text-xs">
+            {!isGeneralChannel && activeDmUser && (
+              <div className="flex items-center gap-1">
                 <span
-                  className={`w-2 h-2 rounded-full ${statusDotClass}`}
+                  className={`w-2 h-2 rounded-full ${dmPresenceClass}`}
                 ></span>
-                <span className="text-[11px]">{statusLabel}</span>
-              </span>
-
-              <span className="text-slate-500 text-[11px]">
-                You are signed in as{" "}
-                <span className="font-semibold">{user.username}</span>
-              </span>
-            </div>
-          </section>
-
-          {/* CHAT BODY */}
-          <section className="bg-white rounded-xl shadow p-4 flex-1 flex flex-col min-h-0">
-            {/* Huddle Banner */}
-            {activeHuddle &&
-              activeHuddle.channelId === activeChannelKey && (
-                <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] flex items-center justify-between">
-                  <span>
-                    🔊 Huddle in progress{" "}
-                    <span className="font-semibold">
-                      (started by {activeHuddle.startedBy?.username})
-                    </span>
-                  </span>
-
-                  <div className="flex items-center gap-2">
-                    {isInHuddleCall ? (
-                      <span className="text-[10px] text-amber-700">
-                        You are connected
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-amber-700">
-                        Connecting when media is allowed…
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-            {/* Editing indicator */}
-            {editingMessageId && (
-              <div className="mb-2 text-[10px] text-amber-600 flex items-center gap-2">
-                <span>Editing a message...</span>
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="underline hover:no-underline"
-                >
-                  Cancel
-                </button>
+                <span className="text-slate-600">{dmPresenceText}</span>
               </div>
             )}
 
-            {/* MESSAGES LIST */}
-            <div
-              ref={listRef}
-              className="flex-1 overflow-y-auto border border-slate-100 bg-slate-50 rounded-lg p-3 space-y-2 text-xs"
+            {/* Search */}
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search in channel..."
+              className="text-xs border rounded-full px-2 py-[2px] w-40 focus:outline-none焦 focus:ring-1 focus:ring-blue-400"
+            />
+
+            <button
+              type="button"
+              onClick={handleToggleHuddle}
+              className="inline-flex items-center gap-1 rounded-full border px-3 py-[4px] text-[11px] hover:bg-slate-50"
             >
-              {loadingHistory && activeMessages.length === 0 ? (
-                <div className="text-[11px] text-slate-400">
-                  Loading conversation...
-                </div>
-              ) : messagesToRender.length === 0 ? (
-                <div className="text-[11px] text-slate-400">
-                  No messages yet. Say hi 👋
-                </div>
-              ) : (
-                messagesToRender.map((m) => {
-                  const isSystem = m.system;
-                  const isOwn =
-                    !m.system &&
-                    String(m.userId || m.user_id) === String(user.id);
-                  const time = m.createdAt
-                    ? new Date(m.createdAt).toLocaleTimeString()
-                    : "";
+              <span>🔊</span>
+              <span>{huddleButtonLabel}</span>
+            </button>
 
-                  if (isSystem) {
-                    return (
-                      <div
-                        key={m.id}
-                        className="w-full text-center text-[10px] text-slate-500 my-1"
-                      >
-                        — {m.textHtml || m.text} —
-                      </div>
-                    );
-                  }
+            <span className="inline-flex items-center gap-1 rounded-full border px-2 py-[2px]">
+              <span
+                className={`w-2 h-2 rounded-full ${statusDotClass}`}
+              ></span>
+              <span className="text-[11px]">{statusLabel}</span>
+            </span>
 
-                  const isLastOwn = isOwn && m.id === lastMessageId;
-                  const readers = isLastOwn
-                    ? getReadersForMessage(m.createdAt)
-                    : [];
+            <span className="text-slate-500 text-[11px]">
+              You are signed in as{" "}
+              <span className="font-semibold">{user.username}</span>
+            </span>
+          </div>
+        </section>
 
-                  const reactions = m.reactions || {};
-                  const reactionEntries = Object.entries(reactions);
+        {/* CHAT BODY */}
+        <section className="bg-white rounded-xl shadow p-4 flex-1 flex flex-col min-h-0">
+          {/* Huddle Banner (only in the channel where huddle started) */}
+          {isHuddleActiveHere && (
+            <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] flex items-center justify-between">
+              <div className="flex flex-col">
+                <span>
+                  🔊 Huddle in progress{" "}
+                  <span className="font-semibold">
+                    (started by {activeHuddle.startedBy?.username})
+                  </span>
+                </span>
+                {huddleError && (
+                  <span className="text-[10px] text-red-600 mt-1">
+                    {huddleError}
+                  </span>
+                )}
+              </div>
 
+              <div className="flex items-center gap-2">
+                {huddleConnecting && (
+                  <span className="text-[10px] text-slate-500">
+                    Joining...
+                  </span>
+                )}
+                {!huddleJoined && !huddleConnecting && (
+                  <button
+                    type="button"
+                    onClick={joinHuddle}
+                    className="text-[10px] border border-amber-300 rounded px-2 py-1 hover:bg-amber-100"
+                  >
+                    Join huddle
+                  </button>
+                )}
+                {huddleJoined && (
+                  <span className="text-[10px] text-amber-700">
+                    You&apos;re in this huddle
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Editing indicator */}
+          {editingMessageId && (
+            <div className="mb-2 text-[10px] text-amber-600 flex items-center gap-2">
+              <span>Editing a message...</span>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="underline hover:no-underline"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {/* MESSAGES LIST */}
+          <div
+            ref={listRef}
+            className="flex-1 overflow-y-auto border border-slate-100 bg-slate-50 rounded-lg p-3 space-y-2 text-xs"
+          >
+            {loadingHistory && activeMessages.length === 0 ? (
+              <div className="text-[11px] text-slate-400">
+                Loading conversation...
+              </div>
+            ) : messagesToRender.length === 0 ? (
+              <div className="text-[11px] text-slate-400">
+                No messages yet. Say hi 👋
+              </div>
+            ) : (
+              messagesToRender.map((m) => {
+                const isSystem = m.system;
+                const isOwn =
+                  !m.system &&
+                  String(m.userId || m.user_id) === String(user.id);
+                const time = m.createdAt
+                  ? new Date(m.createdAt).toLocaleTimeString()
+                  : "";
+
+                if (isSystem) {
                   return (
                     <div
                       key={m.id}
-                      className={`flex ${
-                        isOwn ? "justify-end" : "justify-start"
+                      className="w-full text-center text-[10px] text-slate-500 my-1"
+                    >
+                      — {m.textHtml || m.text} —{" "}
+                    </div>
+                  );
+                }
+
+                const isLastOwn = isOwn && m.id === lastMessageId;
+                const readers = isLastOwn
+                  ? getReadersForMessage(m.createdAt)
+                  : [];
+
+                const reactions = m.reactions || {};
+                const reactionEntries = Object.entries(reactions);
+
+                return (
+                  <div
+                    key={m.id}
+                    className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
+                        isOwn
+                          ? "bg-blue-600 text-white"
+                          : "bg-white border border-slate-200 text-slate-800"
                       }`}
                     >
-                      <div
-                        className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
-                          isOwn
-                            ? "bg-blue-600 text-white"
-                            : "bg-white border border-slate-200 text-slate-800"
-                        }`}
-                      >
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-[10px] font-semibold">
-                            {isOwn ? "You" : m.username || "User"}
-                          </span>
-                          <span
-                            className={`text-[9px] ${
-                              isOwn ? "text-blue-100" : "text-slate-400"
-                            }`}
-                          >
-                            {time}
-                          </span>
+                      {/* Header */}
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-semibold">
+                          {isOwn ? "You" : m.username || "User"}
+                        </span>
+                        <span
+                          className={`text-[9px] ${
+                            isOwn ? "text-blue-100" : "text-slate-400"
+                          }`}
+                        >
+                          {time}
+                        </span>
+                      </div>
+
+                      {/* Deleted state */}
+                      {m.deletedAt ? (
+                        <div className="text-[10px] italic text-slate-300">
+                          This message was deleted.
                         </div>
+                      ) : (
+                        <>
+                          {/* Message Text */}
+                          <div
+                            className="text-[11px] whitespace-pre-wrap break-words prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{
+                              __html: m.textHtml || m.text || "",
+                            }}
+                          />
 
-                        {/* Deleted state */}
-                        {m.deletedAt ? (
-                          <div className="text-[10px] italic text-slate-300">
-                            This message was deleted.
-                          </div>
-                        ) : (
-                          <>
-                            {/* Message Text */}
+                          {/* Reactions */}
+                          {reactionEntries.length > 0 && (
                             <div
-                              className="text-[11px] whitespace-pre-wrap break-words prose prose-sm max-w-none"
-                              dangerouslySetInnerHTML={{
-                                __html: m.textHtml || m.text || "",
-                              }}
-                            />
-
-                            {/* Reactions */}
-                            {reactionEntries.length > 0 && (
-                              <div
-                                className={`mt-1 flex flex-wrap gap-1 ${
-                                  isOwn ? "justify-end" : "justify-start"
-                                }`}
-                              >
-                                {reactionEntries.map(([emoji, info]) => {
-                                  const userIds = info.userIds || [];
-                                  const count =
-                                    typeof info.count === "number"
-                                      ? info.count
-                                      : userIds.length;
-                                  const hasReacted = userIds.includes(
-                                    user.id
-                                  );
-
-                                  return (
-                                    <button
-                                      key={emoji}
-                                      type="button"
-                                      onClick={() =>
-                                        handleToggleReaction(m.id, emoji)
-                                      }
-                                      className={`px-2 py-[2px] rounded-full text-[10px] border flex items-center gap-1 ${
-                                        hasReacted
-                                          ? isOwn
-                                            ? "bg-blue-500 border-blue-300 text-white"
-                                            : "bg-blue-50 border-blue-300 text-blue-700"
-                                          : isOwn
-                                          ? "bg-blue-700 border-blue-500 text-blue-50"
-                                          : "bg-slate-100 border-slate-300 text-slate-700"
-                                      }`}
-                                    >
-                                      <span>{emoji}</span>
-                                      <span>{count}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
-
-                            {/* Add Reaction */}
-                            <div
-                              className={`mt-1 flex ${
+                              className={`mt-1 flex flex-wrap gap-1 ${
                                 isOwn ? "justify-end" : "justify-start"
                               }`}
                             >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleOpenReactionPicker(m.id)
-                                }
-                                className={`text-[10px] px-2 py-[2px] rounded-full border ${
-                                  isOwn
-                                    ? "border-blue-500 text-blue-100 hover:bg-blue-500/40"
-                                    : "border-slate-300 text-slate-500 hover:bg-slate-100"
-                                }`}
-                              >
-                                ➕ Add reaction
-                              </button>
-                            </div>
+                              {reactionEntries.map(([emoji, info]) => {
+                                const userIds = info.userIds || [];
+                                const count =
+                                  typeof info.count === "number"
+                                    ? info.count
+                                    : userIds.length;
+                                const hasReacted = userIds.includes(user.id);
 
-                            {/* Mini Reaction Picker */}
-                            {openReactionFor === m.id && (
-                              <div
-                                className={`mt-1 inline-flex flex-wrap gap-1 px-2 py-1 rounded-full ${
-                                  isOwn ? "bg-blue-700/40" : "bg-slate-100"
-                                }`}
-                              >
-                                {QUICK_REACTIONS.map((emoji) => (
+                                return (
                                   <button
                                     key={emoji}
                                     type="button"
                                     onClick={() =>
-                                      handleAddReactionFromPicker(
-                                        m.id,
-                                        emoji
-                                      )
+                                      handleToggleReaction(m.id, emoji)
                                     }
-                                    className="text-[12px] px-1"
+                                    className={`px-2 py-[2px] rounded-full text-[10px] border flex items-center gap-1 ${
+                                      hasReacted
+                                        ? isOwn
+                                          ? "bg-blue-500 border-blue-300 text-white"
+                                          : "bg-blue-50 border-blue-300 text-blue-700"
+                                        : isOwn
+                                        ? "bg-blue-700 border-blue-500 text-blue-50"
+                                        : "bg-slate-100 border-slate-300 text-slate-700"
+                                    }`}
                                   >
-                                    {emoji}
+                                    <span>{emoji}</span>
+                                    <span>{count}</span>
                                   </button>
-                                ))}
-                              </div>
-                            )}
+                                );
+                              })}
+                            </div>
+                          )}
 
-                            {/* Edit / Delete for own messages */}
-                            {isOwn && (
-                              <div
-                                className={`mt-1 flex ${
-                                  isOwn ? "justify-end" : "justify-start"
-                                } gap-2 text-[10px] opacity-80`}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditMessage(m)}
-                                  className="underline hover:no-underline"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteMessage(m.id)}
-                                  className="underline hover:no-underline"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {/* READ RECEIPTS */}
-                        {isLastOwn && !m.deletedAt && (
-                          <div className="mt-1 text-[9px] text-blue-100">
-                            {readers.length === 0
-                              ? "Delivered"
-                              : `Seen by ${readers
-                                  .map((r) => r.username)
-                                  .join(", ")}`}
+                          {/* Add Reaction */}
+                          <div
+                            className={`mt-1 flex ${
+                              isOwn ? "justify-end" : "justify-start"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReactionPicker(m.id)}
+                              className={`text-[10px] px-2 py-[2px] rounded-full border ${
+                                isOwn
+                                  ? "border-blue-500 text-blue-100 hover:bg-blue-500/40"
+                                  : "border-slate-300 text-slate-500 hover:bg-slate-100"
+                              }`}
+                            >
+                              ➕ Add reaction
+                            </button>
                           </div>
-                        )}
-                      </div>
+
+                          {/* Mini Reaction Picker */}
+                          {openReactionFor === m.id && (
+                            <div
+                              className={`mt-1 inline-flex flex-wrap gap-1 px-2 py-1 rounded-full ${
+                                isOwn ? "bg-blue-700/40" : "bg-slate-100"
+                              }`}
+                            >
+                              {QUICK_REACTIONS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() =>
+                                    handleAddReactionFromPicker(m.id, emoji)
+                                  }
+                                  className="text-[12px] px-1"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Edit / Delete for own messages */}
+                          {isOwn && (
+                            <div
+                              className={`mt-1 flex ${
+                                isOwn ? "justify-end" : "justify-start"
+                              } gap-2 text-[10px] opacity-80`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditMessage(m)}
+                                className="underline hover:no-underline"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMessage(m.id)}
+                                className="underline hover:no-underline"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* READ RECEIPTS */}
+                      {isLastOwn && !m.deletedAt && (
+                        <div className="mt-1 text-[9px] text-blue-100">
+                          {readers.length === 0
+                            ? "Delivered"
+                            : `Seen by ${readers
+                                .map((r) => r.username)
+                                .join(", ")}`}
+                        </div>
+                      )}
                     </div>
-                  );
-                })
-              )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Attachment preview */}
+          {attachment && (
+            <div className="mt-2 text-[11px] text-slate-600">
+              Attachment selected:{" "}
+              <span className="font-medium">{attachment.name}</span>{" "}
+              <span className="text-slate-400">
+                (sending files can be wired later)
+              </span>
+            </div>
+          )}
+
+          {/* Typing Indicator */}
+          {typingUsernames.length > 0 && (
+            <div className="mt-1 text-[10px] text-slate-500">
+              {typingUsernames.length === 1
+                ? `${typingUsernames[0]} is typing...`
+                : `${typingUsernames.join(", ")} are typing...`}
+            </div>
+          )}
+
+          {/* COMPOSER */}
+          <form
+            onSubmit={handleSend}
+            className="mt-3 flex items-end gap-2 text-xs"
+          >
+            <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden">
+              <ReactQuill
+                theme="snow"
+                value={editorHtml}
+                onChange={handleEditorChange}
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder={
+                  connected
+                    ? "Write a message... (Ctrl+Enter to send)"
+                    : "Connect to chat..."
+                }
+                className="text-xs"
+              />
             </div>
 
-            {/* Attachment preview */}
-            {attachment && (
-              <div className="mt-2 text-[11px] text-slate-600">
-                Attachment selected:{" "}
-                <span className="font-medium">{attachment.name}</span>{" "}
-                <span className="text-slate-400">
-                  (sending files can be wired later)
-                </span>
-              </div>
-            )}
+            <div className="flex flex-col items-end gap-2">
+              <button
+                type="button"
+                onClick={handleAttachmentClick}
+                className="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white hover:bg-slate-50"
+              >
+                📎 Attach
+              </button>
 
-            {/* Typing Indicator */}
-            {typingUsernames.length > 0 && (
-              <div className="mt-1 text-[10px] text-slate-500">
-                {typingUsernames.length === 1
-                  ? `${typingUsernames[0]} is typing...`
-                  : `${typingUsernames.join(", ")} are typing...`}
-              </div>
-            )}
+              <button
+                type="submit"
+                disabled={!connected || !editorHtml.trim() || sending}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sending
+                  ? "Sending..."
+                  : editingMessageId
+                  ? "Save"
+                  : "Send"}
+              </button>
+            </div>
 
-            {/* COMPOSER */}
-            <form
-              onSubmit={handleSend}
-              className="mt-3 flex items-end gap-2 text-xs"
-            >
-              <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden">
-                <ReactQuill
-                  theme="snow"
-                  value={editorHtml}
-                  onChange={handleEditorChange}
-                  modules={quillModules}
-                  formats={quillFormats}
-                  placeholder={
-                    connected
-                      ? "Write a message... (Ctrl+Enter to send)"
-                      : "Connect to chat..."
-                  }
-                  className="text-xs"
-                />
-              </div>
-
-              <div className="flex flex-col items-end gap-2">
-                <button
-                  type="button"
-                  onClick={handleAttachmentClick}
-                  className="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white hover:bg-slate-50"
-                >
-                  📎 Attach
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={!connected || !editorHtml.trim() || sending}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {sending
-                    ? "Sending..."
-                    : editingMessageId
-                    ? "Save"
-                    : "Send"}
-                </button>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleAttachmentChange}
-              />
-            </form>
-          </section>
-        </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleAttachmentChange}
+            />
+          </form>
+        </section>
       </div>
 
-      {/* Floating Huddle Panel (Slack-style) */}
-      {activeHuddle &&
-        activeHuddle.channelId === activeChannelKey &&
-        isInHuddleCall && (
-          <div className="fixed bottom-4 left-4 z-40 w-80 bg-slate-900 text-white rounded-xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800">
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold">
-                  Huddle in{" "}
-                  {isGeneralChannel
-                    ? "#team-general"
-                    : activeDmUser
-                    ? activeDmUser.username
-                    : "channel"}
-                </span>
-                <span className="text-[10px] text-slate-400">
-                  {isHuddleHost
-                    ? "You started this huddle"
-                    : "Connected to huddle"}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={leaveHuddleCall}
-                className="text-[10px] px-2 py-1 rounded-full bg-slate-800 hover:bg-slate-700"
-              >
-                Leave call
-              </button>
+      {/* FLOATING, DRAGGABLE HUDDLE PANEL (GLOBAL, BIGGER + FULLSCREEN) */}
+      {activeHuddle && huddleJoined && (
+        <div
+          ref={huddlePanelRef}
+          className={`fixed bg-slate-900 text-slate-100 shadow-2xl border border-slate-700 z-30 flex flex-col ${
+            isHuddleFullscreen
+              ? "inset-0 m-0 w-screen h-screen rounded-none"
+              : "bottom-6 right-6 w-[480px] max-w-[90vw] h-[320px] rounded-2xl"
+          }`}
+          style={{
+            transform: isHuddleFullscreen
+              ? undefined
+              : `translate(${huddleDrag.x}px, ${huddleDrag.y}px)`,
+            cursor:
+              huddleDrag.dragging && !isHuddleFullscreen
+                ? "grabbing"
+                : "default",
+          }}
+        >
+          <div
+            className="flex items-center justify-between px-4 py-2 border-b border-slate-800 select-none"
+            onMouseDown={handleHuddleMouseDown}
+          >
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold">
+                Huddle in{" "}
+                {activeHuddle.channelId === "general"
+                  ? "#team-general"
+                  : activeChannelTitle}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {isHuddleOwner
+                  ? "You started this huddle"
+                  : "You’re in this huddle"}
+              </span>
             </div>
 
-            <div className="p-2 grid grid-cols-2 gap-2 bg-slate-950/60">
-              <div className="relative w-full bg-black rounded-lg overflow-hidden aspect-video">
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-                <span className="absolute left-2 bottom-2 text-[10px] bg-black/60 px-1.5 py-0.5 rounded">
-                  Teammate
-                </span>
-              </div>
-              <div className="relative w-full bg-black rounded-lg overflow-hidden aspect-video">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-full h-full object-cover opacity-80"
-                />
-                <span className="absolute left-2 bottom-2 text-[10px] bg-black/60 px-1.5 py-0.5 rounded">
-                  You
-                </span>
-              </div>
-            </div>
+            <div className="flex items-center gap-2">
+              {/* Fullscreen toggle button */}
+              {!isHuddleFullscreen ? (
+                <button
+                  type="button"
+                  onClick={handleEnterHuddleFullscreen}
+                  className="text-[10px] px-2 py-[3px] rounded-full bg-slate-800 hover:bg-slate-700"
+                  title="Go fullscreen"
+                >
+                  ⛶
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleExitHuddleFullscreen}
+                  className="text-[10px] px-2 py-[3px] rounded-full bg-slate-800 hover:bg-slate-700"
+                  title="Exit fullscreen"
+                >
+                  ⤢
+                </button>
+              )}
 
-            <div className="flex items-center justify-center gap-3 px-3 py-2 bg-slate-900">
               <button
                 type="button"
-                onClick={handleToggleMute}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-sm ${
-                  isMuted ? "bg-red-600" : "bg-slate-700"
-                } hover:bg-slate-600`}
+                onClick={handleToggleHuddle}
+                className="text-[10px] px-2 py-[3px] rounded-full bg-slate-800 hover:bg-slate-700"
               >
-                {isMuted ? "🔇" : "🎙️"}
-              </button>
-              <button
-                type="button"
-                onClick={handleToggleCamera}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-sm ${
-                  isCameraOff ? "bg-yellow-600" : "bg-slate-700"
-                } hover:bg-slate-600`}
-              >
-                {isCameraOff ? "📷✖" : "📷"}
-              </button>
-              <button
-                type="button"
-                onClick={handleToggleScreenShare}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-sm ${
-                  isScreenSharing ? "bg-green-600" : "bg-slate-700"
-                } hover:bg-slate-600`}
-              >
-                {isScreenSharing ? "🖥️✔" : "🖥️"}
+                {isHuddleOwner ? "Leave & end" : "Leave"}
               </button>
             </div>
           </div>
-        )}
-    </>
+
+          <div
+            className={`p-3 grid gap-2 flex-1 ${
+              remotePeers.length > 0 ? "grid-cols-2" : "grid-cols-1"
+            }`}
+          >
+            {/* Remote peers */}
+            {remotePeers.map((p) => (
+              <HuddleVideoTile
+                key={p.userId}
+                stream={p.stream}
+                label={p.username}
+                isYou={false}
+                muted={false}
+              />
+            ))}
+
+            {/* Your tile */}
+            <HuddleVideoTile
+              stream={localStream}
+              label={user.username}
+              isYou
+              muted
+            />
+          </div>
+
+          <div className="px-4 pt-1 pb-3 flex items-center justify-center gap-3 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={toggleMute}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${
+                isMuted ? "bg-red-600" : "bg-slate-700"
+              }`}
+              title={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? "🔇" : "🎙️"}
+            </button>
+            <button
+              type="button"
+              onClick={toggleCamera}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${
+                isCameraOff ? "bg-red-600" : "bg-slate-700"
+              }`}
+              title={isCameraOff ? "Turn camera on" : "Turn camera off"}
+            >
+              {isCameraOff ? "📷" : "🎥"}
+            </button>
+            <button
+              type="button"
+              onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${
+                isScreenSharing ? "bg-blue-600" : "bg-slate-700"
+              }`}
+              title={
+                isScreenSharing ? "Stop screen share" : "Start screen share"
+              }
+            >
+              🖥️
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
