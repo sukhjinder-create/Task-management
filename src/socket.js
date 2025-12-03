@@ -4,9 +4,9 @@ import { io } from "socket.io-client";
 let socket = null;
 
 export function initSocket(token) {
-  if (!token) return;
+  if (!token) return null;
 
-  // disconnect any existing socket
+  // Disconnect any existing socket
   if (socket) {
     socket.disconnect();
     socket = null;
@@ -14,10 +14,7 @@ export function initSocket(token) {
 
   socket = io("http://localhost:3000", {
     auth: { token },
-    autoConnect: true,
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
+    withCredentials: true,
   });
 
   return socket;
@@ -27,38 +24,78 @@ export function getSocket() {
   return socket;
 }
 
-export function disconnectSocket() {
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
-}
-
-/**
- * Optional convenience helpers for future chat/presence usage.
- * You don't *have* to use them – you can still call getSocket().emit(...) directly.
- */
+// ─────────────────────────────
+// Chat channel helpers
+// ─────────────────────────────
 
 export function joinChatChannel(channelId) {
   const s = getSocket();
-  if (!s || !channelId) return;
+  if (!s) return;
   s.emit("chat:join", channelId);
 }
 
 export function leaveChatChannel(channelId) {
   const s = getSocket();
-  if (!s || !channelId) return;
+  if (!s) return;
   s.emit("chat:leave", channelId);
 }
 
-export function sendChatMessage({ channelId, text, tempId }) {
+export function sendChatMessage(payload) {
   const s = getSocket();
-  if (!s || !channelId || !text) return;
-  s.emit("chat:message", { channelId, text, tempId });
+  if (!s) return;
+  s.emit("chat:message", payload);
 }
 
-export function setPresenceStatus(status) {
+// Typing indicator
+export function sendTyping(channelId) {
   const s = getSocket();
-  if (!s || !status) return;
+  if (!s) return;
+  if (!channelId) return;
+  s.emit("chat:typing", { channelId });
+}
+
+// Read receipts
+export function sendReadReceipt(channelId, at) {
+  const s = getSocket();
+  if (!s) return;
+  if (!channelId) return;
+  s.emit("chat:read", {
+    channelId,
+    at: at || new Date().toISOString(),
+  });
+}
+
+// 🔥 Reactions
+export function sendReaction(payload) {
+  const s = getSocket();
+  if (!s) return;
+  s.emit("chat:reaction", payload);
+}
+
+// Huddles (signaling only – no audio implementation yet)
+export function startHuddle(channelId, huddleId) {
+  const s = getSocket();
+  if (!s) return;
+  if (!channelId || !huddleId) return;
+  s.emit("huddle:start", { channelId, huddleId });
+}
+
+export function endHuddle(channelId, huddleId) {
+  const s = getSocket();
+  if (!s) return;
+  if (!channelId || !huddleId) return;
+  s.emit("huddle:end", { channelId, huddleId });
+}
+
+// ─────────────────────────────
+// Presence helpers (for attendance)
+// ─────────────────────────────
+
+/**
+ * status: "available" | "aws" | "lunch" | "offline" | "online" etc.
+ */
+export function sendPresenceStatus(status) {
+  const s = getSocket();
+  if (!s) return;
   s.emit("presence:set", status);
 }
