@@ -3,23 +3,32 @@ import { useEffect, useRef, useState } from "react";
 import { getSocket } from "../socket";
 
 /**
- * EXTENSION ADDITIONS:
- * - persistent state so huddle stays alive across navigation
- * - prevent auto cleanup when Chat unmounts
- * - fullscreen support for video tile
- * - visibility + tab switching protections
- * - keep WebRTC alive globally (not tied to Chat.jsx mount)
+ * useHuddleWebRTC (global-safe)
+ *
+ * - Stable getUserMedia (no camera blinking)
+ * - Proper cleanup of PeerConnections + media tracks
+ * - Screen share support
+ * - Fullscreen support (for outer UI to use)
+ * - "End" behaviour: ends huddle for EVERYONE (Option 1)
  */
 
 const HUDDLE_STATE_KEY = "activeHuddleState";
 
 export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
+  // ------------------------
+  // FIX: null-safety variables (avoid direct user.id access when user is null)
+  // ------------------------
+  const safeUserId = user?.id ?? null; // FIX: null-safety
+  const safeUsername = user?.username ?? null; // FIX: null-safety
+  const safeActiveChannel = activeHuddle?.channelId ?? null; // FIX
+  const safeActiveHuddleId = activeHuddle?.huddleId ?? null; // FIX
+
   const [joined, setJoined] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
 
   const [localStream, setLocalStream] = useState(null);
-  const [remotePeers, setRemotePeers] = useState([]);
+  const [remotePeers, setRemotePeers] = useState([]); // [{ userId, username, stream }]
 
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
@@ -27,35 +36,17 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
 
   const peerConnectionsRef = useRef({});
   const peerStreamsRef = useRef({});
-  const localStreamRef = useRef(null);
-  const displayStreamRef = useRef(null);
+  const localStreamRef = useRef(null); // always the *camera* stream when available
+  const displayStreamRef = useRef(null); // screen-share stream
 
   const currentHuddleIdRef = useRef(null);
 
-  // 🔵 Prevent destroying the huddle when component unmounts
-  const preventCleanupRef = useRef(true);
-
-  // 🔵 Fullscreen video target ref
+  // Fullscreen DOM target (outer UI will attach this to the video container)
   const fullscreenTargetRef = useRef(null);
 
-  // ----------------------------
-  // Persistent Huddle (load)
-  // ----------------------------
-  useEffect(() => {
-    const saved = localStorage.getItem(HUDDLE_STATE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.huddleId && parsed.channelId) {
-          currentHuddleIdRef.current = parsed.huddleId;
-        }
-      } catch {}
-    }
-  }, []);
-
-  // ----------------------------
-  // Save active huddle persistently
-  // ----------------------------
+  // ───────────────────────────────────────────
+  // Persist basic huddle info (for possible rejoin UX)
+  // ───────────────────────────────────────────
   useEffect(() => {
     if (activeHuddle && activeHuddle.huddleId) {
       localStorage.setItem(
@@ -66,19 +57,19 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
           startedBy: activeHuddle.startedBy,
         })
       );
+      currentHuddleIdRef.current = activeHuddle.huddleId;
     } else {
       localStorage.removeItem(HUDDLE_STATE_KEY);
+      currentHuddleIdRef.current = null;
     }
   }, [activeHuddle]);
 
-  // ----------------------------
-  // BACKGROUND / TAB PROTECTION
-  // ----------------------------
+  // ───────────────────────────────────────────
+  // Tab / visibility helpers (no media stop)
+  // ───────────────────────────────────────────
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        // DO NOT stop media
-        // Just inform browser we want to keep audio alive
+      if (document.visibilityState === "hidden" && joined) {
         document.title = "Huddle in progress…";
       } else {
         document.title = "TaskManager";
@@ -87,6 +78,7 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
 
     const handleBeforeUnload = (e) => {
       if (joined) {
+        // Warn user if they try to close / refresh while in huddle
         e.preventDefault();
         e.returnValue = "";
       }
@@ -101,13 +93,15 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
     };
   }, [joined]);
 
-  // ----------------------------
-  // Fullscreen support
-  // ----------------------------
+  // ───────────────────────────────────────────
+  // Fullscreen helpers
+  // ───────────────────────────────────────────
   const requestFullscreen = () => {
-    if (!fullscreenTargetRef.current) return;
     const el = fullscreenTargetRef.current;
-    if (el.requestFullscreen) el.requestFullscreen();
+    if (!el) return;
+    if (el.requestFullscreen) {
+      el.requestFullscreen();
+    }
   };
 
   const exitFullscreen = () => {
@@ -116,23 +110,48 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
     }
   };
 
-  // ----------------------------
+  // ───────────────────────────────────────────
   // Media helpers
-  // ----------------------------
+  // ───────────────────────────────────────────
+
+  /**
+   * Ensure we have a single, stable camera+mic stream.
+   * We only re-acquire if:
+   * - there is no stream, or
+   * - all video tracks are ended.
+   */
   async function ensureLocalStream() {
-    if (localStreamRef.current) return localStreamRef.current;
+    const existing = localStreamRef.current;
+
+    if (existing) {
+      const hasLiveVideo = existing
+        .getVideoTracks()
+        .some((t) => t.readyState === "live");
+      const hasLiveAudio = existing
+        .getAudioTracks()
+        .some((t) => t.readyState === "live");
+
+      if (hasLiveVideo || hasLiveAudio) {
+        // reuse existing stream, NO blinking
+        setLocalStream(existing);
+        return existing;
+      }
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: true,
       });
+
       localStreamRef.current = stream;
       setLocalStream(stream);
       setIsMuted(false);
       setIsCameraOff(false);
       return stream;
     } catch (e) {
-      setError("Could not access camera/mic.");
+      console.error("getUserMedia failed", e);
+      setError("Could not access camera/mic. Check permissions.");
       throw e;
     }
   }
@@ -142,23 +161,25 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
     if (pc) {
       pc.onicecandidate = null;
       pc.ontrack = null;
-      pc.close();
+      pc.onconnectionstatechange = null;
+      try {
+        pc.close();
+      } catch (e) {
+        console.warn("Error closing peerConnection", e);
+      }
       delete peerConnectionsRef.current[peerId];
     }
+
     const stream = peerStreamsRef.current[peerId];
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
       delete peerStreamsRef.current[peerId];
     }
+
     setRemotePeers((prev) => prev.filter((p) => p.userId !== peerId));
   }
 
-  // ----------------------------
-  // GLOBAL cleanup (only when truly required)
-  // ----------------------------
   function cleanupAll() {
-    if (preventCleanupRef.current) return; // 🔵 do NOT clean if global huddle active
-
     Object.keys(peerConnectionsRef.current).forEach((id) =>
       cleanupPeer(id)
     );
@@ -178,19 +199,21 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
     setJoined(false);
     setConnecting(false);
     setIsScreenSharing(false);
+    setIsMuted(false);
+    setIsCameraOff(false);
 
     currentHuddleIdRef.current = null;
   }
 
-  // ----------------------------
+  // ───────────────────────────────────────────
   // PeerConnection creation
-  // ----------------------------
+  // ───────────────────────────────────────────
   async function createPeerConnection(peerId, huddleId, isInitiator) {
     let pc = peerConnectionsRef.current[peerId];
     if (pc) return pc;
 
     const socket = getSocket();
-    if (!socket) return;
+    if (!socket) return null;
 
     pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -198,18 +221,21 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
 
     peerConnectionsRef.current[peerId] = pc;
 
+    // FIX: use safe channel (avoid referencing activeHuddle.channelId directly)
     const signalChannel =
-      (activeHuddle && activeHuddle.channelId) || channelId;
+      safeActiveChannel || channelId;
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
+      if (!signalChannel) return;
+
       socket.emit("huddle:signal", {
         channelId: signalChannel,
         huddleId,
         toUserId: peerId,
         data: {
           type: "candidate",
-          fromUserId: user.id,
+          fromUserId: safeUserId, // FIX: use safeUserId
           candidate: event.candidate,
         },
       });
@@ -222,28 +248,37 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
       peerStreamsRef.current[peerId] = stream;
 
       setRemotePeers((prev) => {
-        const exists = prev.find((p) => p.userId === peerId);
-        if (exists) {
+        const existing = prev.find((p) => p.userId === peerId);
+        if (existing) {
           return prev.map((p) =>
             p.userId === peerId ? { ...p, stream } : p
           );
         }
-        return [...prev, { userId: peerId, username: `User ${peerId}`, stream }];
+        return [
+          ...prev,
+          { userId: peerId, username: `User ${peerId}`, stream },
+        ];
       });
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed") {
+      const state = pc.connectionState;
+      if (state === "failed" || state === "disconnected") {
         cleanupPeer(peerId);
       }
     };
 
+    // Attach local tracks ONCE
     const local = await ensureLocalStream();
-    local.getTracks().forEach((t) => pc.addTrack(t, local));
+    local.getTracks().forEach((track) => {
+      pc.addTrack(track, local);
+    });
 
     if (isInitiator) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+
+      if (!signalChannel) return pc;
 
       socket.emit("huddle:signal", {
         channelId: signalChannel,
@@ -251,7 +286,7 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
         toUserId: peerId,
         data: {
           type: "offer",
-          fromUserId: user.id,
+          fromUserId: safeUserId, // FIX
           sdp: offer,
         },
       });
@@ -260,26 +295,43 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
     return pc;
   }
 
-  // ----------------------------
-  // Public
-  // ----------------------------
+  // ───────────────────────────────────────────
+  // Public API
+  // ───────────────────────────────────────────
   async function joinHuddle() {
     if (!activeHuddle || !activeHuddle.huddleId) return;
+    if (joined || connecting) return;
 
+    setError("");
     setConnecting(true);
-    preventCleanupRef.current = true;
+    currentHuddleIdRef.current = activeHuddle.huddleId;
 
     try {
       await ensureLocalStream();
       setJoined(true);
-    } catch {}
-    finally {
+    } catch {
+      // error already set in ensureLocalStream
+    } finally {
       setConnecting(false);
     }
   }
 
+  /**
+   * Leave + END huddle for EVERYONE (Option 1)
+   * - emits "huddle:end" to server
+   * - server should broadcast "huddle:ended"
+   * - HuddleContext listens to that and clears activeHuddle
+   */
   function leaveHuddle() {
-    preventCleanupRef.current = false; // allow cleanup for leave
+    const socket = getSocket();
+    if (socket && activeHuddle && activeHuddle.huddleId) {
+      socket.emit("huddle:end", {
+        channelId: activeHuddle.channelId || channelId,
+        huddleId: activeHuddle.huddleId,
+        endedBy: { userId: safeUserId, username: safeUsername }, // FIX
+      });
+    }
+
     cleanupAll();
     localStorage.removeItem(HUDDLE_STATE_KEY);
   }
@@ -288,38 +340,54 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
     const stream = localStreamRef.current;
     if (!stream) return;
     const next = !isMuted;
-    stream.getAudioTracks().forEach((t) => (t.enabled = !next));
+    stream.getAudioTracks().forEach((t) => {
+      t.enabled = !next;
+    });
     setIsMuted(next);
   }
 
   function toggleCamera() {
     const stream = localStreamRef.current;
     if (!stream) return;
-    const next = !isCameraOff;
-    stream.getVideoTracks().forEach((t) => (t.enabled = !next));
-    setIsCameraOff(next);
+    const nextOff = !isCameraOff;
+    stream.getVideoTracks().forEach((t) => {
+      t.enabled = !nextOff;
+    });
+    setIsCameraOff(nextOff);
   }
 
   async function startScreenShare() {
+    if (!joined) return;
+
     try {
-      const ds = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      displayStreamRef.current = ds;
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+      });
+
+      displayStreamRef.current = displayStream;
       setIsScreenSharing(true);
 
-      const track = ds.getVideoTracks()[0];
+      const screenTrack = displayStream.getVideoTracks()[0];
 
+      // Replace outgoing video track with screen
       Object.values(peerConnectionsRef.current).forEach((pc) => {
         const sender = pc
           .getSenders()
           .find((s) => s.track && s.track.kind === "video");
-        if (sender) sender.replaceTrack(track);
+        if (sender && screenTrack) {
+          sender.replaceTrack(screenTrack);
+        }
       });
 
-      setLocalStream(ds);
+      // Show screen in local preview
+      setLocalStream(displayStream);
 
-      track.onended = stopScreenShare;
-    } catch {
-      setError("Screen share failed.");
+      screenTrack.onended = () => {
+        stopScreenShare();
+      };
+    } catch (e) {
+      console.error("Screen share failed", e);
+      setError("Screen share failed or was cancelled.");
     }
   }
 
@@ -329,95 +397,112 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
       displayStreamRef.current = null;
     }
 
-    const local = localStreamRef.current;
-    if (!local) return;
+    const cameraStream = localStreamRef.current;
+    if (!cameraStream) {
+      setIsScreenSharing(false);
+      return;
+    }
 
-    const videoTrack = local.getVideoTracks()[0];
+    const videoTrack = cameraStream.getVideoTracks()[0];
     Object.values(peerConnectionsRef.current).forEach((pc) => {
       const sender = pc
         .getSenders()
         .find((s) => s.track && s.track.kind === "video");
-      if (sender && videoTrack) sender.replaceTrack(videoTrack);
+      if (sender && videoTrack) {
+        sender.replaceTrack(videoTrack);
+      }
     });
 
+    // Show camera in local preview again
+    setLocalStream(cameraStream);
     setIsScreenSharing(false);
-    setLocalStream(localStreamRef.current);
   }
 
-  // ----------------------------
+  // ───────────────────────────────────────────
   // Signaling listener
-  // ----------------------------
+  // ───────────────────────────────────────────
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
-    const handle = async (payload) => {
-      const { channelId: ch, huddleId, fromUserId, toUserId, data } = payload;
+    const handleSignal = async (payload = {}) => {
+      const { channelId: ch, huddleId, fromUserId, toUserId, data } =
+        payload;
       if (!data) return;
 
       const expectedChannel =
         (activeHuddle && activeHuddle.channelId) || channelId;
+      if (!expectedChannel || ch !== expectedChannel) return;
 
-      if (ch !== expectedChannel) return;
-
-      if (toUserId && String(toUserId) !== String(user.id)) return;
+      // FIX: compare using safeUserId to avoid reading user.id when user is null
+      if (toUserId && String(toUserId) !== String(safeUserId)) return;
 
       const peerId = fromUserId;
-      if (!peerId || String(peerId) === String(user.id)) return;
+      if (!peerId || String(peerId) === String(safeUserId)) return;
 
       try {
         if (data.type === "offer") {
           await ensureLocalStream();
+
           const pc =
             peerConnectionsRef.current[peerId] ||
-            (await createPeerConnection(peerId, huddleId, false));
+            (await createPeerConnection(
+              peerId,
+              huddleId || currentHuddleIdRef.current,
+              false
+            ));
 
-          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          if (!pc) return;
+
+          await pc.setRemoteDescription(
+            new RTCSessionDescription(data.sdp)
+          );
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
           socket.emit("huddle:signal", {
             channelId: expectedChannel,
-            huddleId,
+            huddleId: huddleId || currentHuddleIdRef.current,
             toUserId: peerId,
             data: {
               type: "answer",
-              fromUserId: user.id,
+              fromUserId: safeUserId, // FIX
               sdp: answer,
             },
           });
-        }
-
-        if (data.type === "answer") {
+        } else if (data.type === "answer") {
           const pc = peerConnectionsRef.current[peerId];
           if (!pc) return;
-          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        }
-
-        if (data.type === "candidate") {
+          await pc.setRemoteDescription(
+            new RTCSessionDescription(data.sdp)
+          );
+        } else if (data.type === "candidate") {
           const pc = peerConnectionsRef.current[peerId];
           if (!pc) return;
           if (data.candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            await pc.addIceCandidate(
+              new RTCIceCandidate(data.candidate)
+            );
           }
         }
-      } catch (err) {
-        console.error("Signaling error:", err);
-        setError("Connection problem.");
+      } catch (e) {
+        console.error("Signaling error", e);
+        setError("Connection problem in huddle.");
       }
     };
 
-    socket.on("huddle:signal", handle);
+    socket.on("huddle:signal", handleSignal);
 
     return () => {
-      socket.off("huddle:signal", handle);
-      // ❗ DON'T CLEAN STREAMS HERE — huddle must persist globally
+      socket.off("huddle:signal", handleSignal);
+      // cleanupAll is NOT called here; HuddleProvider is global.
     };
-  }, [channelId, activeHuddle, user.id, joined]);
+  // FIX: use safeUserId in dependencies instead of user.id
+  }, [channelId, activeHuddle, safeUserId]);
 
-  // ----------------------------
+  // ───────────────────────────────────────────
   // Return API
-  // ----------------------------
+  // ───────────────────────────────────────────
   return {
     joined,
     connecting,
@@ -429,7 +514,7 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
     isScreenSharing,
 
     joinHuddle,
-    leaveHuddle,
+    leaveHuddle, // ends huddle for everyone (Option 1)
     toggleMute,
     toggleCamera,
     startScreenShare,
@@ -437,7 +522,6 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
 
     requestFullscreen,
     exitFullscreen,
-
     fullscreenTargetRef,
   };
 }

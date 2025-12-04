@@ -1,9 +1,6 @@
 // src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
 
-// We no longer need setApiToken from api.js because
-// api.js now reads token directly from localStorage via an interceptor.
-
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -13,46 +10,72 @@ export function AuthProvider({ children }) {
     isReady: false,
   });
 
-  // On first load, restore auth from localStorage
+  /* ---------------------------------------------
+     1. Restore from localStorage on page load
+  --------------------------------------------- */
   useEffect(() => {
     try {
       const stored = localStorage.getItem("auth");
       if (stored) {
         const parsed = JSON.parse(stored);
+
+        // 🔥 Global token so axios & socket use it automatically
+        window.__AUTH_TOKEN__ = parsed?.token || null;
+
         setAuth({
-          user: parsed.user || null,
-          token: parsed.token || null,
+          user: parsed?.user || null,
+          token: parsed?.token || null,
           isReady: true,
         });
       } else {
         setAuth((prev) => ({ ...prev, isReady: true }));
       }
     } catch (e) {
-      console.warn("Failed to read auth from localStorage", e);
+      console.warn("Unable to restore auth", e);
       setAuth((prev) => ({ ...prev, isReady: true }));
     }
   }, []);
 
-  // Called from Login page when backend returns user + token
+  /* ---------------------------------------------
+     2. Login handler → stores auth everywhere
+  --------------------------------------------- */
   const login = (user, token) => {
+    if (!token) return console.error("Login missing token!");
+
     const data = { user, token };
+
+    // Store in browser
     localStorage.setItem("auth", JSON.stringify(data));
+
+    // 🔥 Set runtime global token so axios uses it instantly
+    window.__AUTH_TOKEN__ = token;
+
     setAuth({
       user,
       token,
       isReady: true,
     });
-    // No need to manually set token on axios:
-    // api.js interceptor reads it from localStorage on every request.
+
+    // OPTIONAL: If socket already connected → re-authenticate
+    window.dispatchEvent(
+      new CustomEvent("auth:updated", { detail: { user, token } })
+    );
   };
 
+  /* ---------------------------------------------
+     3. Logout → clear everything
+  --------------------------------------------- */
   const logout = () => {
     localStorage.removeItem("auth");
+    window.__AUTH_TOKEN__ = null;
+
     setAuth({
       user: null,
       token: null,
       isReady: true,
     });
+
+    window.dispatchEvent(new CustomEvent("auth:logout"));
   };
 
   const value = {
@@ -61,22 +84,15 @@ export function AuthProvider({ children }) {
     logout,
   };
 
-  // Optional: you can show a loader instead of null while auth is restoring
-  if (!auth.isReady) {
-    return null;
-  }
+  if (!auth.isReady) return null;
 
   return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }

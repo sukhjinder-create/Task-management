@@ -1,236 +1,304 @@
 // src/huddle/GlobalHuddleWindow.jsx
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useHuddle } from "../context/HuddleContext";
 
-export default function GlobalHuddleWindow() {
-  const {
-    activeHuddle,
-    rtc: {
-      joined,
-      connecting,
-      localStream,
-      remotePeers,
-      toggleMute,
-      toggleCamera,
-      startScreenShare,
-      stopScreenShare,
-      isMuted,
-      isCameraOff,
-      isScreenSharing,
-      requestFullscreen,
-      fullscreenTargetRef,
-      leaveHuddle,
-      joinHuddle,
-    },
-  } = useHuddle() || {};
-
-  // If provider didn't load yet → render nothing
-  if (!useHuddle()) return null;
-
-  if (!activeHuddle) return null;
-
-  // -----------------------------
-  // Floating Window Dragging
-  // -----------------------------
-  const [pos, setPos] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("huddleWindowPos"));
-      return saved || { x: 20, y: 20 };
-    } catch {
-      return { x: 20, y: 20 };
-    }
-  });
-
-  const [size, setSize] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("huddleWindowSize"));
-      return saved || { width: 350, height: 260 };
-    } catch {
-      return { width: 350, height: 260 };
-    }
-  });
-
-  const draggingRef = useRef(false);
-  const resizingRef = useRef(false);
-
-  const lastMouse = useRef({ x: 0, y: 0 });
-
-  const startDrag = (e) => {
-    draggingRef.current = true;
-    lastMouse.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const stopDrag = () => {
-    draggingRef.current = false;
-    resizingRef.current = false;
-  };
-
-  const startResize = (e) => {
-    e.stopPropagation();
-    resizingRef.current = true;
-    lastMouse.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleMouseMove = (e) => {
-    if (draggingRef.current) {
-      const dx = e.clientX - lastMouse.current.x;
-      const dy = e.clientY - lastMouse.current.y;
-      lastMouse.current = { x: e.clientX, y: e.clientY };
-
-      setPos((prev) => {
-        const updated = { x: prev.x + dx, y: prev.y + dy };
-        localStorage.setItem("huddleWindowPos", JSON.stringify(updated));
-        return updated;
-      });
-    }
-
-    if (resizingRef.current) {
-      const dx = e.clientX - lastMouse.current.x;
-      const dy = e.clientY - lastMouse.current.y;
-      lastMouse.current = { x: e.clientX, y: e.clientY };
-
-      setSize((prev) => {
-        const updated = {
-          width: Math.max(280, prev.width + dx),
-          height: Math.max(200, prev.height + dy),
-        };
-        localStorage.setItem("huddleWindowSize", JSON.stringify(updated));
-        return updated;
-      });
-    }
-  };
+// Small helper component for remote peer video
+function RemotePeerVideo({ peer }) {
+  const videoRef = useRef(null);
 
   useEffect(() => {
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", stopDrag);
+    const video = videoRef.current;
+    if (!video) return;
 
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", stopDrag);
+    if (!peer || !peer.stream) {
+      if (video.srcObject) video.srcObject = null;
+      return;
+    }
+
+    if (video.srcObject !== peer.stream) {
+      video.srcObject = peer.stream;
+    }
+
+    const play = () => {
+      video
+        .play()
+        .catch(() => {
+          /* ignore autoplay errors */
+        });
     };
+
+    if (video.readyState >= 2) {
+      play();
+    } else {
+      video.onloadedmetadata = play;
+    }
+  }, [peer]);
+
+  return (
+    <video
+      ref={videoRef}
+      className="absolute bottom-3 right-3 w-32 h-24 object-cover rounded-lg border border-white/20 shadow-lg"
+    />
+  );
+}
+
+export default function GlobalHuddleWindow() {
+  const huddleCtx = useHuddle();
+  const activeHuddle = huddleCtx?.activeHuddle || null;
+  const rtc = huddleCtx?.rtc || null;
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Default size for floating window
+  const [pos, setPos] = useState({ x: 200, y: 120 });
+  const [size, setSize] = useState({ w: 540, h: 400 }); // a bit bigger by default
+
+  const windowRef = useRef(null);
+  const localVideoRef = useRef(null);
+
+  const dragging = useRef(false);
+  const resizing = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const resizeStart = useRef({ w: 0, h: 0, x: 0, y: 0 });
+
+  // -------------------------
+  // Attach local video stream (no blinking)
+  // -------------------------
+  useEffect(() => {
+    const video = localVideoRef.current;
+    if (!video) return;
+
+    // If rtc is not ready yet, clear stream & bail
+    if (!rtc || !rtc.localStream) {
+      if (video.srcObject) video.srcObject = null;
+      return;
+    }
+
+    if (video.srcObject !== rtc.localStream) {
+      video.srcObject = rtc.localStream;
+    }
+
+    video.muted = true;
+
+    const play = () => {
+      video
+        .play()
+        .catch(() => {
+          /* ignore autoplay errors */
+        });
+    };
+
+    if (video.readyState >= 2) {
+      play();
+    } else {
+      video.onloadedmetadata = play;
+    }
+  }, [rtc]);
+
+  // -------------------------
+  // Dragging
+  // -------------------------
+  const onMouseDownDrag = (e) => {
+    if (isFullscreen) return;
+    dragging.current = true;
+    dragOffset.current = {
+      x: e.clientX - pos.x,
+      y: e.clientY - pos.y,
+    };
+  };
+
+  const onMouseMove = (e) => {
+    if (dragging.current) {
+      setPos({
+        x: e.clientX - dragOffset.current.x,
+        y: e.clientY - dragOffset.current.y,
+      });
+    }
+    if (resizing.current) {
+      const dx = e.clientX - resizeStart.current.x;
+      const dy = e.clientY - resizeStart.current.y;
+      setSize({
+        w: Math.max(380, resizeStart.current.w + dx),
+        h: Math.max(280, resizeStart.current.h + dy),
+      });
+    }
+  };
+
+  const onMouseUp = () => {
+    dragging.current = false;
+    resizing.current = false;
+  };
+
+  // -------------------------
+  // Resizing
+  // -------------------------
+  const onMouseDownResize = (e) => {
+    if (isFullscreen) return;
+    e.stopPropagation();
+    resizing.current = true;
+    resizeStart.current = {
+      w: size.w,
+      h: size.h,
+      x: e.clientX,
+      y: e.clientY,
+    };
+  };
+
+  // -------------------------
+  // Fullscreen toggle
+  // -------------------------
+  const toggleFullscreen = () => {
+    if (!rtc) return;
+
+    if (!isFullscreen) {
+      setPos({ x: 0, y: 0 });
+      setSize({ w: window.innerWidth, h: window.innerHeight });
+      setIsFullscreen(true);
+      if (typeof rtc.requestFullscreen === "function") {
+        rtc.requestFullscreen();
+      }
+    } else {
+      setSize({ w: 540, h: 400 });
+      setPos({ x: 200, y: 120 });
+      setIsFullscreen(false);
+      if (typeof rtc.exitFullscreen === "function") {
+        rtc.exitFullscreen();
+      }
+    }
+  };
+
+  // -------------------------
+  // Close / Leave Huddle
+  // -------------------------
+  const leave = () => {
+    if (!rtc) return;
+    if (typeof rtc.leaveHuddle === "function") {
+      rtc.leaveHuddle();
+    }
+  };
+
+  // -------------------------
+  // Global mouse events for drag / resize
+  // -------------------------
+  useEffect(() => {
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -----------------------------
+  // If no active huddle or no rtc, hide window completely
+  if (!activeHuddle || !rtc) return null;
+
+  const remotePeers = Array.isArray(rtc.remotePeers) ? rtc.remotePeers : [];
 
   return (
     <div
-      className="fixed bg-white shadow-2xl border rounded-xl z-[99999]"
+      ref={windowRef}
+      className="fixed bg-[#0f111a] text-white shadow-2xl rounded-xl border border-slate-800 z-[999999]"
       style={{
-        top: pos.y,
         left: pos.x,
-        width: size.width,
-        height: size.height,
+        top: pos.y,
+        width: size.w,
+        height: size.h,
+        transition: isFullscreen ? "all 0.2s ease" : "none",
       }}
     >
-      {/* Header (draggable) */}
+      {/* ██████████████ TOP BAR ██████████████ */}
       <div
-        className="cursor-move bg-slate-800 text-white px-3 py-2 rounded-t-xl flex justify-between items-center"
-        onMouseDown={startDrag}
+        onMouseDown={onMouseDownDrag}
+        className="w-full px-3 py-2 bg-[#1b1e27] cursor-move rounded-t-xl flex justify-between items-center select-none"
       >
-        <span className="text-sm font-medium">
-          Huddle – {activeHuddle?.channelId}
-        </span>
+        <div className="font-semibold text-sm">
+          Huddle – {activeHuddle.channelId?.replace("team-", "")}
+        </div>
 
         <div className="flex items-center gap-2">
-          {/* Fullscreen */}
+          {/* Fullscreen Button */}
           <button
-            className="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600"
-            onClick={requestFullscreen}
+            onClick={toggleFullscreen}
+            className="px-3 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600"
           >
-            Fullscreen
+            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
           </button>
 
-          {/* Close */}
+          {/* Single End Button (for this window) */}
           <button
-            className="text-xs bg-red-500 px-2 py-1 rounded hover:bg-red-600"
-            onClick={leaveHuddle}
+            onClick={leave}
+            className="px-3 py-1 text-xs rounded bg-red-600 hover:bg-red-500"
           >
             End
           </button>
         </div>
       </div>
 
-      {/* CONTENT */}
+      {/* ██████████████ VIDEO AREA ██████████████ */}
       <div
-        className="relative bg-black rounded-b-xl overflow-hidden"
-        ref={fullscreenTargetRef}
-        style={{
-          width: "100%",
-          height: size.height - 48,
-        }}
+        className="relative w-full bg-black overflow-hidden"
+        style={{ height: size.h - 110 }}
       >
-        {/* MAIN VIDEO GRID */}
-        <div className="w-full h-full grid grid-cols-2 gap-1 p-1">
-          {/* Local Stream */}
-          {localStream && (
-            <video
-              className="bg-black rounded object-cover w-full h-full"
-              ref={(el) => el && (el.srcObject = localStream)}
-              autoPlay
-              muted
-            />
-          )}
-
-          {/* Remote Streams */}
-          {remotePeers.map((peer) => (
-            <video
-              key={peer.userId}
-              className="bg-black rounded object-cover w-full h-full"
-              ref={(el) => el && (el.srcObject = peer.stream)}
-              autoPlay
-            />
-          ))}
-
-          {remotePeers.length === 0 && !localStream && (
-            <div className="text-white text-xs flex items-center justify-center opacity-40">
-              Waiting for video…
-            </div>
-          )}
-        </div>
-
-        {/* Controls */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-3 bg-slate-900 bg-opacity-70 px-4 py-2 rounded-full">
-          <button
-            className={`px-3 py-1 rounded ${
-              isMuted ? "bg-red-600" : "bg-slate-700"
-            } text-white`}
-            onClick={toggleMute}
-          >
-            {isMuted ? "Unmute" : "Mute"}
-          </button>
-
-          <button
-            className={`px-3 py-1 rounded ${
-              isCameraOff ? "bg-red-600" : "bg-slate-700"
-            } text-white`}
-            onClick={toggleCamera}
-          >
-            {isCameraOff ? "Camera Off" : "Camera On"}
-          </button>
-
-          {!isScreenSharing ? (
-            <button
-              className="px-3 py-1 rounded bg-slate-700 text-white"
-              onClick={startScreenShare}
-            >
-              Share Screen
-            </button>
-          ) : (
-            <button
-              className="px-3 py-1 rounded bg-red-600 text-white"
-              onClick={stopScreenShare}
-            >
-              Stop Sharing
-            </button>
-          )}
-        </div>
-
-        {/* Resize handle */}
         <div
-          onMouseDown={startResize}
-          className="absolute bottom-0 right-0 w-4 h-4 bg-slate-700 cursor-se-resize rounded-tr-lg"
-        ></div>
+          ref={rtc.fullscreenTargetRef}
+          className="w-full h-full flex items-center justify-center bg-black"
+        >
+          {/* Local video */}
+          {rtc.localStream ? (
+            <video
+              ref={localVideoRef}
+              className="w-full h-full object-cover rounded-lg"
+            />
+          ) : (
+            <div className="text-gray-400 text-sm">Connecting camera…</div>
+          )}
+        </div>
+
+        {/* Remote videos */}
+        {remotePeers.map((peer) => (
+          <RemotePeerVideo key={peer.userId || peer.id} peer={peer} />
+        ))}
       </div>
+
+      {/* ██████████████ CONTROL BAR ██████████████ */}
+      <div className="w-full bg-[#1b1e27] py-3 px-6 flex justify-center gap-6 rounded-b-xl">
+        {/* MUTE */}
+        <button
+          onClick={() => rtc.toggleMute && rtc.toggleMute()}
+          className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600"
+        >
+          {rtc.isMuted ? "🔇" : "🎤"}
+        </button>
+
+        {/* CAMERA */}
+        <button
+          onClick={() => rtc.toggleCamera && rtc.toggleCamera()}
+          className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600"
+        >
+          {rtc.isCameraOff ? "📷❌" : "📷"}
+        </button>
+
+        {/* SCREEN SHARE */}
+        <button
+          onClick={() =>
+            rtc.isScreenSharing
+              ? rtc.stopScreenShare && rtc.stopScreenShare()
+              : rtc.startScreenShare && rtc.startScreenShare()
+          }
+          className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600"
+        >
+          {rtc.isScreenSharing ? "🛑" : "🖥️"}
+        </button>
+      </div>
+
+      {/* Resize handle */}
+      {!isFullscreen && (
+        <div
+          onMouseDown={onMouseDownResize}
+          className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize bg-slate-500 rounded"
+        ></div>
+      )}
     </div>
   );
 }

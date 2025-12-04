@@ -14,9 +14,13 @@ import {
   endHuddle,
   sendReaction,
 } from "../socket";
-import useHuddleWebRTC from "../webrtc/huddleRTC"; // NOTE: default import now
+import { useHuddle } from "../context/HuddleContext"; // 🔵 global huddle
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
+
+// NEW: channel modals
+import CreateChannelModal from "../components/CreateChannelModal";
+import ChannelSettingsModal from "../components/ChannelSettingsModal";
 
 // ----- CONFIG -----
 const GENERAL_CHANNEL_KEY = "general";
@@ -62,45 +66,23 @@ function presenceLabel(status) {
   return "Unknown";
 }
 
-// Small reusable video tile for huddles
-function HuddleVideoTile({ stream, label, isYou, muted }) {
-  const videoRef = useRef(null);
-
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
-  }, [stream]);
-
-  return (
-    <div className="relative bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-700">
-      {stream ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={muted}
-          className="w-full h-full object-cover"
-        />
-      ) : (
-        <div className="flex flex-col items-center justify-center text-slate-400 text-xs py-6">
-          <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center mb-2">
-            {label?.[0]?.toUpperCase() || "?"}
-          </div>
-          <span>{isYou ? "Waiting for your media..." : "Connecting..."}</span>
-        </div>
-      )}
-      <div className="absolute bottom-1 left-2 text-[10px] px-2 py-[2px] rounded-full bg-black/60 text-slate-100">
-        {isYou ? "You" : label || "Teammate"}
-      </div>
-    </div>
-  );
-}
-
 export default function Chat() {
   const { auth } = useAuth();
   const api = useApi();
   const user = auth.user;
+
+  // 🔊 Global huddle state / controls
+  const huddleCtx = useHuddle();
+  const activeHuddle = huddleCtx?.activeHuddle;
+  const setActiveHuddle = huddleCtx?.setActiveHuddle;
+  const setChannelForHuddle = huddleCtx?.setChannelForHuddle;
+  const rtc = huddleCtx?.rtc;
+
+  const {
+    joined: huddleJoined = false,
+    connecting: huddleConnecting = false,
+    error: huddleError = "",
+  } = rtc || {};
 
   // ----- STATE -----
   const [connected, setConnected] = useState(false);
@@ -114,6 +96,12 @@ export default function Chat() {
   const [messagesByChannel, setMessagesByChannel] = useState({});
   const [activeChannelKey, setActiveChannelKey] = useState(GENERAL_CHANNEL_KEY);
   const [activeDmUser, setActiveDmUser] = useState(null);
+
+  // NEW: channels list + modals
+  const [channels, setChannels] = useState([]);
+  const [openCreate, setOpenCreate] = useState(false);
+  const [openSettings, setOpenSettings] = useState(false);
+  const [settingsChannel, setSettingsChannel] = useState(null);
 
   // presence map: userId -> { status, at }
   const [presenceMap, setPresenceMap] = useState({});
@@ -129,9 +117,6 @@ export default function Chat() {
   // Read receipts: channelId -> { userId -> { at } }
   const [readReceiptsByChannel, setReadReceiptsByChannel] = useState({});
 
-  // Huddle metadata (GLOBAL: can be from any channel)
-  const [activeHuddle, setActiveHuddle] = useState(null);
-
   // small tick just to let typing timeouts refresh
   const [, setTick] = useState(0);
 
@@ -139,18 +124,6 @@ export default function Chat() {
   const activeChannelRef = useRef(GENERAL_CHANNEL_KEY);
   const fileInputRef = useRef(null);
   const lastTypingSentRef = useRef(0);
-
-  // For draggable huddle panel
-  const huddlePanelRef = useRef(null);
-  const huddleLastMousePosRef = useRef({ x: 0, y: 0 });
-  const [huddleDrag, setHuddleDrag] = useState({
-    dragging: false,
-    x: 0,
-    y: 0,
-  });
-
-  // NEW: fullscreen state for huddle panel
-  const [isHuddleFullscreen, setIsHuddleFullscreen] = useState(false);
 
   // Which message's emoji picker is open
   const [openReactionFor, setOpenReactionFor] = useState(null);
@@ -191,14 +164,12 @@ export default function Chat() {
 
   const isGeneralChannel = activeChannelKey === GENERAL_CHANNEL_KEY;
   const isThreadChannel = activeChannelKey.startsWith("thread:");
+  const isDmChannel = !!activeDmUser && !isThreadChannel;
 
-  const activeChannelTitle = isThreadChannel
-    ? "Thread"
-    : isGeneralChannel
-    ? "Team Chat"
-    : activeDmUser
-    ? `Direct Message with ${activeDmUser.username}`
-    : "Direct Message";
+  const activeChannel = useMemo(
+    () => channels.find((ch) => ch.key === activeChannelKey) || null,
+    [channels, activeChannelKey]
+  );
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -215,28 +186,6 @@ export default function Chat() {
       ? activeMessages[activeMessages.length - 1].id
       : null;
 
-  // ----- Huddle WebRTC hook (multi-user, join button) -----
-  const {
-    joined: huddleJoined,
-    connecting: huddleConnecting,
-    error: huddleError,
-    localStream,
-    remotePeers,
-    isMuted,
-    isCameraOff,
-    isScreenSharing,
-    joinHuddle,
-    leaveHuddle,
-    toggleMute,
-    toggleCamera,
-    startScreenShare,
-    stopScreenShare,
-  } = useHuddleWebRTC({
-    channelId: activeChannelKey, // view channel
-    user,
-    activeHuddle, // source of truth for actual huddle channel/id
-  });
-
   const isHuddleActiveHere =
     activeHuddle && activeHuddle.channelId === activeChannelKey;
 
@@ -244,21 +193,48 @@ export default function Chat() {
     activeHuddle &&
     String(activeHuddle.startedBy?.userId) === String(user.id);
 
+  const activeChannelTitle = isThreadChannel
+    ? "Thread"
+    : isDmChannel && activeDmUser
+    ? `Direct Message with ${activeDmUser.username}`
+    : isGeneralChannel
+    ? "Team Chat"
+    : activeChannel?.name || activeChannelKey;
+
+  const publicChannels = useMemo(
+    () =>
+      channels.filter((ch) => {
+        if (!ch) return false;
+        const isPriv = ch.isPrivate ?? ch.is_private ?? false;
+        return (
+          !isPriv &&
+          ch.key !== GENERAL_CHANNEL_KEY &&
+          !String(ch.key || "").startsWith("dm:")
+        );
+      }),
+    [channels]
+  );
+
+  const privateChannels = useMemo(
+    () =>
+      channels.filter((ch) => {
+        if (!ch) return false;
+        const isPriv = ch.isPrivate ?? ch.is_private ?? false;
+        return (
+          isPriv &&
+          ch.key !== GENERAL_CHANNEL_KEY &&
+          !String(ch.key || "").startsWith("dm:")
+        );
+      }),
+    [channels]
+  );
+
+
+
   // force re-render to allow typing timers to expire
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, []);
-
-  // 🔹 Keep fullscreen state in sync if user presses ESC
-  useEffect(() => {
-    const handleFsChange = () => {
-      if (!document.fullscreenElement) {
-        setIsHuddleFullscreen(false);
-      }
-    };
-    document.addEventListener("fullscreenchange", handleFsChange);
-    return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
   // ----- SCROLL ON NEW MESSAGES -----
@@ -288,6 +264,27 @@ export default function Chat() {
     return () => {
       cancelled = true;
     };
+  }, [api]);
+
+  // ----- LOAD CHANNELS ONE TIME -----
+
+const loadChannels = async () => {
+  try {
+    const res = await api.get("/chat/channels", {
+    //  👇 this is the important part
+      headers: {
+        "x-user-id": user?.id,   // or user?._id depending on your backend
+      },
+    });
+
+    setChannels(res.data);
+  } catch (err) {
+    console.error("Failed to load channels:", err);
+  }
+};
+
+  useEffect(() => {
+    loadChannels();
   }, [api]);
 
   // ----- SOCKET SETUP: CONNECTION + LISTENERS -----
@@ -489,11 +486,11 @@ export default function Chat() {
       });
     };
 
-    // Huddle events
+    // Huddle events (global)
     const handleHuddleStarted = (payload) => {
       if (!payload || !payload.channelId || !payload.huddleId) return;
+      if (!setActiveHuddle) return;
 
-      // This is GLOBAL: if a huddle starts in any channel, remember it
       setActiveHuddle({
         channelId: payload.channelId,
         huddleId: payload.huddleId,
@@ -504,16 +501,15 @@ export default function Chat() {
 
     const handleHuddleEnded = (payload) => {
       if (!payload || !payload.channelId || !payload.huddleId) return;
+      if (!setActiveHuddle) return;
 
-      // If this is the same huddle we know about, clear it
       setActiveHuddle((prev) => {
         if (
           prev &&
           prev.channelId === payload.channelId &&
           prev.huddleId === payload.huddleId
         ) {
-          // Also leave WebRTC locally
-          leaveHuddle();
+          if (rtc) rtc.leaveHuddle?.();
           return null;
         }
         return prev;
@@ -605,8 +601,6 @@ export default function Chat() {
       });
     };
 
-    // WebRTC signaling handled inside useHuddleWebRTC via socket.on("huddle:signal")
-
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("chat:history", handleHistory);
@@ -640,7 +634,7 @@ export default function Chat() {
       socket.off("chat:messageEdited", handleMessageEdited);
       socket.off("chat:messageDeleted", handleMessageDeleted);
     };
-  }, [auth.token, user.id, leaveHuddle]);
+  }, [auth.token, user.id, setActiveHuddle, rtc]);
 
   // ----- JOIN / LEAVE WHEN ACTIVE CHANNEL CHANGES -----
   useEffect(() => {
@@ -659,18 +653,20 @@ export default function Chat() {
     joinChatChannel(activeChannelKey);
     activeChannelRef.current = activeChannelKey;
 
+    // tell global huddle which channel is currently in focus
+    if (setChannelForHuddle) {
+      setChannelForHuddle(activeChannelKey);
+    }
+
     // clear typing indicator for new channel
     setTypingByChannel((prev) => ({
       ...prev,
       [activeChannelKey]: {},
     }));
 
-    // ❗️IMPORTANT: we NO LONGER clear activeHuddle here
-    // This keeps the huddle global across channels
-
     // close any open reaction picker
     setOpenReactionFor(null);
-  }, [activeChannelKey, auth.token]);
+  }, [activeChannelKey, auth.token, setChannelForHuddle]);
 
   // ----- SEND MESSAGE -----
   const handleSend = async (e) => {
@@ -760,6 +756,11 @@ export default function Chat() {
     setActiveDmUser(null);
   };
 
+  const handleSelectChannel = (channelKey) => {
+    setActiveChannelKey(channelKey);
+    setActiveDmUser(null);
+  };
+
   const handleAttachmentClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
@@ -840,34 +841,34 @@ export default function Chat() {
     sendReadReceipt(activeChannelKey, at);
   }, [connected, activeChannelKey, activeMessages]);
 
-  // Huddle start/end handler (GLOBAL)
+  // Huddle start/end handler (GLOBAL toggle button)
   const handleToggleHuddle = () => {
-    if (!connected) return;
+    if (!connected || !rtc) return;
 
-    // If there is an active huddle (in ANY channel)
+    // If there is an active huddle (any channel)
     if (activeHuddle) {
-      // If I own it, end for everyone on the original channel
       if (isHuddleOwner) {
         endHuddle(activeHuddle.channelId, activeHuddle.huddleId);
       }
-      // Leave locally
-      leaveHuddle();
-      setActiveHuddle(null);
-      setIsHuddleFullscreen(false);
+      rtc.leaveHuddle();
+      if (setActiveHuddle) setActiveHuddle(null);
       return;
     }
 
-    // No huddle yet -> start one in the CURRENT channel and auto-join
+    // No huddle yet -> start one in CURRENT channel & auto-join
     const huddleId = createUniqueId("huddle");
     startHuddle(activeChannelKey, huddleId);
-    setActiveHuddle({
-      channelId: activeChannelKey,
-      huddleId,
-      startedBy: { userId: user.id, username: user.username },
-      at: new Date().toISOString(),
-    });
-    // creator joins immediately
-    joinHuddle();
+
+    if (setActiveHuddle) {
+      setActiveHuddle({
+        channelId: activeChannelKey,
+        huddleId,
+        startedBy: { userId: user.id, username: user.username },
+        at: new Date().toISOString(),
+      });
+    }
+
+    rtc.joinHuddle();
   };
 
   // Toggle reaction for a message
@@ -978,103 +979,136 @@ export default function Chat() {
       huddleButtonLabel = "Join huddle";
     }
   } else if (activeHuddle) {
-    // huddle active in another channel
     huddleButtonLabel = "Huddle in another channel";
   }
-
-  // ----- DRAG HANDLERS FOR HUDDLE PANEL -----
-  const handleHuddleMouseDown = (e) => {
-    if (isHuddleFullscreen) return; // no dragging in fullscreen
-    e.preventDefault();
-    huddleLastMousePosRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-    };
-    setHuddleDrag((prev) => ({ ...prev, dragging: true }));
-  };
-
-  useEffect(() => {
-    if (!huddleDrag.dragging) return;
-
-    const handleMouseMove = (e) => {
-      e.preventDefault();
-      const { x: lastX, y: lastY } = huddleLastMousePosRef.current;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      huddleLastMousePosRef.current = { x: e.clientX, y: e.clientY };
-
-      setHuddleDrag((prev) => ({
-        ...prev,
-        x: prev.x + dx,
-        y: prev.y + dy,
-      }));
-    };
-
-    const handleMouseUp = () => {
-      setHuddleDrag((prev) => ({ ...prev, dragging: false }));
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [huddleDrag.dragging]);
-
-  // ----- FULLSCREEN HANDLERS -----
-  const handleEnterHuddleFullscreen = () => {
-    setIsHuddleFullscreen(true);
-    const el = huddlePanelRef.current;
-    if (el && el.requestFullscreen) {
-      try {
-        el.requestFullscreen();
-      } catch {
-        // ignore
-      }
-    }
-  };
-
-  const handleExitHuddleFullscreen = () => {
-    setIsHuddleFullscreen(false);
-    if (document.fullscreenElement) {
-      try {
-        document.exitFullscreen();
-      } catch {
-        // ignore
-      }
-    }
-  };
 
   return (
     <div className="h-[calc(100vh-80px)] flex gap-4">
       {/* LEFT: channels + DMs */}
       <aside className="w-64 bg-white rounded-xl shadow p-3 flex flex-col text-xs">
-        <div className="mb-4">
-          <div className="text-[11px] font-semibold text-slate-500 mb-1">
-            Channels
+        {/* HEADER */}
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-[11px] font-semibold text-slate-500">
+              Channels
+            </div>
+            <div className="inline-flex items-center gap-1 text-[10px] text-slate-500 mt-1">
+              <span
+                className={`w-2 h-2 rounded-full ${statusDotClass}`}
+              ></span>
+              <span>{statusLabel}</span>
+            </div>
           </div>
+
+          {/* Create channel */}
           <button
             type="button"
-            onClick={handleSelectGeneral}
-            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
-              isGeneralChannel
-                ? "bg-blue-50 text-blue-700"
-                : "text-slate-700 hover:bg-slate-50"
-            }`}
+            onClick={() => setOpenCreate(true)}
+            className="text-[14px] leading-none px-2 hover:bg-slate-100 rounded"
+            title="Create channel"
           >
-            <span className="flex items-center gap-2">
-              <span className="text-base">#</span>
-              <span>team-general</span>
-            </span>
-
-            <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
-              <span className={`w-2 h-2 rounded-full ${statusDotClass}`} />
-              {statusLabel}
-            </span>
+            +
           </button>
         </div>
+
+        {/* GENERAL CHANNEL */}
+        <button
+          type="button"
+          onClick={handleSelectGeneral}
+          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs mb-2 ${
+            isGeneralChannel
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-base">#</span>
+            <span>team-general</span>
+          </span>
+        </button>
+
+        {/* PUBLIC CHANNELS */}
+        {publicChannels.length > 0 && (
+          <div className="mb-3 space-y-1">
+            {publicChannels.map((ch) => {
+              const isActive = activeChannelKey === ch.key;
+              return (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => handleSelectChannel(ch.key)}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
+                    isActive
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-base">#</span>
+                    <span>{ch.name}</span>
+                  </span>
+
+                  {/* settings (admins can manage in modal) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSettingsChannel(ch);
+                      setOpenSettings(true);
+                    }}
+                    className="text-[12px] hover:text-slate-900"
+                    title="Channel settings"
+                  >
+                    ⋮
+                  </button>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* PRIVATE CHANNELS — visible only if user is a member (A-1 handled by backend) */}
+        {privateChannels.length > 0 && (
+          <div className="mb-3 space-y-1">
+            <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+              Private <span className="text-[9px]">🔒</span>
+            </div>
+
+            {privateChannels.map((ch) => {
+              const isActive = activeChannelKey === ch.key;
+              return (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => handleSelectChannel(ch.key)}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
+                    isActive
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🔒</span>
+                    <span>{ch.name}</span>
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSettingsChannel(ch);
+                      setOpenSettings(true);
+                    }}
+                    className="text-[12px]"
+                    title="Channel settings"
+                  >
+                    ⋮
+                  </button>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* DMs with proper scroll / no shifting */}
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -1145,14 +1179,14 @@ export default function Chat() {
             <p className="text-xs text-slate-500">
               {isThreadChannel
                 ? "Threaded conversation for a specific message."
-                : isGeneralChannel
-                ? "Team-wide real-time chat. Everyone sees the same messages."
-                : "Private 1:1 conversation between you and your teammate."}
+                : isDmChannel
+                ? "Private 1:1 conversation between you and your teammate."
+                : "Team or channel-wide real-time chat."}
             </p>
           </div>
 
           <div className="flex items-center gap-3 text-xs">
-            {!isGeneralChannel && activeDmUser && (
+            {!isGeneralChannel && isDmChannel && activeDmUser && (
               <div className="flex items-center gap-1">
                 <span
                   className={`w-2 h-2 rounded-full ${dmPresenceClass}`}
@@ -1167,7 +1201,7 @@ export default function Chat() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search in channel..."
-              className="text-xs border rounded-full px-2 py-[2px] w-40 focus:outline-none焦 focus:ring-1 focus:ring-blue-400"
+              className="text-xs border rounded-full px-2 py-[2px] w-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
 
             <button
@@ -1221,7 +1255,7 @@ export default function Chat() {
                 {!huddleJoined && !huddleConnecting && (
                   <button
                     type="button"
-                    onClick={joinHuddle}
+                    onClick={() => rtc?.joinHuddle?.()}
                     className="text-[10px] border border-amber-300 rounded px-2 py-1 hover:bg-amber-100"
                   >
                     Join huddle
@@ -1229,7 +1263,7 @@ export default function Chat() {
                 )}
                 {huddleJoined && (
                   <span className="text-[10px] text-amber-700">
-                    You&apos;re in this huddle
+                    You&apos;re in this huddle (see floating window)
                   </span>
                 )}
               </div>
@@ -1530,136 +1564,37 @@ export default function Chat() {
         </section>
       </div>
 
-      {/* FLOATING, DRAGGABLE HUDDLE PANEL (GLOBAL, BIGGER + FULLSCREEN) */}
-      {activeHuddle && huddleJoined && (
-        <div
-          ref={huddlePanelRef}
-          className={`fixed bg-slate-900 text-slate-100 shadow-2xl border border-slate-700 z-30 flex flex-col ${
-            isHuddleFullscreen
-              ? "inset-0 m-0 w-screen h-screen rounded-none"
-              : "bottom-6 right-6 w-[480px] max-w-[90vw] h-[320px] rounded-2xl"
-          }`}
-          style={{
-            transform: isHuddleFullscreen
-              ? undefined
-              : `translate(${huddleDrag.x}px, ${huddleDrag.y}px)`,
-            cursor:
-              huddleDrag.dragging && !isHuddleFullscreen
-                ? "grabbing"
-                : "default",
-          }}
-        >
-          <div
-            className="flex items-center justify-between px-4 py-2 border-b border-slate-800 select-none"
-            onMouseDown={handleHuddleMouseDown}
-          >
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold">
-                Huddle in{" "}
-                {activeHuddle.channelId === "general"
-                  ? "#team-general"
-                  : activeChannelTitle}
-              </span>
-              <span className="text-[10px] text-slate-400">
-                {isHuddleOwner
-                  ? "You started this huddle"
-                  : "You’re in this huddle"}
-              </span>
-            </div>
+      {/* CHANNEL MODALS */}
+      <CreateChannelModal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        onCreated={(channel) => {
+          setChannels((prev) => [...prev, channel]);
+          setActiveChannelKey(channel.key);
+        }}
+      />
 
-            <div className="flex items-center gap-2">
-              {/* Fullscreen toggle button */}
-              {!isHuddleFullscreen ? (
-                <button
-                  type="button"
-                  onClick={handleEnterHuddleFullscreen}
-                  className="text-[10px] px-2 py-[3px] rounded-full bg-slate-800 hover:bg-slate-700"
-                  title="Go fullscreen"
-                >
-                  ⛶
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleExitHuddleFullscreen}
-                  className="text-[10px] px-2 py-[3px] rounded-full bg-slate-800 hover:bg-slate-700"
-                  title="Exit fullscreen"
-                >
-                  ⤢
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={handleToggleHuddle}
-                className="text-[10px] px-2 py-[3px] rounded-full bg-slate-800 hover:bg-slate-700"
-              >
-                {isHuddleOwner ? "Leave & end" : "Leave"}
-              </button>
-            </div>
-          </div>
-
-          <div
-            className={`p-3 grid gap-2 flex-1 ${
-              remotePeers.length > 0 ? "grid-cols-2" : "grid-cols-1"
-            }`}
-          >
-            {/* Remote peers */}
-            {remotePeers.map((p) => (
-              <HuddleVideoTile
-                key={p.userId}
-                stream={p.stream}
-                label={p.username}
-                isYou={false}
-                muted={false}
-              />
-            ))}
-
-            {/* Your tile */}
-            <HuddleVideoTile
-              stream={localStream}
-              label={user.username}
-              isYou
-              muted
-            />
-          </div>
-
-          <div className="px-4 pt-1 pb-3 flex items-center justify-center gap-3 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={toggleMute}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${
-                isMuted ? "bg-red-600" : "bg-slate-700"
-              }`}
-              title={isMuted ? "Unmute" : "Mute"}
-            >
-              {isMuted ? "🔇" : "🎙️"}
-            </button>
-            <button
-              type="button"
-              onClick={toggleCamera}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${
-                isCameraOff ? "bg-red-600" : "bg-slate-700"
-              }`}
-              title={isCameraOff ? "Turn camera on" : "Turn camera off"}
-            >
-              {isCameraOff ? "📷" : "🎥"}
-            </button>
-            <button
-              type="button"
-              onClick={isScreenSharing ? stopScreenShare : startScreenShare}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${
-                isScreenSharing ? "bg-blue-600" : "bg-slate-700"
-              }`}
-              title={
-                isScreenSharing ? "Stop screen share" : "Start screen share"
-              }
-            >
-              🖥️
-            </button>
-          </div>
-        </div>
-      )}
+      <ChannelSettingsModal
+        open={openSettings}
+        channel={settingsChannel}
+        currentUser={user}
+        onClose={() => setOpenSettings(false)}
+        onUpdate={() => loadChannels()}
+        onLeave={(channelKey) => {
+          setOpenSettings(false);
+          if (activeChannelKey === channelKey) {
+            setActiveChannelKey(GENERAL_CHANNEL_KEY);
+          }
+          loadChannels();
+        }}
+        onDelete={(channelKey) => {
+          setOpenSettings(false);
+          if (activeChannelKey === channelKey) {
+            setActiveChannelKey(GENERAL_CHANNEL_KEY);
+          }
+          loadChannels();
+        }}
+      />
     </div>
   );
 }

@@ -23,6 +23,21 @@ export default function Sidebar() {
   useEffect(() => {
     let cancelled = false;
 
+    // FIX: guard - don't call API when no token (prevents 401 noise)
+    if (!auth?.token) {
+      // still subscribe to unread bus, because some other component may publish counts
+      const unsubscribeBus = subscribeToUnreadCount((count) => {
+        if (!cancelled) {
+          setUnreadCount(count);
+        }
+      });
+
+      return () => {
+        cancelled = true;
+        unsubscribeBus();
+      };
+    }
+
     async function loadNotificationsCount() {
       try {
         const res = await api.get("/notifications");

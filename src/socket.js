@@ -3,131 +3,127 @@ import { io } from "socket.io-client";
 
 let socket = null;
 
-// read backend URL from Vite env
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 
-export function initSocket(token) {
-  if (!token) return null;
+/**
+ * Create / re-create socket with JWT token from global window.__AUTH_TOKEN__
+ */
+function createSocket() {
+  if (!window.__AUTH_TOKEN__) return null;
 
-  // Close previous socket before creating a new one
-  if (socket) {
-    try {
-      socket.disconnect();
-    } catch (err) {
-      console.warn("Previous socket disconnect failed:", err);
-    }
-    socket = null;
-  }
-
-  // Create new connection
   socket = io(BACKEND_URL, {
-    auth: { token },
+    auth: { token: window.__AUTH_TOKEN__ },
+    transports: ["websocket"],
     withCredentials: true,
-    transports: ["websocket"],   // no polling loops
-    reconnectionAttempts: 8,
-    reconnectionDelay: 500,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 700,
   });
 
   return socket;
 }
+
+/* -------------------------------------------------
+   Initialize socket manually (first login load)
+------------------------------------------------- */
+export function initSocket(token) {
+  if (token) window.__AUTH_TOKEN__ = token;
+
+  // close previous
+  if (socket) {
+    try {
+      socket.disconnect();
+    } catch {}
+    socket = null;
+  }
+
+  return createSocket();
+}
+
+/* -------------------------------------------------
+   When token changes after login → re-auth socket
+------------------------------------------------- */
+window.addEventListener("auth:updated", () => {
+  if (socket) {
+    try {
+      socket.disconnect();
+    } catch {}
+  }
+  createSocket();
+});
+
+/* -------------------------------------------------
+   When user logs out → destroy socket
+------------------------------------------------- */
+window.addEventListener("auth:logout", () => {
+  if (socket) {
+    try {
+      socket.disconnect();
+    } catch {}
+  }
+  socket = null;
+  window.__AUTH_TOKEN__ = null;
+});
 
 export function getSocket() {
   return socket;
 }
 
-// ─────────────────────────────
-// CHAT HELPERS
-// ─────────────────────────────
+/* -------------------------------------------------
+   CHAT ACTIONS
+------------------------------------------------- */
 
 export function joinChatChannel(channelId) {
-  const s = getSocket();
-  if (!s) return;
-  s.emit("chat:join", channelId);
+  socket?.emit("chat:join", channelId);
 }
 
 export function leaveChatChannel(channelId) {
-  const s = getSocket();
-  if (!s) return;
-  s.emit("chat:leave", channelId);
+  socket?.emit("chat:leave", channelId);
 }
 
 export function sendChatMessage(payload) {
-  const s = getSocket();
-  if (!s) return;
-  s.emit("chat:message", payload);
+  socket?.emit("chat:message", payload);
 }
 
 export function sendTyping(channelId) {
-  const s = getSocket();
-  if (!s || !channelId) return;
-  s.emit("chat:typing", { channelId });
+  socket?.emit("chat:typing", { channelId });
 }
 
 export function sendReadReceipt(channelId, at) {
-  const s = getSocket();
-  if (!s || !channelId) return;
-  s.emit("chat:read", {
-    channelId,
-    at: at || new Date().toISOString(),
-  });
+  socket?.emit("chat:read", { channelId, at: at || new Date().toISOString() });
 }
-
-// ─────────────────────────────
-// REACTIONS
-// ─────────────────────────────
 
 export function sendReaction(payload) {
-  const s = getSocket();
-  if (!s) return;
-  s.emit("chat:reaction", payload);
+  socket?.emit("chat:reaction", payload);
 }
 
-// ─────────────────────────────
-// HUDDLES (DB-backed + Manual Join)
-// ─────────────────────────────
+/* -------------------------------------------------
+   HUDDLE
+------------------------------------------------- */
 
-// The user who starts a huddle
 export function startHuddle(channelId, huddleId) {
-  const s = getSocket();
-  if (!s || !channelId || !huddleId) return;
-  s.emit("huddle:start", { channelId, huddleId });
+  socket?.emit("huddle:start", { channelId, huddleId });
 }
 
-// The owner or system ends the huddle
 export function endHuddle(channelId, huddleId) {
-  const s = getSocket();
-  if (!s || !channelId || !huddleId) return;
-  s.emit("huddle:end", { channelId, huddleId });
+  socket?.emit("huddle:end", { channelId, huddleId });
 }
 
-// WebRTC signaling: to single target user
-export function sendHuddleSignal(channelId, targetUserId, data) {
-  const s = getSocket();
-  if (!s || !channelId || !targetUserId || !data) return;
-  s.emit("huddle:signal", { channelId, targetUserId, data });
-}
-
-// User joins the huddle manually
 export function joinHuddle(channelId, huddleId) {
-  const s = getSocket();
-  if (!s) return;
-  s.emit("huddle:join", { channelId, huddleId });
+  socket?.emit("huddle:join", { channelId, huddleId });
 }
 
-// User leaves the huddle
 export function leaveHuddle(channelId, huddleId) {
-  const s = getSocket();
-  if (!s) return;
-  s.emit("huddle:leave", { channelId, huddleId });
+  socket?.emit("huddle:leave", { channelId, huddleId });
 }
 
-// ─────────────────────────────
-// PRESENCE
-// ─────────────────────────────
+export function sendHuddleSignal(channelId, targetUserId, data) {
+  socket?.emit("huddle:signal", { channelId, targetUserId, data });
+}
 
+/* -------------------------------------------------
+   PRESENCE
+------------------------------------------------- */
 export function sendPresenceStatus(status) {
-  const s = getSocket();
-  if (!s) return;
-  s.emit("presence:set", status);
+  socket?.emit("presence:set", status);
 }
