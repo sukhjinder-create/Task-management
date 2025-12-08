@@ -1,6 +1,11 @@
 // src/pages/Chat.jsx
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
+import {
+  generateUserKeyPair,
+  encryptForRecipients,
+  decryptEnvelopeIfNeeded,
+} from "../crypto/chatCrypto";
 import { useApi } from "../api";
 import {
   getSocket,
@@ -14,21 +19,18 @@ import {
   endHuddle,
   sendReaction,
 } from "../socket";
-import { useHuddle } from "../context/HuddleContext"; // 🔵 global huddle
+import { useHuddle } from "../context/HuddleContext";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 
-// NEW: channel modals
 import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
 
 // ----- CONFIG -----
 const GENERAL_CHANNEL_KEY = "general";
 
-// Quick reactions for the mini emoji picker
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "😮", "😢"];
 
-// Rich editor config (minimal, Slack-ish)
 const quillModules = {
   toolbar: [
     ["bold", "italic", "underline"],
@@ -38,12 +40,10 @@ const quillModules = {
 };
 const quillFormats = ["bold", "italic", "underline", "list", "bullet", "link"];
 
-// Helpers
 function createUniqueId(prefix = "id") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Always sort ids so dm key is stable (dm:userA:userB)
 function dmKeyFor(userIdA, userIdB) {
   const [a, b] = [userIdA, userIdB].sort();
   return `dm:${a}:${b}`;
@@ -71,7 +71,6 @@ export default function Chat() {
   const api = useApi();
   const user = auth.user;
 
-  // 🔊 Global huddle state / controls
   const huddleCtx = useHuddle();
   const activeHuddle = huddleCtx?.activeHuddle;
   const setActiveHuddle = huddleCtx?.setActiveHuddle;
@@ -91,13 +90,23 @@ export default function Chat() {
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+    // userId -> public key (JWK) from backend /crypto/public-keys
+  const [userKeysById, setUserKeysById] = useState({});
+
 
   // channelKey -> [messages]
   const [messagesByChannel, setMessagesByChannel] = useState({});
   const [activeChannelKey, setActiveChannelKey] = useState(GENERAL_CHANNEL_KEY);
   const [activeDmUser, setActiveDmUser] = useState(null);
 
-  // NEW: channels list + modals
+  // THREAD SIDEBAR
+  // key: "thread:<rootMessageId>" -> parent channel key
+  const [threadParents, setThreadParents] = useState({});
+  const [activeThreadKey, setActiveThreadKey] = useState(null);
+  const [threadRootMessage, setThreadRootMessage] = useState(null);
+  const [threadEditorHtml, setThreadEditorHtml] = useState("");
+
+  // channels list + modals
   const [channels, setChannels] = useState([]);
   const [openCreate, setOpenCreate] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
@@ -106,7 +115,7 @@ export default function Chat() {
   // presence map: userId -> { status, at }
   const [presenceMap, setPresenceMap] = useState({});
 
-  // Rich editor content
+  // Rich editor content (main channel)
   const [editorHtml, setEditorHtml] = useState("");
   const [sending, setSending] = useState(false);
   const [attachment, setAttachment] = useState(null);
@@ -117,7 +126,6 @@ export default function Chat() {
   // Read receipts: channelId -> { userId -> { at } }
   const [readReceiptsByChannel, setReadReceiptsByChannel] = useState({});
 
-  // small tick just to let typing timeouts refresh
   const [, setTick] = useState(0);
 
   const listRef = useRef(null);
@@ -125,13 +133,10 @@ export default function Chat() {
   const fileInputRef = useRef(null);
   const lastTypingSentRef = useRef(0);
 
-  // Which message's emoji picker is open
   const [openReactionFor, setOpenReactionFor] = useState(null);
 
-  // Search query
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Edit state
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingOriginalChannel, setEditingOriginalChannel] = useState(null);
 
@@ -143,7 +148,6 @@ export default function Chat() {
     [users, user.id]
   );
 
-  // sort teammates by presence then name
   const sortedTeammates = useMemo(() => {
     return [...teammates].sort((a, b) => {
       const pa = presenceMap[a.id]?.status || "offline";
@@ -162,9 +166,37 @@ export default function Chat() {
     });
   }, [teammates, presenceMap]);
 
+    // Combine users info with their public keys (if any)
+ const usersWithKeys = useMemo(
+  () =>
+    users.map((u) => {
+      const raw = userKeysById[u.id];
+      if (!raw) return u;
+
+      let publicKeyJwk = raw;
+
+      // If backend gave us a JSON string, parse it once here
+      if (typeof raw === "string") {
+        try {
+          publicKeyJwk = JSON.parse(raw);
+        } catch (err) {
+          console.error("Failed to parse publicKey for user", u.id, err, raw);
+          return u; // skip key if broken
+        }
+      }
+
+      return {
+        ...u,
+        publicKeyJwk,
+      };
+    }),
+  [users, userKeysById]
+);
+
+
+
   const isGeneralChannel = activeChannelKey === GENERAL_CHANNEL_KEY;
-  const isThreadChannel = activeChannelKey.startsWith("thread:");
-  const isDmChannel = !!activeDmUser && !isThreadChannel;
+  const isDmChannel = !!activeDmUser;
 
   const activeChannel = useMemo(
     () => channels.find((ch) => ch.key === activeChannelKey) || null,
@@ -193,23 +225,25 @@ export default function Chat() {
     activeHuddle &&
     String(activeHuddle.startedBy?.userId) === String(user.id);
 
-  const activeChannelTitle = isThreadChannel
-    ? "Thread"
-    : isDmChannel && activeDmUser
-    ? `Direct Message with ${activeDmUser.username}`
-    : isGeneralChannel
-    ? "Team Chat"
-    : activeChannel?.name || activeChannelKey;
+  const activeChannelTitle =
+    isDmChannel && activeDmUser
+      ? `Direct Message with ${activeDmUser.username}`
+      : isGeneralChannel
+      ? "Team Chat"
+      : activeChannel?.name || activeChannelKey;
 
   const publicChannels = useMemo(
     () =>
-      channels.filter((ch) => {
+      (channels || []).filter((ch) => {
         if (!ch) return false;
-        const isPriv = ch.isPrivate ?? ch.is_private ?? false;
+        const key = ch.key || "";
+        const isPrivate = ch.is_private ?? ch.isPrivate ?? false;
         return (
-          !isPriv &&
-          ch.key !== GENERAL_CHANNEL_KEY &&
-          !String(ch.key || "").startsWith("dm:")
+          !isPrivate &&
+          key &&
+          key !== GENERAL_CHANNEL_KEY &&
+          !key.startsWith("dm:") &&
+          !key.startsWith("thread:")
         );
       }),
     [channels]
@@ -217,33 +251,90 @@ export default function Chat() {
 
   const privateChannels = useMemo(
     () =>
-      channels.filter((ch) => {
+      (channels || []).filter((ch) => {
         if (!ch) return false;
-        const isPriv = ch.isPrivate ?? ch.is_private ?? false;
+        const key = ch.key || "";
+        const isPrivate = ch.is_private ?? ch.isPrivate ?? false;
         return (
-          isPriv &&
-          ch.key !== GENERAL_CHANNEL_KEY &&
-          !String(ch.key || "").startsWith("dm:")
+          isPrivate &&
+          key &&
+          key !== GENERAL_CHANNEL_KEY &&
+          !key.startsWith("dm:") &&
+          !key.startsWith("thread:")
         );
       }),
     [channels]
   );
 
+  // thread derived
+  const threadMessages = activeThreadKey
+    ? messagesByChannel[activeThreadKey] || []
+    : [];
 
+  const threadParentChannelKey =
+    activeThreadKey && threadParents[activeThreadKey]
+      ? threadParents[activeThreadKey]
+      : null;
 
-  // force re-render to allow typing timers to expire
+  const threadParentChannel =
+    threadParentChannelKey &&
+    channels.find((ch) => ch.key === threadParentChannelKey);
+
+  // 🔐 Figure out which user IDs should be able to read a given channel's messages
+  const getRecipientIdsForChannelKey = (channelKey) => {
+    // DM: channelKey is like "dm:userA:userB"
+    if (channelKey && channelKey.startsWith("dm:")) {
+      const parts = channelKey.split(":").slice(1); // [userA, userB]
+      // ensure current user is included
+      const all = [...parts, user.id];
+      return Array.from(new Set(all.map((id) => String(id))));
+    }
+
+    // General "team" channel => everyone
+    if (channelKey === GENERAL_CHANNEL_KEY) {
+      return users.map((u) => u.id);
+    }
+
+    // Other channels: try to use members if present on channel object
+    const ch = channels.find((c) => c.key === channelKey);
+    if (ch && Array.isArray(ch.members) && ch.members.length > 0) {
+      const memberIds = ch.members.map((m) => m.user_id || m.id);
+      const all = [...memberIds, user.id];
+      return Array.from(new Set(all.map((id) => String(id))));
+    }
+
+    // Fallback: all users (until you wire proper membership)
+    return users.map((u) => u.id);
+  };
+
+  // 🔐 helper: normalize + decrypt incoming message text
+  const decryptForDisplay = async (rawText, rawMessage, channelId) => {
+    try {
+      const baseText = rawText || "";
+      const decrypted = await decryptEnvelopeIfNeeded(
+        baseText,
+        { ...rawMessage, channelId },
+        user.id,
+        usersWithKeys
+      );
+      return decrypted || "";
+    } catch (err) {
+      console.error("E2E decrypt error:", err);
+      return rawText || "";
+    }
+  };
+
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // ----- SCROLL ON NEW MESSAGES -----
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [activeMessages]);
 
-  // ----- LOAD USERS ONE TIME -----
+  // Load users
   useEffect(() => {
     let cancelled = false;
 
@@ -266,28 +357,106 @@ export default function Chat() {
     };
   }, [api]);
 
-  // ----- LOAD CHANNELS ONE TIME -----
+    // Load user public keys for E2E crypto
+  useEffect(() => {
+    let cancelled = false;
 
-const loadChannels = async () => {
-  try {
-    const res = await api.get("/chat/channels", {
-    //  👇 this is the important part
-      headers: {
-        "x-user-id": user?.id,   // or user?._id depending on your backend
-      },
-    });
+    async function loadUserKeys() {
+      try {
+        const res = await api.get("/crypto/public-keys");
+        if (cancelled) return;
 
-    setChannels(res.data);
-  } catch (err) {
-    console.error("Failed to load channels:", err);
-  }
-};
+        const map = {};
+        (res.data || []).forEach((row) => {
+          if (row.publicKey) {
+            map[row.userId] = row.publicKey;
+          }
+        });
+
+        setUserKeysById(map);
+        console.log("[E2E] Loaded public keys for users:", Object.keys(map));
+      } catch (err) {
+        console.error("Failed to load user public keys:", err);
+      }
+    }
+
+    loadUserKeys();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+
+
+  // 🔐 NEW: ensure this user has an E2E key pair + publish public key
+    // 🔐 Ensure we have a keypair AND that our public key is uploaded to backend
+  useEffect(() => {
+    let cancelled = false;
+
+    async function ensureKeys() {
+      try {
+        let publicKeyJwk;
+        let privateKeyJwk;
+
+        const stored = localStorage.getItem("chatKeyPair");
+
+        if (stored) {
+          // we already have a keypair locally → just reuse it
+          const parsed = JSON.parse(stored);
+          publicKeyJwk = parsed.publicKeyJwk;
+          privateKeyJwk = parsed.privateKeyJwk;
+        } else {
+          // generate a brand-new keypair
+          const generated = await generateUserKeyPair();
+          if (cancelled) return;
+
+          publicKeyJwk = generated.publicKeyJwk;
+          privateKeyJwk = generated.privateKeyJwk;
+
+          localStorage.setItem(
+            "chatKeyPair",
+            JSON.stringify({ publicKeyJwk, privateKeyJwk })
+          );
+        }
+
+        if (cancelled) return;
+
+        // ✅ ALWAYS upload the public key (idempotent because backend upserts)
+        await api.post("/crypto/public-key", {
+          publicKey: publicKeyJwk,
+        });
+
+        console.log("[E2E] Public key uploaded for user", user.id);
+      } catch (err) {
+        console.error("Failed to ensure E2E key pair:", err);
+      }
+    }
+
+    if (auth?.token && user?.id) {
+      ensureKeys();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, auth?.token, user?.id]);
+
+
+  // Load channels
+  const loadChannels = async () => {
+    try {
+      const res = await api.get("/chat/channels");
+      setChannels(res.data || []);
+    } catch (err) {
+      console.error("Failed to load channels:", err);
+    }
+  };
 
   useEffect(() => {
     loadChannels();
   }, [api]);
 
-  // ----- SOCKET SETUP: CONNECTION + LISTENERS -----
+  // ----- SOCKET SETUP -----
   useEffect(() => {
     let socket = getSocket();
     if (!socket && auth.token) {
@@ -309,21 +478,39 @@ const loadChannels = async () => {
       setConnected(false);
     };
 
-    const handleHistory = (payload) => {
+    const handleHistory = async (payload) => {
       if (!payload || !payload.channelId) return;
       const channelId = payload.channelId;
-      const history = (payload.messages || []).map((m) => ({
-        id: m.id || createUniqueId("msg"),
-        channelId,
-        textHtml: m.textHtml || m.text_html || m.text || "",
-        userId: m.userId || m.user_id,
-        username: m.username,
-        createdAt: m.createdAt || m.created_at,
-        updatedAt: m.updatedAt || m.updated_at,
-        deletedAt: m.deletedAt || m.deleted_at,
-        reactions: m.reactions || {},
-        attachments: m.attachments || [],
-      }));
+      const rawMessages = payload.messages || [];
+
+      const history = await Promise.all(
+        rawMessages.map(async (m) => {
+          const base = {
+            id: m.id || createUniqueId("msg"),
+            channelId,
+            textHtml: m.textHtml || m.text_html || m.text || "",
+            userId: m.userId || m.user_id,
+            username: m.username,
+            createdAt: m.createdAt || m.created_at,
+            updatedAt: m.updatedAt || m.updated_at,
+            deletedAt: m.deletedAt || m.deleted_at,
+            parentId: m.parentId || m.parent_id || null,
+            reactions: m.reactions || {},
+            attachments: m.attachments || [],
+          };
+
+          const decryptedText = await decryptForDisplay(
+            base.textHtml,
+            m,
+            channelId
+          );
+
+          return {
+            ...base,
+            textHtml: decryptedText,
+          };
+        })
+      );
 
       setMessagesByChannel((prev) => ({
         ...prev,
@@ -333,52 +520,61 @@ const loadChannels = async () => {
       setLoadingHistory(false);
     };
 
-    const handleChatMessage = (msg) => {
+        const handleChatMessage = async (msg) => {
       if (!msg || !msg.channelId) return;
       const channelId = msg.channelId;
+
+      const decryptedText = await decryptForDisplay(
+        msg.textHtml || msg.text_html || msg.text || "",
+        msg,
+        channelId
+      );
+
+      const normalized = {
+        id: msg.id || msg.tempId || createUniqueId("msg"),
+        channelId,
+        textHtml: decryptedText,
+        userId: msg.userId || msg.user_id,
+        username: msg.username,
+        createdAt: msg.createdAt || msg.created_at,
+        updatedAt: msg.updatedAt || msg.updated_at,
+        deletedAt: msg.deletedAt || msg.deleted_at,
+        parentId: msg.parentId || msg.parent_id || null,
+        reactions: msg.reactions || {},
+        attachments: msg.attachments || [],
+      };
 
       setMessagesByChannel((prev) => {
         const existing = prev[channelId] || [];
         const next = [...existing];
 
-        // optimistic reconciliation if tempId
+        // tempId replacement
         if (msg.tempId) {
           const idxTemp = next.findIndex((m) => m.id === msg.tempId);
           if (idxTemp !== -1) {
             next[idxTemp] = {
               ...next[idxTemp],
-              ...msg,
-              id: msg.id || msg.tempId,
+              ...normalized,
             };
             return { ...prev, [channelId]: next };
           }
         }
 
+        // id replacement
         if (msg.id) {
           const idx = next.findIndex((m) => m.id === msg.id);
           if (idx !== -1) {
-            next[idx] = { ...next[idx], ...msg };
+            next[idx] = { ...next[idx], ...normalized };
             return { ...prev, [channelId]: next };
           }
         }
 
-        const safeId = msg.id || msg.tempId || createUniqueId("msg");
-        next.push({
-          id: safeId,
-          channelId,
-          textHtml: msg.textHtml || msg.text_html || msg.text || "",
-          userId: msg.userId || msg.user_id,
-          username: msg.username,
-          createdAt: msg.createdAt || msg.created_at,
-          updatedAt: msg.updatedAt || msg.updated_at,
-          deletedAt: msg.deletedAt || msg.deleted_at,
-          reactions: msg.reactions || {},
-          attachments: msg.attachments || [],
-        });
-
+        // otherwise push
+        next.push(normalized);
         return { ...prev, [channelId]: next };
       });
     };
+
 
     const handleSystem = (payload) => {
       if (!payload || !payload.channelId) return;
@@ -392,7 +588,6 @@ const loadChannels = async () => {
         return;
       }
 
-      // de-duplicate very recent identical system messages
       setMessagesByChannel((prev) => {
         const existing = prev[channelId] || [];
         const last = existing[existing.length - 1];
@@ -437,7 +632,6 @@ const loadChannels = async () => {
       }));
     };
 
-    // Typing from others
     const handleTyping = (payload) => {
       if (!payload || !payload.channelId) return;
       const channelId = payload.channelId;
@@ -460,7 +654,6 @@ const loadChannels = async () => {
       });
     };
 
-    // Read receipts from others
     const handleRead = (payload) => {
       if (!payload || !payload.channelId || !payload.userId) return;
       const channelId = payload.channelId;
@@ -486,7 +679,6 @@ const loadChannels = async () => {
       });
     };
 
-    // Huddle events (global)
     const handleHuddleStarted = (payload) => {
       if (!payload || !payload.channelId || !payload.huddleId) return;
       if (!setActiveHuddle) return;
@@ -516,7 +708,6 @@ const loadChannels = async () => {
       });
     };
 
-    // Reactions from others
     const handleReaction = (payload = {}) => {
       const { channelId, messageId, emoji, action, userId: reactorId } =
         payload;
@@ -593,7 +784,8 @@ const loadChannels = async () => {
           m.id === msgId
             ? {
                 ...m,
-                deletedAt: deletedAt || deleted_at || new Date().toISOString(),
+                deletedAt:
+                  deletedAt || deleted_at || new Date().toISOString(),
               }
             : m
         );
@@ -634,9 +826,9 @@ const loadChannels = async () => {
       socket.off("chat:messageEdited", handleMessageEdited);
       socket.off("chat:messageDeleted", handleMessageDeleted);
     };
-  }, [auth.token, user.id, setActiveHuddle, rtc]);
+  }, [auth.token, user.id, setActiveHuddle, rtc, users]);
 
-  // ----- JOIN / LEAVE WHEN ACTIVE CHANNEL CHANGES -----
+  // JOIN / LEAVE main channel
   useEffect(() => {
     let socket = getSocket();
     if (!socket && auth.token) {
@@ -653,22 +845,61 @@ const loadChannels = async () => {
     joinChatChannel(activeChannelKey);
     activeChannelRef.current = activeChannelKey;
 
-    // tell global huddle which channel is currently in focus
     if (setChannelForHuddle) {
       setChannelForHuddle(activeChannelKey);
     }
 
-    // clear typing indicator for new channel
     setTypingByChannel((prev) => ({
       ...prev,
       [activeChannelKey]: {},
     }));
 
-    // close any open reaction picker
     setOpenReactionFor(null);
   }, [activeChannelKey, auth.token, setChannelForHuddle]);
 
-  // ----- SEND MESSAGE -----
+  // JOIN / LEAVE thread channel (sidebar)
+  useEffect(() => {
+    let socket = getSocket();
+    if (!socket && auth.token) {
+      socket = initSocket(auth.token);
+    }
+    if (!socket) return;
+    if (!activeThreadKey) return;
+
+    joinChatChannel(activeThreadKey);
+
+    return () => {
+      if (activeThreadKey) {
+        leaveChatChannel(activeThreadKey);
+      }
+    };
+  }, [activeThreadKey, auth.token]);
+
+  // ----- THREAD HANDLERS (SIDEBAR) -----
+  const handleOpenThread = (message) => {
+    if (!message?.id) return;
+    const threadKey = `thread:${message.id}`;
+
+    setThreadParents((prev) => ({
+      ...prev,
+      [threadKey]:
+        activeChannelKey && !activeChannelKey.startsWith("thread:")
+          ? activeChannelKey
+          : prev[threadKey] || GENERAL_CHANNEL_KEY,
+    }));
+
+    setActiveThreadKey(threadKey);
+    setThreadRootMessage(message);
+    setOpenReactionFor(null);
+  };
+
+  const handleCloseThread = () => {
+    setActiveThreadKey(null);
+    setThreadRootMessage(null);
+    setThreadEditorHtml("");
+  };
+
+    // ----- SEND MESSAGE (MAIN CHANNEL / DM) -----
   const handleSend = async (e) => {
     e.preventDefault();
     const html = (editorHtml || "").trim();
@@ -680,7 +911,7 @@ const loadChannels = async () => {
       const channelId = editingOriginalChannel || activeChannelKey;
       const messageId = editingMessageId;
 
-      // optimistic update
+      // Locally update with plaintext
       setMessagesByChannel((prev) => {
         const channelMessages = prev[channelId] || [];
         const next = channelMessages.map((m) =>
@@ -695,12 +926,33 @@ const loadChannels = async () => {
         return { ...prev, [channelId]: next };
       });
 
+      // 🔐 Encrypt updated text before sending to server
+      let encryptedHtml = html;
+      try {
+        const recipientIds = getRecipientIdsForChannelKey(channelId);
+        encryptedHtml = await encryptForRecipients(
+          html,
+          user.id,
+          recipientIds,
+          usersWithKeys      // ✅ IMPORTANT: use usersWithKeys here
+        );
+      } catch (err) {
+        console.error(
+          "E2E encrypt (edit) failed, falling back to plaintext:",
+          err
+        );
+      }
+
+      // 🔍 DEBUG: see plaintext vs ciphertext (EDIT)
+      console.log("PLAINTEXT before encrypt (edit):", html);
+      console.log("CIPHERTEXT sent to server (edit):", encryptedHtml);
+
       const socket = getSocket();
       if (socket) {
         socket.emit("chat:edit", {
           channelId,
           messageId,
-          text: html,
+          text: encryptedHtml,
         });
       }
 
@@ -712,11 +964,11 @@ const loadChannels = async () => {
       return;
     }
 
+    // 🆕 NORMAL SEND (new message, not edit)
     const tempId = createUniqueId("temp");
-
     setSending(true);
 
-    // optimistic UI
+    // Locally show plaintext so UI is snappy
     setMessagesByChannel((prev) => {
       const existing = prev[activeChannelKey] || [];
       const next = [
@@ -728,16 +980,36 @@ const loadChannels = async () => {
           userId: user.id,
           username: user.username,
           createdAt: new Date().toISOString(),
+          parentId: null,
           reactions: {},
         },
       ];
       return { ...prev, [activeChannelKey]: next };
     });
 
+    // 🔐 Encrypt for recipients before sending to backend
+    let encryptedHtml = html;
+    try {
+      const recipientIds = getRecipientIdsForChannelKey(activeChannelKey);
+      encryptedHtml = await encryptForRecipients(
+        html,
+        user.id,
+        recipientIds,
+        usersWithKeys        // ✅ THIS is the "later in handleSend" part
+      );
+    } catch (err) {
+      console.error("E2E encrypt failed, sending plaintext:", err);
+    }
+
+    // 🔍 DEBUG: see plaintext vs ciphertext (NEW MESSAGE)
+    console.log("PLAINTEXT before encrypt:", html);
+    console.log("CIPHERTEXT sent to server:", encryptedHtml);
+
     sendChatMessage({
       channelId: activeChannelKey,
-      text: html,
+      text: encryptedHtml,
       tempId,
+      parentId: null,
     });
 
     setEditorHtml("");
@@ -745,20 +1017,93 @@ const loadChannels = async () => {
     setSending(false);
   };
 
+
+
+  // ----- SEND MESSAGE IN THREAD -----
+  const handleThreadEditorChange = (value) => {
+    setThreadEditorHtml(value);
+  };
+
+  const handleSendThread = async (e) => {
+    e.preventDefault();
+    const html = (threadEditorHtml || "").trim();
+    if (!html || !connected || !activeThreadKey || !threadRootMessage?.id) {
+      return;
+    }
+
+    const tempId = createUniqueId("temp");
+    const channelId = activeThreadKey;
+    const parentId = threadRootMessage.id;
+
+    // Locally show plaintext
+    setMessagesByChannel((prev) => {
+      const existing = prev[channelId] || [];
+      const next = [
+        ...existing,
+        {
+          id: tempId,
+          channelId,
+          textHtml: html,
+          userId: user.id,
+          username: user.username,
+          createdAt: new Date().toISOString(),
+          parentId,
+          reactions: {},
+        },
+      ];
+      return { ...prev, [channelId]: next };
+    });
+
+    // 🔐 Encrypt for recipients of the *parent channel*
+        let encryptedHtml = html;
+    try {
+      const parentKey = threadParentChannelKey || activeChannelKey;
+      const recipientIds = getRecipientIdsForChannelKey(parentKey);
+      encryptedHtml = await encryptForRecipients(
+        html,
+        user.id,
+        recipientIds,
+        usersWithKeys
+      );
+    } catch (err) {
+      console.error("E2E encrypt (thread) failed, sending plaintext:", err);
+    }
+
+
+    sendChatMessage({
+      channelId,
+      text: encryptedHtml,
+      tempId,
+      parentId,
+    });
+
+    setThreadEditorHtml("");
+  };
+
+  // ----- CHANNEL / DM SELECT -----
   const handleSelectDm = (otherUser) => {
     const key = dmKeyFor(user.id, otherUser.id);
     setActiveChannelKey(key);
     setActiveDmUser(otherUser);
+    setActiveThreadKey(null);
+    setThreadRootMessage(null);
+    setThreadEditorHtml("");
   };
 
   const handleSelectGeneral = () => {
     setActiveChannelKey(GENERAL_CHANNEL_KEY);
     setActiveDmUser(null);
+    setActiveThreadKey(null);
+    setThreadRootMessage(null);
+    setThreadEditorHtml("");
   };
 
   const handleSelectChannel = (channelKey) => {
     setActiveChannelKey(channelKey);
     setActiveDmUser(null);
+    setActiveThreadKey(null);
+    setThreadRootMessage(null);
+    setThreadEditorHtml("");
   };
 
   const handleAttachmentClick = () => {
@@ -776,7 +1121,7 @@ const loadChannels = async () => {
     setAttachment(file);
   };
 
-  // Typing: send "chat:typing" with throttle
+  // Typing in main composer
   const handleEditorChange = (value) => {
     setEditorHtml(value);
     const now = Date.now();
@@ -806,7 +1151,6 @@ const loadChannels = async () => {
   const dmPresenceClass = presenceColor(dmPresence);
   const dmPresenceText = presenceLabel(dmPresence);
 
-  // Typing usernames for active channel
   const typingUsersForActive = typingByChannel[activeChannelKey] || {};
   const typingUsernames = Object.values(typingUsersForActive)
     .filter((entry) => {
@@ -817,7 +1161,6 @@ const loadChannels = async () => {
     .map((entry) => entry.username)
     .filter((name) => name && name !== user.username);
 
-  // helper: readers for a given message
   const getReadersForMessage = (createdAt) => {
     const channelReads = readReceiptsByChannel[activeChannelKey] || {};
     const msgTime = createdAt ? new Date(createdAt).getTime() : 0;
@@ -831,7 +1174,6 @@ const loadChannels = async () => {
     });
   };
 
-  // Send our read receipt whenever we see latest message
   useEffect(() => {
     if (!connected) return;
     if (!activeMessages.length) return;
@@ -841,11 +1183,9 @@ const loadChannels = async () => {
     sendReadReceipt(activeChannelKey, at);
   }, [connected, activeChannelKey, activeMessages]);
 
-  // Huddle start/end handler (GLOBAL toggle button)
   const handleToggleHuddle = () => {
     if (!connected || !rtc) return;
 
-    // If there is an active huddle (any channel)
     if (activeHuddle) {
       if (isHuddleOwner) {
         endHuddle(activeHuddle.channelId, activeHuddle.huddleId);
@@ -855,7 +1195,6 @@ const loadChannels = async () => {
       return;
     }
 
-    // No huddle yet -> start one in CURRENT channel & auto-join
     const huddleId = createUniqueId("huddle");
     startHuddle(activeChannelKey, huddleId);
 
@@ -871,7 +1210,6 @@ const loadChannels = async () => {
     rtc.joinHuddle();
   };
 
-  // Toggle reaction for a message
   const handleToggleReaction = (messageId, emoji) => {
     if (!activeChannelKey) return;
 
@@ -883,7 +1221,6 @@ const loadChannels = async () => {
     const hasReacted = existingUserIds.includes(user.id);
     const action = hasReacted ? "remove" : "add";
 
-    // optimistic local update
     setMessagesByChannel((prev) => {
       const channelMessages = prev[activeChannelKey] || [];
       const nextChannelMessages = channelMessages.map((m) => {
@@ -914,7 +1251,6 @@ const loadChannels = async () => {
       };
     });
 
-    // notify server
     sendReaction({
       channelId: activeChannelKey,
       messageId,
@@ -970,7 +1306,6 @@ const loadChannels = async () => {
     }
   };
 
-  // Header huddle button label
   let huddleButtonLabel = "Start huddle";
   if (isHuddleActiveHere) {
     if (huddleJoined || huddleConnecting) {
@@ -984,9 +1319,8 @@ const loadChannels = async () => {
 
   return (
     <div className="h-[calc(100vh-80px)] flex gap-4">
-      {/* LEFT: channels + DMs */}
+      {/* LEFT: CHANNELS + DMS */}
       <aside className="w-64 bg-white rounded-xl shadow p-3 flex flex-col text-xs">
-        {/* HEADER */}
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="text-[11px] font-semibold text-slate-500">
@@ -1000,7 +1334,6 @@ const loadChannels = async () => {
             </div>
           </div>
 
-          {/* Create channel */}
           <button
             type="button"
             onClick={() => setOpenCreate(true)}
@@ -1011,7 +1344,7 @@ const loadChannels = async () => {
           </button>
         </div>
 
-        {/* GENERAL CHANNEL */}
+        {/* GENERAL */}
         <button
           type="button"
           onClick={handleSelectGeneral}
@@ -1028,89 +1361,111 @@ const loadChannels = async () => {
         </button>
 
         {/* PUBLIC CHANNELS */}
-        {publicChannels.length > 0 && (
-          <div className="mb-3 space-y-1">
-            {publicChannels.map((ch) => {
-              const isActive = activeChannelKey === ch.key;
-              return (
-                <button
-                  key={ch.id}
-                  type="button"
-                  onClick={() => handleSelectChannel(ch.key)}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
-                    isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="text-base">#</span>
-                    <span>{ch.name}</span>
-                  </span>
+{publicChannels.length > 0 && (
+  <div className="mb-3 space-y-1">
+    {publicChannels.map((ch) => {
+      const isActive = activeChannelKey === ch.key;
+      return (
+        <button
+          key={ch.id}
+          type="button"
+          onClick={() => handleSelectChannel(ch.key)}
+          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
+            isActive
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-base">#</span>
+            <span>{ch.name}</span>
+          </span>
 
-                  {/* settings (admins can manage in modal) */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSettingsChannel(ch);
-                      setOpenSettings(true);
-                    }}
-                    className="text-[12px] hover:text-slate-900"
-                    title="Channel settings"
-                  >
-                    ⋮
-                  </button>
-                </button>
-              );
-            })}
-          </div>
-        )}
+          {/* settings control - span instead of button */}
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSettingsChannel(ch);
+              setOpenSettings(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                setSettingsChannel(ch);
+                setOpenSettings(true);
+              }
+            }}
+            className="text-[12px] hover:text-slate-900 cursor-pointer"
+            title="Channel settings"
+            aria-label={`Channel settings for ${ch.name}`}
+          >
+            ⋮
+          </span>
+        </button>
+      );
+    })}
+  </div>
+)}
 
-        {/* PRIVATE CHANNELS — visible only if user is a member (A-1 handled by backend) */}
-        {privateChannels.length > 0 && (
-          <div className="mb-3 space-y-1">
-            <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-              Private <span className="text-[9px]">🔒</span>
-            </div>
+{/* PRIVATE CHANNELS */}
+{privateChannels.length > 0 && (
+  <div className="mb-3 space-y-1">
+    <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+      Private <span className="text-[9px]">🔒</span>
+    </div>
 
-            {privateChannels.map((ch) => {
-              const isActive = activeChannelKey === ch.key;
-              return (
-                <button
-                  key={ch.id}
-                  type="button"
-                  onClick={() => handleSelectChannel(ch.key)}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
-                    isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span>🔒</span>
-                    <span>{ch.name}</span>
-                  </span>
+    {privateChannels.map((ch) => {
+      const isActive = activeChannelKey === ch.key;
+      return (
+        <button
+          key={ch.id}
+          type="button"
+          onClick={() => handleSelectChannel(ch.key)}
+          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
+            isActive
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <span>🔒</span>
+            <span>{ch.name}</span>
+          </span>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSettingsChannel(ch);
-                      setOpenSettings(true);
-                    }}
-                    className="text-[12px]"
-                    title="Channel settings"
-                  >
-                    ⋮
-                  </button>
-                </button>
-              );
-            })}
-          </div>
-        )}
+          {/* settings control - span instead of button */}
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSettingsChannel(ch);
+              setOpenSettings(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                setSettingsChannel(ch);
+                setOpenSettings(true);
+              }
+            }}
+            className="text-[12px] cursor-pointer"
+            title="Channel settings"
+            aria-label={`Channel settings for ${ch.name}`}
+          >
+            ⋮
+          </span>
+        </button>
+      );
+    })}
+  </div>
+)}
 
-        {/* DMs with proper scroll / no shifting */}
+
+        {/* DMs */}
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="text-[11px] font-semibold text-slate-500 mb-1">
             Direct messages
@@ -1170,22 +1525,21 @@ const loadChannels = async () => {
         </div>
       </aside>
 
-      {/* RIGHT SIDE */}
+      {/* CENTER: MAIN CHAT */}
       <div className="flex-1 flex flex-col space-y-4">
         {/* Header */}
         <section className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold">{activeChannelTitle}</h1>
             <p className="text-xs text-slate-500">
-              {isThreadChannel
-                ? "Threaded conversation for a specific message."
-                : isDmChannel
+              {isDmChannel
                 ? "Private 1:1 conversation between you and your teammate."
                 : "Team or channel-wide real-time chat."}
             </p>
           </div>
 
           <div className="flex items-center gap-3 text-xs">
+            {/* DM presence pill */}
             {!isGeneralChannel && isDmChannel && activeDmUser && (
               <div className="flex items-center gap-1">
                 <span
@@ -1204,6 +1558,7 @@ const loadChannels = async () => {
               className="text-xs border rounded-full px-2 py-[2px] w-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
 
+            {/* Huddle button */}
             <button
               type="button"
               onClick={handleToggleHuddle}
@@ -1213,6 +1568,7 @@ const loadChannels = async () => {
               <span>{huddleButtonLabel}</span>
             </button>
 
+            {/* Connection status pill */}
             <span className="inline-flex items-center gap-1 rounded-full border px-2 py-[2px]">
               <span
                 className={`w-2 h-2 rounded-full ${statusDotClass}`}
@@ -1220,6 +1576,7 @@ const loadChannels = async () => {
               <span className="text-[11px]">{statusLabel}</span>
             </span>
 
+            {/* Signed-in user */}
             <span className="text-slate-500 text-[11px]">
               You are signed in as{" "}
               <span className="font-semibold">{user.username}</span>
@@ -1227,9 +1584,9 @@ const loadChannels = async () => {
           </div>
         </section>
 
-        {/* CHAT BODY */}
+        {/* MAIN CHAT BODY */}
         <section className="bg-white rounded-xl shadow p-4 flex-1 flex flex-col min-h-0">
-          {/* Huddle Banner (only in the channel where huddle started) */}
+          {/* Huddle banner in this channel */}
           {isHuddleActiveHere && (
             <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] flex items-center justify-between">
               <div className="flex flex-col">
@@ -1284,7 +1641,7 @@ const loadChannels = async () => {
             </div>
           )}
 
-          {/* MESSAGES LIST */}
+          {/* Messages List */}
           <div
             ref={listRef}
             className="flex-1 overflow-y-auto border border-slate-100 bg-slate-50 rounded-lg p-3 space-y-2 text-xs"
@@ -1329,7 +1686,9 @@ const loadChannels = async () => {
                 return (
                   <div
                     key={m.id}
-                    className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+                    className={`flex ${
+                      isOwn ? "justify-end" : "justify-start"
+                    }`}
                   >
                     <div
                       className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
@@ -1338,7 +1697,6 @@ const loadChannels = async () => {
                           : "bg-white border border-slate-200 text-slate-800"
                       }`}
                     >
-                      {/* Header */}
                       <div className="flex items-center justify-between mb-0.5">
                         <span className="text-[10px] font-semibold">
                           {isOwn ? "You" : m.username || "User"}
@@ -1352,14 +1710,12 @@ const loadChannels = async () => {
                         </span>
                       </div>
 
-                      {/* Deleted state */}
                       {m.deletedAt ? (
                         <div className="text-[10px] italic text-slate-300">
                           This message was deleted.
                         </div>
                       ) : (
                         <>
-                          {/* Message Text */}
                           <div
                             className="text-[11px] whitespace-pre-wrap break-words prose prose-sm max-w-none"
                             dangerouslySetInnerHTML={{
@@ -1426,7 +1782,6 @@ const loadChannels = async () => {
                             </button>
                           </div>
 
-                          {/* Mini Reaction Picker */}
                           {openReactionFor === m.id && (
                             <div
                               className={`mt-1 inline-flex flex-wrap gap-1 px-2 py-1 rounded-full ${
@@ -1448,41 +1803,53 @@ const loadChannels = async () => {
                             </div>
                           )}
 
-                          {/* Edit / Delete for own messages */}
-                          {isOwn && (
-                            <div
-                              className={`mt-1 flex ${
-                                isOwn ? "justify-end" : "justify-start"
-                              } gap-2 text-[10px] opacity-80`}
+                          {/* Thread + Edit/Delete */}
+                          <div
+                            className={`mt-1 flex ${
+                              isOwn ? "justify-end" : "justify-start"
+                            } gap-2 text-[10px] opacity-80`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleOpenThread(m)}
+                              className="underline hover:no-underline"
                             >
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditMessage(m)}
-                                className="underline hover:no-underline"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteMessage(m.id)}
-                                className="underline hover:no-underline"
-                              >
-                                Delete
-                              </button>
+                              Reply in thread
+                            </button>
+
+                            {isOwn && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditMessage(m)}
+                                  className="underline hover:no-underline"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDeleteMessage(m.id)
+                                  }
+                                  className="underline hover:no-underline"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Read receipts */}
+                          {isLastOwn && !m.deletedAt && (
+                            <div className="mt-1 text-[9px] text-blue-100">
+                              {readers.length === 0
+                                ? "Delivered"
+                                : `Seen by ${readers
+                                    .map((r) => r.username)
+                                    .join(", ")}`}
                             </div>
                           )}
                         </>
-                      )}
-
-                      {/* READ RECEIPTS */}
-                      {isLastOwn && !m.deletedAt && (
-                        <div className="mt-1 text-[9px] text-blue-100">
-                          {readers.length === 0
-                            ? "Delivered"
-                            : `Seen by ${readers
-                                .map((r) => r.username)
-                                .join(", ")}`}
-                        </div>
                       )}
                     </div>
                   </div>
@@ -1502,7 +1869,7 @@ const loadChannels = async () => {
             </div>
           )}
 
-          {/* Typing Indicator */}
+          {/* Typing indicator */}
           {typingUsernames.length > 0 && (
             <div className="mt-1 text-[10px] text-slate-500">
               {typingUsernames.length === 1
@@ -1511,7 +1878,7 @@ const loadChannels = async () => {
             </div>
           )}
 
-          {/* COMPOSER */}
+          {/* Main composer */}
           <form
             onSubmit={handleSend}
             className="mt-3 flex items-end gap-2 text-xs"
@@ -1563,6 +1930,131 @@ const loadChannels = async () => {
           </form>
         </section>
       </div>
+
+      {/* RIGHT: THREAD SIDEBAR */}
+      {activeThreadKey && threadRootMessage && (
+        <aside className="w-[340px] bg-white rounded-xl shadow flex flex-col text-xs">
+          {/* Header */}
+          <div className="px-4 py-3 border-b flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-[11px] font-semibold text-slate-700">
+                Thread
+              </span>
+              <span className="text-[10px] text-slate-400">
+                in{" "}
+                {threadParentChannel
+                  ? `#${threadParentChannel.name}`
+                  : "this channel"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleCloseThread}
+              className="text-[12px] text-slate-400 hover:text-slate-700"
+              title="Close thread"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Root message */}
+          <div className="px-4 py-3 border-b bg-slate-50">
+            <div className="text-[10px] font-semibold mb-1">
+              {threadRootMessage.username === user.username
+                ? "You"
+                : threadRootMessage.username || "User"}
+            </div>
+            <div
+              className="text-[11px] whitespace-pre-wrap break-words"
+              dangerouslySetInnerHTML={{
+                __html:
+                  threadRootMessage.textHtml ||
+                  threadRootMessage.text ||
+                  "",
+              }}
+            />
+          </div>
+
+          {/* Thread messages */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-2 bg-white">
+            {threadMessages.length === 0 ? (
+              <div className="text-[11px] text-slate-400">
+                No replies yet. Start the conversation.
+              </div>
+            ) : (
+              threadMessages.map((m) => {
+                const isOwn =
+                  String(m.userId || m.user_id) === String(user.id);
+                const time = m.createdAt
+                  ? new Date(m.createdAt).toLocaleTimeString()
+                  : "";
+                return (
+                  <div
+                    key={m.id}
+                    className={`flex ${
+                      isOwn ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg px-3 py-2 shadow-sm ${
+                        isOwn
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-50 border border-slate-200 text-slate-800"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-semibold">
+                          {isOwn ? "You" : m.username || "User"}
+                        </span>
+                        <span
+                          className={`text-[9px] ${
+                            isOwn ? "text-blue-100" : "text-slate-400"
+                          }`}
+                        >
+                          {time}
+                        </span>
+                      </div>
+                      <div
+                        className="text-[11px] whitespace-pre-wrap break-words"
+                        dangerouslySetInnerHTML={{
+                          __html: m.textHtml || m.text || "",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Thread composer */}
+          <form
+            onSubmit={handleSendThread}
+            className="border-t px-3 py-2 flex flex-col gap-2"
+          >
+            <div className="border border-slate-300 rounded-lg overflow-hidden">
+              <ReactQuill
+                theme="snow"
+                value={threadEditorHtml}
+                onChange={handleThreadEditorChange}
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder="Reply in thread..."
+                className="text-xs"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={!connected || !(threadEditorHtml || "").trim()}
+                className="bg-blue-600 text-white px-3 py-1 rounded-lg text-[11px] hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Reply
+              </button>
+            </div>
+          </form>
+        </aside>
+      )}
 
       {/* CHANNEL MODALS */}
       <CreateChannelModal
