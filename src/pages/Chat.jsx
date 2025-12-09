@@ -90,9 +90,8 @@ export default function Chat() {
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
-    // userId -> public key (JWK) from backend /crypto/public-keys
+  // userId -> public key (JWK) from backend /crypto/public-keys
   const [userKeysById, setUserKeysById] = useState({});
-
 
   // channelKey -> [messages]
   const [messagesByChannel, setMessagesByChannel] = useState({});
@@ -166,34 +165,32 @@ export default function Chat() {
     });
   }, [teammates, presenceMap]);
 
-    // Combine users info with their public keys (if any)
- const usersWithKeys = useMemo(
-  () =>
-    users.map((u) => {
-      const raw = userKeysById[u.id];
-      if (!raw) return u;
+  // Combine users info with their public keys (if any)
+  const usersWithKeys = useMemo(
+    () =>
+      users.map((u) => {
+        const raw = userKeysById[u.id];
+        if (!raw) return u;
 
-      let publicKeyJwk = raw;
+        let publicKeyJwk = raw;
 
-      // If backend gave us a JSON string, parse it once here
-      if (typeof raw === "string") {
-        try {
-          publicKeyJwk = JSON.parse(raw);
-        } catch (err) {
-          console.error("Failed to parse publicKey for user", u.id, err, raw);
-          return u; // skip key if broken
+        // If backend gave us a JSON string, parse it once here
+        if (typeof raw === "string") {
+          try {
+            publicKeyJwk = JSON.parse(raw);
+          } catch (err) {
+            console.error("Failed to parse publicKey for user", u.id, err, raw);
+            return u; // skip key if broken
+          }
         }
-      }
 
-      return {
-        ...u,
-        publicKeyJwk,
-      };
-    }),
-  [users, userKeysById]
-);
-
-
+        return {
+          ...u,
+          publicKeyJwk,
+        };
+      }),
+    [users, userKeysById]
+  );
 
   const isGeneralChannel = activeChannelKey === GENERAL_CHANNEL_KEY;
   const isDmChannel = !!activeDmUser;
@@ -309,18 +306,44 @@ export default function Chat() {
 
   // 🔐 helper: normalize + decrypt incoming message text
   const decryptForDisplay = async (rawText, rawMessage, channelId) => {
+    const baseText =
+      typeof rawText === "string" && rawText.length ? rawText : "";
+
+    // If server text is literally empty, nothing to show anyway
+    if (!baseText) return "";
+
     try {
-      const baseText = rawText || "";
       const decrypted = await decryptEnvelopeIfNeeded(
         baseText,
         { ...rawMessage, channelId },
         user.id,
         usersWithKeys
       );
-      return decrypted || "";
+
+      // If decrypt gave a string
+      if (typeof decrypted === "string") {
+        const trimmed = decrypted.trim();
+
+        // Our helper returns placeholders like "[Encrypted message (...)]"
+        if (trimmed.startsWith("[Encrypted message")) {
+          return decrypted;
+        }
+
+        if (trimmed.length > 0) {
+          return decrypted;
+        }
+      }
+
+      // Any other weird / falsy / non-string → keep original server text
+      return baseText;
     } catch (err) {
-      console.error("E2E decrypt error:", err);
-      return rawText || "";
+      console.error("E2E decrypt error:", err, {
+        rawText,
+        rawMessage,
+        channelId,
+      });
+      // On error, always show whatever server sent
+      return baseText;
     }
   };
 
@@ -357,7 +380,7 @@ export default function Chat() {
     };
   }, [api]);
 
-    // Load user public keys for E2E crypto
+  // Load user public keys for E2E crypto
   useEffect(() => {
     let cancelled = false;
 
@@ -387,9 +410,7 @@ export default function Chat() {
     };
   }, [api]);
 
-
-  // 🔐 NEW: ensure this user has an E2E key pair + publish public key
-    // 🔐 Ensure we have a keypair AND that our public key is uploaded to backend
+  // 🔐 Ensure we have a keypair AND that our public key is uploaded to backend
   useEffect(() => {
     let cancelled = false;
 
@@ -441,7 +462,6 @@ export default function Chat() {
     };
   }, [api, auth?.token, user?.id]);
 
-
   // Load channels
   const loadChannels = async () => {
     try {
@@ -483,12 +503,17 @@ export default function Chat() {
       const channelId = payload.channelId;
       const rawMessages = payload.messages || [];
 
+      console.log("[chat:history] payload", payload);
+
       const history = await Promise.all(
         rawMessages.map(async (m) => {
+          const baseText =
+            m.textHtml || m.text_html || m.text || m.textHtml === "" ? m.textHtml : "";
+
           const base = {
             id: m.id || createUniqueId("msg"),
             channelId,
-            textHtml: m.textHtml || m.text_html || m.text || "",
+            textHtml: baseText || "",
             userId: m.userId || m.user_id,
             username: m.username,
             createdAt: m.createdAt || m.created_at,
@@ -505,9 +530,14 @@ export default function Chat() {
             channelId
           );
 
+          const finalTextHtml =
+            typeof decryptedText === "string" && decryptedText.trim() !== ""
+              ? decryptedText
+              : base.textHtml || "[no text]";
+
           return {
             ...base,
-            textHtml: decryptedText,
+            textHtml: finalTextHtml,
           };
         })
       );
@@ -520,20 +550,23 @@ export default function Chat() {
       setLoadingHistory(false);
     };
 
-        const handleChatMessage = async (msg) => {
+    const handleChatMessage = async (msg) => {
       if (!msg || !msg.channelId) return;
       const channelId = msg.channelId;
 
-      const decryptedText = await decryptForDisplay(
-        msg.textHtml || msg.text_html || msg.text || "",
-        msg,
-        channelId
-      );
+      const raw = msg.textHtml || msg.text_html || msg.text || "";
+
+      const decryptedText = await decryptForDisplay(raw, msg, channelId);
+
+      const finalTextHtml =
+        typeof decryptedText === "string" && decryptedText.trim() !== ""
+          ? decryptedText
+          : raw || "[no text]";
 
       const normalized = {
         id: msg.id || msg.tempId || createUniqueId("msg"),
         channelId,
-        textHtml: decryptedText,
+        textHtml: finalTextHtml,
         userId: msg.userId || msg.user_id,
         username: msg.username,
         createdAt: msg.createdAt || msg.created_at,
@@ -574,7 +607,6 @@ export default function Chat() {
         return { ...prev, [channelId]: next };
       });
     };
-
 
     const handleSystem = (payload) => {
       if (!payload || !payload.channelId) return;
@@ -826,7 +858,7 @@ export default function Chat() {
       socket.off("chat:messageEdited", handleMessageEdited);
       socket.off("chat:messageDeleted", handleMessageDeleted);
     };
-  }, [auth.token, user.id, setActiveHuddle, rtc, users]);
+  }, [auth.token, user.id, setActiveHuddle, rtc, users, usersWithKeys]);
 
   // JOIN / LEAVE main channel
   useEffect(() => {
@@ -899,7 +931,7 @@ export default function Chat() {
     setThreadEditorHtml("");
   };
 
-    // ----- SEND MESSAGE (MAIN CHANNEL / DM) -----
+  // ----- SEND MESSAGE (MAIN CHANNEL / DM) -----
   const handleSend = async (e) => {
     e.preventDefault();
     const html = (editorHtml || "").trim();
@@ -934,7 +966,7 @@ export default function Chat() {
           html,
           user.id,
           recipientIds,
-          usersWithKeys      // ✅ IMPORTANT: use usersWithKeys here
+          usersWithKeys
         );
       } catch (err) {
         console.error(
@@ -943,7 +975,7 @@ export default function Chat() {
         );
       }
 
-      // 🔍 DEBUG: see plaintext vs ciphertext (EDIT)
+      // DEBUG
       console.log("PLAINTEXT before encrypt (edit):", html);
       console.log("CIPHERTEXT sent to server (edit):", encryptedHtml);
 
@@ -995,13 +1027,12 @@ export default function Chat() {
         html,
         user.id,
         recipientIds,
-        usersWithKeys        // ✅ THIS is the "later in handleSend" part
+        usersWithKeys
       );
     } catch (err) {
       console.error("E2E encrypt failed, sending plaintext:", err);
     }
 
-    // 🔍 DEBUG: see plaintext vs ciphertext (NEW MESSAGE)
     console.log("PLAINTEXT before encrypt:", html);
     console.log("CIPHERTEXT sent to server:", encryptedHtml);
 
@@ -1016,8 +1047,6 @@ export default function Chat() {
     setAttachment(null);
     setSending(false);
   };
-
-
 
   // ----- SEND MESSAGE IN THREAD -----
   const handleThreadEditorChange = (value) => {
@@ -1055,7 +1084,7 @@ export default function Chat() {
     });
 
     // 🔐 Encrypt for recipients of the *parent channel*
-        let encryptedHtml = html;
+    let encryptedHtml = html;
     try {
       const parentKey = threadParentChannelKey || activeChannelKey;
       const recipientIds = getRecipientIdsForChannelKey(parentKey);
@@ -1068,7 +1097,6 @@ export default function Chat() {
     } catch (err) {
       console.error("E2E encrypt (thread) failed, sending plaintext:", err);
     }
-
 
     sendChatMessage({
       channelId,
@@ -1361,109 +1389,108 @@ export default function Chat() {
         </button>
 
         {/* PUBLIC CHANNELS */}
-{publicChannels.length > 0 && (
-  <div className="mb-3 space-y-1">
-    {publicChannels.map((ch) => {
-      const isActive = activeChannelKey === ch.key;
-      return (
-        <button
-          key={ch.id}
-          type="button"
-          onClick={() => handleSelectChannel(ch.key)}
-          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
-            isActive
-              ? "bg-blue-50 text-blue-700"
-              : "text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <span className="text-base">#</span>
-            <span>{ch.name}</span>
-          </span>
+        {publicChannels.length > 0 && (
+          <div className="mb-3 space-y-1">
+            {publicChannels.map((ch) => {
+              const isActive = activeChannelKey === ch.key;
+              return (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => handleSelectChannel(ch.key)}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
+                    isActive
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-base">#</span>
+                    <span>{ch.name}</span>
+                  </span>
 
-          {/* settings control - span instead of button */}
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              setSettingsChannel(ch);
-              setOpenSettings(true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                e.stopPropagation();
-                setSettingsChannel(ch);
-                setOpenSettings(true);
-              }
-            }}
-            className="text-[12px] hover:text-slate-900 cursor-pointer"
-            title="Channel settings"
-            aria-label={`Channel settings for ${ch.name}`}
-          >
-            ⋮
-          </span>
-        </button>
-      );
-    })}
-  </div>
-)}
+                  {/* settings control - span instead of button */}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSettingsChannel(ch);
+                      setOpenSettings(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSettingsChannel(ch);
+                        setOpenSettings(true);
+                      }
+                    }}
+                    className="text-[12px] hover:text-slate-900 cursor-pointer"
+                    title="Channel settings"
+                    aria-label={`Channel settings for ${ch.name}`}
+                  >
+                    ⋮
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-{/* PRIVATE CHANNELS */}
-{privateChannels.length > 0 && (
-  <div className="mb-3 space-y-1">
-    <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-      Private <span className="text-[9px]">🔒</span>
-    </div>
+        {/* PRIVATE CHANNELS */}
+        {privateChannels.length > 0 && (
+          <div className="mb-3 space-y-1">
+            <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+              Private <span className="text-[9px]">🔒</span>
+            </div>
 
-    {privateChannels.map((ch) => {
-      const isActive = activeChannelKey === ch.key;
-      return (
-        <button
-          key={ch.id}
-          type="button"
-          onClick={() => handleSelectChannel(ch.key)}
-          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
-            isActive
-              ? "bg-blue-50 text-blue-700"
-              : "text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <span>🔒</span>
-            <span>{ch.name}</span>
-          </span>
+            {privateChannels.map((ch) => {
+              const isActive = activeChannelKey === ch.key;
+              return (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => handleSelectChannel(ch.key)}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
+                    isActive
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🔒</span>
+                    <span>{ch.name}</span>
+                  </span>
 
-          {/* settings control - span instead of button */}
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              setSettingsChannel(ch);
-              setOpenSettings(true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                e.stopPropagation();
-                setSettingsChannel(ch);
-                setOpenSettings(true);
-              }
-            }}
-            className="text-[12px] cursor-pointer"
-            title="Channel settings"
-            aria-label={`Channel settings for ${ch.name}`}
-          >
-            ⋮
-          </span>
-        </button>
-      );
-    })}
-  </div>
-)}
-
+                  {/* settings control - span instead of button */}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSettingsChannel(ch);
+                      setOpenSettings(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSettingsChannel(ch);
+                        setOpenSettings(true);
+                      }
+                    }}
+                    className="text-[12px] cursor-pointer"
+                    title="Channel settings"
+                    aria-label={`Channel settings for ${ch.name}`}
+                  >
+                    ⋮
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* DMs */}
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -1913,11 +1940,7 @@ export default function Chat() {
                 disabled={!connected || !editorHtml.trim() || sending}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {sending
-                  ? "Sending..."
-                  : editingMessageId
-                  ? "Save"
-                  : "Send"}
+                {sending ? "Sending..." : editingMessageId ? "Save" : "Send"}
               </button>
             </div>
 

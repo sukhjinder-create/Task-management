@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
+import Select from "react-select";
 
 const ROLES = ["admin", "manager", "user"];
+const ENTRIES_OPTIONS = [10, 25, 50, 100];
 
 export default function UsersAdmin() {
   const api = useApi();
@@ -19,6 +21,10 @@ export default function UsersAdmin() {
   const [creating, setCreating] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+
+  // pagination
+  const [pageSize, setPageSize] = useState(10); // min 10, max 100
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Create user form
   const [newUser, setNewUser] = useState({
@@ -38,6 +44,7 @@ export default function UsersAdmin() {
     role: "user",
   });
   const [selectedProjectsEdit, setSelectedProjectsEdit] = useState([]); // project IDs
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   if (currentUser?.role !== "admin") {
     return (
@@ -83,7 +90,16 @@ export default function UsersAdmin() {
     load();
   }, [api]);
 
-  // ---------- Helpers for create ----------
+  // keep currentPage in range when users or pageSize change
+  useEffect(() => {
+    const total = users.length;
+    const totalPagesNow = total === 0 ? 1 : Math.ceil(total / pageSize);
+    if (currentPage > totalPagesNow) {
+      setCurrentPage(totalPagesNow);
+    }
+  }, [users, pageSize, currentPage]);
+
+  // ---------- Helpers / options ----------
 
   const handleCreateFieldChange = (e) => {
     const { name, value } = e.target;
@@ -93,32 +109,17 @@ export default function UsersAdmin() {
     }));
   };
 
-  const handleCreateProjectToggle = (projectId) => {
-    setSelectedProjectsCreate((prev) => {
-      if (prev.includes(projectId)) {
-        // deselect project → also remove its tasks from selectedTasksCreate
-        const newProjects = prev.filter((id) => id !== projectId);
-        setSelectedTasksCreate((prevTasks) =>
-          prevTasks.filter(
-            (taskId) =>
-              !(tasksByProject[projectId] || []).some((t) => t.id === taskId)
-          )
-        );
-        return newProjects;
-      } else {
-        return [...prev, projectId];
-      }
-    });
-  };
+  // All projects as react-select options
+  const projectOptions = useMemo(
+    () =>
+      (projects || []).map((p) => ({
+        value: p.id,
+        label: p.name,
+      })),
+    [projects]
+  );
 
-  const handleCreateTaskToggle = (taskId) => {
-    setSelectedTasksCreate((prev) =>
-      prev.includes(taskId)
-        ? prev.filter((id) => id !== taskId)
-        : [...prev, taskId]
-    );
-  };
-
+  // Tasks derived from selected projects (for create)
   const tasksForProjectsCreate = useMemo(() => {
     const list = [];
     for (const projectId of selectedProjectsCreate) {
@@ -133,6 +134,36 @@ export default function UsersAdmin() {
     }
     return list;
   }, [selectedProjectsCreate, tasksByProject, projects]);
+
+  // react-select options for tasks
+  const taskOptionsCreate = useMemo(
+    () =>
+      tasksForProjectsCreate.map((t) => ({
+        value: t.id,
+        label: `[${t.project_name}] ${t.task}`,
+      })),
+    [tasksForProjectsCreate]
+  );
+
+  // When project multi-select changes in CREATE
+  const handleCreateProjectsChange = (selected) => {
+    const ids = (selected || []).map((opt) => opt.value);
+    setSelectedProjectsCreate(ids);
+
+    // prune selected tasks that are no longer under selected projects
+    setSelectedTasksCreate((prevSelected) => {
+      const allowedTaskIds = new Set();
+      ids.forEach((pid) => {
+        (tasksByProject[pid] || []).forEach((t) => allowedTaskIds.add(t.id));
+      });
+      return prevSelected.filter((taskId) => allowedTaskIds.has(taskId));
+    });
+  };
+
+  const handleCreateTasksChange = (selected) => {
+    const ids = (selected || []).map((opt) => opt.value);
+    setSelectedTasksCreate(ids);
+  };
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -213,6 +244,7 @@ export default function UsersAdmin() {
     } else {
       setSelectedProjectsEdit([]);
     }
+    setIsEditModalOpen(true);
   };
 
   const cancelEdit = () => {
@@ -223,6 +255,7 @@ export default function UsersAdmin() {
       role: "user",
     });
     setSelectedProjectsEdit([]);
+    setIsEditModalOpen(false);
   };
 
   const handleEditFieldChange = (e) => {
@@ -233,12 +266,9 @@ export default function UsersAdmin() {
     }));
   };
 
-  const handleEditProjectToggle = (projectId) => {
-    setSelectedProjectsEdit((prev) =>
-      prev.includes(projectId)
-        ? prev.filter((id) => id !== projectId)
-        : [...prev, projectId]
-    );
+  const handleEditProjectsChange = (selected) => {
+    const ids = (selected || []).map((opt) => opt.value);
+    setSelectedProjectsEdit(ids);
   };
 
   const handleUpdateUser = async (e) => {
@@ -303,7 +333,44 @@ export default function UsersAdmin() {
     }
   };
 
+  // ---------- Pagination derived values ----------
+
+  const totalUsers = users.length;
+  const totalPages = totalUsers === 0 ? 1 : Math.ceil(totalUsers / pageSize);
+
+  const paginatedUsers = useMemo(() => {
+    if (totalUsers === 0) return [];
+    const start = (currentPage - 1) * pageSize;
+    return users.slice(start, start + pageSize);
+  }, [users, currentPage, pageSize, totalUsers]);
+
+  const showingFrom =
+    totalUsers === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const showingTo =
+    totalUsers === 0 ? 0 : Math.min(currentPage * pageSize, totalUsers);
+
+  const handlePageSizeChange = (e) => {
+    const value = parseInt(e.target.value, 10);
+    if (Number.isNaN(value)) return;
+    const clamped = Math.min(100, Math.max(10, value));
+    setPageSize(clamped);
+    setCurrentPage(1);
+  };
+
   // ---------- RENDER ----------
+
+  // Values for react-select (create)
+  const selectedProjectOptionsCreate = projectOptions.filter((opt) =>
+    selectedProjectsCreate.includes(opt.value)
+  );
+  const selectedTaskOptionsCreate = taskOptionsCreate.filter((opt) =>
+    selectedTasksCreate.includes(opt.value)
+  );
+
+  // Values for react-select (edit)
+  const selectedProjectOptionsEdit = projectOptions.filter((opt) =>
+    selectedProjectsEdit.includes(opt.value)
+  );
 
   return (
     <div className="space-y-6">
@@ -318,7 +385,7 @@ export default function UsersAdmin() {
         </div>
       </section>
 
-      {/* Create + Edit section */}
+      {/* Create section */}
       <section className="bg-white rounded-xl shadow p-4 space-y-6">
         {/* CREATE USER */}
         <div>
@@ -375,40 +442,26 @@ export default function UsersAdmin() {
             </div>
 
             <div className="space-y-3">
-              {/* Projects multi-select */}
+              {/* Projects multi-select (dropdown) */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs">
                     Projects (multi-select)
                   </label>
-                  <span className="text-[10px] text-slate-400">
-                    Select one or more projects
-                  </span>
                 </div>
-                <div className="border rounded-lg px-3 py-2 max-h-40 overflow-auto text-xs space-y-1">
-                  {projects.length === 0 ? (
-                    <div className="text-slate-400">
-                      No projects available. Create a project first.
-                    </div>
-                  ) : (
-                    projects.map((p) => (
-                      <label
-                        key={p.id}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedProjectsCreate.includes(p.id)}
-                          onChange={() => handleCreateProjectToggle(p.id)}
-                        />
-                        <span>{p.name}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
+                <Select
+                  isMulti
+                  options={projectOptions}
+                  value={selectedProjectOptionsCreate}
+                  onChange={handleCreateProjectsChange}
+                  className="text-xs"
+                  classNamePrefix="react-select"
+                  placeholder="Select projects..."
+                  noOptionsMessage={() => "No projects available"}
+                />
               </div>
 
-              {/* Tasks (optional) */}
+              {/* Tasks multi-select (dropdown) */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs">
@@ -418,33 +471,25 @@ export default function UsersAdmin() {
                     You can assign tasks now or later.
                   </span>
                 </div>
-                <div className="border rounded-lg px-3 py-2 max-h-40 overflow-auto text-xs space-y-1">
-                  {selectedProjectsCreate.length === 0 ? (
-                    <div className="text-slate-400">
-                      Select at least one project to see its tasks.
-                    </div>
-                  ) : tasksForProjectsCreate.length === 0 ? (
-                    <div className="text-slate-400">
-                      No tasks found for selected projects.
-                    </div>
-                  ) : (
-                    tasksForProjectsCreate.map((t) => (
-                      <label
-                        key={t.id}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedTasksCreate.includes(t.id)}
-                          onChange={() => handleCreateTaskToggle(t.id)}
-                        />
-                        <span>
-                          [{t.project_name}] {t.task}
-                        </span>
-                      </label>
-                    ))
-                  )}
-                </div>
+                <Select
+                  isMulti
+                  options={taskOptionsCreate}
+                  value={selectedTaskOptionsCreate}
+                  onChange={handleCreateTasksChange}
+                  className="text-xs"
+                  classNamePrefix="react-select"
+                  placeholder={
+                    selectedProjectsCreate.length === 0
+                      ? "Select project(s) first"
+                      : "Select tasks..."
+                  }
+                  noOptionsMessage={() =>
+                    selectedProjectsCreate.length === 0
+                      ? "Select at least one project"
+                      : "No tasks found for selected projects"
+                  }
+                  isDisabled={selectedProjectsCreate.length === 0}
+                />
               </div>
             </div>
 
@@ -459,13 +504,145 @@ export default function UsersAdmin() {
             </div>
           </form>
         </div>
+      </section>
 
-        {/* EDIT USER */}
-        {editingUserId && (
-          <div className="border-t pt-4 mt-2">
-            <h2 className="text-sm font-semibold mb-2">
-              Edit User ({editUser.username || editingUserId})
-            </h2>
+      {/* Users list */}
+      <section className="bg-white rounded-xl shadow p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold">Existing Users</h2>
+          <div className="flex items-center gap-2 text-xs">
+            <span>Show</span>
+            <select
+              value={pageSize}
+              onChange={handlePageSizeChange}
+              className="border rounded px-2 py-1 text-xs"
+            >
+              {ENTRIES_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <span>entries</span>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="text-sm text-slate-500">Loading users...</div>
+        ) : totalUsers === 0 ? (
+          <div className="text-sm text-slate-500">No users yet.</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr className="text-left text-slate-500 border-b">
+                    <th className="py-2 pr-3">Username</th>
+                    <th className="py-2 pr-3">Email</th>
+                    <th className="py-2 pr-3">Role</th>
+                    <th className="py-2 pr-3">Projects</th>
+                    <th className="py-2 pr-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedUsers.map((u) => (
+                    <tr key={u.id} className="border-b last:border-b-0">
+                      <td className="py-2 pr-3">{u.username}</td>
+                      <td className="py-2 pr-3">{u.email}</td>
+                      <td className="py-2 pr-3 uppercase">{u.role}</td>
+                      <td className="py-2 pr-3">
+                        {Array.isArray(u.projects)
+                          ? `${u.projects.length} project(s)`
+                          : "—"}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <div className="flex gap-2">
+                          <button
+                            className="text-[11px] px-2 py-1 rounded border border-slate-300"
+                            onClick={() => startEditUser(u)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="text-[11px] px-2 py-1 rounded border border-red-300 text-red-600"
+                            onClick={() => handleDeleteUser(u.id)}
+                            disabled={deletingId === u.id}
+                          >
+                            {deletingId === u.id ? "Deleting..." : "Delete"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination footer */}
+            <div className="flex items-center justify-between mt-3 text-xs">
+              <span className="text-slate-500">
+                Showing {showingFrom} to {showingTo} of {totalUsers} entries
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  className="px-2 py-1 border rounded disabled:opacity-40"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  « First
+                </button>
+                <button
+                  className="px-2 py-1 border rounded disabled:opacity-40"
+                  onClick={() =>
+                    setCurrentPage((p) => (p > 1 ? p - 1 : p))
+                  }
+                  disabled={currentPage === 1}
+                >
+                  ‹ Prev
+                </button>
+                <span className="px-2">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  className="px-2 py-1 border rounded disabled:opacity-40"
+                  onClick={() =>
+                    setCurrentPage((p) =>
+                      p < totalPages ? p + 1 : p
+                    )
+                  }
+                  disabled={currentPage === totalPages}
+                >
+                  Next ›
+                </button>
+                <button
+                  className="px-2 py-1 border rounded disabled:opacity-40"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  Last »
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* EDIT USER MODAL */}
+      {isEditModalOpen && editingUserId && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold">
+                Edit User ({editUser.username || editingUserId})
+              </h2>
+              <button
+                className="text-xs px-2 py-1 rounded border"
+                onClick={cancelEdit}
+              >
+                ✕
+              </button>
+            </div>
+
             <form
               onSubmit={handleUpdateUser}
               className="grid md:grid-cols-2 gap-4 text-sm"
@@ -514,29 +691,20 @@ export default function UsersAdmin() {
                       Adjust assigned projects
                     </span>
                   </div>
-                  <div className="border rounded-lg px-3 py-2 max-h-40 overflow-auto text-xs space-y-1">
-                    {projects.length === 0 ? (
-                      <div className="text-slate-400">No projects.</div>
-                    ) : (
-                      projects.map((p) => (
-                        <label
-                          key={p.id}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedProjectsEdit.includes(p.id)}
-                            onChange={() => handleEditProjectToggle(p.id)}
-                          />
-                          <span>{p.name}</span>
-                        </label>
-                      ))
-                    )}
-                  </div>
+                  <Select
+                    isMulti
+                    options={projectOptions}
+                    value={selectedProjectOptionsEdit}
+                    onChange={handleEditProjectsChange}
+                    className="text-xs"
+                    classNamePrefix="react-select"
+                    placeholder="Select projects..."
+                    noOptionsMessage={() => "No projects available"}
+                  />
                 </div>
               </div>
 
-              <div className="md:col-span-2 flex justify-between gap-2">
+              <div className="md:col-span-2 flex justify-between gap-2 mt-2">
                 <button
                   type="button"
                   onClick={cancelEdit}
@@ -554,64 +722,8 @@ export default function UsersAdmin() {
               </div>
             </form>
           </div>
-        )}
-      </section>
-
-      {/* Users list */}
-      <section className="bg-white rounded-xl shadow p-4">
-        <h2 className="text-sm font-semibold mb-3">Existing Users</h2>
-
-        {loading ? (
-          <div className="text-sm text-slate-500">Loading users...</div>
-        ) : users.length === 0 ? (
-          <div className="text-sm text-slate-500">No users yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr className="text-left text-slate-500 border-b">
-                  <th className="py-2 pr-3">Username</th>
-                  <th className="py-2 pr-3">Email</th>
-                  <th className="py-2 pr-3">Role</th>
-                  <th className="py-2 pr-3">Projects</th>
-                  <th className="py-2 pr-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="border-b last:border-b-0">
-                    <td className="py-2 pr-3">{u.username}</td>
-                    <td className="py-2 pr-3">{u.email}</td>
-                    <td className="py-2 pr-3 uppercase">{u.role}</td>
-                    <td className="py-2 pr-3">
-                      {Array.isArray(u.projects)
-                        ? `${u.projects.length} project(s)`
-                        : "—"}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <div className="flex gap-2">
-                        <button
-                          className="text-[11px] px-2 py-1 rounded border border-slate-300"
-                          onClick={() => startEditUser(u)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="text-[11px] px-2 py-1 rounded border border-red-300 text-red-600"
-                          onClick={() => handleDeleteUser(u.id)}
-                          disabled={deletingId === u.id}
-                        >
-                          {deletingId === u.id ? "Deleting..." : "Delete"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 }

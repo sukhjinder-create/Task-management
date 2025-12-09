@@ -5,13 +5,14 @@ import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import CommentsSection from "../components/CommentsSection.jsx";
-
-const STATUS_COLUMNS = ["pending", "in-progress", "completed"];
+import Subtasks from "../components/Subtasks.jsx";
+import Select from "react-select";
 
 function statusLabel(status) {
   if (status === "pending") return "Pending";
   if (status === "in-progress") return "In Progress";
   if (status === "completed") return "Completed";
+  if (!status) return "No status";
   return status;
 }
 
@@ -44,6 +45,40 @@ function isOverdue(task) {
   return due < today;
 }
 
+// Heuristic ordering for statuses so columns feel natural
+function statusSortIndex(key, label) {
+  const s = (label || key || "").toLowerCase();
+  if (
+    s.includes("to do") ||
+    s.includes("todo") ||
+    s.includes("backlog") ||
+    s.includes("pending")
+  )
+    return 1;
+  if (
+    s.includes("in progress") ||
+    s.includes("in-progress") ||
+    s.includes("doing") ||
+    s.includes("wip")
+  )
+    return 2;
+  if (
+    s.includes("review") ||
+    s.includes("qa") ||
+    s.includes("test") ||
+    s.includes("stage")
+  )
+    return 3;
+  if (
+    s.includes("done") ||
+    s.includes("complete") ||
+    s.includes("completed") ||
+    s.includes("closed")
+  )
+    return 4;
+  return 5;
+}
+
 export default function MyTasks() {
   const api = useApi();
   const { auth } = useAuth();
@@ -51,9 +86,7 @@ export default function MyTasks() {
   const role = user?.role;
   const location = useLocation();
 
-  // Admin, manager, user → all can drag
-  const canDrag =
-    role === "admin" || role === "manager" || role === "user";
+  const canDrag = role === "admin" || role === "manager" || role === "user";
 
   const title = role === "user" ? "My Tasks" : "Tasks";
   const subtitle =
@@ -62,8 +95,17 @@ export default function MyTasks() {
       : "You can see tasks across your visible projects. Drag cards between columns to update status.";
 
   const [tasks, setTasks] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dragTaskId, setDragTaskId] = useState(null);
+
+  // Dynamic columns from backend: [{ key, label }]
+  const [statusColumns, setStatusColumns] = useState([]);
+
+  // Filters
+  const [selectedProjects, setSelectedProjects] = useState([]); // project ids (as strings)
+  const [hideEmpty, setHideEmpty] = useState(false);
+  const [statusSearch, setStatusSearch] = useState("");
 
   // Modal state
   const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
@@ -71,7 +113,7 @@ export default function MyTasks() {
   const [editTask, setEditTask] = useState(null);
   const [savingEdit, setSavingEdit] = useState(false);
 
-  // Attachments state
+  // Attachments
   const [attachments, setAttachments] = useState([]);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
@@ -81,19 +123,38 @@ export default function MyTasks() {
 
   const [initialTaskOpened, setInitialTaskOpened] = useState(false);
 
-  // Load tasks for projects visible to this role (backend handles visibility)
+  // Users list (for mapping assigned_to -> username)
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // 🔹 Helper: map assigned_to ID to username (email)
+  const getAssigneeLabel = (id) => {
+    if (!id) return null;
+    // If it's the logged-in user, we can resolve immediately
+    if (user && id === user.id) {
+      return `${user.username} (${user.email})`;
+    }
+    const u = users.find((usr) => usr.id === id);
+    // Fallback to id if user not found (shouldn't usually happen)
+    return u ? `${u.username} (${u.email})` : id;
+  };
+
+  // ===== Load all tasks + global statuses =====
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
+        // 1) Load projects
         const projectsRes = await api.get("/projects");
-        const projects = projectsRes.data || [];
-        const allTasks = [];
+        const projectsData = projectsRes.data || [];
+        setProjects(projectsData);
 
-        for (const p of projects) {
+        // 2) Load tasks per project
+        const allTasks = [];
+        for (const p of projectsData) {
           try {
-            const res = await api.get(`/tasks/${p.id}`);
-            const projectTasks = (res.data || []).map((t) => ({
+            const tasksRes = await api.get(`/tasks/${p.id}`);
+            const projectTasks = (tasksRes.data || []).map((t) => ({
               ...t,
               project_name: p.name,
               project_id: p.id,
@@ -103,8 +164,43 @@ export default function MyTasks() {
             console.error("Failed to load tasks for project", p.id, err);
           }
         }
-
         setTasks(allTasks);
+
+        // 3) Load global statuses (union across all projects)
+        try {
+          const res = await api.get("/project-statuses/global");
+          const rows = res.data || [];
+
+          if (rows.length > 0) {
+            const cols = rows.map((s) => ({
+              key: s.status_key || s.key,
+              label: s.label || statusLabel(s.status_key || s.key),
+            }));
+
+            cols.sort((a, b) => {
+              const ia = statusSortIndex(a.key, a.label);
+              const ib = statusSortIndex(b.key, b.label);
+              if (ia !== ib) return ia - ib;
+              return (a.label || a.key).localeCompare(b.label || b.key);
+            });
+
+            setStatusColumns(cols);
+          } else {
+            // fallback defaults in sensible order
+            setStatusColumns([
+              { key: "pending", label: "Pending" },
+              { key: "in-progress", label: "In Progress" },
+              { key: "completed", label: "Completed" },
+            ]);
+          }
+        } catch (err) {
+          console.error("Failed to load global statuses", err);
+          setStatusColumns([
+            { key: "pending", label: "Pending" },
+            { key: "in-progress", label: "In Progress" },
+            { key: "completed", label: "Completed" },
+          ]);
+        }
       } catch (err) {
         console.error(err);
         const msg = err.response?.data?.error || "Failed to load tasks";
@@ -119,42 +215,163 @@ export default function MyTasks() {
     }
   }, [user, api]);
 
-  const grouped = useMemo(() => {
-    const result = {
-      pending: [],
-      "in-progress": [],
-      completed: [],
-    };
-    for (const t of tasks) {
-      if (!result[t.status]) result[t.status] = [];
-      result[t.status].push(t);
+  // ===== Load users for assignee labels (admin/manager usually need this) =====
+  useEffect(() => {
+    // It's still safe for normal users; if /users is restricted, they'll just see IDs.
+    async function loadUsers() {
+      setLoadingUsers(true);
+      try {
+        const res = await api.get("/users");
+        setUsers(res.data || []);
+      } catch (err) {
+        console.error("Error fetching users for labels:", err);
+        // Avoid toast spam here; it's a non-critical enhancement.
+      } finally {
+        setLoadingUsers(false);
+      }
     }
-    return result;
-  }, [tasks]);
 
+    if (user) {
+      loadUsers();
+    }
+  }, [user, api]);
+
+  // ===== Apply project filter =====
+  const filteredTasks = useMemo(() => {
+    if (!selectedProjects || selectedProjects.length === 0) return tasks;
+    const selectedSet = new Set(selectedProjects);
+    return tasks.filter((t) => selectedSet.has(String(t.project_id)));
+  }, [tasks, selectedProjects]);
+
+  // Project options for react-select
+  const projectOptions = useMemo(
+    () =>
+      projects.map((p) => ({
+        value: String(p.id),
+        label: p.name,
+      })),
+    [projects]
+  );
+
+  const selectedProjectOptions = useMemo(
+    () => projectOptions.filter((opt) => selectedProjects.includes(opt.value)),
+    [projectOptions, selectedProjects]
+  );
+
+  // Compact styling so project select looks like normal inputs
+  const projectSelectStyles = {
+    control: (base, state) => ({
+      ...base,
+      minHeight: 32,
+      // no fixed height, allow multi-line chips inside the border
+      borderRadius: 6,
+      borderColor: state.isFocused ? "#0f172a" : "#e2e8f0",
+      boxShadow: "none",
+      "&:hover": { borderColor: "#cbd5f5" },
+      fontSize: 11,
+    }),
+
+    valueContainer: (base) => ({
+      ...base,
+      paddingTop: 0,
+      paddingBottom: 0,
+      paddingLeft: 6,
+      paddingRight: 6,
+      gap: 4,
+    }),
+    multiValue: (base) => ({
+      ...base,
+      borderRadius: 9999,
+      backgroundColor: "#e5edff",
+    }),
+    multiValueLabel: (base) => ({
+      ...base,
+      fontSize: 11,
+    }),
+    multiValueRemove: (base) => ({
+      ...base,
+      ":hover": {
+        backgroundColor: "transparent",
+        color: "#ef4444",
+      },
+    }),
+    placeholder: (base) => ({
+      ...base,
+      fontSize: 11,
+      color: "#9ca3af",
+    }),
+    input: (base) => ({
+      ...base,
+      fontSize: 11,
+      margin: 0,
+      padding: 0,
+    }),
+    menu: (base) => ({
+      ...base,
+      fontSize: 11,
+      zIndex: 40,
+    }),
+    dropdownIndicator: (base) => ({
+      ...base,
+      padding: 4,
+    }),
+    clearIndicator: (base) => ({
+      ...base,
+      padding: 4,
+    }),
+    indicatorSeparator: () => ({
+      display: "none",
+    }),
+  };
+
+  // ===== Visible columns after status search =====
+  const visibleStatusColumns = useMemo(() => {
+    const term = statusSearch.trim().toLowerCase();
+    if (!term) return statusColumns;
+    return statusColumns.filter((col) => {
+      const keyMatch = (col.key || "").toLowerCase().includes(term);
+      const labelMatch = (col.label || "").toLowerCase().includes(term);
+      return keyMatch || labelMatch;
+    });
+  }, [statusColumns, statusSearch]);
+
+  // ===== Group tasks by status =====
+  const grouped = useMemo(() => {
+    const result = {};
+
+    statusColumns.forEach((col) => {
+      if (col && col.key) result[col.key] = [];
+    });
+
+    for (const t of filteredTasks) {
+      const key = t.status;
+      if (!key) continue;
+      if (!result[key]) result[key] = [];
+      result[key].push(t);
+    }
+
+    return result;
+  }, [filteredTasks, statusColumns]);
+
+  // ===== Stats =====
   const stats = useMemo(() => {
-    if (!tasks || tasks.length === 0) {
+    if (!filteredTasks || filteredTasks.length === 0) {
       return {
         total: 0,
-        pending: 0,
-        inProgress: 0,
-        completed: 0,
+        perStatus: {},
         overdue: 0,
       };
     }
 
-    let pending = 0;
-    let inProgress = 0;
-    let completed = 0;
+    const perStatus = {};
     let overdue = 0;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (const t of tasks) {
-      if (t.status === "pending") pending++;
-      else if (t.status === "in-progress") inProgress++;
-      else if (t.status === "completed") completed++;
+    for (const t of filteredTasks) {
+      const key = t.status || "no-status";
+      perStatus[key] = (perStatus[key] || 0) + 1;
 
       if (t.due_date && t.status !== "completed") {
         const due = new Date(t.due_date);
@@ -164,13 +381,11 @@ export default function MyTasks() {
     }
 
     return {
-      total: tasks.length,
-      pending,
-      inProgress,
-      completed,
+      total: filteredTasks.length,
+      perStatus,
       overdue,
     };
-  }, [tasks]);
+  }, [filteredTasks]);
 
   // Drag handlers
   const onDragStart = (taskId) => {
@@ -202,9 +417,7 @@ export default function MyTasks() {
       await api.put(`/tasks/${task.id}`, { status: newStatus });
 
       setTasks((prev) =>
-        prev.map((t) =>
-          t.id === task.id ? { ...t, status: newStatus } : t
-        )
+        prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t))
       );
 
       setSelectedTaskDetails((prev) =>
@@ -220,7 +433,7 @@ export default function MyTasks() {
     }
   };
 
-  // ===== Attachments for selected task =====
+  // Attachments
   const loadAttachmentsForTask = async (taskId) => {
     setLoadingAttachments(true);
     setAttachments([]);
@@ -240,7 +453,7 @@ export default function MyTasks() {
     setIsEditing(false);
     setEditTask({
       task: task.task || "",
-      status: task.status || "pending",
+      status: task.status || "",
       assigned_to: task.assigned_to || "",
       due_date: task.due_date ? task.due_date.slice(0, 10) : "",
       description: task.description || "",
@@ -281,7 +494,7 @@ export default function MyTasks() {
     }
   };
 
-  // ===== Admin edit handlers (in modal) =====
+  // Edit handlers
   const handleEditFieldChange = (e) => {
     const { name, value } = e.target;
     setEditTask((prev) => ({
@@ -296,7 +509,7 @@ export default function MyTasks() {
     try {
       const payload = {
         task: editTask.task,
-        status: editTask.status,
+        status: editTask.status || null,
         assigned_to: editTask.assigned_to || null,
         due_date: editTask.due_date || null,
         description: editTask.description,
@@ -351,7 +564,7 @@ export default function MyTasks() {
     }
   };
 
-  // ===== Copy deep link for this task =====
+  // Copy deep link
   const handleCopyTaskLink = async () => {
     if (!selectedTaskDetails) return;
     try {
@@ -369,7 +582,7 @@ export default function MyTasks() {
     }
   };
 
-  // ===== Deep-link: auto-open when ?task=<id> is present (for /my-tasks) =====
+  // Deep-link: auto-open ?task=<id>
   useEffect(() => {
     if (initialTaskOpened) return;
     if (!tasks || tasks.length === 0) return;
@@ -378,7 +591,7 @@ export default function MyTasks() {
     const taskId = params.get("task");
     if (!taskId) return;
 
-    const found = tasks.find((t) => t.id === taskId);
+    const found = tasks.find((t) => String(t.id) === String(taskId));
     if (!found) {
       setInitialTaskOpened(true);
       return;
@@ -388,17 +601,30 @@ export default function MyTasks() {
     setInitialTaskOpened(true);
   }, [tasks, location.search, initialTaskOpened]);
 
+  // Filter handlers
+  const handleProjectFilterChange = (options) => {
+    const values = (options || []).map((opt) => opt.value);
+    setSelectedProjects(values);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <section className="bg-white rounded-xl shadow p-4 flex justify-between items-center">
+      <section className="bg-white rounded-xl shadow p-4 flex flex-col gap-3">
         <div>
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-xs text-slate-500">{subtitle}</p>
-          {tasks.length > 0 && (
-            <p className="mt-1 text-[11px] text-slate-400">
-              Total: <b>{stats.total}</b> • Pending: {stats.pending} • In
-              progress: {stats.inProgress} • Completed: {stats.completed} •{" "}
+          {filteredTasks.length > 0 && (
+            <p className="mt-1 text-[11px] text-slate-600">
+              Total: <b>{stats.total}</b>
+              {visibleStatusColumns.length > 0 && " • "}
+              {visibleStatusColumns.map((col, idx) => (
+                <span key={col.key}>
+                  {col.label}: {stats.perStatus[col.key] ?? 0}
+                  {idx < visibleStatusColumns.length - 1 ? " • " : ""}
+                </span>
+              ))}
+              {" • "}
               Overdue:{" "}
               <span
                 className={
@@ -412,85 +638,152 @@ export default function MyTasks() {
             </p>
           )}
         </div>
+
+        {/* Filters */}
+        <section className="bg-white rounded-xl shadow p-4">
+          <div className="flex flex-wrap gap-4 items-start text-[11px]">
+            {/* Projects */}
+            <div className="flex flex-col gap-1 min-w-[220px] max-w-xs">
+              <span className="text-slate-600">Projects (multi-select)</span>
+              <Select
+                isMulti
+                options={projectOptions}
+                value={selectedProjectOptions}
+                onChange={handleProjectFilterChange}
+                styles={projectSelectStyles}
+                className="min-w-[220px] text-[11px]"
+                classNamePrefix="rs"
+                placeholder="Select..."
+              />
+              <span className="text-[10px] text-slate-400">
+                Leave empty for all.
+              </span>
+            </div>
+
+            {/* Status search */}
+            <div className="flex flex-col gap-1 min-w-[220px] max-w-xs">
+              <span className="text-slate-600">Status search</span>
+              <input
+                type="text"
+                placeholder="Search status..."
+                value={statusSearch}
+                onChange={(e) => setStatusSearch(e.target.value)}
+                className="border rounded px-2 py-[6px] text-[11px] min-w-[220px]"
+              />
+              {/* Invisible helper to match height */}
+              <span className="text-[10px] text-slate-400 opacity-0">
+                Leave empty for all.
+              </span>
+            </div>
+
+            {/* Button */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] opacity-0">placeholder</span>
+              <button
+                type="button"
+                onClick={() => setHideEmpty((v) => !v)}
+                className="inline-flex items-center gap-1 border rounded px-3 py-1 text-[11px] text-slate-700 bg-slate-50 hover:bg-slate-100 h-8"
+              >
+                {hideEmpty ? "Show empty columns" : "Hide empty columns"}
+              </button>
+            </div>
+          </div>
+        </section>
       </section>
 
       {/* Board */}
       <section className="bg-white rounded-xl shadow p-4">
         {loading ? (
           <div className="text-sm text-slate-500">Loading tasks...</div>
-        ) : tasks.length === 0 ? (
+        ) : statusColumns.length === 0 ? (
           <div className="text-sm text-slate-500">
-            No tasks found for your projects.
+            No status columns defined for your projects yet.
           </div>
         ) : (
-          <div className="grid md:grid-cols-3 gap-3">
-            {STATUS_COLUMNS.map((status) => (
-              <div
-                key={status}
-                className="border border-slate-200 rounded-lg min-h-[200px] p-2 bg-slate-50"
-                onDragOver={onDragOver}
-                onDrop={() => onDrop(status)}
-              >
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold">
-                    {statusLabel(status)}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    {grouped[status]?.length || 0} tasks
-                  </span>
-                </div>
+          <div className="grid grid-flow-col auto-cols-[minmax(260px,1fr)] gap-3 overflow-x-auto pb-2">
+            {visibleStatusColumns.map((col) => {
+              const colTasks = grouped[col.key] || [];
+              if (hideEmpty && colTasks.length === 0) return null;
 
-                <div className="space-y-2">
-                  {grouped[status]?.map((t) => (
-                    <div
-                      key={t.id}
-                      draggable={canDrag}
-                      onDragStart={() => onDragStart(t.id)}
-                      onDragEnd={onDragEnd}
-                      className={
-                        "border rounded-lg px-2 py-2 text-xs bg-white " +
-                        (canDrag
-                          ? "cursor-grab active:cursor-grabbing "
-                          : "cursor-default ") +
-                        (isOverdue(t)
-                          ? "border-red-300 bg-red-50"
-                          : "border-slate-200")
-                      }
-                      onClick={() => handleCardClick(t)}
-                    >
-                      <div className="font-medium text-[11px]">
-                        {t.task}
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        Project: {t.project_name}
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        {t.due_date &&
-                          `Due: ${new Date(
-                            t.due_date
-                          ).toLocaleDateString()}`}
-                      </div>
+              return (
+                <div
+                  key={col.key}
+                  className="border border-slate-200 rounded-lg min-h-[200px] p-2 bg-slate-50"
+                  onDragOver={onDragOver}
+                  onDrop={() => onDrop(col.key)}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold">{col.label}</span>
+                    <span className="text-[10px] text-slate-500">
+                      {colTasks.length} tasks
+                    </span>
+                  </div>
 
-                      <div className="mt-1 flex items-center justify-between">
-                        <span
-                          className={
-                            "inline-flex items-center rounded-full border px-2 py-[1px] text-[10px] font-medium " +
-                            priorityBadgeClass(t.priority)
-                          }
-                        >
-                          {priorityLabel(t.priority)}
-                        </span>
-                        {isOverdue(t) && (
-                          <span className="text-[10px] text-red-600 font-semibold">
-                            Overdue
-                          </span>
+                  <div className="space-y-2">
+                    {colTasks.map((t) => (
+                      <div
+                        key={t.id}
+                        draggable={canDrag}
+                        onDragStart={() => onDragStart(t.id)}
+                        onDragEnd={onDragEnd}
+                        className={
+                          "border rounded-lg px-2 py-2 text-xs bg-white " +
+                          (canDrag
+                            ? "cursor-grab active:cursor-grabbing "
+                            : "cursor-default ") +
+                          (isOverdue(t)
+                            ? "border-red-300 bg-red-50"
+                            : "border-slate-200")
+                        }
+                        onClick={() => handleCardClick(t)}
+                      >
+                        <div className="font-medium text-[11px]">
+                          {t.task}
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          Project: {t.project_name}
+                        </div>
+                        {t.assigned_to && (
+                          <div className="text-[10px] text-slate-500">
+                            Assigned to: {getAssigneeLabel(t.assigned_to)}
+                          </div>
                         )}
+
+                        {(t.subtasks_total ?? 0) > 0 && (
+                          <div className="text-[10px] text-slate-500">
+                            ({t.subtasks_completed ?? 0}/
+                            {t.subtasks_total ?? 0} subtasks completed)
+                          </div>
+                        )}
+
+                        <div className="text-[10px] text-slate-400">
+                          {t.due_date &&
+                            `Due: ${new Date(
+                              t.due_date
+                            ).toLocaleDateString()}`}
+                        </div>
+
+                        <div className="mt-1 flex items-center justify-between">
+                          <span
+                            className={
+                              "inline-flex items-center rounded-full border px-2 py-[1px] text-[10px] font-medium " +
+                              priorityBadgeClass(t.priority)
+                            }
+                          >
+                            {priorityLabel(t.priority)}
+                          </span>
+                          {isOverdue(t) && (
+                            <span className="text-[10px] text-red-600 font-semibold">
+                              Overdue
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -517,11 +810,22 @@ export default function MyTasks() {
                       Project: {selectedTaskDetails.project_name}
                     </p>
                   )}
-                  {selectedTaskDetails.assigned_to && (
+
+                  {(selectedTaskDetails.subtasks_total ?? 0) > 0 && (
                     <p className="text-[11px] text-slate-500">
-                      Assigned to: {selectedTaskDetails.assigned_to}
+                      Progress: {selectedTaskDetails.subtasks_completed ?? 0}/
+                      {selectedTaskDetails.subtasks_total ?? 0} subtasks
+                      completed
                     </p>
                   )}
+
+                  {selectedTaskDetails.assigned_to && (
+                    <p className="text-[11px] text-slate-500">
+                      Assigned to:{" "}
+                      {getAssigneeLabel(selectedTaskDetails.assigned_to)}
+                    </p>
+                  )}
+
                   <p className="text-[11px] text-slate-500">
                     Priority:{" "}
                     {priorityLabel(
@@ -570,9 +874,7 @@ export default function MyTasks() {
               {/* Read-only description */}
               {!isEditing && (
                 <div className="mt-3">
-                  <h3 className="text-xs font-semibold mb-1">
-                    Description
-                  </h3>
+                  <h3 className="text-xs font-semibold mb-1">Description</h3>
                   {selectedTaskDetails.description ? (
                     <div
                       className="prose prose-sm max-w-none text-xs"
@@ -608,13 +910,16 @@ export default function MyTasks() {
                       <label className="block mt-2">Status</label>
                       <select
                         name="status"
-                        value={editTask.status}
+                        value={editTask.status || ""}
                         onChange={handleEditFieldChange}
                         className="w-full border rounded px-2 py-1"
                       >
-                        <option value="pending">Pending</option>
-                        <option value="in-progress">In progress</option>
-                        <option value="completed">Completed</option>
+                        <option value="">No status</option>
+                        {statusColumns.map((col) => (
+                          <option key={col.key} value={col.key}>
+                            {col.label}
+                          </option>
+                        ))}
                       </select>
 
                       <label className="block mt-2">Priority</label>
@@ -674,13 +979,16 @@ export default function MyTasks() {
                 </div>
               )}
 
-              {/* Comments for this task */}
+              {/* Subtasks panel */}
+              <Subtasks taskId={selectedTaskDetails.id} />
+
+              {/* Comments */}
               <div className="mt-3 border-t pt-3">
                 <h3 className="text-xs font-semibold mb-1">Comments</h3>
                 <CommentsSection taskId={selectedTaskDetails.id} />
               </div>
 
-              {/* Attachments panel */}
+              {/* Attachments */}
               <div className="mt-3 border-t pt-3">
                 <h3 className="text-xs font-semibold mb-1">Attachments</h3>
 

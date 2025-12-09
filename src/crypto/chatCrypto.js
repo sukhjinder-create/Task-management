@@ -204,35 +204,60 @@ export async function decryptEnvelopeIfNeeded(
   currentUserId,
   users
 ) {
+  // Not a string or empty → nothing to do
   if (!textHtml || typeof textHtml !== "string") return textHtml;
-  if (!textHtml.startsWith("{")) return textHtml;
+
+  // Not JSON-looking → definitely not our envelope
+  if (!textHtml.trim().startsWith("{")) return textHtml;
 
   let envelope;
   try {
     envelope = JSON.parse(textHtml);
   } catch {
+    // Broken JSON: just show whatever is there
     return textHtml;
   }
 
   if (!envelope || envelope.type !== E2E_VERSION) return textHtml;
 
   const entry = envelope.enc?.[String(currentUserId)];
-  if (!entry) return "[Encrypted message (not for you)]";
+  if (!entry) {
+    // Message was encrypted, but not for this user
+    return "[Encrypted message (not for you)]";
+  }
 
   const senderId =
     envelope.from || messageMeta?.userId || messageMeta?.user_id;
 
+  // If we don’t have a users array, don’t crash
+  if (!Array.isArray(users)) {
+    console.warn(
+      "[E2E] decryptEnvelopeIfNeeded: users array missing, returning placeholder"
+    );
+    return "[Encrypted message (missing sender key)]";
+  }
+
   const senderUser = users.find((u) => String(u.id) === String(senderId));
+
   const senderPubJwk =
     senderUser?.publicKeyJwk ||
     senderUser?.public_key ||
     senderUser?.publicKey ||
     senderUser?.public_key_jwk;
 
-  if (!senderPubJwk) return "[Encrypted message (missing sender key)]";
+  if (!senderPubJwk) {
+    console.warn(
+      "[E2E] decryptEnvelopeIfNeeded: no public key for sender",
+      senderId
+    );
+    return "[Encrypted message (missing sender key)]";
+  }
 
   const keyPair = loadKeyPairFromStorage();
-  if (!keyPair?.privateKeyJwk) return "[Encrypted message (no your key)]";
+  if (!keyPair?.privateKeyJwk) {
+    console.warn("[E2E] decryptEnvelopeIfNeeded: no local private key");
+    return "[Encrypted message (no your key)]";
+  }
 
   try {
     const myPriv = await importPrivateKey(keyPair.privateKeyJwk);
@@ -251,7 +276,14 @@ export async function decryptEnvelopeIfNeeded(
       data
     );
 
-    return TEXT_DECODER.decode(plainBuf);
+    const decoded = TEXT_DECODER.decode(plainBuf);
+
+    // If somehow we decoded to empty string, let caller fall back
+    if (typeof decoded !== "string" || decoded.trim() === "") {
+      return textHtml;
+    }
+
+    return decoded;
   } catch (err) {
     console.error("decrypt failed:", err);
     return "[Encrypted message (failed decryption)]";

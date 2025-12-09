@@ -10,7 +10,8 @@ import Notifications from "./pages/Notifications";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./layouts/AppLayout";
 import Profile from "./pages/Profile";
-import Chat from "./pages/Chat"; // 🔹 NEW: Team Chat page
+import Chat from "./pages/Chat"; // 🔹 Team Chat page
+import Reports from "./pages/Reports.jsx"; // 🔹 Reports page
 
 export default function App() {
   return (
@@ -18,7 +19,7 @@ export default function App() {
       {/* LOGIN (no layout) */}
       <Route path="/login" element={<Login />} />
 
-      {/* PAGES WITH SIDEBAR LAYOUT */}
+      {/* HOME → Dashboard with layout */}
       <Route
         path="/"
         element={
@@ -107,7 +108,7 @@ export default function App() {
         }
       />
 
-      {/* 🔹 NEW: Team Chat route */}
+      {/* 🔹 Team Chat */}
       <Route
         path="/chat"
         element={
@@ -119,6 +120,19 @@ export default function App() {
         }
       />
 
+      {/* 🔹 Reports (WITH layout) */}
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <Reports />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/projects" />} />
     </Routes>
   );

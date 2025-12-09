@@ -23,9 +23,8 @@ export default function Sidebar() {
   useEffect(() => {
     let cancelled = false;
 
-    // FIX: guard - don't call API when no token (prevents 401 noise)
+    // Guard - don't call API when no token (prevents 401 noise)
     if (!auth?.token) {
-      // still subscribe to unread bus, because some other component may publish counts
       const unsubscribeBus = subscribeToUnreadCount((count) => {
         if (!cancelled) {
           setUnreadCount(count);
@@ -125,7 +124,19 @@ export default function Sidebar() {
           {tasksLabel}
         </NavLink>
 
-        {/* NEW: Team Chat (we will wire /chat route later) */}
+        {/* Reports tab – visible to everyone, backend enforces permissions */}
+        <NavLink
+          to="/reports"
+          className={({ isActive }) =>
+            `block px-3 py-2 rounded-lg text-sm ${
+              isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
+            }`
+          }
+        >
+          Reports
+        </NavLink>
+
+        {/* Team Chat */}
         <NavLink
           to="/chat"
           className={({ isActive }) =>
@@ -155,7 +166,6 @@ export default function Sidebar() {
           </div>
         </NavLink>
 
-        {/* Optional: explicit Profile nav item */}
         <NavLink
           to="/profile"
           className={({ isActive }) =>
