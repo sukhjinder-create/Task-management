@@ -1,32 +1,63 @@
 // src/crypto/chatCrypto.js
 
-const E2E_VERSION = "e2e-p256-aesgcm-v1";
-
-function bufToBase64(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
-}
-
-function base64ToBuf(str) {
-  const bin = atob(str);
-  const len = bin.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = bin.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
+// Single version flag for our envelope
+export const E2E_VERSION = "e2e-p256-aesgcm-v1";
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
 
-// ⚙️ Key generation: ECDH P-256
+// ---------- helpers ----------
+
+function bufToBase64(buf) {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) {
+    bin += String.fromCharCode(bytes[i]);
+  }
+  return btoa(bin);
+}
+
+function base64ToBuf(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    arr[i] = bin.charCodeAt(i);
+  }
+  return arr;
+}
+
+export function loadKeyPairFromStorage() {
+  try {
+    const raw = localStorage.getItem("chatKeyPair");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("[E2E] Failed to load keypair from storage:", err);
+    return null;
+  }
+}
+
+function saveKeyPairToStorage(obj) {
+  try {
+    localStorage.setItem("chatKeyPair", JSON.stringify(obj));
+  } catch (err) {
+    console.error("[E2E] Failed to save keypair to storage:", err);
+  }
+}
+
+// ---------- key generation / import ----------
+
 export async function generateUserKeyPair() {
+  if (!window.crypto?.subtle) {
+    throw new Error("WebCrypto not available");
+  }
+
   const keyPair = await window.crypto.subtle.generateKey(
     {
       name: "ECDH",
       namedCurve: "P-256",
     },
-    true,
+    true, // extractable
     ["deriveKey", "deriveBits"]
   );
 
@@ -39,42 +70,13 @@ export async function generateUserKeyPair() {
     keyPair.privateKey
   );
 
-  return { publicKeyJwk, privateKeyJwk };
+  const payload = { publicKeyJwk, privateKeyJwk };
+  saveKeyPairToStorage(payload);
+  return payload;
 }
 
-// 🔐 local storage helpers
-export function loadKeyPairFromStorage() {
-  const raw = localStorage.getItem("chatKeyPair");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-// ✅ FIXED: enforce correct shape and parsing for public key
-async function importPublicKey(publicKeyJwk) {
-  if (!publicKeyJwk) {
-    throw new Error("importPublicKey: no public key provided");
-  }
-
-  let jwk = publicKeyJwk;
-
-  // convert string JSON → object
-  if (typeof jwk === "string") {
-    try {
-      jwk = JSON.parse(jwk);
-    } catch (err) {
-      console.error("importPublicKey: failed JSON.parse", err, jwk);
-      throw err;
-    }
-  }
-
-  if (typeof jwk !== "object") {
-    throw new Error("importPublicKey: invalid JWK (not object)");
-  }
-
+export async function importPublicKey(jwk) {
+  if (!jwk) throw new Error("Missing public JWK");
   return window.crypto.subtle.importKey(
     "jwk",
     jwk,
@@ -83,30 +85,29 @@ async function importPublicKey(publicKeyJwk) {
       namedCurve: "P-256",
     },
     true,
-    []
+    [] // public key has no usages in ECDH
   );
 }
 
-// 🔑 private key importer unchanged except type-safety
-async function importPrivateKey(privateKeyJwk) {
-  if (!privateKeyJwk) throw new Error("Missing private key");
+export async function importPrivateKey(jwk) {
+  if (!jwk) throw new Error("Missing private JWK");
   return window.crypto.subtle.importKey(
     "jwk",
-    privateKeyJwk,
+    jwk,
     {
       name: "ECDH",
       namedCurve: "P-256",
     },
     false,
-    ["deriveKey"]
+    ["deriveKey", "deriveBits"]
   );
 }
 
-async function deriveAesKey(myPrivateKey, otherPublicKey) {
+async function deriveAesKey(myPrivateKey, theirPublicKey) {
   return window.crypto.subtle.deriveKey(
     {
       name: "ECDH",
-      public: otherPublicKey,
+      public: theirPublicKey,
     },
     myPrivateKey,
     {
@@ -118,86 +119,134 @@ async function deriveAesKey(myPrivateKey, otherPublicKey) {
   );
 }
 
+// ---------- ENCRYPT ----------
+
 /**
- * Encrypt text for multiple recipients
+ * Encrypt a plaintext HTML string for a set of user IDs.
+ *
+ * @param {string} plainHtml
+ * @param {string} senderId
+ * @param {string[]} recipientIds - MUST include senderId so sender can read own messages
+ * @param {Array} usersWithKeys - [{id, username, publicKeyJwk}, ...]
+ * @returns {Promise<string>} JSON string envelope
  */
+
+// chatCrypto.js
+
 export async function encryptForRecipients(
-  plainText,
+  plainHtml,
   senderId,
   recipientIds,
-  users
+  usersWithKeys
 ) {
-  if (!plainText) return plainText;
+  // Nothing to encrypt
+  if (!plainHtml || typeof plainHtml !== "string" || !plainHtml.trim()) {
+    return plainHtml;
+  }
 
+  const senderIdStr = String(senderId);
+
+  // Make sure sender is in the recipient list
+  const uniqueIds = Array.from(
+    new Set(
+      [...(recipientIds || []), senderIdStr].map((id) => String(id))
+    )
+  );
+
+  // Load my own keypair (created in Chat.jsx and stored in localStorage)
   const keyPair = loadKeyPairFromStorage();
-  if (!keyPair?.privateKeyJwk) {
-    console.warn("encryptForRecipients: no local private key");
-    return plainText;
+  if (!keyPair?.privateKeyJwk || !keyPair?.publicKeyJwk) {
+    console.warn("[E2E] No local keypair, sending plaintext instead");
+    return plainHtml;
+  }
+
+  // Build map: userId -> publicKeyJwk (from /crypto/public-keys)
+  const keyById = new Map();
+  (usersWithKeys || []).forEach((u) => {
+    if (!u || !u.id) return;
+    const raw =
+      u.publicKeyJwk ||
+      u.public_key ||
+      u.publicKey ||
+      u.public_key_jwk ||
+      null;
+    if (raw) {
+      keyById.set(String(u.id), raw);
+    }
+  });
+
+  // Ensure we always have sender's public key in the map
+  keyById.set(senderIdStr, keyPair.publicKeyJwk);
+
+  // Encrypt for anyone we *do* have a public key for.
+  // Users without a key will read from fallbackText later.
+  const recipients = [];
+  for (const id of uniqueIds) {
+    const jwk = keyById.get(id);
+    if (!jwk) {
+      console.warn("[E2E] No public key for recipient", id);
+      continue;
+    }
+    recipients.push({ id, publicKeyJwk: jwk });
+  }
+
+  if (recipients.length === 0) {
+    console.warn("[E2E] No recipients had public keys; sending plaintext");
+    return plainHtml;
   }
 
   const myPriv = await importPrivateKey(keyPair.privateKeyJwk);
 
-  const uniqueRecipientIds = [
-    ...new Set(recipientIds.filter(Boolean).map(String)),
-  ];
-
   const enc = {};
-
-  for (const rid of uniqueRecipientIds) {
-    const user = users.find((u) => String(u.id) === String(rid));
-
-    const pubJwk =
-      user?.publicKeyJwk ||
-      user?.public_key ||
-      user?.publicKey ||
-      user?.public_key_jwk;
-
-    if (!pubJwk) {
-      console.warn("No public key for user", rid);
-      continue;
-    }
-
-    let recipPub;
-    try {
-      recipPub = await importPublicKey(pubJwk);
-    } catch (err) {
-      console.error("Bad public key for", rid, err);
-      continue;
-    }
+  for (const r of recipients) {
+    const recipPub =
+      typeof r.publicKeyJwk === "string"
+        ? await importPublicKey(JSON.parse(r.publicKeyJwk))
+        : await importPublicKey(r.publicKeyJwk);
 
     const aesKey = await deriveAesKey(myPriv, recipPub);
 
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const ciphertext = await window.crypto.subtle.encrypt(
-      {
-        name: "AES-GCM",
-        iv,
-      },
+    const cipherBuf = await window.crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
       aesKey,
-      TEXT_ENCODER.encode(plainText)
+      TEXT_ENCODER.encode(plainHtml)
     );
 
-    enc[String(rid)] = {
+    enc[String(r.id)] = {
       iv: bufToBase64(iv),
-      data: bufToBase64(ciphertext),
+      data: bufToBase64(new Uint8Array(cipherBuf)),
     };
   }
 
-  if (!Object.keys(enc).length) {
-    console.warn("encryptForRecipients: no recipients had keys → plaintext");
-    return plainText;
-  }
-
-  return JSON.stringify({
+  // 🔑 ALWAYS embed the sender's public key from local keyPair
+  const envelope = {
     type: E2E_VERSION,
-    from: String(senderId),
+    from: senderIdStr,
+    fromPublicKeyJwk: keyPair.publicKeyJwk, // <— key for everyone to use
     enc,
-  });
+    // 🔥 CRITICAL: plaintext backup so nobody ever sees JSON
+    fallbackText: plainHtml,
+  };
+
+  return JSON.stringify(envelope);
 }
 
+
+// ---------- DECRYPT ----------
+
 /**
- * Decrypt envelope if needed
+ * Try to decrypt an envelope if it's in our E2E format.
+ * Otherwise, return the input textHtml unchanged.
+ *
+ * @param {string} textHtml - raw DB text_html field
+ * @param {object} messageMeta - full message row from server
+ * @param {string} currentUserId
+ * @param {Array} users - usersWithKeys from Chat.jsx
+ * @returns {Promise<string>}
  */
+// chatCrypto.js
+
 export async function decryptEnvelopeIfNeeded(
   textHtml,
   messageMeta,
@@ -207,63 +256,95 @@ export async function decryptEnvelopeIfNeeded(
   // Not a string or empty → nothing to do
   if (!textHtml || typeof textHtml !== "string") return textHtml;
 
-  // Not JSON-looking → definitely not our envelope
-  if (!textHtml.trim().startsWith("{")) return textHtml;
+  const trimmed = textHtml.trim();
+  if (!trimmed.startsWith("{")) return textHtml;
 
   let envelope;
   try {
-    envelope = JSON.parse(textHtml);
+    envelope = JSON.parse(trimmed);
   } catch {
-    // Broken JSON: just show whatever is there
+    // Broken JSON: show whatever is there
     return textHtml;
   }
 
   if (!envelope || envelope.type !== E2E_VERSION) return textHtml;
 
-  const entry = envelope.enc?.[String(currentUserId)];
-  if (!entry) {
-    // Message was encrypted, but not for this user
-    return "[Encrypted message (not for you)]";
-  }
-
+  const currentIdStr = String(currentUserId);
   const senderId =
-    envelope.from || messageMeta?.userId || messageMeta?.user_id;
+    envelope.from ||
+    messageMeta?.userId ||
+    messageMeta?.user_id ||
+    null;
 
-  // If we don’t have a users array, don’t crash
-  if (!Array.isArray(users)) {
+  // Plaintext fallback if anything goes bad
+  const fallbackPlain =
+    typeof envelope.fallbackText === "string" &&
+    envelope.fallbackText.trim() !== ""
+      ? envelope.fallbackText
+      : textHtml;
+
+  // There might not even be an encrypted entry for this user
+  const entry = envelope.enc?.[currentIdStr];
+  if (!entry) {
     console.warn(
-      "[E2E] decryptEnvelopeIfNeeded: users array missing, returning placeholder"
+      "[E2E] No encrypted payload for this user; using fallback"
     );
-    return "[Encrypted message (missing sender key)]";
+    return fallbackPlain;
   }
 
-  const senderUser = users.find((u) => String(u.id) === String(senderId));
+  // Figure out sender public key
+  let senderPubJwk =
+    envelope.fromPublicKeyJwk !== undefined
+      ? envelope.fromPublicKeyJwk
+      : null;
 
-  const senderPubJwk =
-    senderUser?.publicKeyJwk ||
-    senderUser?.public_key ||
-    senderUser?.publicKey ||
-    senderUser?.public_key_jwk;
+  // If not in envelope, try /crypto/public-keys data
+  if (!senderPubJwk && Array.isArray(users)) {
+    const senderUser = users.find(
+      (u) => String(u.id) === String(senderId)
+    );
+    senderPubJwk =
+      senderUser?.publicKeyJwk ||
+      senderUser?.public_key ||
+      senderUser?.publicKey ||
+      senderUser?.public_key_jwk ||
+      null;
+  }
+
+  // If still nothing and it's *our own* message, use our local keyPair
+  if (!senderPubJwk && senderId && String(senderId) === currentIdStr) {
+    const keyPair = loadKeyPairFromStorage();
+    if (keyPair?.publicKeyJwk) {
+      senderPubJwk = keyPair.publicKeyJwk;
+    }
+  }
 
   if (!senderPubJwk) {
     console.warn(
-      "[E2E] decryptEnvelopeIfNeeded: no public key for sender",
-      senderId
+      "[E2E] decryptEnvelopeIfNeeded: no sender pub key, using fallback"
     );
-    return "[Encrypted message (missing sender key)]";
+    return fallbackPlain;
   }
 
+  // We need our private key to decrypt
   const keyPair = loadKeyPairFromStorage();
   if (!keyPair?.privateKeyJwk) {
-    console.warn("[E2E] decryptEnvelopeIfNeeded: no local private key");
-    return "[Encrypted message (no your key)]";
+    console.warn(
+      "[E2E] decryptEnvelopeIfNeeded: no local private key, using fallback"
+    );
+    return fallbackPlain;
   }
 
   try {
     const myPriv = await importPrivateKey(keyPair.privateKeyJwk);
-    const senderPub = await importPublicKey(senderPubJwk);
+
+    const senderPub =
+      typeof senderPubJwk === "string"
+        ? await importPublicKey(JSON.parse(senderPubJwk))
+        : await importPublicKey(senderPubJwk);
 
     const aesKey = await deriveAesKey(myPriv, senderPub);
+
     const iv = base64ToBuf(entry.iv);
     const data = base64ToBuf(entry.data);
 
@@ -277,15 +358,16 @@ export async function decryptEnvelopeIfNeeded(
     );
 
     const decoded = TEXT_DECODER.decode(plainBuf);
-
-    // If somehow we decoded to empty string, let caller fall back
-    if (typeof decoded !== "string" || decoded.trim() === "") {
-      return textHtml;
+    if (!decoded || !decoded.trim()) {
+      return fallbackPlain;
     }
 
     return decoded;
   } catch (err) {
-    console.error("decrypt failed:", err);
-    return "[Encrypted message (failed decryption)]";
+    console.warn(
+      "[E2E] decryptEnvelopeIfNeeded: decrypt failed, falling back in UI",
+      err
+    );
+    return fallbackPlain;
   }
 }

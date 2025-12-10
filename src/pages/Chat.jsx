@@ -27,9 +27,13 @@ import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
 
 // ----- CONFIG -----
+// ----- CONFIG -----
 const GENERAL_CHANNEL_KEY = "general";
+const AVAILABILITY_CHANNEL_KEY = "availability-updates";
+const PROJECT_MANAGER_CHANNEL_KEY = "project-manager";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "😮", "😢"];
+
 
 const quillModules = {
   toolbar: [
@@ -95,7 +99,14 @@ export default function Chat() {
 
   // channelKey -> [messages]
   const [messagesByChannel, setMessagesByChannel] = useState({});
-  const [activeChannelKey, setActiveChannelKey] = useState(GENERAL_CHANNEL_KEY);
+  const [activeChannelKey, setActiveChannelKey] = useState(() => {
+    if (typeof window === "undefined") return GENERAL_CHANNEL_KEY;
+    try {
+      return localStorage.getItem("chat.activeChannel") || GENERAL_CHANNEL_KEY;
+    } catch {
+      return GENERAL_CHANNEL_KEY;
+    }
+  });
   const [activeDmUser, setActiveDmUser] = useState(null);
 
   // THREAD SIDEBAR
@@ -128,7 +139,9 @@ export default function Chat() {
   const [, setTick] = useState(0);
 
   const listRef = useRef(null);
-  const activeChannelRef = useRef(GENERAL_CHANNEL_KEY);
+  // AFTER
+  const activeChannelRef = useRef(null);
+
   const fileInputRef = useRef(null);
   const lastTypingSentRef = useRef(0);
 
@@ -138,6 +151,16 @@ export default function Chat() {
 
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingOriginalChannel, setEditingOriginalChannel] = useState(null);
+
+  // persist active channel key so refresh keeps you in same channel / DM
+  useEffect(() => {
+    if (!activeChannelKey) return;
+    try {
+      localStorage.setItem("chat.activeChannel", activeChannelKey);
+    } catch {
+      // ignore storage errors
+    }
+  }, [activeChannelKey]);
 
   // ----- DERIVED -----
   const activeMessages = messagesByChannel[activeChannelKey] || [];
@@ -192,6 +215,25 @@ export default function Chat() {
     [users, userKeysById]
   );
 
+  // 🔐 helper: normalize + decrypt incoming message text (channels + DMs)
+  const decryptForDisplay = async (rawText, rawMessage, channelId) => {
+    try {
+      const baseText = rawText || "";
+
+      const decrypted = await decryptEnvelopeIfNeeded(
+        baseText,
+        { ...rawMessage, channelId },
+        user.id,
+        usersWithKeys
+      );
+
+      return decrypted || "";
+    } catch (err) {
+      console.warn("[E2E] decryptForDisplay failed, using rawText:", err);
+      return rawText || "";
+    }
+  };
+
   const isGeneralChannel = activeChannelKey === GENERAL_CHANNEL_KEY;
   const isDmChannel = !!activeDmUser;
 
@@ -239,6 +281,8 @@ export default function Chat() {
           !isPrivate &&
           key &&
           key !== GENERAL_CHANNEL_KEY &&
+          key !== AVAILABILITY_CHANNEL_KEY &&
+          key !== PROJECT_MANAGER_CHANNEL_KEY &&
           !key.startsWith("dm:") &&
           !key.startsWith("thread:")
         );
@@ -278,74 +322,41 @@ export default function Chat() {
     channels.find((ch) => ch.key === threadParentChannelKey);
 
   // 🔐 Figure out which user IDs should be able to read a given channel's messages
+    // 🔐 Figure out which user IDs should be able to read a given channel's messages
   const getRecipientIdsForChannelKey = (channelKey) => {
+    // Only users that have a public key are valid recipients for E2E
+    const usersWithPub = usersWithKeys.filter((u) => !!u.publicKeyJwk);
+    const idsWithPub = new Set(usersWithPub.map((u) => String(u.id)));
+
+    const ensureSelfIncludedWithKeys = (ids) => {
+      const set = new Set(ids.map((id) => String(id)));
+      set.add(String(user.id)); // always include self
+      // final list: only those who actually have a public key
+      return Array.from(set).filter((id) => idsWithPub.has(id));
+    };
+
     // DM: channelKey is like "dm:userA:userB"
     if (channelKey && channelKey.startsWith("dm:")) {
       const parts = channelKey.split(":").slice(1); // [userA, userB]
-      // ensure current user is included
-      const all = [...parts, user.id];
-      return Array.from(new Set(all.map((id) => String(id))));
+      return ensureSelfIncludedWithKeys(parts);
     }
 
-    // General "team" channel => everyone
+    // General "team" channel => everyone with a key
     if (channelKey === GENERAL_CHANNEL_KEY) {
-      return users.map((u) => u.id);
+      return ensureSelfIncludedWithKeys(usersWithPub.map((u) => u.id));
     }
 
-    // Other channels: try to use members if present on channel object
+    // Other channels: use explicit members if available
     const ch = channels.find((c) => c.key === channelKey);
     if (ch && Array.isArray(ch.members) && ch.members.length > 0) {
       const memberIds = ch.members.map((m) => m.user_id || m.id);
-      const all = [...memberIds, user.id];
-      return Array.from(new Set(all.map((id) => String(id))));
+      return ensureSelfIncludedWithKeys(memberIds);
     }
 
-    // Fallback: all users (until you wire proper membership)
-    return users.map((u) => u.id);
+    // Fallback: all users who have keys
+    return ensureSelfIncludedWithKeys(usersWithPub.map((u) => u.id));
   };
 
-  // 🔐 helper: normalize + decrypt incoming message text
-  const decryptForDisplay = async (rawText, rawMessage, channelId) => {
-    const baseText =
-      typeof rawText === "string" && rawText.length ? rawText : "";
-
-    // If server text is literally empty, nothing to show anyway
-    if (!baseText) return "";
-
-    try {
-      const decrypted = await decryptEnvelopeIfNeeded(
-        baseText,
-        { ...rawMessage, channelId },
-        user.id,
-        usersWithKeys
-      );
-
-      // If decrypt gave a string
-      if (typeof decrypted === "string") {
-        const trimmed = decrypted.trim();
-
-        // Our helper returns placeholders like "[Encrypted message (...)]"
-        if (trimmed.startsWith("[Encrypted message")) {
-          return decrypted;
-        }
-
-        if (trimmed.length > 0) {
-          return decrypted;
-        }
-      }
-
-      // Any other weird / falsy / non-string → keep original server text
-      return baseText;
-    } catch (err) {
-      console.error("E2E decrypt error:", err, {
-        rawText,
-        rawMessage,
-        channelId,
-      });
-      // On error, always show whatever server sent
-      return baseText;
-    }
-  };
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -507,13 +518,10 @@ export default function Chat() {
 
       const history = await Promise.all(
         rawMessages.map(async (m) => {
-          const baseText =
-            m.textHtml || m.text_html || m.text || m.textHtml === "" ? m.textHtml : "";
-
           const base = {
             id: m.id || createUniqueId("msg"),
             channelId,
-            textHtml: baseText || "",
+            textHtml: m.textHtml || m.text_html || m.text || "",
             userId: m.userId || m.user_id,
             username: m.username,
             createdAt: m.createdAt || m.created_at,
@@ -522,6 +530,11 @@ export default function Chat() {
             parentId: m.parentId || m.parent_id || null,
             reactions: m.reactions || {},
             attachments: m.attachments || [],
+            // keep any envelope fields in case we want them
+            encrypted: m.encrypted,
+            senderPublicKeyJwk:
+              m.senderPublicKeyJwk || m.sender_public_key,
+            fallbackText: m.fallbackText || m.fallback_text,
           };
 
           const decryptedText = await decryptForDisplay(
@@ -530,14 +543,9 @@ export default function Chat() {
             channelId
           );
 
-          const finalTextHtml =
-            typeof decryptedText === "string" && decryptedText.trim() !== ""
-              ? decryptedText
-              : base.textHtml || "[no text]";
-
           return {
             ...base,
-            textHtml: finalTextHtml,
+            textHtml: decryptedText,
           };
         })
       );
@@ -554,19 +562,16 @@ export default function Chat() {
       if (!msg || !msg.channelId) return;
       const channelId = msg.channelId;
 
-      const raw = msg.textHtml || msg.text_html || msg.text || "";
-
-      const decryptedText = await decryptForDisplay(raw, msg, channelId);
-
-      const finalTextHtml =
-        typeof decryptedText === "string" && decryptedText.trim() !== ""
-          ? decryptedText
-          : raw || "[no text]";
+      const decryptedText = await decryptForDisplay(
+        msg.textHtml || msg.text_html || msg.text || "",
+        msg,
+        channelId
+      );
 
       const normalized = {
         id: msg.id || msg.tempId || createUniqueId("msg"),
         channelId,
-        textHtml: finalTextHtml,
+        textHtml: decryptedText,
         userId: msg.userId || msg.user_id,
         username: msg.username,
         createdAt: msg.createdAt || msg.created_at,
@@ -858,36 +863,42 @@ export default function Chat() {
       socket.off("chat:messageEdited", handleMessageEdited);
       socket.off("chat:messageDeleted", handleMessageDeleted);
     };
-  }, [auth.token, user.id, setActiveHuddle, rtc, users, usersWithKeys]);
+  }, [auth.token, user.id, setActiveHuddle, rtc, usersWithKeys]);
 
   // JOIN / LEAVE main channel
-  useEffect(() => {
-    let socket = getSocket();
-    if (!socket && auth.token) {
-      socket = initSocket(auth.token);
-    }
-    if (!socket) return;
+useEffect(() => {
+  let socket = getSocket();
+  if (!socket && auth.token) {
+    socket = initSocket(auth.token);
+  }
+  if (!socket) return;
 
-    const prev = activeChannelRef.current;
-    if (prev && prev !== activeChannelKey) {
-      leaveChatChannel(prev);
-    }
+  const prev = activeChannelRef.current;
+  if (prev && prev !== activeChannelKey) {
+    // leave previous channel only when key actually changes
+    leaveChatChannel(prev);
+  }
 
+  // only join if new channel or first time
+  if (prev !== activeChannelKey) {
     setLoadingHistory(true);
     joinChatChannel(activeChannelKey);
     activeChannelRef.current = activeChannelKey;
 
+    // optional: tell huddle which channel we’re in
     if (setChannelForHuddle) {
       setChannelForHuddle(activeChannelKey);
     }
 
-    setTypingByChannel((prev) => ({
-      ...prev,
+    setTypingByChannel((prevState) => ({
+      ...prevState,
       [activeChannelKey]: {},
     }));
 
     setOpenReactionFor(null);
-  }, [activeChannelKey, auth.token, setChannelForHuddle]);
+  }
+}, [activeChannelKey, auth.token]); // ⬅️ IMPORTANT: remove setChannelForHuddle here
+
 
   // JOIN / LEAVE thread channel (sidebar)
   useEffect(() => {
@@ -975,10 +986,6 @@ export default function Chat() {
         );
       }
 
-      // DEBUG
-      console.log("PLAINTEXT before encrypt (edit):", html);
-      console.log("CIPHERTEXT sent to server (edit):", encryptedHtml);
-
       const socket = getSocket();
       if (socket) {
         socket.emit("chat:edit", {
@@ -1032,9 +1039,6 @@ export default function Chat() {
     } catch (err) {
       console.error("E2E encrypt failed, sending plaintext:", err);
     }
-
-    console.log("PLAINTEXT before encrypt:", html);
-    console.log("CIPHERTEXT sent to server:", encryptedHtml);
 
     sendChatMessage({
       channelId: activeChannelKey,
@@ -1346,7 +1350,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="h-[calc(100vh-80px)] flex gap-4">
+    <div className="h-full flex gap-4">
       {/* LEFT: CHANNELS + DMS */}
       <aside className="w-64 bg-white rounded-xl shadow p-3 flex flex-col text-xs">
         <div className="flex items-center justify-between mb-3">
@@ -1387,6 +1391,38 @@ export default function Chat() {
             <span>team-general</span>
           </span>
         </button>
+
+                {/* SYSTEM CHANNELS (pinned) */}
+        <button
+          type="button"
+          onClick={() => handleSelectChannel(AVAILABILITY_CHANNEL_KEY)}
+          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs mb-1 ${
+            activeChannelKey === AVAILABILITY_CHANNEL_KEY
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-base">#</span>
+            <span>availability-updates</span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSelectChannel(PROJECT_MANAGER_CHANNEL_KEY)}
+          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs mb-2 ${
+            activeChannelKey === PROJECT_MANAGER_CHANNEL_KEY
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-base">#</span>
+            <span>project-manager</span>
+          </span>
+        </button>
+
 
         {/* PUBLIC CHANNELS */}
         {publicChannels.length > 0 && (
@@ -1940,7 +1976,11 @@ export default function Chat() {
                 disabled={!connected || !editorHtml.trim() || sending}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {sending ? "Sending..." : editingMessageId ? "Save" : "Send"}
+                {sending
+                  ? "Sending..."
+                  : editingMessageId
+                  ? "Save"
+                  : "Send"}
               </button>
             </div>
 

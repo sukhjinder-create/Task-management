@@ -14,8 +14,6 @@ export default function AppLayout({ children }) {
 
   const user = auth?.user;
 
-  // attendanceStatus can be:
-  // "offline" | "available" | "aws" | "lunch"
   const [attendanceStatus, setAttendanceStatus] = useState(() => {
     try {
       return localStorage.getItem("attendanceStatus") || "offline";
@@ -38,9 +36,6 @@ export default function AppLayout({ children }) {
   const [lunchLoading, setLunchLoading] = useState(false);
   const [toggleLoading, setToggleLoading] = useState(false);
 
-  // ───────────────────────────────────────────
-  // Helpers for UI text / colors
-  // ───────────────────────────────────────────
   const statusMeta = useMemo(() => {
     switch (attendanceStatus) {
       case "available":
@@ -70,20 +65,15 @@ export default function AppLayout({ children }) {
     }
   }, [attendanceStatus]);
 
-  // ───────────────────────────────────────────
-  // SIGN IN / SIGN OFF TOGGLE
-  // ───────────────────────────────────────────
   const handleToggleSign = async () => {
     try {
       setToggleLoading(true);
 
       if (attendanceStatus === "offline") {
-        // SIGN IN
         await api.post("/attendance/sign-in");
         setAttendanceStatus("available");
         toast.success("Signed in. Slack updated.");
       } else {
-        // SIGN OFF
         await api.post("/attendance/sign-off");
         setAttendanceStatus("offline");
         toast.success("Signed off. Slack updated.");
@@ -97,9 +87,6 @@ export default function AppLayout({ children }) {
     }
   };
 
-  // ───────────────────────────────────────────
-  // AWS
-  // ───────────────────────────────────────────
   const sendAws = async (minutes) => {
     try {
       setAwsLoading(true);
@@ -127,9 +114,6 @@ export default function AppLayout({ children }) {
     sendAws(num);
   };
 
-  // ───────────────────────────────────────────
-  // LUNCH
-  // ───────────────────────────────────────────
   const handleLunchClick = async () => {
     try {
       setLunchLoading(true);
@@ -145,9 +129,6 @@ export default function AppLayout({ children }) {
     }
   };
 
-  // ───────────────────────────────────────────
-  // AVAILABLE (after AWS or lunch)
-  // ───────────────────────────────────────────
   const handleAvailableClick = async () => {
     try {
       setAvailableLoading(true);
@@ -163,18 +144,18 @@ export default function AppLayout({ children }) {
     }
   };
 
-  // Simple helper for button base classes
   const baseSmallBtn =
     "text-xs px-3 py-1 rounded-lg border shadow-sm hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed";
 
   return (
-    <div className="flex">
+    // ⬇️ Lock the whole app to viewport height, no body scroll
+    <div className="flex h-screen overflow-hidden">
       <Sidebar />
 
-      <div className="ml-60 w-full min-h-screen bg-slate-100">
+      {/* Right-hand pane: flex column + its own scroll area */}
+      <div className="ml-60 flex-1 bg-slate-100 flex flex-col overflow-hidden">
         {/* HEADER */}
         <header className="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center">
-          {/* LEFT: User + status + attendance controls */}
           <div className="flex items-center gap-4">
             {/* User chip */}
             {user && (
@@ -207,7 +188,6 @@ export default function AppLayout({ children }) {
 
             {/* Attendance controls */}
             <div className="flex items-center gap-2">
-              {/* Toggle SIGN IN / SIGN OFF */}
               <button
                 onClick={handleToggleSign}
                 disabled={toggleLoading}
@@ -226,10 +206,8 @@ export default function AppLayout({ children }) {
                   : "Sign off"}
               </button>
 
-              {/* When offline, hide other controls */}
               {attendanceStatus !== "offline" && (
                 <>
-                  {/* AWS - only from Available */}
                   {attendanceStatus === "available" && (
                     <div className="relative">
                       <button
@@ -277,7 +255,6 @@ export default function AppLayout({ children }) {
                     </div>
                   )}
 
-                  {/* Lunch - only from Available */}
                   {attendanceStatus === "available" && (
                     <button
                       type="button"
@@ -292,7 +269,6 @@ export default function AppLayout({ children }) {
                     </button>
                   )}
 
-                  {/* Available button for AWS / Lunch */}
                   {(attendanceStatus === "aws" ||
                     attendanceStatus === "lunch") && (
                     <button
@@ -312,7 +288,6 @@ export default function AppLayout({ children }) {
             </div>
           </div>
 
-          {/* RIGHT: Logout */}
           <button
             onClick={logout}
             className="text-sm bg-red-100 text-red-600 px-4 py-1.5 rounded-lg hover:bg-red-200 border border-red-200"
@@ -321,10 +296,9 @@ export default function AppLayout({ children }) {
           </button>
         </header>
 
-        {/* MAIN PAGE CONTENT */}
-        <main className="px-6 py-6 relative">
+        {/* MAIN PAGE CONTENT – the ONLY place that scrolls */}
+        <main className="px-6 py-6 relative flex-1 overflow-y-auto">
           {children}
-          {/* 🔊 Global floating huddle window (Zoom-style) */}
           <GlobalHuddleWindow />
         </main>
       </div>

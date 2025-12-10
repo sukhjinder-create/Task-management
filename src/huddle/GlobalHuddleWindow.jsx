@@ -20,11 +20,9 @@ function RemotePeerVideo({ peer }) {
     }
 
     const play = () => {
-      video
-        .play()
-        .catch(() => {
-          /* ignore autoplay errors */
-        });
+      video.play().catch(() => {
+        /* ignore autoplay errors */
+      });
     };
 
     if (video.readyState >= 2) {
@@ -81,11 +79,9 @@ export default function GlobalHuddleWindow() {
     video.muted = true;
 
     const play = () => {
-      video
-        .play()
-        .catch(() => {
-          /* ignore autoplay errors */
-        });
+      video.play().catch(() => {
+        /* ignore autoplay errors */
+      });
     };
 
     if (video.readyState >= 2) {
@@ -109,17 +105,29 @@ export default function GlobalHuddleWindow() {
 
   const onMouseMove = (e) => {
     if (dragging.current) {
+      const nextX = e.clientX - dragOffset.current.x;
+      const nextY = e.clientY - dragOffset.current.y;
+
+      const maxX = Math.max(0, window.innerWidth - size.w);
+      const maxY = Math.max(0, window.innerHeight - size.h - 40);
+
       setPos({
-        x: e.clientX - dragOffset.current.x,
-        y: e.clientY - dragOffset.current.y,
+        x: Math.min(Math.max(0, nextX), maxX),
+        y: Math.min(Math.max(0, nextY), maxY),
       });
     }
     if (resizing.current) {
       const dx = e.clientX - resizeStart.current.x;
       const dy = e.clientY - resizeStart.current.y;
+      const minW = 380;
+      const minH = 280;
+
+      const nextW = Math.max(minW, resizeStart.current.w + dx);
+      const nextH = Math.max(minH, resizeStart.current.h + dy);
+
       setSize({
-        w: Math.max(380, resizeStart.current.w + dx),
-        h: Math.max(280, resizeStart.current.h + dy),
+        w: nextW,
+        h: nextH,
       });
     }
   };
@@ -166,6 +174,19 @@ export default function GlobalHuddleWindow() {
       }
     }
   };
+
+  // Keep fullscreen window in sync with viewport resize
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const handleResize = () => {
+      setSize({ w: window.innerWidth, h: window.innerHeight });
+      setPos({ x: 0, y: 0 });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isFullscreen]);
 
   // -------------------------
   // Close / Leave Huddle
@@ -219,6 +240,7 @@ export default function GlobalHuddleWindow() {
         <div className="flex items-center gap-2">
           {/* Fullscreen Button */}
           <button
+            type="button"
             onClick={toggleFullscreen}
             className="px-3 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600"
           >
@@ -227,6 +249,7 @@ export default function GlobalHuddleWindow() {
 
           {/* Single End Button (for this window) */}
           <button
+            type="button"
             onClick={leave}
             className="px-3 py-1 text-xs rounded bg-red-600 hover:bg-red-500"
           >
@@ -265,6 +288,7 @@ export default function GlobalHuddleWindow() {
       <div className="w-full bg-[#1b1e27] py-3 px-6 flex justify-center gap-6 rounded-b-xl">
         {/* MUTE */}
         <button
+          type="button"
           onClick={() => rtc.toggleMute && rtc.toggleMute()}
           className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600"
         >
@@ -273,6 +297,7 @@ export default function GlobalHuddleWindow() {
 
         {/* CAMERA */}
         <button
+          type="button"
           onClick={() => rtc.toggleCamera && rtc.toggleCamera()}
           className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600"
         >
@@ -281,6 +306,7 @@ export default function GlobalHuddleWindow() {
 
         {/* SCREEN SHARE */}
         <button
+          type="button"
           onClick={() =>
             rtc.isScreenSharing
               ? rtc.stopScreenShare && rtc.stopScreenShare()
@@ -297,7 +323,7 @@ export default function GlobalHuddleWindow() {
         <div
           onMouseDown={onMouseDownResize}
           className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize bg-slate-500 rounded"
-        ></div>
+        />
       )}
     </div>
   );
