@@ -1,4 +1,3 @@
-// src/socket.js
 import { io } from "socket.io-client";
 
 let socket = null;
@@ -8,9 +7,20 @@ const BACKEND_URL =
 
 /**
  * Create / re-create socket with JWT token from global window.__AUTH_TOKEN__
+ *
+ * Note: server authenticates by JWT token only. Workspace is taken from the token
+ * payload server-side (we also set window.__WORKSPACE_ID__ for frontend convenience).
  */
 function createSocket() {
   if (!window.__AUTH_TOKEN__) return null;
+
+  // keep previous socket closed
+  if (socket) {
+    try {
+      socket.disconnect();
+    } catch {}
+    socket = null;
+  }
 
   socket = io(BACKEND_URL, {
     auth: { token: window.__AUTH_TOKEN__ },
@@ -27,7 +37,10 @@ function createSocket() {
    Initialize socket manually (first login load)
 ------------------------------------------------- */
 export function initSocket(token) {
-  if (token) window.__AUTH_TOKEN__ = token;
+  if (token) {
+    window.__AUTH_TOKEN__ = token;
+    // If token included workspace in stored auth, window.__WORKSPACE_ID__ may already be set.
+  }
 
   // close previous
   if (socket) {
@@ -42,6 +55,7 @@ export function initSocket(token) {
 
 /* -------------------------------------------------
    When token changes after login → re-auth socket
+   (listening event is already used in app)
 ------------------------------------------------- */
 window.addEventListener("auth:updated", () => {
   if (socket) {
@@ -63,6 +77,7 @@ window.addEventListener("auth:logout", () => {
   }
   socket = null;
   window.__AUTH_TOKEN__ = null;
+  window.__WORKSPACE_ID__ = null;
 });
 
 export function getSocket() {

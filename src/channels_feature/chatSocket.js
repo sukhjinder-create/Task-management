@@ -1,4 +1,3 @@
-// src/channels_feature/chatSocket.js
 import {
   getSocket,
   joinChatChannel,
@@ -32,7 +31,7 @@ export function setupChannelSocket(channelKey, handlers = {}) {
     onSystem,
   } = handlers;
 
-  // Join room
+  // Join room (server will also join workspace-scoped room based on JWT)
   joinChatChannel(channelKey);
 
   const historyHandler = (payload) => {

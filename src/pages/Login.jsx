@@ -1,4 +1,3 @@
-// src/pages/Login.jsx
 import { useState } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../api";
@@ -13,6 +12,27 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const safePersistAuth = (user, token) => {
+    try {
+      // keep backward compatible storage shape: { token, user }
+      const payload = { token, user };
+      localStorage.setItem("auth", JSON.stringify(payload));
+
+      // set window globals used by socket.js and other legacy code
+      try {
+        window.__AUTH_TOKEN__ = token;
+        window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || "GLOBAL";
+      } catch (e) {
+        // ignore
+      }
+
+      // Notify other parts of app (socket.js listens for this)
+      window.dispatchEvent(new Event("auth:updated"));
+    } catch (err) {
+      console.warn("Failed to persist auth to localStorage:", err);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,11 +52,21 @@ export default function Login() {
       // Backend returns: { token, user }
       const { token, user } = res.data;
 
-      // ✅ Pass correct arguments to AuthContext
-      login(user, token);
+      // Persist auth locally (safe duplicate if AuthContext also persists)
+      safePersistAuth(user, token);
+
+      // ✅ Pass correct arguments to AuthContext (keep behaviour)
+      // AuthContext.login may set app-level state
+      try {
+        login(user, token);
+      } catch (err) {
+        // If AuthContext.login unexpectedly throws, don't block the flow.
+        console.warn("AuthContext.login call threw:", err);
+      }
 
       toast.success(`Logged in as ${user.username}`);
-      // ✅ Go straight to projects (your main working page)
+
+      // navigate to main projects page
       navigate("/projects", { replace: true });
     } catch (err) {
       console.error("Login error:", err);

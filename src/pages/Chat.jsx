@@ -27,13 +27,11 @@ import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
 
 // ----- CONFIG -----
-// ----- CONFIG -----
 const GENERAL_CHANNEL_KEY = "general";
 const AVAILABILITY_CHANNEL_KEY = "availability-updates";
 const PROJECT_MANAGER_CHANNEL_KEY = "project-manager";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "😮", "😢"];
-
 
 const quillModules = {
   toolbar: [
@@ -70,6 +68,55 @@ function presenceLabel(status) {
   return "Unknown";
 }
 
+/* -------------------------
+   Simple emoji shortcode map
+   - non-exhaustive, safe, extendable
+---------------------------- */
+const EMOJI_MAP = {
+  smile: "😄",
+  grin: "😁",
+  thumbsup: "👍",
+  "+1": "👍",
+  heart: "❤️",
+  tada: "🎉",
+  laugh: "😂",
+  joy: "😂",
+  open_mouth: "😮",
+  cry: "😢",
+  wave: "👋",
+  check: "✅",
+  clock1: "🕐",
+  pause_button: "⏸️",
+  plate_with_cutlery: "🍽️",
+};
+
+/**
+ * Convert colon shortcodes like :smile: into unicode emoji.
+ * Leaves unknown shortcodes untouched.
+ * Works on plain text or HTML (it just replaces textual tokens).
+ */
+function convertEmojiShortcodes(text) {
+  if (!text || typeof text !== "string") return text;
+  return text.replace(/:([a-z0-9_+\-]+):/gi, (match, name) => {
+    const key = name.toLowerCase();
+    if (EMOJI_MAP[key]) return EMOJI_MAP[key];
+    return match; // leave as-is if unknown
+  });
+}
+
+/**
+ * Apply emoji conversion to message object fields that will be displayed.
+ * Non-destructive.
+ */
+function applyEmojiToMessage(msg) {
+  if (!msg) return msg;
+  const copy = { ...msg };
+  if (copy.textHtml) copy.textHtml = convertEmojiShortcodes(copy.textHtml);
+  if (copy.text) copy.text = convertEmojiShortcodes(copy.text);
+  if (copy.fallbackText) copy.fallbackText = convertEmojiShortcodes(copy.fallbackText);
+  return copy;
+}
+
 export default function Chat() {
   const { auth } = useAuth();
   const api = useApi();
@@ -94,10 +141,8 @@ export default function Chat() {
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
-  // userId -> public key (JWK) from backend /crypto/public-keys
   const [userKeysById, setUserKeysById] = useState({});
 
-  // channelKey -> [messages]
   const [messagesByChannel, setMessagesByChannel] = useState({});
   const [activeChannelKey, setActiveChannelKey] = useState(() => {
     if (typeof window === "undefined") return GENERAL_CHANNEL_KEY;
@@ -110,7 +155,6 @@ export default function Chat() {
   const [activeDmUser, setActiveDmUser] = useState(null);
 
   // THREAD SIDEBAR
-  // key: "thread:<rootMessageId>" -> parent channel key
   const [threadParents, setThreadParents] = useState({});
   const [activeThreadKey, setActiveThreadKey] = useState(null);
   const [threadRootMessage, setThreadRootMessage] = useState(null);
@@ -139,7 +183,6 @@ export default function Chat() {
   const [, setTick] = useState(0);
 
   const listRef = useRef(null);
-  // AFTER
   const activeChannelRef = useRef(null);
 
   const fileInputRef = useRef(null);
@@ -152,6 +195,51 @@ export default function Chat() {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingOriginalChannel, setEditingOriginalChannel] = useState(null);
 
+  // -----------------------
+  // Superadmin / single-workspace mode
+  // Backwards-compatible: keep workspace variables but operate in single-workspace / superadmin mode.
+  // We no longer present a workspace selector in the UI; instead we load channels and users globally
+  // like a superadmin would. This mirrors the previous Chat.jsx behavior.
+  const [workspaces, setWorkspaces] = useState([]);
+  const [activeWorkspace, setActiveWorkspace] = useState(() => {
+    try {
+      return localStorage.getItem("chat.workspaceId") || null;
+    } catch {
+      return null;
+    }
+  });
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
+
+  // Load users (superadmin/global)
+  async function loadUsers() {
+    try {
+      setLoadingUsers(true);
+      const res = await api.get("/users");
+      setUsers(res.data || []);
+    } catch (err) {
+      console.error("Failed to load users for chat:", err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }
+
+  // Load channels (global)
+  async function loadChannels() {
+    try {
+      const res = await api.get("/chat/channels");
+      setChannels(res.data || []);
+    } catch (err) {
+      console.error("Failed to load channels:", err);
+    }
+  }
+
+  // Initial load: channels & users & keys (superadmin/global)
+  useEffect(() => {
+    // keep loading workspaces for compatibility but we don't show selector
+    loadChannels();
+    loadUsers();
+  }, []);
+
   // persist active channel key so refresh keeps you in same channel / DM
   useEffect(() => {
     if (!activeChannelKey) return;
@@ -161,6 +249,8 @@ export default function Chat() {
       // ignore storage errors
     }
   }, [activeChannelKey]);
+
+  // -----------------------
 
   // ----- DERIVED -----
   const activeMessages = messagesByChannel[activeChannelKey] || [];
@@ -227,10 +317,12 @@ export default function Chat() {
         usersWithKeys
       );
 
-      return decrypted || "";
+      // Apply emoji conversion right after decrypt (so UI shows emoji)
+      const withEmoji = convertEmojiShortcodes(decrypted || baseText || "");
+      return withEmoji;
     } catch (err) {
       console.warn("[E2E] decryptForDisplay failed, using rawText:", err);
-      return rawText || "";
+      return convertEmojiShortcodes(rawText || "");
     }
   };
 
@@ -322,7 +414,6 @@ export default function Chat() {
     channels.find((ch) => ch.key === threadParentChannelKey);
 
   // 🔐 Figure out which user IDs should be able to read a given channel's messages
-    // 🔐 Figure out which user IDs should be able to read a given channel's messages
   const getRecipientIdsForChannelKey = (channelKey) => {
     // Only users that have a public key are valid recipients for E2E
     const usersWithPub = usersWithKeys.filter((u) => !!u.publicKeyJwk);
@@ -357,7 +448,6 @@ export default function Chat() {
     return ensureSelfIncludedWithKeys(usersWithPub.map((u) => u.id));
   };
 
-
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
@@ -367,29 +457,6 @@ export default function Chat() {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [activeMessages]);
-
-  // Load users
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadUsers() {
-      try {
-        setLoadingUsers(true);
-        const res = await api.get("/users");
-        if (cancelled) return;
-        setUsers(res.data || []);
-      } catch (err) {
-        console.error("Failed to load users for chat:", err);
-      } finally {
-        if (!cancelled) setLoadingUsers(false);
-      }
-    }
-
-    loadUsers();
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
 
   // Load user public keys for E2E crypto
   useEffect(() => {
@@ -473,20 +540,6 @@ export default function Chat() {
     };
   }, [api, auth?.token, user?.id]);
 
-  // Load channels
-  const loadChannels = async () => {
-    try {
-      const res = await api.get("/chat/channels");
-      setChannels(res.data || []);
-    } catch (err) {
-      console.error("Failed to load channels:", err);
-    }
-  };
-
-  useEffect(() => {
-    loadChannels();
-  }, [api]);
-
   // ----- SOCKET SETUP -----
   useEffect(() => {
     let socket = getSocket();
@@ -503,6 +556,16 @@ export default function Chat() {
     const handleConnect = () => {
       setConnected(true);
       setJoining(false);
+
+      // Auto-join permanent channels so user sees attendance / project notifications
+      try {
+        // don't change activeChannelKey or UI focus; just ensure the socket is in rooms
+        joinChatChannel(GENERAL_CHANNEL_KEY);
+        joinChatChannel(AVAILABILITY_CHANNEL_KEY);
+        joinChatChannel(PROJECT_MANAGER_CHANNEL_KEY);
+      } catch (e) {
+        console.warn("Auto-join pinned channels failed:", e);
+      }
     };
 
     const handleDisconnect = () => {
@@ -543,10 +606,13 @@ export default function Chat() {
             channelId
           );
 
-          return {
+          // Use decryptedText (already emoji-converted in decryptForDisplay)
+          const result = {
             ...base,
             textHtml: decryptedText,
           };
+
+          return applyEmojiToMessage(result);
         })
       );
 
@@ -582,6 +648,8 @@ export default function Chat() {
         attachments: msg.attachments || [],
       };
 
+      const normalizedWithEmoji = applyEmojiToMessage(normalized);
+
       setMessagesByChannel((prev) => {
         const existing = prev[channelId] || [];
         const next = [...existing];
@@ -592,7 +660,7 @@ export default function Chat() {
           if (idxTemp !== -1) {
             next[idxTemp] = {
               ...next[idxTemp],
-              ...normalized,
+              ...normalizedWithEmoji,
             };
             return { ...prev, [channelId]: next };
           }
@@ -602,13 +670,13 @@ export default function Chat() {
         if (msg.id) {
           const idx = next.findIndex((m) => m.id === msg.id);
           if (idx !== -1) {
-            next[idx] = { ...next[idx], ...normalized };
+            next[idx] = { ...next[idx], ...normalizedWithEmoji };
             return { ...prev, [channelId]: next };
           }
         }
 
         // otherwise push
-        next.push(normalized);
+        next.push(normalizedWithEmoji);
         return { ...prev, [channelId]: next };
       });
     };
@@ -650,7 +718,7 @@ export default function Chat() {
             id: createUniqueId("sys"),
             channelId,
             system: true,
-            textHtml: txt,
+            textHtml: convertEmojiShortcodes(txt),
             createdAt,
           },
         ];
@@ -782,32 +850,63 @@ export default function Chat() {
       });
     };
 
-    const handleMessageEdited = (payload = {}) => {
+    const handleMessageEdited = async (payload = {}) => {
       const {
         channelId,
         id,
         messageId,
-        textHtml,
-        text,
+        textHtml: incomingTextHtml,
+        text: incomingText,
         updatedAt,
         updated_at,
       } = payload;
       const msgId = id || messageId;
       if (!channelId || !msgId) return;
 
-      setMessagesByChannel((prev) => {
-        const channelMessages = prev[channelId] || [];
-        const next = channelMessages.map((m) =>
-          m.id === msgId
-            ? {
-                ...m,
-                textHtml: textHtml || text || m.textHtml,
-                updatedAt: updatedAt || updated_at || m.updatedAt,
-              }
-            : m
-        );
-        return { ...prev, [channelId]: next };
-      });
+      try {
+        const rawText = incomingTextHtml ?? incomingText ?? null;
+
+        if (!rawText) {
+          setMessagesByChannel((prev) => {
+            const channelMessages = prev[channelId] || [];
+            const next = channelMessages.map((m) =>
+              m.id === msgId
+                ? {
+                    ...m,
+                    updatedAt: updatedAt || updated_at || m.updatedAt,
+                  }
+                : m
+            );
+            return { ...prev, [channelId]: next };
+          });
+          return;
+        }
+
+        let displayText = rawText;
+        try {
+          displayText = await decryptForDisplay(rawText, payload, channelId);
+          displayText = String(displayText || "");
+        } catch (err) {
+          console.warn("decryptForDisplay failed for edited message:", err);
+          displayText = convertEmojiShortcodes(String(rawText));
+        }
+
+        setMessagesByChannel((prev) => {
+          const channelMessages = prev[channelId] || [];
+          const next = channelMessages.map((m) =>
+            m.id === msgId
+              ? {
+                  ...m,
+                  textHtml: displayText,
+                  updatedAt: updatedAt || updated_at || m.updatedAt,
+                }
+              : m
+          );
+          return { ...prev, [channelId]: next };
+        });
+      } catch (err) {
+        console.error("handleMessageEdited error:", err);
+      }
     };
 
     const handleMessageDeleted = (payload = {}) => {
@@ -866,39 +965,42 @@ export default function Chat() {
   }, [auth.token, user.id, setActiveHuddle, rtc, usersWithKeys]);
 
   // JOIN / LEAVE main channel
-useEffect(() => {
-  let socket = getSocket();
-  if (!socket && auth.token) {
-    socket = initSocket(auth.token);
-  }
-  if (!socket) return;
-
-  const prev = activeChannelRef.current;
-  if (prev && prev !== activeChannelKey) {
-    // leave previous channel only when key actually changes
-    leaveChatChannel(prev);
-  }
-
-  // only join if new channel or first time
-  if (prev !== activeChannelKey) {
-    setLoadingHistory(true);
-    joinChatChannel(activeChannelKey);
-    activeChannelRef.current = activeChannelKey;
-
-    // optional: tell huddle which channel we’re in
-    if (setChannelForHuddle) {
-      setChannelForHuddle(activeChannelKey);
+  useEffect(() => {
+    let socket = getSocket();
+    if (!socket && auth.token) {
+      socket = initSocket(auth.token);
+    }
+    if (!socket) {
+      setConnected(false);
+      setJoining(false);
+      return;
     }
 
-    setTypingByChannel((prevState) => ({
-      ...prevState,
-      [activeChannelKey]: {},
-    }));
+    const prev = activeChannelRef.current;
+    if (prev && prev !== activeChannelKey) {
+      // leave previous channel only when key actually changes
+      leaveChatChannel(prev);
+    }
 
-    setOpenReactionFor(null);
-  }
-}, [activeChannelKey, auth.token]); // ⬅️ IMPORTANT: remove setChannelForHuddle here
+    // only join if new channel or first time
+    if (prev !== activeChannelKey) {
+      setLoadingHistory(true);
+      joinChatChannel(activeChannelKey);
+      activeChannelRef.current = activeChannelKey;
 
+      // optional: tell huddle which channel we’re in
+      if (setChannelForHuddle) {
+        setChannelForHuddle(activeChannelKey);
+      }
+
+      setTypingByChannel((prevState) => ({
+        ...prevState,
+        [activeChannelKey]: {},
+      }));
+
+      setOpenReactionFor(null);
+    }
+  }, [activeChannelKey, auth.token]); // keep dependency minimal
 
   // JOIN / LEAVE thread channel (sidebar)
   useEffect(() => {
@@ -954,14 +1056,16 @@ useEffect(() => {
       const channelId = editingOriginalChannel || activeChannelKey;
       const messageId = editingMessageId;
 
-      // Locally update with plaintext
+      // Locally update with plaintext (also apply emoji conversion)
+      const plainWithEmoji = convertEmojiShortcodes(html);
+
       setMessagesByChannel((prev) => {
         const channelMessages = prev[channelId] || [];
         const next = channelMessages.map((m) =>
           m.id === messageId
             ? {
                 ...m,
-                textHtml: html,
+                textHtml: plainWithEmoji,
                 updatedAt: new Date().toISOString(),
               }
             : m
@@ -1007,7 +1111,9 @@ useEffect(() => {
     const tempId = createUniqueId("temp");
     setSending(true);
 
-    // Locally show plaintext so UI is snappy
+    // Locally show plaintext so UI is snappy (apply emoji conversion)
+    const plainWithEmoji = convertEmojiShortcodes(html);
+
     setMessagesByChannel((prev) => {
       const existing = prev[activeChannelKey] || [];
       const next = [
@@ -1015,7 +1121,7 @@ useEffect(() => {
         {
           id: tempId,
           channelId: activeChannelKey,
-          textHtml: html,
+          textHtml: plainWithEmoji,
           userId: user.id,
           username: user.username,
           createdAt: new Date().toISOString(),
@@ -1068,7 +1174,9 @@ useEffect(() => {
     const channelId = activeThreadKey;
     const parentId = threadRootMessage.id;
 
-    // Locally show plaintext
+    // Locally show plaintext (apply emoji conversion)
+    const plainWithEmoji = convertEmojiShortcodes(html);
+
     setMessagesByChannel((prev) => {
       const existing = prev[channelId] || [];
       const next = [
@@ -1076,7 +1184,7 @@ useEffect(() => {
         {
           id: tempId,
           channelId,
-          textHtml: html,
+          textHtml: plainWithEmoji,
           userId: user.id,
           username: user.username,
           createdAt: new Date().toISOString(),
@@ -1392,7 +1500,7 @@ useEffect(() => {
           </span>
         </button>
 
-                {/* SYSTEM CHANNELS (pinned) */}
+        {/* SYSTEM CHANNELS (pinned) */}
         <button
           type="button"
           onClick={() => handleSelectChannel(AVAILABILITY_CHANNEL_KEY)}
@@ -1422,7 +1530,6 @@ useEffect(() => {
             <span>project-manager</span>
           </span>
         </button>
-
 
         {/* PUBLIC CHANNELS */}
         {publicChannels.length > 0 && (

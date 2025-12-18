@@ -1,8 +1,8 @@
 // src/layout/AppLayout.jsx
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate, Outlet } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
 import { useApi } from "../api";
 import toast from "react-hot-toast";
 import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow"; // ⬅ floating huddle UI
@@ -148,16 +148,13 @@ export default function AppLayout({ children }) {
     "text-xs px-3 py-1 rounded-lg border shadow-sm hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed";
 
   return (
-    // ⬇️ Lock the whole app to viewport height, no body scroll
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
 
-      {/* Right-hand pane: flex column + its own scroll area */}
       <div className="ml-60 flex-1 bg-slate-100 flex flex-col overflow-hidden">
         {/* HEADER */}
         <header className="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            {/* User chip */}
             {user && (
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-slate-800 text-white text-xs flex items-center justify-center font-semibold">
@@ -176,7 +173,6 @@ export default function AppLayout({ children }) {
               </div>
             )}
 
-            {/* Status pill */}
             <div
               className={`inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full border text-[11px] ${statusMeta.pillClass}`}
             >
@@ -186,7 +182,6 @@ export default function AppLayout({ children }) {
               <span>{statusMeta.label}</span>
             </div>
 
-            {/* Attendance controls */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleToggleSign}
@@ -298,7 +293,7 @@ export default function AppLayout({ children }) {
 
         {/* MAIN PAGE CONTENT – the ONLY place that scrolls */}
         <main className="px-6 py-6 relative flex-1 overflow-y-auto">
-          {children}
+          <Outlet />
           <GlobalHuddleWindow />
         </main>
       </div>

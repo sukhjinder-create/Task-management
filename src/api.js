@@ -1,4 +1,3 @@
-// src/api.js
 import axios from "axios";
 
 export const API_BASE_URL = "http://localhost:3000";
@@ -9,7 +8,7 @@ const api = axios.create({
 });
 
 /* ------------------------------------------
-   1. Always attach JWT token cleanly
+   1. Attach JWT token + workspace id (SAFE)
 --------------------------------------------- */
 api.interceptors.request.use(
   (config) => {
@@ -17,8 +16,42 @@ api.interceptors.request.use(
       const stored = localStorage.getItem("auth");
       const parsed = stored ? JSON.parse(stored) : null;
 
-      if (parsed?.token) {
-        config.headers.Authorization = `Bearer ${parsed.token}`;
+      const token = parsed?.token || parsed?.accessToken || null;
+      const user = parsed?.user || parsed;
+
+      /* ---------- AUTH TOKEN ---------- */
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        try {
+          window.__AUTH_TOKEN__ = token;
+        } catch {}
+      }
+
+      /* ---------- WORKSPACE ID ---------- */
+      const workspaceId =
+        user?.workspaceId ||
+        user?.workspace_id ||
+        parsed?.workspaceId ||
+        parsed?.workspace_id ||
+        null;
+
+      /**
+       * 🚫 DO NOT send fake workspace IDs
+       * ✅ Only attach header if we have a REAL one
+       */
+      if (workspaceId) {
+        const wid = String(workspaceId);
+        config.headers["x-workspace-id"] = wid;
+
+        try {
+          window.__WORKSPACE_ID__ = wid;
+        } catch {}
+      } else {
+        // ensure we don't leak old values
+        delete config.headers["x-workspace-id"];
+        try {
+          delete window.__WORKSPACE_ID__;
+        } catch {}
       }
     } catch (e) {
       console.warn("Auth token parse failed:", e);
@@ -30,9 +63,7 @@ api.interceptors.request.use(
 );
 
 /* ------------------------------------------
-   2. SAFE 401 Handler (no aggressive logout)
-      - prevents logout loop during channel create
-      - only logs out IF backend returns "Invalid token"
+   2. RESPONSE HANDLER
 --------------------------------------------- */
 api.interceptors.response.use(
   (res) => res,
@@ -40,37 +71,55 @@ api.interceptors.response.use(
     const status = err?.response?.status;
     const message = err?.response?.data?.error || "";
 
-    // Ignore OPTIONS preflight & 404 (not auth related)
-    if (status === 404 || status === 403) {
+    /* ------------------------------------------
+       WORKSPACE ENFORCEMENT (Backend authority)
+    --------------------------------------------- */
+    if (status === 403) {
+      const lower = String(message).toLowerCase();
+
+      if (
+        lower.includes("workspace is suspended") ||
+        lower.includes("workspace is deleted")
+      ) {
+        console.warn("🚫 Workspace access revoked:", message);
+
+        try {
+          localStorage.removeItem("auth");
+        } catch {}
+
+        window.dispatchEvent(
+          new CustomEvent("workspace:blocked", {
+            detail: { reason: message },
+          })
+        );
+
+        window.dispatchEvent(new Event("auth:logout"));
+      }
+
       return Promise.reject(err);
     }
 
-    // Prevent logout if 401 came due to permissions or channel creation mismatch
-    const allowSoft = [
-      "Not allowed",
-      "Missing",
-      "Cannot",
-      "Denied",
-      "Forbidden",
-      "Private",
-    ];
-
+    /* ------------------------------------------
+       EXISTING 401 LOGIC (UNCHANGED)
+    --------------------------------------------- */
     if (status === 401) {
       console.warn("⚠️ Soft 401 captured:", message);
+      const lower = String(message).toLowerCase();
 
-      const lower = message.toLowerCase();
-
-      // Only logout if explicitly invalid token or expired
       if (lower.includes("expired") || lower.includes("invalid")) {
         console.warn("🔴 Real token failure → logging out");
 
-        localStorage.removeItem("auth");
+        try {
+          localStorage.removeItem("auth");
+        } catch {}
 
         window.dispatchEvent(
           new CustomEvent("auth:unauthorized", {
             detail: { expired: true },
           })
         );
+
+        window.dispatchEvent(new Event("auth:logout"));
       } else {
         console.warn("🟡 401 not jwt-related → skip logout");
       }
