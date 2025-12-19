@@ -178,18 +178,31 @@ export default function Sidebar() {
         </NavLink>
 
         {isAdmin && (
-          <NavLink
-            to="/admin/users"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-lg text-sm ${
-                isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
-              }`
-            }
-          >
-            Admin Panel
-          </NavLink>
-        )}
-      </nav>
+  <>
+    <NavLink
+      to="/admin/attendance"
+      className={({ isActive }) =>
+        `block px-3 py-2 rounded-lg text-sm ${
+          isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
+        }`
+      }
+    >
+      Attendance
+    </NavLink>
+
+    <NavLink
+      to="/admin/users"
+      className={({ isActive }) =>
+        `block px-3 py-2 rounded-lg text-sm ${
+          isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
+        }`
+      }
+    >
+      Admin Panel
+    </NavLink>
+  </>
+)}
+</nav>
 
       {/* FOOTER with explicit profile link */}
       <div className="text-xs text-slate-500 border-t border-slate-200 pt-4">

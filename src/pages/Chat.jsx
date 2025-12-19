@@ -626,6 +626,28 @@ export default function Chat() {
 
     const handleChatMessage = async (msg) => {
       if (!msg || !msg.channelId) return;
+
+       // 🛑 HARD GUARD: ignore non-chat attendance/screen events
+  if (msg.eventType && msg.eventType.startsWith("ATTENDANCE_")) {
+    return;
+  }
+
+  if (msg.eventType && msg.eventType.startsWith("SCREEN_")) {
+    return;
+  }
+
+  // 🛑 Ignore non-chat internal events
+if (
+  msg.eventType &&
+  (
+    msg.eventType.startsWith("SCREEN_") ||
+    msg.eventType === "IDLE_DETECTED"
+  )
+) {
+  return;
+}
+
+
       const channelId = msg.channelId;
 
       const decryptedText = await decryptForDisplay(
@@ -1048,6 +1070,11 @@ export default function Chat() {
   const handleSend = async (e) => {
     e.preventDefault();
     const html = (editorHtml || "").trim();
+    if (activeChannelKey === AVAILABILITY_CHANNEL_KEY) {
+  toast.error("This channel is read-only.");
+  return;
+}
+
     if (!html) return;
     if (!connected) return;
 
@@ -1265,6 +1292,7 @@ export default function Chat() {
   const handleEditorChange = (value) => {
     setEditorHtml(value);
     const now = Date.now();
+    if (activeChannelKey === AVAILABILITY_CHANNEL_KEY) return;
     if (
       connected &&
       activeChannelKey &&
@@ -1325,6 +1353,9 @@ export default function Chat() {
 
   const handleToggleHuddle = () => {
     if (!connected || !rtc) return;
+
+    if (activeChannelKey === AVAILABILITY_CHANNEL_KEY) return;
+
 
     if (activeHuddle) {
       if (isHuddleOwner) {
@@ -1729,6 +1760,7 @@ export default function Chat() {
             />
 
             {/* Huddle button */}
+            {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
             <button
               type="button"
               onClick={handleToggleHuddle}
@@ -1737,6 +1769,7 @@ export default function Chat() {
               <span>🔊</span>
               <span>{huddleButtonLabel}</span>
             </button>
+            )}
 
             {/* Connection status pill */}
             <span className="inline-flex items-center gap-1 rounded-full border px-2 py-[2px]">
@@ -1894,7 +1927,7 @@ export default function Chat() {
                           />
 
                           {/* Reactions */}
-                          {reactionEntries.length > 0 && (
+                          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && reactionEntries.length > 0 && (
                             <div
                               className={`mt-1 flex flex-wrap gap-1 ${
                                 isOwn ? "justify-end" : "justify-start"
@@ -1932,8 +1965,9 @@ export default function Chat() {
                               })}
                             </div>
                           )}
-
+                        
                           {/* Add Reaction */}
+                          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
                           <div
                             className={`mt-1 flex ${
                               isOwn ? "justify-end" : "justify-start"
@@ -1951,8 +1985,9 @@ export default function Chat() {
                               ➕ Add reaction
                             </button>
                           </div>
+                          )}
 
-                          {openReactionFor === m.id && (
+                          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && openReactionFor === m.id && (
                             <div
                               className={`mt-1 inline-flex flex-wrap gap-1 px-2 py-1 rounded-full ${
                                 isOwn ? "bg-blue-700/40" : "bg-slate-100"
@@ -1974,6 +2009,7 @@ export default function Chat() {
                           )}
 
                           {/* Thread + Edit/Delete */}
+                          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
                           <div
                             className={`mt-1 flex ${
                               isOwn ? "justify-end" : "justify-start"
@@ -2008,6 +2044,7 @@ export default function Chat() {
                               </>
                             )}
                           </div>
+                          )}
 
                           {/* Read receipts */}
                           {isLastOwn && !m.deletedAt && (
@@ -2049,55 +2086,67 @@ export default function Chat() {
           )}
 
           {/* Main composer */}
-          <form
-            onSubmit={handleSend}
-            className="mt-3 flex items-end gap-2 text-xs"
+          {/* Main composer */}
+<form
+  onSubmit={handleSend}
+  className="mt-3 text-xs"
+>
+  {activeChannelKey !== AVAILABILITY_CHANNEL_KEY ? (
+    <>
+      <div className="flex items-end gap-2">
+        <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden">
+          <ReactQuill
+            theme="snow"
+            value={editorHtml}
+            onChange={handleEditorChange}
+            modules={quillModules}
+            formats={quillFormats}
+            placeholder={
+              connected
+                ? "Write a message... (Ctrl+Enter to send)"
+                : "Connect to chat..."
+            }
+            className="text-xs"
+          />
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+          <button
+            type="button"
+            onClick={handleAttachmentClick}
+            className="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white hover:bg-slate-50"
           >
-            <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden">
-              <ReactQuill
-                theme="snow"
-                value={editorHtml}
-                onChange={handleEditorChange}
-                modules={quillModules}
-                formats={quillFormats}
-                placeholder={
-                  connected
-                    ? "Write a message... (Ctrl+Enter to send)"
-                    : "Connect to chat..."
-                }
-                className="text-xs"
-              />
-            </div>
+            📎 Attach
+          </button>
 
-            <div className="flex flex-col items-end gap-2">
-              <button
-                type="button"
-                onClick={handleAttachmentClick}
-                className="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white hover:bg-slate-50"
-              >
-                📎 Attach
-              </button>
+          <button
+            type="submit"
+            disabled={!connected || !editorHtml.trim() || sending}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {sending
+              ? "Sending..."
+              : editingMessageId
+              ? "Save"
+              : "Send"}
+          </button>
+        </div>
+      </div>
 
-              <button
-                type="submit"
-                disabled={!connected || !editorHtml.trim() || sending}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {sending
-                  ? "Sending..."
-                  : editingMessageId
-                  ? "Save"
-                  : "Send"}
-              </button>
-            </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleAttachmentChange}
+      />
+    </>
+  ) : (
+    <div className="text-[11px] text-slate-400 italic">
+      This channel is read-only. Attendance updates are posted automatically.
+    </div>
+  )}
+</form>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleAttachmentChange}
-            />
-          </form>
         </section>
       </div>
 
@@ -2198,6 +2247,7 @@ export default function Chat() {
           </div>
 
           {/* Thread composer */}
+          
           <form
             onSubmit={handleSendThread}
             className="border-t px-3 py-2 flex flex-col gap-2"

@@ -12,6 +12,7 @@ import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
 import Chat from "./pages/Chat";
 import Reports from "./pages/Reports.jsx";
+import AdminAttendance from "./pages/AdminAttendance.jsx";
 
 // ---- Layouts & protection ----
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -73,6 +74,15 @@ export default function App() {
           <Route path="reports" element={<Reports />} />
 
           <Route
+  path="/admin/attendance"
+  element={
+    <ProtectedRoute roles={["admin"]}>
+      <AdminAttendance />
+    </ProtectedRoute>
+  }
+/>
+
+          <Route
             path="admin/users"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
@@ -100,6 +110,9 @@ export default function App() {
           <Route path="payments" element={<SuperadminPayments />} />
           <Route path="settings" element={<SuperadminSettings />} />
         </Route>
+
+        
+
 
         {/* ============================
             LEGACY / PRESERVED ROUTES

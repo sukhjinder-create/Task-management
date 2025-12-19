@@ -22,12 +22,37 @@ export default function AppLayout({ children }) {
     }
   });
 
+  const [idleThresholdMs, setIdleThresholdMs] = useState(
+    5 * 60 * 1000
+  );
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadAttendanceSettings = async () => {
+      try {
+        const res = await api.get("/settings/attendance");
+        const minutes = Number(res.data?.idleThresholdMinutes);
+
+        if (mounted && Number.isFinite(minutes) && minutes > 0) {
+          setIdleThresholdMs(minutes * 60 * 1000);
+        }
+      } catch {
+        // silent fallback
+      }
+    };
+
+    loadAttendanceSettings();
+
+    return () => {
+      mounted = false;
+    };
+  }, [api]);
+
   useEffect(() => {
     try {
       localStorage.setItem("attendanceStatus", attendanceStatus);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [attendanceStatus]);
 
   const [awsOpen, setAwsOpen] = useState(false);
@@ -35,6 +60,10 @@ export default function AppLayout({ children }) {
   const [availableLoading, setAvailableLoading] = useState(false);
   const [lunchLoading, setLunchLoading] = useState(false);
   const [toggleLoading, setToggleLoading] = useState(false);
+
+  // 🖥️ Screen / system activity tracking
+  const [lastActivityAt, setLastActivityAt] = useState(Date.now());
+  const [isIdle, setIsIdle] = useState(false);
 
   const statusMeta = useMemo(() => {
     switch (attendanceStatus) {
@@ -76,6 +105,7 @@ export default function AppLayout({ children }) {
       } else {
         await api.post("/attendance/sign-off");
         setAttendanceStatus("offline");
+        setIsIdle(false); // ✅ reset idle
         toast.success("Signed off. Slack updated.");
       }
     } catch (err) {
@@ -144,6 +174,57 @@ export default function AppLayout({ children }) {
     }
   };
 
+  // ✅ FIXED IDLE / SCREEN TRACKING
+  useEffect(() => {
+    if (!auth?.token) return;
+    if (attendanceStatus === "offline") return;
+
+    let idleTimer;
+
+    const markActive = async () => {
+      setLastActivityAt(Date.now());
+
+      if (isIdle && attendanceStatus === "available") {
+        setIsIdle(false);
+        try {
+          await api.post("/attendance/screen-on");
+        } catch {}
+      }
+    };
+
+    const checkIdle = async () => {
+      if (isIdle) return; // ✅ prevent duplicate screen-off
+      if (attendanceStatus !== "available") return;
+
+      const now = Date.now();
+      if (now - lastActivityAt >= idleThresholdMs) {
+        setIsIdle(true);
+        try {
+          await api.post("/attendance/screen-off");
+        } catch {}
+      }
+    };
+
+    const events = ["mousemove", "keydown", "mousedown", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, markActive));
+
+    idleTimer = setInterval(checkIdle, 30 * 1000);
+
+    return () => {
+      events.forEach((e) =>
+        window.removeEventListener(e, markActive)
+      );
+      clearInterval(idleTimer);
+    };
+  }, [
+    auth?.token,
+    attendanceStatus,
+    isIdle,
+    lastActivityAt,
+    idleThresholdMs,
+    api,
+  ]);
+
   const baseSmallBtn =
     "text-xs px-3 py-1 rounded-lg border shadow-sm hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed";
 
@@ -152,7 +233,6 @@ export default function AppLayout({ children }) {
       <Sidebar />
 
       <div className="ml-60 flex-1 bg-slate-100 flex flex-col overflow-hidden">
-        {/* HEADER */}
         <header className="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center">
           <div className="flex items-center gap-4">
             {user && (
@@ -291,7 +371,6 @@ export default function AppLayout({ children }) {
           </button>
         </header>
 
-        {/* MAIN PAGE CONTENT – the ONLY place that scrolls */}
         <main className="px-6 py-6 relative flex-1 overflow-y-auto">
           <Outlet />
           <GlobalHuddleWindow />
