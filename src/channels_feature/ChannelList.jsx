@@ -59,7 +59,7 @@ function ChannelCreateForm({ onCreated, onCancel }) {
         <label className="text-slate-300">Key</label>
         <input
           className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-100 text-xs"
-          placeholder="general, team-sales, etc."
+          placeholder="team-general, team-sales, etc."
           value={key}
           onChange={(e) => setKey(e.target.value)}
         />
@@ -69,7 +69,7 @@ function ChannelCreateForm({ onCreated, onCancel }) {
         <label className="text-slate-300">Name</label>
         <input
           className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-100 text-xs"
-          placeholder="General chat"
+          placeholder="Team General chat"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />

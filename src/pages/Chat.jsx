@@ -1,5 +1,6 @@
 // src/pages/Chat.jsx
 import { useEffect, useRef, useState, useMemo } from "react";
+import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import {
   generateUserKeyPair,
@@ -27,7 +28,7 @@ import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
 
 // ----- CONFIG -----
-const GENERAL_CHANNEL_KEY = "general";
+const GENERAL_CHANNEL_KEY = "team-general";
 const AVAILABILITY_CHANNEL_KEY = "availability-updates";
 const PROJECT_MANAGER_CHANNEL_KEY = "project-manager";
 
@@ -41,6 +42,27 @@ const quillModules = {
   ],
 };
 const quillFormats = ["bold", "italic", "underline", "list", "bullet", "link"];
+
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (sameDay(d, today)) return "Today";
+  if (sameDay(d, yesterday)) return "Yesterday";
+
+  return d.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 function createUniqueId(prefix = "id") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -250,8 +272,6 @@ export default function Chat() {
     }
   }, [activeChannelKey]);
 
-  // -----------------------
-
   // ----- DERIVED -----
   const activeMessages = messagesByChannel[activeChannelKey] || [];
 
@@ -327,7 +347,31 @@ export default function Chat() {
   };
 
   const isGeneralChannel = activeChannelKey === GENERAL_CHANNEL_KEY;
-  const isDmChannel = !!activeDmUser;
+  const isDmChannel = activeChannelKey?.startsWith("dm:");
+useEffect(() => {
+  if (!activeChannelKey) return;
+
+  // 🔹 Handle DM channel restoration on refresh
+  if (activeChannelKey.startsWith("dm:")) {
+    const parts = activeChannelKey.split(":");
+    if (parts.length !== 3) return;
+
+    const [, userA, userB] = parts;
+    const otherUserId =
+      String(userA) === String(user.id) ? userB : userA;
+
+    const otherUser = users.find(
+      (u) => String(u.id) === String(otherUserId)
+    );
+
+    if (otherUser) {
+      setActiveDmUser(otherUser);
+    }
+  } else {
+    // 🔹 Not a DM → clear DM state
+    setActiveDmUser(null);
+  }
+}, [activeChannelKey, users, user.id]);
 
   const activeChannel = useMemo(
     () => channels.find((ch) => ch.key === activeChannelKey) || null,
@@ -554,154 +598,173 @@ export default function Chat() {
     }
 
     const handleConnect = () => {
-      setConnected(true);
-      setJoining(false);
-
-      // Auto-join permanent channels so user sees attendance / project notifications
-      try {
-        // don't change activeChannelKey or UI focus; just ensure the socket is in rooms
-        joinChatChannel(GENERAL_CHANNEL_KEY);
-        joinChatChannel(AVAILABILITY_CHANNEL_KEY);
-        joinChatChannel(PROJECT_MANAGER_CHANNEL_KEY);
-      } catch (e) {
-        console.warn("Auto-join pinned channels failed:", e);
-      }
-    };
+  setConnected(true);
+  setJoining(false);
+};
 
     const handleDisconnect = () => {
       setConnected(false);
     };
 
     const handleHistory = async (payload) => {
-      if (!payload || !payload.channelId) return;
-      const channelId = payload.channelId;
-      const rawMessages = payload.messages || [];
+  if (!payload || !payload.channelId) return;
+  const channelId = payload.channelId;
+  const rawMessages = payload.messages || [];
+  console.log("[chat:history] payload", payload);
 
-      console.log("[chat:history] payload", payload);
-
-      const history = await Promise.all(
-        rawMessages.map(async (m) => {
-          const base = {
-            id: m.id || createUniqueId("msg"),
-            channelId,
-            textHtml: m.textHtml || m.text_html || m.text || "",
-            userId: m.userId || m.user_id,
-            username: m.username,
-            createdAt: m.createdAt || m.created_at,
-            updatedAt: m.updatedAt || m.updated_at,
-            deletedAt: m.deletedAt || m.deleted_at,
-            parentId: m.parentId || m.parent_id || null,
-            reactions: m.reactions || {},
-            attachments: m.attachments || [],
-            // keep any envelope fields in case we want them
-            encrypted: m.encrypted,
-            senderPublicKeyJwk:
-              m.senderPublicKeyJwk || m.sender_public_key,
-            fallbackText: m.fallbackText || m.fallback_text,
-          };
-
-          const decryptedText = await decryptForDisplay(
-            base.textHtml,
-            m,
-            channelId
-          );
-
-          // Use decryptedText (already emoji-converted in decryptForDisplay)
-          const result = {
-            ...base,
-            textHtml: decryptedText,
-          };
-
-          return applyEmojiToMessage(result);
-        })
-      );
-
-      setMessagesByChannel((prev) => ({
-        ...prev,
-        [channelId]: history,
-      }));
-
-      setLoadingHistory(false);
-    };
-
-    const handleChatMessage = async (msg) => {
-      if (!msg || !msg.channelId) return;
-
-       // 🛑 HARD GUARD: ignore non-chat attendance/screen events
-  if (msg.eventType && msg.eventType.startsWith("ATTENDANCE_")) {
-    return;
-  }
-
-  if (msg.eventType && msg.eventType.startsWith("SCREEN_")) {
-    return;
-  }
-
-  // 🛑 Ignore non-chat internal events
-if (
-  msg.eventType &&
-  (
-    msg.eventType.startsWith("SCREEN_") ||
-    msg.eventType === "IDLE_DETECTED"
-  )
-) {
-  return;
-}
-
-
-      const channelId = msg.channelId;
+  const history = await Promise.all(
+    rawMessages.map(async (m) => {
+      const base = {
+        id: m.id || createUniqueId("msg"),
+        channelId,
+        textHtml: m.textHtml || m.text_html || m.text || "",
+        userId: m.userId || m.user_id,
+        username: m.username,
+        createdAt: m.createdAt || m.created_at,
+        updatedAt: m.updatedAt || m.updated_at,
+        deletedAt: m.deletedAt || m.deleted_at,
+        parentId: m.parentId || m.parent_id || null,
+        reactions: m.reactions || {},
+        attachments: m.attachments || [],
+        encrypted: m.encrypted,
+        senderPublicKeyJwk:
+          m.senderPublicKeyJwk || m.sender_public_key,
+        fallbackText: m.fallbackText || m.fallback_text,
+      };
 
       const decryptedText = await decryptForDisplay(
-        msg.textHtml || msg.text_html || msg.text || "",
-        msg,
+        base.textHtml,
+        m,
         channelId
       );
 
-      const normalized = {
-        id: msg.id || msg.tempId || createUniqueId("msg"),
-        channelId,
+      // ✅ FIX 3: detect attendance/system messages safely
+      const isSystem =
+  m.system === true ||
+  m.username === "System" ||
+  channelId === AVAILABILITY_CHANNEL_KEY;
+
+      const result = {
+        ...base,
+        system: isSystem,
         textHtml: decryptedText,
-        userId: msg.userId || msg.user_id,
-        username: msg.username,
-        createdAt: msg.createdAt || msg.created_at,
-        updatedAt: msg.updatedAt || msg.updated_at,
-        deletedAt: msg.deletedAt || msg.deleted_at,
-        parentId: msg.parentId || msg.parent_id || null,
-        reactions: msg.reactions || {},
-        attachments: msg.attachments || [],
       };
 
-      const normalizedWithEmoji = applyEmojiToMessage(normalized);
+      return applyEmojiToMessage(result);
+    })
+  );
 
-      setMessagesByChannel((prev) => {
-        const existing = prev[channelId] || [];
-        const next = [...existing];
+  // ✅ FIX 1: merge history instead of replacing
+  setMessagesByChannel((prev) => {
+    const existing = prev[channelId] || [];
 
-        // tempId replacement
-        if (msg.tempId) {
-          const idxTemp = next.findIndex((m) => m.id === msg.tempId);
-          if (idxTemp !== -1) {
-            next[idxTemp] = {
-              ...next[idxTemp],
-              ...normalizedWithEmoji,
-            };
-            return { ...prev, [channelId]: next };
-          }
-        }
+    const map = new Map();
+    [...existing, ...history].forEach((m) => {
+      map.set(m.id, m);
+    });
 
-        // id replacement
-        if (msg.id) {
-          const idx = next.findIndex((m) => m.id === msg.id);
-          if (idx !== -1) {
-            next[idx] = { ...next[idx], ...normalizedWithEmoji };
-            return { ...prev, [channelId]: next };
-          }
-        }
-
-        // otherwise push
-        next.push(normalizedWithEmoji);
-        return { ...prev, [channelId]: next };
-      });
+    return {
+      ...prev,
+      [channelId]: Array.from(map.values()).sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+      ),
     };
+  });
+
+  setLoadingHistory(false);
+};
+
+   const handleChatMessage = async (msg) => {
+  if (!msg) return;
+
+  // 🔥 Normalize channel id (AI / legacy / normal messages)
+  const channelId = msg.channelId || msg.channelKey || msg.channel;
+  if (!channelId) return;
+
+  const decryptedText = await decryptForDisplay(
+    msg.textHtml || msg.text_html || msg.text || "",
+    msg,
+    channelId
+  );
+
+  // 🔥 Detect system / attendance messages safely
+  const isSystem =
+    msg.system === true ||
+    msg.username === "System" ||
+    channelId === AVAILABILITY_CHANNEL_KEY;
+
+  const normalized = {
+    id: msg.id || msg.tempId || createUniqueId("msg"),
+    channelId,
+    system: isSystem,
+    textHtml: decryptedText,
+    userId: msg.userId || msg.user_id,
+    username: msg.username,
+    createdAt: msg.createdAt || msg.created_at,
+    updatedAt: msg.updatedAt || msg.updated_at,
+    deletedAt: msg.deletedAt || msg.deleted_at,
+    parentId: msg.parentId || msg.parent_id || null,
+    reactions: msg.reactions || {},
+    attachments: msg.attachments || [],
+  };
+
+  const normalizedWithEmoji = applyEmojiToMessage(normalized);
+
+  setMessagesByChannel((prev) => {
+    const existing = prev[channelId] || [];
+    const next = [...existing];
+
+    // 🔁 tempId replacement
+    if (msg.tempId) {
+      const idxTemp = next.findIndex((m) => m.id === msg.tempId);
+      if (idxTemp !== -1) {
+        next[idxTemp] = {
+          ...next[idxTemp],
+          ...normalizedWithEmoji,
+        };
+        return { ...prev, [channelId]: next };
+      }
+    }
+
+    // 🔁 id replacement
+    if (msg.id) {
+      const idx = next.findIndex((m) => m.id === msg.id);
+      if (idx !== -1) {
+        next[idx] = { ...next[idx], ...normalizedWithEmoji };
+        return { ...prev, [channelId]: next };
+      }
+    }
+
+    // 🛑 FINAL SAFETY DEDUPE (socket echo of own optimistic message)
+const isDuplicate = next.some((m) => {
+  if (!m || m.system) return false;
+
+  const sameUser =
+    String(m.userId) === String(normalizedWithEmoji.userId);
+
+  const sameText =
+    (m.textHtml || "").trim() ===
+    (normalizedWithEmoji.textHtml || "").trim();
+
+  const timeDiff =
+    Math.abs(
+      new Date(m.createdAt || 0).getTime() -
+      new Date(normalizedWithEmoji.createdAt || 0).getTime()
+    ) < 2000; // 2s window
+
+  return sameUser && sameText && timeDiff;
+});
+
+if (isDuplicate) {
+  return prev;
+}
+
+    // ➕ otherwise push
+    next.push(normalizedWithEmoji);
+    return { ...prev, [channelId]: next };
+  });
+};
+
 
     const handleSystem = (payload) => {
       if (!payload || !payload.channelId) return;
@@ -965,6 +1028,11 @@ if (
     socket.on("chat:messageEdited", handleMessageEdited);
     socket.on("chat:messageDeleted", handleMessageDeleted);
 
+    socket.onAny((event, payload) => {
+  console.log("[SOCKET EVENT]", event, payload);
+});
+
+
     if (socket.connected) {
       handleConnect();
     }
@@ -987,42 +1055,24 @@ if (
   }, [auth.token, user.id, setActiveHuddle, rtc, usersWithKeys]);
 
   // JOIN / LEAVE main channel
-  useEffect(() => {
-    let socket = getSocket();
-    if (!socket && auth.token) {
-      socket = initSocket(auth.token);
-    }
-    if (!socket) {
-      setConnected(false);
-      setJoining(false);
-      return;
-    }
+useEffect(() => {
+  const socket = getSocket();
+  if (!socket || !activeChannelKey) return;
 
-    const prev = activeChannelRef.current;
-    if (prev && prev !== activeChannelKey) {
-      // leave previous channel only when key actually changes
-      leaveChatChannel(prev);
-    }
+  setLoadingHistory(true);
 
-    // only join if new channel or first time
-    if (prev !== activeChannelKey) {
-      setLoadingHistory(true);
-      joinChatChannel(activeChannelKey);
-      activeChannelRef.current = activeChannelKey;
+  // 1️⃣ Join channel rooms
+  joinChatChannel(activeChannelKey);
 
-      // optional: tell huddle which channel we’re in
-      if (setChannelForHuddle) {
-        setChannelForHuddle(activeChannelKey);
-      }
+  // 2️⃣ 🔥 EXPLICITLY request history
+  socket.emit("chat:open", activeChannelKey);
 
-      setTypingByChannel((prevState) => ({
-        ...prevState,
-        [activeChannelKey]: {},
-      }));
+  activeChannelRef.current = activeChannelKey;
 
-      setOpenReactionFor(null);
-    }
-  }, [activeChannelKey, auth.token]); // keep dependency minimal
+  return () => {
+    leaveChatChannel(activeChannelKey);
+  };
+}, [activeChannelKey]);
 
   // JOIN / LEAVE thread channel (sidebar)
   useEffect(() => {
@@ -1866,17 +1916,30 @@ if (
                 const time = m.createdAt
                   ? new Date(m.createdAt).toLocaleTimeString()
                   : "";
-
                 if (isSystem) {
-                  return (
-                    <div
-                      key={m.id}
-                      className="w-full text-center text-[10px] text-slate-500 my-1"
-                    >
-                      — {m.textHtml || m.text} —{" "}
-                    </div>
-                  );
-                }
+  const time = m.createdAt
+    ? new Date(m.createdAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+
+  return (
+    <div
+      key={m.id}
+      className="w-full text-center text-[10px] text-slate-500 my-2"
+    >
+      <span className="opacity-80">
+        — {m.textHtml || m.text} —
+      </span>
+      {time && (
+        <span className="ml-2 text-[9px] text-slate-400">
+          {time}
+        </span>
+      )}
+    </div>
+  );
+}
 
                 const isLastOwn = isOwn && m.id === lastMessageId;
                 const readers = isLastOwn

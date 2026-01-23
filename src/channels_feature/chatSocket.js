@@ -1,20 +1,13 @@
 import {
   getSocket,
-  joinChatChannel,
-  leaveChatChannel,
 } from "../socket";
 
 /**
  * Set up all chat-related socket listeners for a given channel.
  *
- * @param {string} channelKey - channel key/id (e.g. "general")
- * @param {object} handlers - callback functions:
- *   - onHistory({ channelId, messages })
- *   - onMessage(msg)
- *   - onMessageEdited(msg)
- *   - onMessageDeleted(msg)
- *   - onReaction(payload)
- *   - onSystem(payload)
+ * IMPORTANT:
+ * - This file MUST NOT join or leave channels
+ * - Channel lifecycle is owned by Chat.jsx
  */
 export function setupChannelSocket(channelKey, handlers = {}) {
   const socket = getSocket();
@@ -31,42 +24,49 @@ export function setupChannelSocket(channelKey, handlers = {}) {
     onSystem,
   } = handlers;
 
-  // Join room (server will also join workspace-scoped room based on JWT)
-  joinChatChannel(channelKey);
+  // 🔥 helper: normalize incoming channel id (AI / legacy / history safe)
+  const getIncomingChannel = (payload) =>
+    payload?.channelId || payload?.channelKey || payload?.channel;
 
   const historyHandler = (payload) => {
     if (!onHistory) return;
-    if (payload.channelId !== channelKey) return;
+    const incomingChannel = getIncomingChannel(payload);
+    if (incomingChannel !== channelKey) return;
     onHistory(payload);
   };
 
   const messageHandler = (msg) => {
     if (!onMessage) return;
-    if (msg.channelId !== channelKey) return;
+    const incomingChannel = getIncomingChannel(msg);
+    if (incomingChannel !== channelKey) return;
     onMessage(msg);
   };
 
   const editedHandler = (msg) => {
     if (!onMessageEdited) return;
-    if (msg.channelId !== channelKey) return;
+    const incomingChannel = getIncomingChannel(msg);
+    if (incomingChannel !== channelKey) return;
     onMessageEdited(msg);
   };
 
   const deletedHandler = (msg) => {
     if (!onMessageDeleted) return;
-    if (msg.channelId !== channelKey) return;
+    const incomingChannel = getIncomingChannel(msg);
+    if (incomingChannel !== channelKey) return;
     onMessageDeleted(msg);
   };
 
   const reactionHandler = (payload) => {
     if (!onReaction) return;
-    if (payload.channelId !== channelKey) return;
+    const incomingChannel = getIncomingChannel(payload);
+    if (incomingChannel !== channelKey) return;
     onReaction(payload);
   };
 
   const systemHandler = (payload) => {
     if (!onSystem) return;
-    if (payload.channelId !== channelKey) return;
+    const incomingChannel = getIncomingChannel(payload);
+    if (incomingChannel !== channelKey) return;
     onSystem(payload);
   };
 
@@ -77,9 +77,8 @@ export function setupChannelSocket(channelKey, handlers = {}) {
   socket.on("chat:reaction", reactionHandler);
   socket.on("chat:system", systemHandler);
 
-  // Return cleanup fn
+  // ✅ CLEANUP: listeners only (NO leave)
   return () => {
-    leaveChatChannel(channelKey);
     socket.off("chat:history", historyHandler);
     socket.off("chat:message", messageHandler);
     socket.off("chat:messageEdited", editedHandler);
