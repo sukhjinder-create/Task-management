@@ -12,7 +12,9 @@ export default function UsersAdmin() {
   const api = useApi();
   const { auth } = useAuth();
   const currentUser = auth.user;
-
+const [aiEnabled, setAiEnabled] = useState(false);
+const [aiName, setAiName] = useState("");
+const [savingAISettings, setSavingAISettings] = useState(false);
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [tasksByProject, setTasksByProject] = useState({}); // { projectId: [tasks...] }
@@ -63,7 +65,9 @@ export default function UsersAdmin() {
           api.get("/users"),
           api.get("/projects"),
         ]);
-
+const aiRes = await api.get("/workspaces/ai-settings");
+setAiEnabled(!!aiRes.data?.aiEnabled);
+setAiName(aiRes.data?.aiName || "AI Assistant");
         setUsers(usersRes.data || []);
         setProjects(projectsRes.data || []);
 
@@ -232,84 +236,108 @@ export default function UsersAdmin() {
 
   // ---------- Helpers for edit ----------
 
-  const startEditUser = (user) => {
-    setEditingUserId(user.id);
-    setEditUser({
-      username: user.username || "",
-      email: user.email || "",
-      role: user.role || "user",
-    });
-    if (Array.isArray(user.projects)) {
-      setSelectedProjectsEdit(user.projects);
-    } else {
-      setSelectedProjectsEdit([]);
-    }
-    setIsEditModalOpen(true);
-  };
+  const startEditUser = async (user) => {
+  setEditingUserId(user.id);
 
-  const cancelEdit = () => {
-    setEditingUserId(null);
-    setEditUser({
-      username: "",
-      email: "",
-      role: "user",
-    });
+  // Base user fields
+  setEditUser({
+    username: user.username || "",
+    email: user.email || "",
+    role: user.role || "user",
+    aiReplyEnabled: false, // default (safe)
+  });
+
+  if (Array.isArray(user.projects)) {
+    setSelectedProjectsEdit(user.projects);
+  } else {
     setSelectedProjectsEdit([]);
-    setIsEditModalOpen(false);
-  };
+  }
 
-  const handleEditFieldChange = (e) => {
-    const { name, value } = e.target;
+  setIsEditModalOpen(true);
+
+  // 🔐 Load AI preference (NON-BLOCKING, SAFE)
+  try {
+    const pref = await api.get(`/users/${user.id}/ai-preference`);
     setEditUser((prev) => ({
       ...prev,
-      [name]: value,
+      aiReplyEnabled: pref.data?.aiReplyEnabled === true,
     }));
-  };
+  } catch (err) {
+    console.warn("Failed to load AI preference", err);
+    // silently ignore → default false
+  }
+};
 
-  const handleEditProjectsChange = (selected) => {
-    const ids = (selected || []).map((opt) => opt.value);
-    setSelectedProjectsEdit(ids);
-  };
+const cancelEdit = () => {
+  setEditingUserId(null);
+  setEditUser({
+    username: "",
+    email: "",
+    role: "user",
+    aiReplyEnabled: false,
+  });
+  setSelectedProjectsEdit([]);
+  setIsEditModalOpen(false);
+};
 
-  const handleUpdateUser = async (e) => {
-    e.preventDefault();
-    if (!editingUserId) return;
+const handleEditFieldChange = (e) => {
+  const { name, value } = e.target;
+  setEditUser((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
+};
 
-    if (!editUser.username.trim()) {
-      toast.error("Username is required");
-      return;
-    }
-    if (!editUser.email.trim()) {
-      toast.error("Email is required");
-      return;
-    }
+const handleEditProjectsChange = (selected) => {
+  const ids = (selected || []).map((opt) => opt.value);
+  setSelectedProjectsEdit(ids);
+};
 
-    setUpdating(true);
-    try {
-      const payload = {
-        username: editUser.username.trim(),
-        email: editUser.email.trim(),
-        role: editUser.role,
-        projects: selectedProjectsEdit, // uuid[]
-      };
+const handleUpdateUser = async (e) => {
+  e.preventDefault();
+  if (!editingUserId) return;
 
-      const res = await api.put(`/users/${editingUserId}`, payload);
-      const updated = res.data;
+  if (!editUser.username.trim()) {
+    toast.error("Username is required");
+    return;
+  }
+  if (!editUser.email.trim()) {
+    toast.error("Email is required");
+    return;
+  }
 
-      setUsers((prev) =>
-        prev.map((u) => (u.id === editingUserId ? updated : u))
-      );
+  setUpdating(true);
+  try {
+    // 1️⃣ Update AI preference first (independent, safe)
+    await api.put(`/users/${editingUserId}/ai-preference`, {
+      aiReplyEnabled: editUser.aiReplyEnabled === true,
+    });
 
-      toast.success("User updated");
-      cancelEdit();
-    } catch (err) {
-      console.error("Update user error:", err);
-      const msg = err.response?.data?.error || "Failed to update user";
-      toast.error(msg);
-    } finally {
-      setUpdating(false);
-    }
-  };
+    // 2️⃣ Update core user fields
+    const payload = {
+      username: editUser.username.trim(),
+      email: editUser.email.trim(),
+      role: editUser.role,
+      projects: selectedProjectsEdit,
+    };
+
+    const res = await api.put(`/users/${editingUserId}`, payload);
+    const updated = res.data;
+
+    setUsers((prev) =>
+      prev.map((u) => (u.id === editingUserId ? updated : u))
+    );
+
+    toast.success("User updated");
+    cancelEdit();
+  } catch (err) {
+    console.error("Update user error:", err);
+    const msg = err.response?.data?.error || "Failed to update user";
+    toast.error(msg);
+  } finally {
+    setUpdating(false);
+  }
+};
 
   // ---------- Delete ----------
 
@@ -384,6 +412,51 @@ export default function UsersAdmin() {
           </p>
         </div>
       </section>
+
+      <section className="bg-white rounded-xl shadow p-4 space-y-3">
+  <h2 className="text-sm font-semibold">Workspace AI Settings</h2>
+
+  <div className="flex items-center justify-between">
+    <span className="text-xs text-slate-600">Enable AI in this workspace</span>
+    <input
+      type="checkbox"
+      checked={aiEnabled}
+      onChange={(e) => setAiEnabled(e.target.checked)}
+    />
+  </div>
+
+  <div>
+    <label className="block text-xs mb-1">AI Display Name</label>
+    <input
+      type="text"
+      value={aiName}
+      onChange={(e) => setAiName(e.target.value)}
+      className="w-full border rounded-lg px-3 py-2 text-sm"
+      placeholder="e.g. Project AI"
+    />
+  </div>
+
+  <button
+    disabled={savingAISettings}
+    onClick={async () => {
+      try {
+        setSavingAISettings(true);
+        await api.put("/workspaces/ai-settings", {
+          aiEnabled,
+          aiName,
+        });
+        toast.success("AI settings updated");
+      } catch {
+        toast.error("Failed to update AI settings");
+      } finally {
+        setSavingAISettings(false);
+      }
+    }}
+    className="bg-indigo-600 text-white text-xs px-4 py-2 rounded-lg"
+  >
+    Save AI Settings
+  </button>
+</section>
 
       {/* Create section */}
       <section className="bg-white rounded-xl shadow p-4 space-y-6">
@@ -680,6 +753,22 @@ export default function UsersAdmin() {
                   ))}
                 </select>
               </div>
+
+<div className="flex items-center justify-between mt-3">
+  <label className="text-xs">
+    Allow AI to reply on behalf of this user
+  </label>
+  <input
+    type="checkbox"
+    checked={editUser.aiReplyEnabled || false}
+    onChange={(e) =>
+      setEditUser((prev) => ({
+        ...prev,
+        aiReplyEnabled: e.target.checked,
+      }))
+    }
+  />
+</div>
 
               <div className="space-y-3">
                 <div>

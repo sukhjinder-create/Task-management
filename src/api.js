@@ -129,5 +129,33 @@ api.interceptors.response.use(
   }
 );
 
+// =======================
+// AI SETTINGS (FRONTEND)
+// =======================
+
+// Workspace AI settings
+export const getWorkspaceAISettings = () => {
+  return api.get("/workspaces/ai-settings");
+};
+
+export const updateWorkspaceAISettings = (payload) => {
+  return api.put("/workspaces/ai-settings", payload);
+};
+
+// User AI preference
+export const getUserAIPreference = (userId, workspaceId) => {
+  return api.get(`/users/${userId}/ai-preference`, {
+    params: { workspaceId },
+  });
+};
+
+export const updateUserAIPreference = (userId, workspaceId, enabled) => {
+  return api.put(`/users/${userId}/ai-preference`, {
+    workspaceId,
+    aiReplyEnabled: enabled,
+  });
+};
+
+
 export const useApi = () => api;
 export default api;

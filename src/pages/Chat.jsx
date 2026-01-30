@@ -31,9 +31,7 @@ import ChannelSettingsModal from "../components/ChannelSettingsModal";
 const GENERAL_CHANNEL_KEY = "team-general";
 const AVAILABILITY_CHANNEL_KEY = "availability-updates";
 const PROJECT_MANAGER_CHANNEL_KEY = "project-manager";
-
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "😮", "😢"];
-
 const quillModules = {
   toolbar: [
     ["bold", "italic", "underline"],
@@ -90,6 +88,14 @@ function presenceLabel(status) {
   return "Unknown";
 }
 
+function normalizeMessage(msg) {
+  return {
+    ...msg,
+    userId: msg.userId || msg.user_id,
+    reactions: msg.reactions || {},
+  };
+}
+
 /* -------------------------
    Simple emoji shortcode map
    - non-exhaustive, safe, extendable
@@ -143,6 +149,10 @@ export default function Chat() {
   const { auth } = useAuth();
   const api = useApi();
   const user = auth.user;
+
+  // AI preference (per-user, per-workspace)
+const [aiReplyEnabled, setAiReplyEnabled] = useState(true);
+const [loadingAiPref, setLoadingAiPref] = useState(false);
 
   const huddleCtx = useHuddle();
   const activeHuddle = huddleCtx?.activeHuddle;
@@ -348,6 +358,31 @@ export default function Chat() {
 
   const isGeneralChannel = activeChannelKey === GENERAL_CHANNEL_KEY;
   const isDmChannel = activeChannelKey?.startsWith("dm:");
+
+  useEffect(() => {
+  let cancelled = false;
+
+  async function loadAiPreference() {
+    try {
+      const res = await api.get(`/users/${user.id}/ai-preference`);
+      if (cancelled) return;
+
+      setAiReplyEnabled(res.data?.aiReplyEnabled === true);
+    } catch (err) {
+      console.warn("Failed to load AI preference, defaulting ON");
+      setAiReplyEnabled(true); // backward compatible
+    }
+  }
+
+  if (user?.id) {
+    loadAiPreference();
+  }
+
+  return () => {
+    cancelled = true;
+  };
+}, [api, user?.id]);
+
 useEffect(() => {
   if (!activeChannelKey) return;
 
@@ -650,37 +685,77 @@ useEffect(() => {
         textHtml: decryptedText,
       };
 
-      return applyEmojiToMessage(result);
+      return applyEmojiToMessage(normalizeMessage(result));
     })
   );
 
   // ✅ FIX 1: merge history instead of replacing
   setMessagesByChannel((prev) => {
-    const existing = prev[channelId] || [];
+  const existing = prev[channelId] || [];
 
-    const map = new Map();
-    [...existing, ...history].forEach((m) => {
-      map.set(m.id, m);
-    });
+  // Index existing messages by id
+  const existingById = new Map(
+    existing.filter(m => m.id).map(m => [m.id, m])
+  );
 
-    return {
-      ...prev,
-      [channelId]: Array.from(map.values()).sort(
-        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-      ),
-    };
-  });
+  // History from DB is SOURCE OF TRUTH
+  history.forEach((m) => {
+  if (!m.id) return;
+
+  const prevMsg = existingById.get(m.id);
+
+  existingById.set(
+    m.id,
+    normalizeMessage({
+      ...prevMsg,        // keep reactions, local UI state
+      ...m,              // DB is source of truth
+      reactions:
+        m.reactions ??
+        prevMsg?.reactions ??
+        {},
+    })
+  );
+});
+
+  return {
+    ...prev,
+    [channelId]: Array.from(existingById.values()).sort(
+      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+    ),
+  };
+});
 
   setLoadingHistory(false);
 };
 
-   const handleChatMessage = async (msg) => {
+const handleChatMessage = async (msg) => {
   if (!msg) return;
 
   // 🔥 Normalize channel id (AI / legacy / normal messages)
   const channelId = msg.channelId || msg.channelKey || msg.channel;
   if (!channelId) return;
 
+  // ✅ 🔁 TEMP → REAL MESSAGE REPLACEMENT (CRITICAL)
+  setMessagesByChannel((prev) => {
+    const list = prev[channelId] || [];
+
+    if (msg.id && msg.tempId) {
+      const idx = list.findIndex((m) => m.id === msg.tempId);
+      if (idx !== -1) {
+        const next = [...list];
+        next[idx] = {
+          ...next[idx],
+          id: msg.id,
+          createdAt: msg.createdAt || next[idx].createdAt,
+        };
+        return { ...prev, [channelId]: next };
+      }
+    }
+
+    return prev;
+  });
+
+  // 🔐 decrypt AFTER reconciliation
   const decryptedText = await decryptForDisplay(
     msg.textHtml || msg.text_html || msg.text || "",
     msg,
@@ -712,59 +787,22 @@ useEffect(() => {
 
   setMessagesByChannel((prev) => {
     const existing = prev[channelId] || [];
-    const next = [...existing];
 
-    // 🔁 tempId replacement
-    if (msg.tempId) {
-      const idxTemp = next.findIndex((m) => m.id === msg.tempId);
-      if (idxTemp !== -1) {
-        next[idxTemp] = {
-          ...next[idxTemp],
-          ...normalizedWithEmoji,
-        };
-        return { ...prev, [channelId]: next };
-      }
+    // 🔁 id replacement (socket echo / AI / history overlap)
+    const idx = existing.findIndex((m) => m.id === normalizedWithEmoji.id);
+    if (idx !== -1) {
+      const next = [...existing];
+      next[idx] = { ...next[idx], ...normalizedWithEmoji };
+      return { ...prev, [channelId]: next };
     }
-
-    // 🔁 id replacement
-    if (msg.id) {
-      const idx = next.findIndex((m) => m.id === msg.id);
-      if (idx !== -1) {
-        next[idx] = { ...next[idx], ...normalizedWithEmoji };
-        return { ...prev, [channelId]: next };
-      }
-    }
-
-    // 🛑 FINAL SAFETY DEDUPE (socket echo of own optimistic message)
-const isDuplicate = next.some((m) => {
-  if (!m || m.system) return false;
-
-  const sameUser =
-    String(m.userId) === String(normalizedWithEmoji.userId);
-
-  const sameText =
-    (m.textHtml || "").trim() ===
-    (normalizedWithEmoji.textHtml || "").trim();
-
-  const timeDiff =
-    Math.abs(
-      new Date(m.createdAt || 0).getTime() -
-      new Date(normalizedWithEmoji.createdAt || 0).getTime()
-    ) < 2000; // 2s window
-
-  return sameUser && sameText && timeDiff;
-});
-
-if (isDuplicate) {
-  return prev;
-}
 
     // ➕ otherwise push
-    next.push(normalizedWithEmoji);
-    return { ...prev, [channelId]: next };
+    return {
+      ...prev,
+      [channelId]: [...existing, normalizedWithEmoji],
+    };
   });
 };
-
 
     const handleSystem = (payload) => {
       if (!payload || !payload.channelId) return;
@@ -1192,22 +1230,30 @@ useEffect(() => {
     const plainWithEmoji = convertEmojiShortcodes(html);
 
     setMessagesByChannel((prev) => {
-      const existing = prev[activeChannelKey] || [];
-      const next = [
-        ...existing,
-        {
-          id: tempId,
-          channelId: activeChannelKey,
-          textHtml: plainWithEmoji,
-          userId: user.id,
-          username: user.username,
-          createdAt: new Date().toISOString(),
-          parentId: null,
-          reactions: {},
-        },
-      ];
-      return { ...prev, [activeChannelKey]: next };
-    });
+  const existing = prev[activeChannelKey] || [];
+
+  // 🔒 PREVENT DUPLICATE TEMP INSERT
+  if (existing.some((m) => m.id === tempId)) {
+    return prev;
+  }
+
+  return {
+    ...prev,
+    [activeChannelKey]: [
+      ...existing,
+      {
+        id: tempId,
+        channelId: activeChannelKey,
+        textHtml: plainWithEmoji,
+        userId: user.id,
+        username: user.username,
+        createdAt: new Date().toISOString(),
+        parentId: null,
+        reactions: {},
+      },
+    ],
+  };
+});
 
     // 🔐 Encrypt for recipients before sending to backend
     let encryptedHtml = html;
@@ -1224,11 +1270,11 @@ useEffect(() => {
     }
 
     sendChatMessage({
-      channelId: activeChannelKey,
-      text: encryptedHtml,
-      tempId,
-      parentId: null,
-    });
+  channelId: activeChannelKey,
+  text: encryptedHtml,          // 🔐 encrypted (for users)
+  tempId,
+  parentId: null,
+});
 
     setEditorHtml("");
     setAttachment(null);
@@ -1288,11 +1334,11 @@ useEffect(() => {
     }
 
     sendChatMessage({
-      channelId,
-      text: encryptedHtml,
-      tempId,
-      parentId,
-    });
+  channelId: activeChannelKey,
+  text: encryptedHtml,          // 🔐 encrypted (for users)
+  tempId,
+  parentId: null,
+});
 
     setThreadEditorHtml("");
   };
@@ -1490,10 +1536,15 @@ useEffect(() => {
   };
 
   const handleStartEditMessage = (message) => {
-    setEditingMessageId(message.id);
-    setEditingOriginalChannel(activeChannelKey);
-    setEditorHtml(message.textHtml || message.text || "");
-  };
+  // 🚫 Prevent editing temp messages
+  if (!message.id || message.id.startsWith("temp-")) {
+    return;
+  }
+
+  setEditingMessageId(message.id);
+  setEditingOriginalChannel(activeChannelKey);
+  setEditorHtml(message.textHtml || message.text || "");
+};
 
   const handleCancelEdit = () => {
     setEditingMessageId(null);
@@ -1543,6 +1594,50 @@ useEffect(() => {
       {/* LEFT: CHANNELS + DMS */}
       <aside className="w-64 bg-white rounded-xl shadow p-3 flex flex-col text-xs">
         <div className="flex items-center justify-between mb-3">
+          {/* 🤖 AI Assistant – Global User Preference */}
+<div className="mb-3 p-2 rounded-lg bg-slate-50 border">
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-2">
+      <span className="text-sm">🤖</span>
+      <div className="flex flex-col">
+        <span className="text-[11px] font-medium">AI Assistant</span>
+        <span className="text-[10px] text-slate-400">
+          Auto-reply & suggestions
+        </span>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      disabled={loadingAiPref}
+      onClick={async () => {
+        const next = !aiReplyEnabled;
+        setAiReplyEnabled(next);
+
+        try {
+          setLoadingAiPref(true);
+          await api.put(`/users/${user.id}/ai-preference`, {
+            aiReplyEnabled: next,
+          });
+        } catch {
+          toast.error("Failed to update AI preference");
+          setAiReplyEnabled(!next);
+        } finally {
+          setLoadingAiPref(false);
+        }
+      }}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
+        aiReplyEnabled ? "bg-blue-600" : "bg-slate-300"
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+          aiReplyEnabled ? "translate-x-4" : "translate-x-1"
+        }`}
+      />
+    </button>
+  </div>
+</div>
           <div>
             <div className="text-[11px] font-semibold text-slate-500">
               Channels
@@ -1790,7 +1885,8 @@ useEffect(() => {
           </div>
 
           <div className="flex items-center gap-3 text-xs">
-            {/* DM presence pill */}
+            
+                        {/* DM presence pill */}
             {!isGeneralChannel && isDmChannel && activeDmUser && (
               <div className="flex items-center gap-1">
                 <span
