@@ -185,6 +185,7 @@ const [loadingAiPref, setLoadingAiPref] = useState(false);
     }
   });
   const [activeDmUser, setActiveDmUser] = useState(null);
+  const [aiExplainLoading, setAiExplainLoading] = useState(null);
 
   // THREAD SIDEBAR
   const [threadParents, setThreadParents] = useState({});
@@ -1589,6 +1590,74 @@ useEffect(() => {
     huddleButtonLabel = "Huddle in another channel";
   }
 
+  async function handleExplainAI(messageId, retry = 0) {
+  try {
+    setAiExplainLoading(messageId);
+
+    const res = await api.get(`/internal/ai/explain/${messageId}`);
+
+    // ⏳ Explanation exists but is still being written (async)
+    if (res.data?.available === false) {
+      if (retry < 5) {
+        setTimeout(() => {
+          handleExplainAI(messageId, retry + 1);
+        }, 600);
+        return;
+      }
+
+      toast("AI is still analyzing this reply. Please try again.", {
+        icon: "⏳",
+        duration: 4000,
+      });
+      return;
+    }
+
+    // ✅ Explanation ready
+    const explanationObj = res.data.explanation;
+
+    if (!explanationObj) {
+      toast("AI explanation could not be parsed.", {
+        icon: "⚠️",
+      });
+      return;
+    }
+
+    // 🧠 Build HUMAN-LEVEL reasoning (no gimmicks)
+    const parts = [];
+
+    if (explanationObj.triggerMessage) {
+      parts.push(
+        `You asked:\n"${explanationObj.triggerMessage}"`
+      );
+    }
+
+    if (explanationObj.summary) {
+      parts.push(`\nWhy AI replied:\n${explanationObj.summary}`);
+    }
+
+    if (
+      Array.isArray(explanationObj.reasoning) &&
+      explanationObj.reasoning.length
+    ) {
+      parts.push(
+        `\nKey reasoning:\n• ${explanationObj.reasoning.join("\n• ")}`
+      );
+    }
+
+    toast.success(parts.join("\n\n"), {
+      duration: 5000,
+      style: {
+        maxWidth: "480px",
+        whiteSpace: "pre-line",
+      },
+    });
+  } catch (err) {
+    toast.error("Failed to fetch AI explanation.");
+  } finally {
+    setAiExplainLoading(null);
+  }
+}
+
   return (
     <div className="h-full flex gap-4">
       {/* LEFT: CHANNELS + DMS */}
@@ -2084,6 +2153,23 @@ useEffect(() => {
                               __html: m.textHtml || m.text || "",
                             }}
                           />
+
+                           {m.username === "AI Assistant" && !m.deletedAt && (
+  <div className="mt-1 flex justify-start">
+    <button
+      type="button"
+      onClick={() => handleExplainAI(m.id)}
+      disabled={aiExplainLoading === m.id}
+      className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-700 border border-slate-300 rounded-full px-2 py-[2px] hover:bg-slate-100 transition"
+      title="Why did AI respond this way?"
+    >
+      <span>🧠</span>
+      <span>
+        {aiExplainLoading === m.id ? "Explaining..." : "Why this reply?"}
+      </span>
+    </button>
+  </div>
+)}
 
                           {/* Reactions */}
                           {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && reactionEntries.length > 0 && (
