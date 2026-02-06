@@ -33,17 +33,25 @@ function RemotePeerVideo({ peer }) {
   }, [peer]);
 
   return (
+  <div className="absolute bottom-3 right-3">
     <video
       ref={videoRef}
-      className="absolute bottom-3 right-3 w-32 h-24 object-cover rounded-lg border border-white/20 shadow-lg"
+      playsInline
+      className="w-32 h-24 object-cover rounded-lg border border-white/20 shadow-lg"
     />
-  );
-}
+    <div className="absolute bottom-0 left-0 right-0 text-[10px] text-white bg-black/60 px-1 rounded-b">
+      {peer.username || "User"}
+    </div>
+  </div>
+);}
 
 export default function GlobalHuddleWindow() {
   const huddleCtx = useHuddle();
   const activeHuddle = huddleCtx?.activeHuddle || null;
+  const isHost =
+  activeHuddle?.startedBy?.userId === huddleCtx?.currentUser?.id;
   const rtc = huddleCtx?.rtc || null;
+  const activeSpeakerId = rtc?.activeSpeakerId;
 
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -234,7 +242,7 @@ export default function GlobalHuddleWindow() {
         className="w-full px-3 py-2 bg-[#1b1e27] cursor-move rounded-t-xl flex justify-between items-center select-none"
       >
         <div className="font-semibold text-sm">
-          Huddle – {activeHuddle.channelId?.replace("team-", "")}
+          Huddle – {activeHuddle.startedBy?.username || "Huddle"}
         </div>
 
         <div className="flex items-center gap-2">
@@ -270,14 +278,31 @@ export default function GlobalHuddleWindow() {
           {/* Local video */}
           {rtc.localStream ? (
             <video
-              ref={localVideoRef}
-              className="w-full h-full object-cover rounded-lg"
-            />
+  ref={localVideoRef}
+  muted
+  playsInline
+  className={`w-full h-full object-cover rounded-lg ${
+  activeSpeakerId === "local"
+    ? "ring-4 ring-green-400"
+    : ""
+}`}
+/>
           ) : (
             <div className="text-gray-400 text-sm">Connecting camera…</div>
           )}
-        </div>
+          <div className="absolute top-2 right-2 bg-black/70 rounded-lg p-2 text-[11px]">
+  <div className="font-semibold mb-1">Participants</div>
 
+  <div className="space-y-1">
+    <div>You (You)</div>
+    {remotePeers.map(p => (
+      <div key={p.userId}>
+        {p.isMuted ? "🔇" : "🎤"} {p.username || "User"}
+      </div>
+    ))}
+  </div>
+</div>
+        </div>
         {/* Remote videos */}
         {remotePeers.map((peer) => (
           <RemotePeerVideo key={peer.userId || peer.id} peer={peer} />
@@ -316,6 +341,18 @@ export default function GlobalHuddleWindow() {
         >
           {rtc.isScreenSharing ? "🛑" : "🖥️"}
         </button>
+
+        {isHost && (
+  <button
+    type="button"
+    onClick={() => rtc.muteAll?.()}
+    className="w-12 h-12 flex items-center justify-center rounded-full bg-red-700 hover:bg-red-600"
+    title="Mute all"
+  >
+    🔇
+  </button>
+)}
+
       </div>
 
       {/* Resize handle */}

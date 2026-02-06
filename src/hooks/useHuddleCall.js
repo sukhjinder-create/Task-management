@@ -1,6 +1,7 @@
 // src/hooks/useHuddleCall.js
 import { useEffect, useRef, useState, useCallback } from "react";
 import { getSocket } from "../socket";
+import "@mediapipe/selfie_segmentation";
 
 // Simple STUN config (works fine for dev/small usage)
 const RTC_CONFIG = {
@@ -19,6 +20,8 @@ export function useHuddleCall({ channelId, currentUser }) {
   const [micEnabled, setMicEnabled] = useState(true);
   const [camEnabled, setCamEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [networkQuality, setNetworkQuality] = useState("good");
+  const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
   // refs to avoid stale closures
   const peerConnectionsRef = useRef({}); // userId -> RTCPeerConnection
@@ -26,14 +29,47 @@ export function useHuddleCall({ channelId, currentUser }) {
   const localStreamRef = useRef(null);
   const cameraVideoTrackRef = useRef(null);
   const screenTrackRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  // ---- Recording (local only, hook-safe) ----
+const startRecording = useCallback(() => {
+  if (!localStreamRef.current) {
+    console.warn("No local stream to record");
+    return;
+  }
 
-  const channelIdRef = useRef(channelId);
+  const recorder = new MediaRecorder(localStreamRef.current, {
+    mimeType: "video/webm",
+  });
+
+  mediaRecorderRef.current = recorder;
+
+  const chunks = [];
+
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data);
+  };
+
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: "video/webm" });
+    console.log("Recording finished:", blob);
+    // later → upload blob
+  };
+
+  recorder.start();
+}, []);
+
+const stopRecording = useCallback(() => {
+  if (mediaRecorderRef.current) {
+    mediaRecorderRef.current.stop();
+    mediaRecorderRef.current = null;
+  }
+}, []);
+
+  const channelIdRef = useRef(null);
+  const setChannelId = useCallback((id) => {
+  channelIdRef.current = id;
+}, []);
   const userRef = useRef(currentUser);
-
-  useEffect(() => {
-    channelIdRef.current = channelId;
-  }, [channelId]);
-
   useEffect(() => {
     userRef.current = currentUser;
   }, [currentUser]);
@@ -68,6 +104,15 @@ export function useHuddleCall({ channelId, currentUser }) {
       ];
     });
   }, []);
+
+  const muteAll = () => {
+  const socket = getSocketSafe();
+  if (!socket || !channelIdRef.current) return;
+
+  socket.emit("huddle:mute-all", {
+    channelId: channelIdRef.current,
+  });
+};
 
   const updateRemotePeerMeta = useCallback((userId, meta) => {
     setRemotePeers((prev) =>
@@ -137,10 +182,21 @@ export function useHuddleCall({ channelId, currentUser }) {
   // ---- Start local media (mic + cam) ----
   const initLocalMedia = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
+const applyBackgroundBlur = async () => {
+  if (!localStreamRef.current) return;
 
+  const videoTrack = cameraVideoTrackRef.current;
+  if (!videoTrack) return;
+
+  console.warn("Background blur hook ready (pipeline not yet attached)");
+};
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: true,
+      video: {
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
+  frameRate: { ideal: 30, max: 60 },
+},
     });
 
     localStreamRef.current = stream;
@@ -148,6 +204,27 @@ export function useHuddleCall({ channelId, currentUser }) {
 
     const videoTrack = stream.getVideoTracks()[0] || null;
     cameraVideoTrackRef.current = videoTrack;
+    const audioCtx = new AudioContext();
+const analyser = audioCtx.createAnalyser();
+const source = audioCtx.createMediaStreamSource(stream);
+
+analyser.fftSize = 256;
+source.connect(analyser);
+
+const data = new Uint8Array(analyser.frequencyBinCount);
+
+const detect = () => {
+  analyser.getByteFrequencyData(data);
+  const volume = data.reduce((a, b) => a + b, 0) / data.length;
+
+  if (volume > 25) {
+    setActiveSpeakerId(userRef.current.id);
+  }
+
+  requestAnimationFrame(detect);
+};
+
+detect();
 
     return stream;
   }, []);
@@ -484,6 +561,26 @@ export function useHuddleCall({ channelId, currentUser }) {
     };
   }, [createPeerConnection, initLocalMedia, inCall, removeRemotePeer, updateRemotePeerMeta, updateRemotePeerStream]);
 
+  useEffect(() => {
+  const interval = setInterval(async () => {
+    const pcs = Object.values(peerConnectionsRef.current);
+    if (!pcs.length) return;
+
+    const stats = await pcs[0].getStats();
+    stats.forEach(report => {
+      if (report.type === "candidate-pair" && report.state === "succeeded") {
+        const rtt = report.currentRoundTripTime || 0;
+
+        if (rtt > 0.6) setNetworkQuality("poor");
+        else if (rtt > 0.3) setNetworkQuality("ok");
+        else setNetworkQuality("good");
+      }
+    });
+  }, 3000);
+
+  return () => clearInterval(interval);
+}, []);
+
   // Clean up when unmounting or channel changes
   useEffect(() => {
     return () => {
@@ -514,5 +611,11 @@ export function useHuddleCall({ channelId, currentUser }) {
     toggleCamera,
     startScreenShare,
     stopScreenShare,
+    activeSpeakerId,
+    networkQuality,
+    startRecording,
+    stopRecording,
+    muteAll,
+    setChannelId,
   };
 }

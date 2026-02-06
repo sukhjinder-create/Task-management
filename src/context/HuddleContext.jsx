@@ -1,6 +1,6 @@
 // src/context/HuddleContext.jsx
 import { createContext, useContext, useState, useEffect, useRef } from "react";
-import useHuddleWebRTC from "../webrtc/huddleRTC";
+import { useHuddleCall } from "../hooks/useHuddleCall";
 import { getSocket } from "../socket";
 import { useAuth } from "./AuthContext";
 
@@ -17,6 +17,11 @@ export function HuddleProvider({ children }) {
 
   // Stores the REAL channel used by WebRTC (because you may navigate anywhere)
   const currentChannelIdRef = useRef(null);
+  useEffect(() => {
+  if (activeHuddle?.channelId) {
+    currentChannelIdRef.current = activeHuddle.channelId;
+  }
+}, [activeHuddle]);
 
   // ---------------------------
   // Load persistent huddle at startup
@@ -39,11 +44,44 @@ export function HuddleProvider({ children }) {
   // ---------------------------
   // WebRTC Hook — completely global
   // ---------------------------
-  const rtc = useHuddleWebRTC({
-    channelId: currentChannelIdRef.current,
-    user,
-    activeHuddle,
-  });
+ const call = useHuddleCall({
+  channelId: null,
+  currentUser: user,
+});
+
+useEffect(() => {
+  if (activeHuddle?.channelId) {
+    call.setChannelId(activeHuddle.channelId);
+  }
+}, [activeHuddle, call]);
+
+const rtc = {
+  // media
+  localStream: call.localStream,
+  remotePeers: call.remotePeers,
+
+  // UI expects THESE names
+  isMuted: !call.micEnabled,
+  isCameraOff: !call.camEnabled,
+  isScreenSharing: call.screenSharing,
+
+  // UI buttons call THESE
+  toggleMute: call.toggleMic,
+  toggleCamera: call.toggleCamera,
+  startScreenShare: call.startScreenShare,
+  stopScreenShare: call.stopScreenShare,
+
+  // lifecycle
+  joinHuddle: call.startCall,
+  leaveHuddle: call.leaveCall,
+};
+
+useEffect(() => {
+  if (!activeHuddle) return;
+  if (!rtc) return;
+
+  rtc.joinHuddle();
+}, [activeHuddle, rtc]);
 
   // ---------------------------
   // Persist huddle state always

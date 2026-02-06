@@ -26,6 +26,8 @@ import "react-quill/dist/quill.snow.css";
 
 import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
+import ReportsModal from "../components/ReportsModal";
+
 
 // ----- CONFIG -----
 const GENERAL_CHANNEL_KEY = "team-general";
@@ -184,6 +186,9 @@ const [loadingAiPref, setLoadingAiPref] = useState(false);
       return GENERAL_CHANNEL_KEY;
     }
   });
+  const [reportsContext, setReportsContext] = useState(null);
+const [reportsOpen, setReportsOpen] = useState(false);
+
   const [activeDmUser, setActiveDmUser] = useState(null);
   const [aiExplainLoading, setAiExplainLoading] = useState(null);
 
@@ -198,6 +203,8 @@ const [loadingAiPref, setLoadingAiPref] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
   const [settingsChannel, setSettingsChannel] = useState(null);
+const [openReports, setOpenReports] = useState(false);
+const [reportContext, setReportContext] = useState(null);
 
   // presence map: userId -> { status, at }
   const [presenceMap, setPresenceMap] = useState({});
@@ -730,6 +737,28 @@ useEffect(() => {
 };
 
 const handleChatMessage = async (msg) => {
+
+// 🔥 REPORT MODAL TRIGGER (FIXED)
+if (msg?.textHtml?.startsWith("__REPORT_READY__")) {
+  try {
+    const payload = JSON.parse(
+      msg.textHtml.replace("__REPORT_READY__", "")
+    );
+
+    setReportsContext({
+      workspaceId: msg.workspaceId,
+      projectName: payload.projectName,
+      fromDate: payload.fromDate,
+      toDate: payload.toDate,
+    });
+
+    setReportsOpen(true);
+  } catch (err) {
+    console.error("Failed to parse report payload", err);
+  }
+  return; // ⛔ do not continue normal message handling
+}
+
   if (!msg) return;
 
   // 🔥 Normalize channel id (AI / legacy / normal messages)
@@ -784,7 +813,32 @@ const handleChatMessage = async (msg) => {
     attachments: msg.attachments || [],
   };
 
+  // 📊 AI-triggered reports modal
+if (
+  msg?.meta?.action === "OPEN_REPORTS"
+) {
+  setOpenReports(true);
+}
+
   const normalizedWithEmoji = applyEmojiToMessage(normalized);
+
+  // 📊 REPORT TRIGGER FROM AI
+if (
+  normalizedWithEmoji.username === "AI Assistant" &&
+  typeof normalizedWithEmoji.textHtml === "string" &&
+  normalizedWithEmoji.textHtml.includes("REPORT_READY")
+) {
+  try {
+    const parsed = JSON.parse(
+      normalizedWithEmoji.textHtml.replace("REPORT_READY:", "")
+    );
+
+    setReportContext(parsed);
+    setOpenReports(true);
+  } catch (err) {
+    console.warn("Failed to parse report context", err);
+  }
+}
 
   setMessagesByChannel((prev) => {
     const existing = prev[channelId] || [];
@@ -1964,15 +2018,13 @@ useEffect(() => {
                 <span className="text-slate-600">{dmPresenceText}</span>
               </div>
             )}
-
-            {/* Search */}
             <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search in channel..."
-              className="text-xs border rounded-full px-2 py-[2px] w-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
+  type="text"
+  value={searchQuery}
+  onChange={(e) => setSearchQuery(e.target.value)}
+  placeholder="Search in channel..."
+  className="text-xs border rounded-full px-2 py-[2px] w-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
+/>
 
             {/* Huddle button */}
             {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
@@ -2552,6 +2604,12 @@ useEffect(() => {
           loadChannels();
         }}
       />
+
+<ReportsModal
+  open={reportsOpen}
+  onClose={() => setReportsOpen(false)}
+  context={reportsContext}
+/>
     </div>
   );
 }
