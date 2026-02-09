@@ -172,10 +172,21 @@ export default function MyTasks() {
           const rows = res.data || [];
 
           if (rows.length > 0) {
-            const cols = rows.map((s) => ({
-              key: s.status_key || s.key,
-              label: s.label || statusLabel(s.status_key || s.key),
-            }));
+            const colsMap = new Map();
+
+for (const s of rows) {
+  const key = s.status_key || s.key;
+  if (!key) continue;
+
+  if (!colsMap.has(key)) {
+    colsMap.set(key, {
+      key,
+      label: s.label || statusLabel(key),
+    });
+  }
+}
+
+const cols = Array.from(colsMap.values());
 
             cols.sort((a, b) => {
               const ia = statusSortIndex(a.key, a.label);
@@ -619,7 +630,7 @@ export default function MyTasks() {
               Total: <b>{stats.total}</b>
               {visibleStatusColumns.length > 0 && " • "}
               {visibleStatusColumns.map((col, idx) => (
-                <span key={col.key}>
+                <span key={`${col.key}-${idx}`}>
                   {col.label}: {stats.perStatus[col.key] ?? 0}
                   {idx < visibleStatusColumns.length - 1 ? " • " : ""}
                 </span>
