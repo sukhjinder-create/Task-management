@@ -14,6 +14,11 @@ import Chat from "./pages/Chat";
 import Reports from "./pages/Reports.jsx";
 import AdminAttendance from "./pages/AdminAttendance.jsx";
 
+// ---- Intelligence pages (NEW) ----
+import UserPerformance from "./pages/intelligence/UserPerformance.jsx";
+import AdminIntelligence from "./pages/intelligence/AdminIntelligence.jsx";
+import ExecutiveSummary from "./pages/intelligence/ExecutiveSummary.jsx";
+
 // ---- Layouts & protection ----
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./layouts/AppLayout";
@@ -35,8 +40,8 @@ import CreateWorkspace from "./pages/CreateWorkspace";
  * APP ROOT
  * ======================================================
  * - NOTHING removed
- * - Verbose routing preserved
- * - Blank page bug FIXED
+ * - Existing routes preserved
+ * - Intelligence routes ADDED
  * ======================================================
  */
 
@@ -51,7 +56,7 @@ export default function App() {
         <Route path="/superadmin/login" element={<SuperadminLogin />} />
 
         {/* ============================
-            USER APP (VERBOSE, FIXED)
+            USER APP (PROTECTED)
         ============================ */}
         <Route
           path="/"
@@ -63,6 +68,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
+          {/* ---- Existing user routes ---- */}
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="projects" element={<Projects />} />
@@ -73,14 +79,21 @@ export default function App() {
           <Route path="chat" element={<Chat />} />
           <Route path="reports" element={<Reports />} />
 
+          {/* ---- NEW: User Intelligence ---- */}
           <Route
-  path="/admin/attendance"
-  element={
-    <ProtectedRoute roles={["admin"]}>
-      <AdminAttendance />
-    </ProtectedRoute>
-  }
-/>
+            path="dashboard/performance"
+            element={<UserPerformance />}
+          />
+
+          {/* ---- Existing admin routes ---- */}
+          <Route
+            path="admin/attendance"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminAttendance />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="admin/users"
@@ -90,10 +103,29 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* ---- NEW: Admin Intelligence ---- */}
+          <Route
+            path="admin/intelligence"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminIntelligence />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="admin/executive-summary"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <ExecutiveSummary />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         {/* ============================
-            SUPERADMIN SYSTEM (VERBOSE)
+            SUPERADMIN SYSTEM
         ============================ */}
         <Route
           path="/superadmin"
@@ -111,13 +143,13 @@ export default function App() {
           <Route path="settings" element={<SuperadminSettings />} />
         </Route>
 
-        
-
-
         {/* ============================
-            LEGACY / PRESERVED ROUTES
+            LEGACY / PRESERVED
         ============================ */}
-        <Route path="/__superadmin_extra/*" element={<SuperadminExtraRoutes />} />
+        <Route
+          path="/__superadmin_extra/*"
+          element={<SuperadminExtraRoutes />}
+        />
 
         {/* ============================
             FALLBACK
