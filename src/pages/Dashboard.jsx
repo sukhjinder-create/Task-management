@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
+import { getAdminInsights, getExecutiveSummary } from "../services/intelligence.api";
 
 function isTaskOverdue(task) {
   if (!task.due_date) return false;
@@ -30,11 +31,63 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [projects, setProjects] = useState([]);
   const [projectTasks, setProjectTasks] = useState([]); // [{ project, tasks }]
+  const [intelligence, setIntelligence] = useState(null);
+  const [executiveSummary, setExecutiveSummary] = useState(null);
+  const [intelligenceLoading, setIntelligenceLoading] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [myPerformance, setMyPerformance] = useState(null);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
+  const [performanceTrend, setPerformanceTrend] = useState([]);
+  const [projectPerformance, setProjectPerformance] = useState([]);
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [forecastReasoningOpen, setForecastReasoningOpen] = useState(false);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError("");
+
+      // Fetch performance trend (last 3 months)
+try {
+  const trendRes = await api.get("/intelligence/user/trend");
+  setPerformanceTrend(trendRes.data || []);
+} catch (err) {
+  console.warn("Trend not available");
+}
+
+// Fetch project-wise performance
+try {
+  const projectPerfRes = await api.get("/intelligence/user/project-performance");
+  setProjectPerformance(projectPerfRes.data || []);
+} catch (err) {
+  console.warn("Project performance not available");
+}
+      // Fetch executive summary (current month)    
+try {
+  setSummaryLoading(true);
+  const month = new Date().toISOString().slice(0, 7);
+  const summaryRes = await api.get(
+    `/intelligence/admin/executive-summary?month=${month}`
+  );
+  setExecutiveSummary(summaryRes.data);
+} catch (err) {
+  console.warn("Executive summary not available yet");
+} finally {
+  setSummaryLoading(false);
+}
+// Fetch my monthly performance
+try {
+  setPerformanceLoading(true);
+  const month = new Date().toISOString().slice(0, 7);
+  const perfRes = await api.get(
+    `/intelligence/user/performance?month=${month}`
+  );
+  setMyPerformance(perfRes.data || null);
+} catch (err) {
+  console.warn("Performance not available yet");
+} finally {
+  setPerformanceLoading(false);
+}
       try {
         const projectsRes = await api.get("/projects");
         const proj = projectsRes.data || [];
@@ -53,6 +106,22 @@ export default function Dashboard() {
         }
 
         setProjectTasks(allProjectTasks);
+        // 🔥 Load intelligence (admin only)
+if (isAdmin) {
+  try {
+    setIntelligenceLoading(true);
+
+    const month = new Date().toISOString().slice(0, 7);
+
+    const insightsRes = await getAdminInsights(month);
+
+    setIntelligence(insightsRes.data);
+  } catch (err) {
+    console.error("Failed to load intelligence", err);
+  } finally {
+    setIntelligenceLoading(false);
+  }
+}
       } catch (err) {
         console.error(err);
         const msg = err.response?.data?.error || "Failed to load dashboard data";
@@ -65,6 +134,29 @@ export default function Dashboard() {
 
     loadData();
   }, []);
+
+  // 🔥 Auto-refresh executive summary while AI is generating
+useEffect(() => {
+  if (!executiveSummary || executiveSummary.status !== "processing") {
+    return;
+  }
+
+  const interval = setInterval(async () => {
+    try {
+      const month = new Date().toISOString().slice(0, 7);
+
+      const res = await api.get(
+        `/intelligence/admin/executive-summary?month=${month}`
+      );
+
+      setExecutiveSummary(res.data);
+    } catch (err) {
+      console.warn("Auto-refresh failed");
+    }
+  }, 5000); // check every 5 seconds
+
+  return () => clearInterval(interval);
+}, [executiveSummary, api]);
 
   // Flatten tasks with project reference
   const flatTasks = useMemo(() => {
@@ -111,9 +203,363 @@ export default function Dashboard() {
     return arr.slice(0, 5);
   }, [tasksForStats]);
 
+  function getRiskLevel(score) {
+  if (score >= 75) return { label: "Low Risk", color: "text-emerald-600" };
+  if (score >= 50) return { label: "Medium Risk", color: "text-amber-600" };
+  return { label: "High Risk", color: "text-red-600" };
+}
   return (
     <div className="space-y-6">
-      <section className="bg-white rounded-xl shadow p-4 flex justify-between items-center">
+
+{/* ================================
+    EXECUTIVE INTELLIGENCE SUMMARY
+================================ */}
+{executiveSummary && (
+  <section className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl shadow p-6">
+    <h2 className="text-lg font-semibold mb-2">
+      Executive Intelligence Insight
+    </h2>
+
+    {executiveSummary.status === "processing" && (
+      <p className="text-sm opacity-90">
+        🧠 AI is analyzing organizational performance...
+      </p>
+    )}
+
+    {executiveSummary.status === "ready" && (
+      <>
+        <div className="text-sm leading-relaxed whitespace-pre-wrap">
+  {executiveSummary.text}
+</div>
+
+        {executiveSummary.reasoning && (
+  <button
+    onClick={() => setShowReasoning(true)}
+    className="mt-4 text-xs font-semibold text-white/90 underline hover:text-white"
+  >
+    View AI analyst reasoning
+  </button>
+)}
+      </>
+    )}
+  </section>
+)}
+
+{/* ================================
+    MY PERFORMANCE SNAPSHOT
+================================ */}
+{myPerformance && (
+  <section className="bg-white rounded-xl shadow p-6 border border-slate-200 space-y-6">
+
+    {/* HEADER */}
+    <div className="flex justify-between items-center">
+      <h2 className="text-lg font-semibold">
+        My Performance – {new Date().toISOString().slice(0, 7)}
+      </h2>
+
+      <div className="text-right">
+        <div className="text-3xl font-bold text-indigo-600">
+          {myPerformance.score}
+        </div>
+        <div
+          className={`text-xs font-semibold ${
+            getRiskLevel(myPerformance.score).color
+          }`}
+        >
+          {getRiskLevel(myPerformance.score).label}
+        </div>
+      </div>
+    </div>
+
+    {/* PROGRESS BAR */}
+    <div>
+      <div className="w-full bg-slate-200 rounded-full h-2">
+        <div
+          className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
+          style={{ width: `${myPerformance.score}%` }}
+        />
+      </div>
+    </div>
+
+    {/* EXPLANATION */}
+    {myPerformance.explanation && (
+      <div className="text-sm text-slate-600">
+        {myPerformance.explanation}
+      </div>
+    )}
+
+    {/* TREND (LAST 3 MONTHS) */}
+    {performanceTrend.length > 0 && (
+      <div>
+        <h3 className="text-sm font-semibold mb-2">Performance Trend</h3>
+        <div className="flex gap-4">
+          {performanceTrend.map((item, idx) => (
+            <div
+              key={idx}
+              className="flex flex-col items-center text-xs"
+            >
+              <div className="text-slate-500">{item.month}</div>
+              <div className="font-semibold text-indigo-600">
+                {item.score}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* PROJECT-WISE PERFORMANCE */}
+    {projectPerformance.length > 0 && (
+      <div>
+        <h3 className="text-sm font-semibold mb-2">
+          Project-wise Productivity
+        </h3>
+
+        <div className="space-y-2">
+          {projectPerformance.map((proj) => (
+            <div
+              key={proj.project_id}
+              className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs"
+            >
+              <div className="flex justify-between mb-1">
+                <span className="font-semibold">
+                  {proj.project_name || proj.projectName}
+                </span>
+                <span className="font-bold text-indigo-600">
+                  {proj.score || 0}
+                </span>
+              </div>
+
+              <div className="w-full bg-slate-200 rounded-full h-1.5">
+                <div
+                  className="bg-indigo-500 h-1.5 rounded-full"
+                  style={{ width: `${proj.score}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* ================================
+    BEHAVIORAL INTELLIGENCE
+================================ */}
+{myPerformance.intelligence && (
+  <div className="mt-6 space-y-5">
+
+    <h3 className="text-sm font-semibold">
+      Behavioral Intelligence Profile
+    </h3>
+
+    {/* DIMENSIONS */}
+    <div className="grid md:grid-cols-2 gap-4 text-xs">
+      {Object.entries(myPerformance.intelligence.dimensions).map(
+        ([key, value]) => (
+          <div key={key}>
+            <div className="flex justify-between mb-1">
+              <span className="capitalize text-slate-600">
+                {key.replace(/([A-Z])/g, " $1")}
+              </span>
+              <span className="font-semibold">
+                {Math.round(value)}
+              </span>
+            </div>
+
+            <div className="w-full bg-slate-200 rounded-full h-1.5">
+              <div
+                className="bg-indigo-500 h-1.5 rounded-full transition-all duration-700"
+                style={{ width: `${value}%` }}
+              />
+            </div>
+          </div>
+        )
+      )}
+    </div>
+
+    {/* RISK */}
+    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs">
+      <div className="flex justify-between">
+        <span className="font-semibold">Risk Probability</span>
+        <span className={`font-bold ${
+          myPerformance.intelligence.risk.level === "High"
+            ? "text-red-600"
+            : myPerformance.intelligence.risk.level === "Medium"
+            ? "text-amber-600"
+            : "text-emerald-600"
+        }`}>
+          {Math.round(myPerformance.intelligence.risk.probability)}%
+          {" "}({myPerformance.intelligence.risk.level})
+        </span>
+      </div>
+    </div>
+
+    {/* SIGNALS */}
+    {myPerformance.intelligence.signals?.length > 0 && (
+      <div>
+        <h4 className="text-xs font-semibold mb-2">
+          Detected Behavioral Signals
+        </h4>
+
+        <div className="flex flex-wrap gap-2">
+          {myPerformance.intelligence.signals.map((s, idx) => (
+            <span
+              key={idx}
+              className="bg-red-100 text-red-700 text-[10px] px-2 py-1 rounded-full"
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
+    {/* COACHING */}
+    {Array.isArray(myPerformance.coaching) &&
+      myPerformance.coaching.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-2">
+            Coaching Suggestions
+          </h3>
+          <ul className="space-y-2 text-sm text-slate-600">
+            {myPerformance.coaching.map((nudge, idx) => (
+  <li
+    key={idx}
+    className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+  >
+    {typeof nudge === "string"
+      ? nudge
+      : nudge.message || nudge.action}
+  </li>
+))}
+          </ul>
+        </div>
+      )}
+  </section>
+)}
+      <section className="space-y-6">
+        <div className="grid lg:grid-cols-3 gap-6">
+{/* 🔥 Org Intelligence Overview */}
+{isAdmin && intelligence && (
+  <section className="bg-white rounded-xl shadow p-6 grid md:grid-cols-4 gap-6">
+    <div>
+      <div className="text-xs text-slate-500">Average Score</div>
+      <div className="text-2xl font-bold">
+        {intelligence.orgScore.averageScore ?? "-"}
+      </div>
+    </div>
+
+    <div>
+      <div className="text-xs text-slate-500">Total Users</div>
+      <div className="text-2xl font-bold">
+        {intelligence.orgScore.userCount}
+      </div>
+    </div>
+
+    <div>
+      <div className="text-xs text-slate-500">High Performers</div>
+      <div className="text-2xl font-bold text-green-600">
+        {intelligence.orgScore.highPerformers}
+      </div>
+    </div>
+
+    <div>
+      <div className="text-xs text-slate-500">At Risk</div>
+      <div className="text-2xl font-bold text-red-600">
+        {intelligence.orgScore.atRiskUsers}
+      </div>
+    </div>
+  </section>
+)}
+{/* 🔥 Performance Leaderboard */}
+{isAdmin && intelligence?.leaderboard && (
+  <section className="bg-slate-50 border border-slate-200 rounded-xl p-6">
+    <h2 className="text-sm font-semibold mb-4">Top Performers</h2>
+
+    <div className="space-y-2">
+      {intelligence.leaderboard.map((u, index) => (
+        <div
+          key={u.userId}
+          className="flex justify-between items-center text-sm border-b pb-2"
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-bold">#{index + 1}</span>
+            <span>{u.username}</span>
+          </div>
+          <span className="font-semibold">{u.score}</span>
+        </div>
+      ))}
+    </div>
+  </section>
+)}
+</div>
+
+{isAdmin && intelligence?.forecast && (
+  <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+
+    <div className="flex justify-between items-center">
+      <h2 className="text-sm font-semibold">
+        Next Month Outlook
+      </h2>
+
+      <span className="text-xs px-2 py-1 rounded-full bg-slate-100 font-medium">
+        {intelligence.forecast.trend}
+      </span>
+    </div>
+
+    {/* Data Signals */}
+    <div className="grid md:grid-cols-3 gap-6 text-sm">
+
+      <div>
+        <div className="text-slate-500">Predicted Average</div>
+        <div className="text-2xl font-semibold">
+          {intelligence.forecast.predictedAverage ?? "-"}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-slate-500">Trend Direction</div>
+        <div className="text-lg font-semibold text-emerald-600">
+          {intelligence.forecast.trend}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-slate-500">Risk Projection</div>
+        <div className="text-lg font-semibold text-red-600">
+          {intelligence.forecast.riskProjection ?? "-"}
+        </div>
+      </div>
+
+    </div>
+
+    {/* AI Interpretation */}
+    {executiveSummary?.outlook && (
+      <div className="border-t pt-4">
+        <div className="text-xs font-semibold text-slate-500 mb-2">
+          AI PERFORMANCE INTERPRETATION
+        </div>
+
+        <p className="text-sm text-slate-700 leading-relaxed">
+          {executiveSummary.outlook}
+        </p>
+      </div>
+    )}
+    {/* ✅ AI Forecast Reasoning */}
+{intelligence?.forecast?.reasoning && (
+  <div className="mt-5 border-t pt-4">
+    <button
+      onClick={() => setForecastReasoningOpen(true)}
+      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+    >
+      View AI forecast reasoning
+    </button>
+  </div>
+)}
+  </section>
+)}
         <div>
           <h1 className="text-lg font-semibold">Dashboard</h1>
           <p className="text-xs text-slate-500">
@@ -270,11 +716,58 @@ export default function Dashboard() {
         </div>
       </section>
 
+      {/* ===============================
+    FORECAST REASONING MODAL
+================================ */}
+{forecastReasoningOpen && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div className="bg-white w-full max-w-2xl rounded-xl shadow-xl p-6 relative">
+
+      <button
+        onClick={() => setForecastReasoningOpen(false)}
+        className="absolute top-3 right-4 text-slate-400 hover:text-slate-700"
+      >
+        ✕
+      </button>
+
+      <h2 className="text-lg font-semibold mb-4">
+        AI Forecast Reasoning
+      </h2>
+
+      <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed max-h-[60vh] overflow-y-auto">
+  {intelligence?.forecast?.reasoning || "Forecast reasoning unavailable"}
+</div>
+    </div>
+  </div>
+)}
+
       {error && (
         <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
           {error}
         </div>
       )}
+      {showReasoning && (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="bg-white rounded-xl shadow-xl w-[720px] max-w-[92%] p-6 relative">
+
+      <button
+        onClick={() => setShowReasoning(false)}
+        className="absolute top-3 right-4 text-slate-500 hover:text-black"
+      >
+        ✕
+      </button>
+
+      <h3 className="text-lg font-semibold mb-4">
+        AI Analyst Reasoning
+      </h3>
+
+      <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+        {executiveSummary?.reasoning || "Reasoning not available."}
+      </div>
+
+    </div>
+  </div>
+)}
     </div>
   );
 }

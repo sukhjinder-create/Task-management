@@ -166,6 +166,47 @@ export default function Sidebar() {
           </div>
         </NavLink>
 
+        {/* ================= INTELLIGENCE ================= */}
+
+{/* User Performance – visible to everyone */}
+<NavLink
+  to="/dashboard/performance"
+  className={({ isActive }) =>
+    `block px-3 py-2 rounded-lg text-sm ${
+      isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
+    }`
+  }
+>
+  My Performance
+</NavLink>
+
+{/* Admin Intelligence */}
+{isAdmin && (
+  <>
+    <NavLink
+      to="/admin/intelligence"
+      className={({ isActive }) =>
+        `block px-3 py-2 rounded-lg text-sm ${
+          isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
+        }`
+      }
+    >
+      Organization Intelligence
+    </NavLink>
+
+    <NavLink
+      to="/admin/executive-summary"
+      className={({ isActive }) =>
+        `block px-3 py-2 rounded-lg text-sm ${
+          isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
+        }`
+      }
+    >
+      Executive Summary
+    </NavLink>
+  </>
+)}
+
         <NavLink
           to="/profile"
           className={({ isActive }) =>

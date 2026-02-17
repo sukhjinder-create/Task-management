@@ -47,7 +47,6 @@ import CreateWorkspace from "./pages/CreateWorkspace";
 
 export default function App() {
   return (
-    <SuperadminAuthProvider>
       <Routes>
         {/* ============================
             PUBLIC
@@ -156,7 +155,7 @@ export default function App() {
         ============================ */}
         <Route path="*" element={<Navigate to="/projects" />} />
       </Routes>
-    </SuperadminAuthProvider>
+
   );
 }
 
