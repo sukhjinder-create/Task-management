@@ -25,7 +25,7 @@ export const getUserMonthlyPerformance = (month) => {
 export const getAdminInsights = (month) => {
   const api = useApi();
 
-  return api.get("/intelligence/admin/insights", {
+  return api.get("/intelligence/insights", {
     params: { month },
   });
 };

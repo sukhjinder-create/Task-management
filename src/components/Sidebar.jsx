@@ -88,18 +88,17 @@ export default function Sidebar() {
       <h1 className="text-xl font-bold mb-6 text-slate-800">TaskManager</h1>
 
       <nav className="flex-1 space-y-1">
-        {(isAdmin || isManager) && (
-          <NavLink
-            to="/dashboard"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-lg text-sm ${
-                isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
-              }`
-            }
-          >
-            Dashboard
-          </NavLink>
-        )}
+        {/* Dashboard — visible to ALL roles (content adapts by role) */}
+<NavLink
+  to="/dashboard"
+  className={({ isActive }) =>
+    `block px-3 py-2 rounded-lg text-sm ${
+      isActive ? "bg-blue-100 text-blue-700" : "text-slate-700"
+    }`
+  }
+>
+  Dashboard
+</NavLink>
 
         <NavLink
           to="/projects"

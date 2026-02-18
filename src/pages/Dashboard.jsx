@@ -63,18 +63,23 @@ try {
   console.warn("Project performance not available");
 }
       // Fetch executive summary (current month)    
-try {
-  setSummaryLoading(true);
-  const month = new Date().toISOString().slice(0, 7);
-  const summaryRes = await api.get(
-    `/intelligence/admin/executive-summary?month=${month}`
-  );
-  setExecutiveSummary(summaryRes.data);
-} catch (err) {
-  console.warn("Executive summary not available yet");
-} finally {
-  setSummaryLoading(false);
+if (isAdmin) {
+  try {
+    setSummaryLoading(true);
+    const month = new Date().toISOString().slice(0, 7);
+
+    const summaryRes = await api.get(
+      `/intelligence/admin/executive-summary?month=${month}`
+    );
+
+    setExecutiveSummary(summaryRes.data);
+  } catch (err) {
+    console.warn("Executive summary not available yet");
+  } finally {
+    setSummaryLoading(false);
+  }
 }
+
 // Fetch my monthly performance
 try {
   setPerformanceLoading(true);
@@ -214,7 +219,7 @@ useEffect(() => {
 {/* ================================
     EXECUTIVE INTELLIGENCE SUMMARY
 ================================ */}
-{executiveSummary && (
+{isAdmin && executiveSummary && (
   <section className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl shadow p-6">
     <h2 className="text-lg font-semibold mb-2">
       Executive Intelligence Insight
