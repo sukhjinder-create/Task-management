@@ -154,17 +154,32 @@ if (isAdmin) {
   const socket = getSocket();
   if (!socket) return;
 
-  const onPulse = (data) => {
-    if (typeof data?.health !== "number") return;
-
-    // ✅ use authoritative value from server
-    setHealthScore(Math.max(0, Math.min(100, data.health)));
+  const subscribe = () => {
+    console.log("✅ Subscribing to workspace realtime");
+    socket.emit("workspace:subscribe");
   };
+
+  // ✅ wait until socket is actually connected
+  if (socket.connected) {
+    subscribe();
+  } else {
+    socket.once("connect", subscribe);
+  }
+
+  const onPulse = (data) => {
+    console.log("🔥 HEALTH PULSE RECEIVED", data);
+  const healthValue = Number(data?.health);
+
+  if (Number.isNaN(healthValue)) return;
+
+  setHealthScore(Math.max(0, Math.min(100, healthValue)));
+};
 
   socket.on("workspace:health-pulse", onPulse);
 
   return () => {
     socket.off("workspace:health-pulse", onPulse);
+    socket.off("connect", subscribe);
   };
 }, []);
 
