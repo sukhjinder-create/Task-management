@@ -3,6 +3,7 @@ import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import { getAdminInsights, getExecutiveSummary } from "../services/intelligence.api";
+import { getSocket } from "../socket";
 
 function isTaskOverdue(task) {
   if (!task.due_date) return false;
@@ -41,11 +42,20 @@ export default function Dashboard() {
   const [projectPerformance, setProjectPerformance] = useState([]);
   const [showReasoning, setShowReasoning] = useState(false);
   const [forecastReasoningOpen, setForecastReasoningOpen] = useState(false);
+  const [healthScore, setHealthScore] = useState(null);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError("");
+      // 🔥 Load workspace health (initial value)
+// ✅ Load workspace health baseline
+try {
+  const healthRes = await api.get("/intelligence/workspace/health");
+  setHealthScore(healthRes.data.healthScore);
+} catch (err) {
+  console.warn("Health not available yet");
+}
 
       // Fetch performance trend (last 3 months)
 try {
@@ -140,6 +150,66 @@ if (isAdmin) {
     loadData();
   }, []);
 
+  useEffect(() => {
+  const socket = getSocket();
+  if (!socket) return;
+
+  const onPulse = (data) => {
+    if (typeof data?.health !== "number") return;
+
+    // ✅ use authoritative value from server
+    setHealthScore(Math.max(0, Math.min(100, data.health)));
+  };
+
+  socket.on("workspace:health-pulse", onPulse);
+
+  return () => {
+    socket.off("workspace:health-pulse", onPulse);
+  };
+}, []);
+
+  /* ======================================
+   LIVE INTELLIGENCE UPDATES
+====================================== */
+
+useEffect(() => {
+  const socket = getSocket();
+  if (!socket) return;
+
+  const handleIntelligenceUpdate = async () => {
+    try {
+      console.log("🧠 Intelligence update received");
+
+      // reload only intelligence — NOT whole dashboard
+      const month = new Date().toISOString().slice(0, 7);
+
+      // refresh performance
+      const perfRes = await api.get(
+        `/intelligence/user/performance?month=${month}`
+      );
+      setMyPerformance(perfRes.data);
+
+      // refresh admin insights if admin
+      if (isAdmin) {
+        const insightsRes = await getAdminInsights(month);
+        setIntelligence(insightsRes.data);
+      }
+
+    } catch (err) {
+      console.warn("Live intelligence refresh failed");
+    }
+  };
+
+  socket.on("workspace:intelligence-updated", handleIntelligenceUpdate);
+
+  return () => {
+    socket.off(
+      "workspace:intelligence-updated",
+      handleIntelligenceUpdate
+    );
+  };
+}, [api, isAdmin]);
+
   // 🔥 Auto-refresh executive summary while AI is generating
 useEffect(() => {
   if (!executiveSummary || executiveSummary.status !== "processing") {
@@ -193,6 +263,49 @@ useEffect(() => {
   ).length;
   const overdueCount = tasksForStats.filter((t) => isTaskOverdue(t)).length;
 
+
+/* ======================================
+   AUTONOMOUS AI INSIGHT ENGINE
+====================================== */
+
+const autonomousInsight = useMemo(() => {
+  if (!myPerformance) return null;
+
+  const risk = myPerformance?.intelligence?.risk?.level;
+  const overdue = overdueCount;
+  const trend = intelligence?.forecast?.trend;
+
+  if (risk === "High" && overdue > 3) {
+    return {
+      type: "critical",
+      message:
+        "Execution risk rising. Overdue workload and behavioral signals indicate potential performance decline.",
+    };
+  }
+
+  if (trend === "declining") {
+    return {
+      type: "warning",
+      message:
+        "Performance momentum is declining. Early intervention recommended before productivity drops further.",
+    };
+  }
+
+  if (trend === "improving" && risk === "Low") {
+    return {
+      type: "positive",
+      message:
+        "Performance momentum improving. Current execution patterns are strengthening organizational stability.",
+    };
+  }
+
+  return {
+    type: "neutral",
+    message:
+      "Workspace operating within normal parameters. No immediate intervention required.",
+  };
+}, [myPerformance, overdueCount, intelligence]);
+
   // My tasks subset (for admin/manager too)
   const myTasks = useMemo(
     () => flatTasks.filter((t) => t.assigned_to === auth.user.id),
@@ -214,7 +327,92 @@ useEffect(() => {
   return { label: "High Risk", color: "text-red-600" };
 }
   return (
-    <div className="space-y-6">
+  <div className="space-y-6">
+
+{/* ======================================
+   AUTONOMOUS AI INSIGHT CARD
+====================================== */}
+
+{autonomousInsight && (
+  <section
+    className={`rounded-xl shadow p-5 border ${
+      autonomousInsight.type === "critical"
+        ? "bg-red-50 border-red-200"
+        : autonomousInsight.type === "warning"
+        ? "bg-amber-50 border-amber-200"
+        : autonomousInsight.type === "positive"
+        ? "bg-emerald-50 border-emerald-200"
+        : "bg-slate-50 border-slate-200"
+    }`}
+  >
+    <div className="flex items-start gap-3">
+
+      <div className="text-lg">
+        {autonomousInsight.type === "critical" && "🔴"}
+        {autonomousInsight.type === "warning" && "⚠️"}
+        {autonomousInsight.type === "positive" && "✅"}
+        {autonomousInsight.type === "neutral" && "🧠"}
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-slate-600 mb-1">
+          AI Autonomous Insight
+        </div>
+
+        <p className="text-sm text-slate-800 leading-relaxed">
+          {autonomousInsight.message}
+        </p>
+      </div>
+
+    </div>
+  </section>
+)}
+
+      {/* ======================================
+   WORKSPACE CONTROL CENTER — AI ATTENTION
+====================================== */}
+
+{(isAdmin || isManager || isUser) && (
+  <section className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl shadow p-5">
+
+    <h2 className="text-sm font-semibold mb-3">
+      Workspace Control Center
+    </h2>
+
+    <div className="grid md:grid-cols-3 gap-4 text-xs">
+
+      {/* Risk Status */}
+      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+        <div className="text-slate-300">Current Risk State</div>
+        <div className="text-lg font-semibold mt-1">
+          {myPerformance?.intelligence?.risk?.level || "Analyzing"}
+        </div>
+      </div>
+
+      {/* Overdue Pressure */}
+      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+        <div className="text-slate-300">Execution Pressure</div>
+        <div className="text-lg font-semibold mt-1">
+          {overdueCount > 5
+            ? "High"
+            : overdueCount > 0
+            ? "Moderate"
+            : "Stable"}
+        </div>
+      </div>
+
+      {/* Momentum */}
+      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+        <div className="text-slate-300">Performance Momentum</div>
+        <div className="text-lg font-semibold mt-1">
+          {intelligence?.forecast?.trend || "Stable"}
+        </div>
+      </div>
+
+    </div>
+
+  </section>
+)}
 
 {/* ================================
     EXECUTIVE INTELLIGENCE SUMMARY
@@ -552,6 +750,22 @@ useEffect(() => {
         </p>
       </div>
     )}
+
+    {/* AI Decision Guidance */}
+<div className="border-t pt-4 mt-4">
+  <div className="text-xs font-semibold text-slate-500 mb-2">
+    RECOMMENDED ACTION
+  </div>
+
+  <p className="text-sm text-slate-700">
+    {intelligence.forecast.trend === "declining"
+      ? "Intervention recommended. Focus on overdue workload and coaching reinforcement."
+      : intelligence.forecast.trend === "improving"
+      ? "Momentum positive. Maintain execution cadence and reinforce high performers."
+      : "Performance stable. Monitor workload balance and prevent execution drift."}
+  </p>
+</div>
+
     {/* ✅ AI Forecast Reasoning */}
 {intelligence?.forecast?.reasoning && (
   <div className="mt-5 border-t pt-4">
@@ -567,6 +781,48 @@ useEffect(() => {
 )}
         <div>
           <h1 className="text-lg font-semibold">Dashboard</h1>
+          {/* ===============================
+   WORKSPACE HEALTH PULSE
+================================ */}
+<section className="bg-white rounded-xl shadow p-4 border border-slate-200">
+  <div className="flex justify-between items-center mb-2">
+    <h2 className="text-sm font-semibold">
+      Workspace Health Pulse
+    </h2>
+    <span
+  className={`text-xs font-semibold ${
+    healthScore === null
+      ? "text-slate-400"
+      : healthScore > 75
+      ? "text-emerald-600"
+      : healthScore > 50
+      ? "text-amber-600"
+      : "text-red-600"
+  }`}
+>
+  {healthScore === null ? "Analyzing…" : `${Math.round(healthScore)}%`}
+</span>
+  </div>
+
+  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+    <div
+      className="h-2 rounded-full transition-all duration-700"
+      style={{
+        width: `${healthScore ?? 0}%`,
+        background:
+          healthScore > 75
+            ? "#10b981"
+            : healthScore > 50
+            ? "#f59e0b"
+            : "#ef4444",
+      }}
+    />
+  </div>
+
+  <p className="text-[11px] text-slate-500 mt-2">
+    Live organizational health reacting to task execution in real time.
+  </p>
+</section>
           <p className="text-xs text-slate-500">
             Role: {role}. Showing an overview of projects and tasks you are allowed
             to access.
