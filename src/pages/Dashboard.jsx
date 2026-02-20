@@ -44,6 +44,21 @@ export default function Dashboard() {
   const [forecastReasoningOpen, setForecastReasoningOpen] = useState(false);
   const [healthScore, setHealthScore] = useState(null);
 
+  // ======================================
+// INTEGRATIONS
+// ======================================
+function connectAsana() {
+  const token = window.__AUTH_TOKEN__;
+
+  if (!token) {
+    toast.error("Authentication missing. Please login again.");
+    return;
+  }
+
+  window.location.href =
+    `${import.meta.env.VITE_BACKEND_URL || "http://localhost:3000"}/integrations/asana/connect?token=${token}`;
+}
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
@@ -394,7 +409,7 @@ const autonomousInsight = useMemo(() => {
       Workspace Control Center
     </h2>
 
-    <div className="grid md:grid-cols-3 gap-4 text-xs">
+    <div className="grid md:grid-cols-4 gap-4 text-xs">
 
       {/* Risk Status */}
       <div className="bg-white/5 rounded-lg p-4 border border-white/10">
@@ -424,6 +439,21 @@ const autonomousInsight = useMemo(() => {
         </div>
       </div>
 
+      {/* Integrations */}
+<div className="bg-white/5 rounded-lg p-4 border border-white/10">
+  <div className="text-slate-300">External Integrations</div>
+
+  <button
+    onClick={connectAsana}
+    className="mt-2 text-xs bg-indigo-500 hover:bg-indigo-600 transition px-3 py-1.5 rounded-md font-semibold"
+  >
+    Connect Asana
+  </button>
+
+  <div className="text-[10px] text-slate-400 mt-2">
+    Allow AI to observe external work activity.
+  </div>
+</div>
     </div>
 
   </section>
