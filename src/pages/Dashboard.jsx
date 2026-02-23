@@ -51,6 +51,9 @@ const [asanaProjects, setAsanaProjects] = useState([]);
 const [asanaTasks, setAsanaTasks] = useState([]);
 const [selectedAsanaProject, setSelectedAsanaProject] = useState(null);
 const [asanaLoading, setAsanaLoading] = useState(false);
+const [asanaPage, setAsanaPage] = useState(1);
+const [asanaSearch, setAsanaSearch] = useState("");
+const [asanaHasMore, setAsanaHasMore] = useState(false);
 
   // ======================================
 // INTEGRATIONS
@@ -64,7 +67,7 @@ function connectAsana() {
   }
 
   window.location.href =
-    `${import.meta.env.VITE_BACKEND_URL || "http://localhost:3000"}/integrations/asana/connect?token=${token}`;
+    `${import.meta.env.VITE_BACKEND_URL || "http://localhost:3000"}/oauth/asana/connect?token=${token}`;
 }
 
 async function openAsanaViewer() {
@@ -83,22 +86,50 @@ async function openAsanaViewer() {
   }
 }
 
-async function loadAsanaProject(project) {
+async function loadAsanaProject(project, page = 1, search = "") {
+
+  if (asanaLoading) return;
+
   try {
-    setSelectedAsanaProject(project);
+    setSelectedAsanaProject({
+      gid: project.gid,
+      name: project.name,
+    });
+
     setAsanaLoading(true);
 
     const res = await api.get(
-      `/integrations/asana/projects/${project.gid}/tasks`
+      `/integrations/asana/projects/${project.gid}/tasks`,
+      {
+        params: {
+          page,
+          limit: 25,
+          search
+        }
+      }
     );
 
-    setAsanaTasks(res.data || []);
+    setAsanaTasks(res.data.data || []);
+    setAsanaHasMore(res.data.hasMore);
+    setAsanaPage(page);
+
   } catch (err) {
     toast.error("Failed to load tasks");
   } finally {
     setAsanaLoading(false);
   }
 }
+
+useEffect(() => {
+  if (!selectedAsanaProject?.gid) return;
+
+  loadAsanaProject(
+    selectedAsanaProject,
+    asanaPage,
+    asanaSearch
+  );
+
+}, [asanaPage, asanaSearch]);
 
   useEffect(() => {
     async function loadData() {
@@ -1133,11 +1164,27 @@ const autonomousInsight = useMemo(() => {
 
     {/* HEADER */}
     <div className="bg-white px-6 py-4 flex justify-between items-center border-b">
-      <h2 className="font-semibold">
-        {selectedAsanaProject
-          ? `Asana — ${selectedAsanaProject.name}`
-          : "Asana Projects"}
-      </h2>
+      <div className="flex items-center gap-3">
+
+  {selectedAsanaProject && (
+    <button
+      onClick={() => {
+        setSelectedAsanaProject(null);
+        setAsanaTasks([]);
+      }}
+      className="text-xs bg-slate-200 px-2 py-1 rounded"
+    >
+      ← Back
+    </button>
+  )}
+
+  <h2 className="font-semibold">
+    {selectedAsanaProject
+      ? `Asana — ${selectedAsanaProject.name}`
+      : "Asana Projects"}
+  </h2>
+
+</div>
 
       <button
         onClick={() => {
@@ -1155,10 +1202,10 @@ const autonomousInsight = useMemo(() => {
     <div className="flex-1 bg-slate-50 overflow-auto p-6">
 
       {asanaLoading && (
-        <div className="text-sm text-slate-500">
-          Loading Asana data...
-        </div>
-      )}
+  <div className="animate-pulse text-sm text-slate-400">
+    Syncing live Asana data...
+  </div>
+)}
 
       {/* PROJECT LIST */}
       {!selectedAsanaProject && (
@@ -1166,7 +1213,11 @@ const autonomousInsight = useMemo(() => {
           {asanaProjects.map((p) => (
             <div
               key={p.gid}
-              onClick={() => loadAsanaProject(p)}
+              onClick={() => {
+  setAsanaPage(1);
+  setAsanaSearch("");
+  loadAsanaProject(p, 1, "");
+}}
               className="bg-white border rounded-lg p-4 cursor-pointer hover:shadow"
             >
               <div className="font-semibold">{p.name}</div>
@@ -1181,6 +1232,18 @@ const autonomousInsight = useMemo(() => {
       {/* TASK TABLE */}
       {selectedAsanaProject && (
         <div className="bg-white rounded-lg border overflow-hidden">
+          {/* ✅ SEARCH BAR */}
+    <div className="p-3 border-b flex gap-2">
+      <input
+        placeholder="Search tasks..."
+        value={asanaSearch}
+        onChange={(e) => {
+          setAsanaPage(1); // reset page
+          setAsanaSearch(e.target.value);
+        }}
+        className="border rounded px-2 py-1 text-xs w-64"
+      />
+    </div>
           <table className="w-full text-xs">
             <thead className="bg-slate-100">
               <tr>
@@ -1191,22 +1254,87 @@ const autonomousInsight = useMemo(() => {
               </tr>
             </thead>
             <tbody>
-              {asanaTasks.map((t) => (
-                <tr key={t.gid} className="border-t">
-                  <td className="p-3">{t.name}</td>
-                  <td className="p-3">
-                    {t.assignee?.name || "—"}
-                  </td>
-                  <td className="p-3">
-                    {t.completed ? "✅ Done" : "In Progress"}
-                  </td>
-                  <td className="p-3">
-                    {new Date(t.modified_at).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+  {asanaTasks.map((t) => (
+    <tr key={t.gid} className="border-t">
+
+  <td className="p-3">{t.name}</td>
+
+  <td className="p-3">
+    {t.assignee?.name || "—"}
+  </td>
+
+  <td className="p-3">
+    <button
+      onClick={async () => {
+        try {
+          await api.patch(
+            `/integrations/asana/tasks/${t.gid}/status`,
+            { completed: !t.completed }
+          );
+
+          setAsanaTasks(prev =>
+            prev.map(task =>
+              task.gid === t.gid
+                ? { ...task, completed: !task.completed }
+                : task
+            )
+          );
+
+        } catch {
+          toast.error("Failed to update task");
+        }
+      }}
+      className={`px-2 py-1 rounded text-[11px] ${
+        t.completed
+          ? "bg-emerald-100 text-emerald-700"
+          : "bg-amber-100 text-amber-700"
+      }`}
+    >
+      {t.completed ? "✅ Done" : "Mark Done"}
+    </button>
+  </td>
+
+  <td className="p-3">
+    {new Date(t.modified_at).toLocaleString()}
+  </td>
+
+</tr>
+  ))}
+</tbody>
           </table>
+          <div className="flex justify-between items-center p-3 border-t text-xs">
+
+  <button
+    disabled={asanaPage === 1}
+    onClick={() => setAsanaPage(p => p - 1)}
+    className="px-3 py-1 bg-slate-200 rounded disabled:opacity-40"
+  >
+    Previous
+  </button>
+
+  <span className="font-medium">
+    Page {asanaPage}
+    <input
+  type="number"
+  min="1"
+  value={asanaPage}
+  onChange={(e) => {
+    const val = Number(e.target.value);
+    if (val > 0) setAsanaPage(val);
+  }}
+  className="w-16 border rounded px-1 py-0.5 text-center"
+/>
+  </span>
+
+  <button
+    disabled={!asanaHasMore}
+    onClick={() => setAsanaPage(p => p + 1)}
+    className="px-3 py-1 bg-slate-200 rounded disabled:opacity-40"
+  >
+    Next
+  </button>
+
+</div>
         </div>
       )}
 
