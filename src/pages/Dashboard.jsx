@@ -43,6 +43,14 @@ export default function Dashboard() {
   const [showReasoning, setShowReasoning] = useState(false);
   const [forecastReasoningOpen, setForecastReasoningOpen] = useState(false);
   const [healthScore, setHealthScore] = useState(null);
+ 
+// ASANA VIEWER STATE
+
+const [asanaOpen, setAsanaOpen] = useState(false);
+const [asanaProjects, setAsanaProjects] = useState([]);
+const [asanaTasks, setAsanaTasks] = useState([]);
+const [selectedAsanaProject, setSelectedAsanaProject] = useState(null);
+const [asanaLoading, setAsanaLoading] = useState(false);
 
   // ======================================
 // INTEGRATIONS
@@ -57,6 +65,39 @@ function connectAsana() {
 
   window.location.href =
     `${import.meta.env.VITE_BACKEND_URL || "http://localhost:3000"}/integrations/asana/connect?token=${token}`;
+}
+
+async function openAsanaViewer() {
+  try {
+    setAsanaOpen(true);
+    setAsanaLoading(true);
+
+    const res = await api.get("/integrations/asana/projects");
+
+    setAsanaProjects(res.data || []);
+  } catch (err) {
+    toast.error("Failed to load Asana projects");
+    console.error(err);
+  } finally {
+    setAsanaLoading(false);
+  }
+}
+
+async function loadAsanaProject(project) {
+  try {
+    setSelectedAsanaProject(project);
+    setAsanaLoading(true);
+
+    const res = await api.get(
+      `/integrations/asana/projects/${project.gid}/tasks`
+    );
+
+    setAsanaTasks(res.data || []);
+  } catch (err) {
+    toast.error("Failed to load tasks");
+  } finally {
+    setAsanaLoading(false);
+  }
 }
 
   useEffect(() => {
@@ -443,12 +484,21 @@ const autonomousInsight = useMemo(() => {
 <div className="bg-white/5 rounded-lg p-4 border border-white/10">
   <div className="text-slate-300">External Integrations</div>
 
+  <div className="flex gap-2 mt-2">
   <button
     onClick={connectAsana}
-    className="mt-2 text-xs bg-indigo-500 hover:bg-indigo-600 transition px-3 py-1.5 rounded-md font-semibold"
+    className="text-xs bg-indigo-500 hover:bg-indigo-600 px-3 py-1.5 rounded-md font-semibold"
   >
-    Connect Asana
+    Connect
   </button>
+
+  <button
+    onClick={openAsanaViewer}
+    className="text-xs bg-slate-700 hover:bg-slate-800 px-3 py-1.5 rounded-md font-semibold"
+  >
+    Open
+  </button>
+</div>
 
   <div className="text-[10px] text-slate-400 mt-2">
     Allow AI to observe external work activity.
@@ -1074,6 +1124,96 @@ const autonomousInsight = useMemo(() => {
     </div>
   </div>
 )}
+
+{/* =====================================
+   ASANA FULLSCREEN VIEWER
+===================================== */}
+{asanaOpen && (
+  <div className="fixed inset-0 bg-black/60 z-50 flex flex-col">
+
+    {/* HEADER */}
+    <div className="bg-white px-6 py-4 flex justify-between items-center border-b">
+      <h2 className="font-semibold">
+        {selectedAsanaProject
+          ? `Asana — ${selectedAsanaProject.name}`
+          : "Asana Projects"}
+      </h2>
+
+      <button
+        onClick={() => {
+          setAsanaOpen(false);
+          setSelectedAsanaProject(null);
+          setAsanaTasks([]);
+        }}
+        className="text-slate-500 hover:text-black"
+      >
+        ✕
+      </button>
+    </div>
+
+    {/* BODY */}
+    <div className="flex-1 bg-slate-50 overflow-auto p-6">
+
+      {asanaLoading && (
+        <div className="text-sm text-slate-500">
+          Loading Asana data...
+        </div>
+      )}
+
+      {/* PROJECT LIST */}
+      {!selectedAsanaProject && (
+        <div className="grid md:grid-cols-3 gap-4">
+          {asanaProjects.map((p) => (
+            <div
+              key={p.gid}
+              onClick={() => loadAsanaProject(p)}
+              className="bg-white border rounded-lg p-4 cursor-pointer hover:shadow"
+            >
+              <div className="font-semibold">{p.name}</div>
+              <div className="text-xs text-slate-500">
+                Click to view tasks
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* TASK TABLE */}
+      {selectedAsanaProject && (
+        <div className="bg-white rounded-lg border overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-100">
+              <tr>
+                <th className="p-3 text-left">Task</th>
+                <th className="p-3 text-left">Assignee</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Last Modified</th>
+              </tr>
+            </thead>
+            <tbody>
+              {asanaTasks.map((t) => (
+                <tr key={t.gid} className="border-t">
+                  <td className="p-3">{t.name}</td>
+                  <td className="p-3">
+                    {t.assignee?.name || "—"}
+                  </td>
+                  <td className="p-3">
+                    {t.completed ? "✅ Done" : "In Progress"}
+                  </td>
+                  <td className="p-3">
+                    {new Date(t.modified_at).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+    </div>
+  </div>
+)}
+
     </div>
   );
 }
