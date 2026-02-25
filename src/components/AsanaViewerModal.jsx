@@ -7,6 +7,8 @@ export default function AsanaViewerModal({ open, onClose }) {
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationDone, setMigrationDone] = useState(false);
 
   // load projects
   useEffect(() => {
@@ -22,8 +24,31 @@ export default function AsanaViewerModal({ open, onClose }) {
     if (!selectedProject) return;
 
     api.get(`/integrations/asana/projects/${selectedProject}/tasks`)
-      .then(res => setTasks(res.data));
+      .then(res => setTasks(res.data.data || []));
   }, [selectedProject]);
+
+  async function migrateProject() {
+  if (!selectedProject) return;
+
+  try {
+    setMigrating(true);
+    setMigrationDone(false);
+
+    await api.post(
+      `/integrations/asana/projects/${selectedProject}/migrate`
+    );
+
+    setMigrationDone(true);
+
+    alert("✅ Project imported successfully!");
+
+  } catch (err) {
+    console.error(err);
+    alert("Migration failed");
+  } finally {
+    setMigrating(false);
+  }
+}
 
   if (!open) return null;
 
@@ -47,13 +72,36 @@ export default function AsanaViewerModal({ open, onClose }) {
 
       {/* CENTER — TASKS */}
       <div className="flex-1 bg-slate-50 overflow-y-auto">
-        <div className="p-4 flex justify-between">
-          <h2 className="font-semibold">
-            Tasks ({tasks.length})
-          </h2>
+        <div className="p-4 flex justify-between items-center">
 
-          <button onClick={onClose}>✕</button>
-        </div>
+  <h2 className="font-semibold">
+    Tasks ({tasks.length})
+  </h2>
+
+  <div className="text-xs text-red-500">
+  Selected: {selectedProject || "NONE"}
+</div>
+
+  <div className="flex gap-3 items-center">
+
+    {selectedProject && (
+      <button
+        onClick={migrateProject}
+        disabled={migrating}
+        className="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 disabled:opacity-50"
+      >
+        {migrating
+          ? "Importing..."
+          : migrationDone
+          ? "Imported ✓"
+          : "Import 🚀"}
+      </button>
+    )}
+
+    <button onClick={onClose}>✕</button>
+
+  </div>
+</div>
 
         <div className="space-y-2 p-4">
           {tasks.map(t => (

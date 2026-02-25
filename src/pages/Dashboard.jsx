@@ -54,6 +54,7 @@ const [asanaLoading, setAsanaLoading] = useState(false);
 const [asanaPage, setAsanaPage] = useState(1);
 const [asanaSearch, setAsanaSearch] = useState("");
 const [asanaHasMore, setAsanaHasMore] = useState(false);
+const [asanaMigrating, setAsanaMigrating] = useState(false);
 
   // ======================================
 // INTEGRATIONS
@@ -117,6 +118,26 @@ async function loadAsanaProject(project, page = 1, search = "") {
     toast.error("Failed to load tasks");
   } finally {
     setAsanaLoading(false);
+  }
+}
+
+async function migrateAsanaProject() {
+  if (!selectedAsanaProject?.gid) return;
+
+  try {
+    setAsanaMigrating(true);
+
+    await api.post(
+      `/integrations/asana/projects/${selectedAsanaProject.gid}/migrate`
+    );
+
+    toast.success("✅ Project imported");
+
+  } catch (err) {
+    console.error(err);
+    toast.error("Migration failed");
+  } finally {
+    setAsanaMigrating(false);
   }
 }
 
@@ -1233,17 +1254,27 @@ const autonomousInsight = useMemo(() => {
       {selectedAsanaProject && (
         <div className="bg-white rounded-lg border overflow-hidden">
           {/* ✅ SEARCH BAR */}
-    <div className="p-3 border-b flex gap-2">
-      <input
-        placeholder="Search tasks..."
-        value={asanaSearch}
-        onChange={(e) => {
-          setAsanaPage(1); // reset page
-          setAsanaSearch(e.target.value);
-        }}
-        className="border rounded px-2 py-1 text-xs w-64"
-      />
-    </div>
+    <div className="p-3 border-b flex gap-2 items-center justify-between">
+
+  <input
+    placeholder="Search tasks..."
+    value={asanaSearch}
+    onChange={(e) => {
+      setAsanaPage(1);
+      setAsanaSearch(e.target.value);
+    }}
+    className="border rounded px-2 py-1 text-xs w-64"
+  />
+
+  <button
+    onClick={migrateAsanaProject}
+    disabled={asanaMigrating}
+    className="bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+  >
+    {asanaMigrating ? "Importing..." : "Import 🚀"}
+  </button>
+
+</div>
           <table className="w-full text-xs">
             <thead className="bg-slate-100">
               <tr>
