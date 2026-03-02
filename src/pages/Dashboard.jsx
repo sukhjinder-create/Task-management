@@ -56,6 +56,14 @@ const [asanaSearch, setAsanaSearch] = useState("");
 const [asanaHasMore, setAsanaHasMore] = useState(false);
 const [asanaMigrating, setAsanaMigrating] = useState(false);
 
+// YOUTRACK VIEWER STATE
+
+const [youtrackOpen, setYoutrackOpen] = useState(false);
+const [youtrackProjects, setYoutrackProjects] = useState([]);
+const [youtrackTasks, setYoutrackTasks] = useState([]);
+const [selectedYoutrackProject, setSelectedYoutrackProject] = useState(null);
+const [youtrackLoading, setYoutrackLoading] = useState(false);
+
   // ======================================
 // INTEGRATIONS
 // ======================================
@@ -71,6 +79,19 @@ function connectAsana() {
     `${import.meta.env.VITE_BACKEND_URL || "http://localhost:3000"}/oauth/asana/connect?token=${token}`;
 }
 
+async function connectYouTrack() {
+  try {
+    await api.post("/integrations/youtrack/connect", {
+      baseUrl: "https://loop.youtrack.cloud",
+      token: prompt("Paste YouTrack Permanent Token"),
+    });
+
+    toast.success("YouTrack connected");
+  } catch (err) {
+    toast.error("YouTrack connection failed");
+  }
+}
+
 async function openAsanaViewer() {
   try {
     setAsanaOpen(true);
@@ -84,6 +105,42 @@ async function openAsanaViewer() {
     console.error(err);
   } finally {
     setAsanaLoading(false);
+  }
+}
+
+async function openYouTrackViewer() {
+  try {
+    setYoutrackOpen(true);
+    setYoutrackLoading(true);
+
+    const res = await api.get(
+      "/integrations/youtrack/projects",
+      {
+        headers: { "Cache-Control": "no-cache" },
+      }
+    );
+
+    // ✅ DEBUG — KEEP THIS
+    console.log("RAW RESPONSE:", res);
+    console.log("DATA:", res.data);
+
+    // ✅ SAFE NORMALIZATION (handles ALL shapes)
+    const projects =
+      Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.data)
+        ? res.data.data
+        : [];
+
+    console.log("NORMALIZED PROJECTS:", projects);
+
+    setYoutrackProjects(projects);
+
+  } catch (err) {
+    console.error("YouTrack load error:", err);
+    toast.error("Failed to load YouTrack projects");
+  } finally {
+    setYoutrackLoading(false);
   }
 }
 
@@ -118,6 +175,23 @@ async function loadAsanaProject(project, page = 1, search = "") {
     toast.error("Failed to load tasks");
   } finally {
     setAsanaLoading(false);
+  }
+}
+
+async function loadYouTrackProject(project) {
+  try {
+    setSelectedYoutrackProject(project);
+    setYoutrackLoading(true);
+
+    const res = await api.get(
+      `/integrations/youtrack/projects/${project.key}/tasks`
+    );
+
+    setYoutrackTasks(res.data.data || []);
+  } catch {
+    toast.error("Failed to load issues");
+  } finally {
+    setYoutrackLoading(false);
   }
 }
 
@@ -537,19 +611,25 @@ const autonomousInsight = useMemo(() => {
   <div className="text-slate-300">External Integrations</div>
 
   <div className="flex gap-2 mt-2">
-  <button
-    onClick={connectAsana}
-    className="text-xs bg-indigo-500 hover:bg-indigo-600 px-3 py-1.5 rounded-md font-semibold"
-  >
-    Connect
+
+  {/* ASANA */}
+  <button onClick={connectAsana} className="text-xs bg-indigo-500 px-3 py-1.5 rounded-md font-semibold">
+    Asana Connect
   </button>
 
-  <button
-    onClick={openAsanaViewer}
-    className="text-xs bg-slate-700 hover:bg-slate-800 px-3 py-1.5 rounded-md font-semibold"
-  >
-    Open
+  <button onClick={openAsanaViewer} className="text-xs bg-slate-700 px-3 py-1.5 rounded-md font-semibold">
+    Asana Open
   </button>
+
+  {/* YOUTRACK */}
+  <button onClick={connectYouTrack} className="text-xs bg-orange-500 px-3 py-1.5 rounded-md font-semibold">
+    YouTrack Connect
+  </button>
+
+  <button onClick={openYouTrackViewer} className="text-xs bg-slate-700 px-3 py-1.5 rounded-md font-semibold">
+    YouTrack Open
+  </button>
+
 </div>
 
   <div className="text-[10px] text-slate-400 mt-2">
@@ -1367,6 +1447,134 @@ const autonomousInsight = useMemo(() => {
 
 </div>
         </div>
+      )}
+    </div>
+  </div>
+)}
+
+{/* =====================================
+   YOUTRACK FULLSCREEN VIEWER
+===================================== */}
+{youtrackOpen && (
+  <div className="fixed inset-0 bg-black/60 z-50 flex flex-col">
+
+    <div className="bg-white px-6 py-4 flex justify-between border-b">
+      <h2 className="font-semibold">
+        {selectedYoutrackProject
+          ? `YouTrack — ${selectedYoutrackProject.name}`
+          : "YouTrack Projects"}
+      </h2>
+
+      <button
+        onClick={() => {
+          setYoutrackOpen(false);
+          setSelectedYoutrackProject(null);
+          setYoutrackTasks([]);
+        }}
+      >
+        ✕
+      </button>
+    </div>
+
+    <div className="flex-1 bg-slate-50 overflow-auto p-6">
+
+      {!selectedYoutrackProject && (
+
+  <>
+    {youtrackLoading && (
+      <div className="text-sm text-slate-400">
+        Loading YouTrack projects...
+      </div>
+    )}
+
+    {!youtrackLoading && youtrackProjects.length === 0 && (
+      <div className="text-sm text-slate-500">
+        No projects found or access not granted.
+      </div>
+    )}
+
+    <div className="grid md:grid-cols-3 gap-4">
+      <div className="text-xs text-red-500">
+  Projects loaded: {youtrackProjects.length}
+</div>
+      {youtrackProjects.map(p => (
+        <div
+          key={p.id}
+          onClick={() => loadYouTrackProject(p)}
+          className="bg-white border rounded-lg p-4 cursor-pointer hover:shadow"
+        >
+          <div className="font-semibold">{p.name}</div>
+        </div>
+      ))}
+    </div>
+  </>
+)}
+
+      {selectedYoutrackProject && (
+        <table className="w-full text-xs bg-white rounded border">
+          <thead className="bg-slate-100">
+  <tr>
+    <th className="p-3 text-left">Issue</th>
+    <th className="p-3 text-left">Assignee</th>
+    <th className="p-3 text-left">Status</th>
+    <th className="p-3 text-left">Last Modified</th>
+  </tr>
+</thead>
+          <tbody>
+  {youtrackTasks.map(t => (
+    <tr key={t.id} className="border-t">
+
+      {/* Issue */}
+      <td className="p-3">
+        {t.title || t.name || "—"}
+      </td>
+
+      {/* Assignee */}
+      <td className="p-3">
+        {t.assignee?.name ||
+         t.assignee ||
+         "—"}
+      </td>
+
+      <td className="p-3">
+  <button
+    onClick={async () => {
+      await api.patch(
+        `/integrations/youtrack/tasks/${t.id}/status`,
+        { completed: !t.completed }
+      );
+
+      setYoutrackTasks(prev =>
+        prev.map(task =>
+          task.id === t.id
+            ? { ...task, completed: !task.completed }
+            : task
+        )
+      );
+    }}
+    className={`px-2 py-1 rounded text-[11px] ${
+      t.completed
+        ? "bg-emerald-100 text-emerald-700"
+        : "bg-amber-100 text-amber-700"
+    }`}
+  >
+    {t.completed ? "✅ Done" : "Mark Done"}
+  </button>
+</td>
+
+      {/* Last Modified */}
+      <td className="p-3">
+        {t.lastModified || t.updated
+          ? new Date(
+              t.lastModified || t.updated
+            ).toLocaleString()
+          : "—"}
+      </td>
+
+    </tr>
+  ))}
+</tbody>
+        </table>
       )}
 
     </div>
