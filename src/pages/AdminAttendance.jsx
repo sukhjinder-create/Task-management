@@ -11,6 +11,7 @@ export default function AdminAttendance() {
   const [rows, setRows] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
 
   // Optional filters
   const [from, setFrom] = useState("");
@@ -92,6 +93,41 @@ export default function AdminAttendance() {
   };
 
   /* --------------------------------------------------
+     Recalculate Attendance (INSERT into attendance_daily)
+  -------------------------------------------------- */
+  const handleRecalculate = async () => {
+    if (!window.confirm("Recalculate attendance data? This will update the attendance_daily table.")) {
+      return;
+    }
+
+    try {
+      setRecalculating(true);
+
+      const payload = {};
+      if (from) payload.from = from;
+      if (to) payload.to = to;
+      if (userId) payload.userId = userId;
+
+      await api.post("/admin/attendance/recalculate", payload);
+
+      toast.success("Attendance recalculated successfully!");
+
+      // Reload the attendance data to show updated values
+      await loadAttendance();
+    } catch (err) {
+      console.error("Recalculation error:", err);
+      const errorMsg =
+        err.response?.data?.error ||
+        err.response?.data?.details ||
+        err.message ||
+        "Recalculation failed";
+      toast.error(`Recalculation failed: ${errorMsg}`);
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  /* --------------------------------------------------
      Fast lookup: userId → username
   -------------------------------------------------- */
   const userMap = useMemo(() => {
@@ -150,31 +186,40 @@ export default function AdminAttendance() {
         </p>
       </div>
 
-      <button
-        onClick={async () => {
-          try {
-            await api.post("/admin/attendance/recalculate", {
-              from: from || null,
-              to: to || null,
-              userId: userId || null,
-            });
-            toast.success("Attendance recalculated");
-            loadAttendance();
-          } catch (err) {
-            toast.error("Recalculation failed");
-          }
-        }}
-        className="border px-4 py-2 rounded text-sm bg-amber-50 hover:bg-amber-100"
-      >
-        Recalculate Attendance
-      </button>
+      {/* ACTION BUTTONS */}
+      <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 mb-1">Actions</h3>
+          <p className="text-xs text-slate-500">
+            Recalculate attendance data from raw logs or export filtered results
+          </p>
+        </div>
 
-      <button
-        onClick={exportCsv}
-        className="border px-4 py-2 rounded text-sm bg-green-50 hover:bg-green-100"
-      >
-        Export CSV (Payroll)
-      </button>
+        <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={handleRecalculate}
+            disabled={recalculating}
+            className="border px-4 py-2 rounded text-sm bg-amber-50 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+          >
+            {recalculating ? "Recalculating..." : "🔄 Recalculate Attendance"}
+          </button>
+
+          <button
+            onClick={exportCsv}
+            disabled={!from}
+            className="border px-4 py-2 rounded text-sm bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+            title={!from ? "Select a 'From' date first" : "Export attendance data as CSV"}
+          >
+            📊 Export CSV (Payroll)
+          </button>
+        </div>
+
+        {!from && (
+          <p className="text-xs text-amber-600">
+            💡 Tip: Set a date range in the filters below to recalculate or export specific periods
+          </p>
+        )}
+      </div>
 
       {/* FILTERS */}
       <div className="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end">
@@ -255,13 +300,27 @@ export default function AdminAttendance() {
           </thead>
 
           <tbody>
+            {loading && (
+              <tr>
+                <td
+                  colSpan={8}
+                  className="px-4 py-6 text-center text-slate-400"
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                    Loading attendance data...
+                  </div>
+                </td>
+              </tr>
+            )}
+
             {rows.length === 0 && !loading && (
               <tr>
                 <td
                   colSpan={8}
                   className="px-4 py-6 text-center text-slate-400"
                 >
-                  No attendance data found.
+                  No attendance data found. Try adjusting your filters or click "Recalculate Attendance" to process raw logs.
                 </td>
               </tr>
             )}

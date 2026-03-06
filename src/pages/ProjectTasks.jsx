@@ -1,6 +1,7 @@
 // src/pages/ProjectTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -8,6 +9,7 @@ import CommentsSection from "../components/CommentsSection.jsx";
 import Subtasks from "../components/Subtasks.jsx";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
+import { Card, Badge, Button, Modal, Input, Select as SelectUI, Avatar } from "../components/ui";
 
 function statusLabel(status) {
   if (status === "pending") return "Pending";
@@ -23,14 +25,10 @@ function priorityLabel(priority) {
   return "Medium";
 }
 
-function priorityBadgeClass(priority) {
-  if (priority === "high") {
-    return "bg-red-100 text-red-700 border-red-200";
-  }
-  if (priority === "low") {
-    return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  }
-  return "bg-amber-50 text-amber-700 border-amber-200";
+function priorityBadgeColor(priority) {
+  if (priority === "high") return "danger";
+  if (priority === "low") return "success";
+  return "warning";
 }
 
 function isOverdue(task) {
@@ -80,6 +78,7 @@ export default function ProjectTasks() {
   const [loadingProject, setLoadingProject] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(true);
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -114,6 +113,9 @@ export default function ProjectTasks() {
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  // 🔹 Activity logs
+const [activityLogs, setActivityLogs] = useState([]);
+const [loadingLogs, setLoadingLogs] = useState(false);
 
   // admin edit
   const [isEditing, setIsEditing] = useState(false);
@@ -394,6 +396,7 @@ export default function ProjectTasks() {
         priority: "medium",
       });
       setNewSubtasks([]);
+      setShowCreateModal(false);
 
       toast.success("Task created");
     } catch (err) {
@@ -491,6 +494,20 @@ export default function ProjectTasks() {
     }
   };
 
+  const loadLogsForTask = async (taskId) => {
+  setLoadingLogs(true);
+  setActivityLogs([]);
+  try {
+    const res = await api.get(`/tasks/${taskId}/logs`);
+    setActivityLogs(res.data || []);
+  } catch (err) {
+    console.error("Failed to load activity logs:", err);
+    setActivityLogs([]);
+  } finally {
+    setLoadingLogs(false);
+  }
+};
+
   const handleCardClick = (task) => {
     setSelectedTaskDetails(task);
     setIsEditing(false);
@@ -503,6 +520,7 @@ export default function ProjectTasks() {
       priority: task.priority || "medium",
     });
     loadAttachmentsForTask(task.id);
+    loadLogsForTask(task.id);
   };
 
   const handleUploadAttachment = async () => {
@@ -767,208 +785,117 @@ export default function ProjectTasks() {
     }
   };
 
+  const formatLogMessage = (log) => {
+  const user = log.actor_username || "Someone";
+
+  const parse = (value) => {
+    if (!value) return null;
+    try {
+      return typeof value === "string" ? JSON.parse(value) : value;
+    } catch {
+      return value;
+    }
+  };
+
+  const oldVal = parse(log.old_value);
+  const newVal = parse(log.new_value);
+
+  switch (log.action_type) {
+    case "STATUS_CHANGED": {
+      const oldStatus = oldVal?.status || oldVal;
+      const newStatus = newVal?.status || newVal;
+      return `Status changed from "${oldStatus}" to "${newStatus}" by ${user}`;
+    }
+
+    case "PRIORITY_CHANGED": {
+      const oldPriority = oldVal?.priority || oldVal;
+      const newPriority = newVal?.priority || newVal;
+      return `Priority changed from "${oldPriority}" to "${newPriority}" by ${user}`;
+    }
+
+    case "ASSIGNEE_CHANGED": {
+  const from = log.old_assignee_username || "Unassigned";
+  const to = log.new_assignee_username || "Unassigned";
+  const actor = log.actor_username || "Someone";
+
+  return `Assignee changed from "${from}" to "${to}" by ${actor}`;
+}
+
+    case "DESCRIPTION_UPDATED":
+      return `Description updated by ${user}`;
+
+    case "TITLE_CHANGED": {
+      const oldTitle = oldVal?.task || oldVal;
+      const newTitle = newVal?.task || newVal;
+      return `Title changed from "${oldTitle}" to "${newTitle}" by ${user}`;
+    }
+
+    case "COMMENT_ADDED":
+      return `Comment added by ${user}`;
+
+    case "TASK_CREATED":
+      return `Task created by ${user}`;
+
+    case "TASK_DELETED":
+      return `Task deleted by ${user}`;
+
+    default:
+      return `${log.action_type} by ${user}`;
+  }
+};
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <section className="bg-white rounded-xl shadow p-4 flex justify-between items-center">
-        <div>
-          <h1 className="text-lg font-semibold">
-            {loadingProject
-              ? "Loading project..."
-              : project?.name || "Project"}
-          </h1>
-          <p className="text-xs text-slate-500">
-            Manage tasks for this project. New tasks are created in
-            &quot;pending&quot; status by default (until you
-            customize).
-          </p>
-          {tasks.length > 0 && (
-            <p className="mt-1 text-[11px] text-slate-400">
-              Total: <b>{stats.total}</b> • Pending: {stats.pending} •
-              In progress: {stats.inProgress} • Completed:{" "}
-              {stats.completed} • Overdue:{" "}
-              <span
-                className={
-                  stats.overdue > 0
-                    ? "text-red-500 font-semibold"
-                    : "text-slate-400"
-                }
-              >
-                {stats.overdue}
-              </span>
-            </p>
-          )}
-        </div>
-      </section>
-
-      {/* Create Task Form (admins + managers only) */}
-      {canEdit && (
-        <section className="bg-white rounded-xl shadow p-4">
-          <h2 className="text-sm font-semibold mb-3">
-            Create Task
-          </h2>
-          <form
-            onSubmit={handleCreateTask}
-            className="grid md:grid-cols-2 gap-4 text-sm"
-          >
-            <div className="space-y-2">
-              <label className="block text-xs">Task title</label>
-              <input
-                type="text"
-                name="task"
-                value={newTask.task}
-                onChange={handleNewTaskChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="Enter task title"
-              />
-
-              <label className="block text-xs mt-3">Due date</label>
-              <input
-                type="date"
-                name="due_date"
-                value={newTask.due_date}
-                onChange={handleNewTaskChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
-
-              <label className="block text-xs mt-3">Assign to</label>
-              <select
-                name="assigned_to"
-                value={newTask.assigned_to}
-                onChange={handleNewTaskChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="">Unassigned</option>
-                {loadingUsers ? (
-                  <option disabled>Loading users...</option>
-                ) : (
-                  users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.username} ({u.email})
-                    </option>
-                  ))
-                )}
-              </select>
-
-              <label className="block text-xs mt-3">Priority</label>
-              <select
-                name="priority"
-                value={newTask.priority}
-                onChange={handleNewTaskChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-
-            {/* RIGHT: big description box */}
-            <div className="space-y-2 md:col-span-1">
-  <label className="block text-xs mb-1">
-    Description
-  </label>
-  <div className="quill-editor">
-    <ReactQuill
-      ref={createEditorRef}
-      theme="snow"
-      value={newTask.description}
-      onChange={handleCreateDescriptionChange}
-      className="text-sm"
-      // big but not insane – adjust if you want
-      style={{ minHeight: "240px" }}
-      placeholder="Describe the task..."
-      modules={quillModules}
-      formats={quillFormats}
-    />
-  </div>
-</div>
-
-
-            {/* Subtasks create section */}
-            <div className="md:col-span-2 mt-4">
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold">
-                  Subtasks (optional)
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddSubtaskRow}
-                  className="text-[11px] text-blue-600 underline"
-                >
-                  + Add subtask
-                </button>
-              </div>
-              {newSubtasks.length === 0 ? (
-                <p className="text-[11px] text-slate-400">
-                  No subtasks added. Click &quot;Add subtask&quot; to
-                  define smaller pieces of work.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {newSubtasks.map((st, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col md:flex-row gap-2 items-start md:items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-2"
-                    >
-                      <input
-                        type="text"
-                        value={st.title}
-                        onChange={(e) =>
-                          handleNewSubtaskChange(
-                            index,
-                            "title",
-                            e.target.value
-                          )
-                        }
-                        placeholder="Subtask title"
-                        className="flex-1 border rounded px-2 py-1 text-xs"
-                      />
-                      <select
-                        value={st.assigned_to || ""}
-                        onChange={(e) =>
-                          handleNewSubtaskChange(
-                            index,
-                            "assigned_to",
-                            e.target.value
-                          )
-                        }
-                        className="border rounded px-2 py-1 text-xs min-w-[150px]"
-                      >
-                        <option value="">Unassigned</option>
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.username} ({u.email})
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRemoveSubtaskRow(index)
-                        }
-                        className="text-[11px] text-red-600 underline"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
+      <Card>
+        <Card.Content className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900">
+                {loadingProject
+                  ? "Loading project..."
+                  : project?.name || "Project"}
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Manage tasks for this project and collaborate with your team
+              </p>
+              {tasks.length > 0 && (
+                <div className="flex items-center gap-3 mt-3">
+                  <Badge color="neutral" size="sm" variant="subtle">
+                    Total: {stats.total}
+                  </Badge>
+                  <Badge color="warning" size="sm" variant="subtle">
+                    Pending: {stats.pending}
+                  </Badge>
+                  <Badge color="primary" size="sm" variant="subtle">
+                    In Progress: {stats.inProgress}
+                  </Badge>
+                  <Badge color="success" size="sm" variant="subtle">
+                    Completed: {stats.completed}
+                  </Badge>
+                  {stats.overdue > 0 && (
+                    <Badge color="danger" size="sm" variant="solid">
+                      Overdue: {stats.overdue}
+                    </Badge>
+                  )}
                 </div>
               )}
             </div>
-
-            <div className="md:col-span-2 flex justify-end">
-              <button
-                type="submit"
-                disabled={creating}
-                className="bg-blue-600 text-white text-xs rounded-lg px-4 py-2 hover:bg-blue-700 disabled:opacity-50"
+            {canEdit && (
+              <Button
+                onClick={() => setShowCreateModal(true)}
+                variant="primary"
+                size="md"
+                className="gap-2"
               >
-                {creating ? "Creating..." : "Create Task"}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
+                <Plus className="w-4 h-4" />
+                New Task
+              </Button>
+            )}
+          </div>
+        </Card.Content>
+      </Card>
+
 
       {/* Tasks Board */}
       {/* ... rest of your component stays exactly the same ... */}
@@ -1174,103 +1101,105 @@ export default function ProjectTasks() {
                 {/* Task cards */}
                 <div className="space-y-2">
                   {grouped[col.key]?.map((t) => (
-                    <div
+                    <Card
                       key={t.id}
                       className={
-                        "border rounded-lg px-2 py-2 bg-white text-xs cursor-pointer hover:bg-slate-50 " +
+                        "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 " +
                         (isOverdue(t)
-                          ? "border-red-300 bg-red-50"
-                          : "border-slate-200")
+                          ? "border-danger-300 bg-danger-50"
+                          : "border-gray-200 hover:border-primary-200")
                       }
                       onClick={() => handleCardClick(t)}
                     >
-                      <div className="font-medium text-[11px]">
-                        {t.task}{" "}
+                      <Card.Content className="p-3 space-y-2">
+                        <div className="font-medium text-sm text-gray-900">
+                          {t.task}
+                        </div>
+
                         {t.subtasks_total > 0 && (
-                          <span className="ml-1 text-[10px] text-slate-500">
-                            ({t.subtasks_completed}/
-                            {t.subtasks_total} subtasks completed)
-                          </span>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {t.subtasks_completed}/{t.subtasks_total} subtasks
+                          </div>
                         )}
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        Status: {statusLabel(t.status)}
-                      </div>
-                      {t.due_date && (
-                        <div className="text-[10px] text-slate-400">
-                          Due:{" "}
-                          {new Date(
-                            t.due_date
-                          ).toLocaleDateString()}
-                        </div>
-                      )}
-                      {t.assigned_to && (
-                        <div className="text-[10px] text-slate-400">
-                          Assigned to:{" "}
-                          {getAssigneeLabel(t.assigned_to)}
-                        </div>
-                      )}
 
-                      <div className="mt-1 flex items-center justify-between">
-                        <span
-                          className={
-                            "inline-flex items-center rounded-full border px-2 py-[1px] text-[10px] font-medium " +
-                            priorityBadgeClass(t.priority)
-                          }
-                        >
-                          {priorityLabel(t.priority)}
-                        </span>
-                        {isOverdue(t) && (
-                          <span className="text-[10px] text-red-600 font-semibold">
-                            Overdue
-                          </span>
+                        {t.due_date && (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(t.due_date).toLocaleDateString()}
+                          </div>
                         )}
-                      </div>
 
-                      <div className="flex justify-between items-center mt-2">
-                        {canEdit && (
-                          <select
-                            className="border rounded px-2 py-1 text-[10px]"
-                            value={t.status || ""}
-                            onChange={(e) => {
+                        {t.assigned_to && (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                            <UserIcon className="w-3 h-3" />
+                            {getAssigneeLabel(t.assigned_to)}
+                          </div>
+                        )}
+
+                        <div className="mt-2 flex items-center justify-between">
+                          <Badge
+                            color={priorityBadgeColor(t.priority)}
+                            size="sm"
+                            variant="subtle"
+                          >
+                            {priorityLabel(t.priority)}
+                          </Badge>
+                          {isOverdue(t) && (
+                            <Badge color="danger" size="sm" variant="solid" className="gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Overdue
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="flex justify-between items-center mt-3 pt-2 border-t border-gray-200">
+                          {canEdit && (
+                            <select
+                              className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                              value={t.status || ""}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleStatusChange(
+                                  t.id,
+                                  e.target.value
+                                );
+                              }}
+                            >
+                              <option value="">No status</option>
+                              {statusColumns.map((sc) => (
+                                <option key={sc.key} value={sc.key}>
+                                  {sc.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-primary-600"
+                            onClick={(e) => {
                               e.stopPropagation();
-                              handleStatusChange(
-                                t.id,
-                                e.target.value
+                              setSelectedTaskForComments(
+                                selectedTaskForComments === t.id
+                                  ? null
+                                  : t.id
                               );
                             }}
                           >
-                            <option value="">No status</option>
-                            {statusColumns.map((sc) => (
-                              <option key={sc.key} value={sc.key}>
-                                {sc.label}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        <button
-                          className="text-[10px] text-blue-600 underline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTaskForComments(
-                              selectedTaskForComments === t.id
-                                ? null
-                                : t.id
-                            );
-                          }}
-                        >
-                          {selectedTaskForComments === t.id
-                            ? "Hide comments"
-                            : "Comments"}
-                        </button>
-                      </div>
-
-                      {selectedTaskForComments === t.id && (
-                        <div className="mt-2 border-t pt-2">
-                          <CommentsSection taskId={t.id} />
+                            {selectedTaskForComments === t.id
+                              ? "Hide comments"
+                              : "Comments"}
+                          </Button>
                         </div>
-                      )}
-                    </div>
+
+                        {selectedTaskForComments === t.id && (
+                          <div className="mt-2 border-t pt-2">
+                            <CommentsSection taskId={t.id} />
+                          </div>
+                        )}
+                      </Card.Content>
+                    </Card>
                   ))}
                 </div>
 
@@ -1593,9 +1522,234 @@ export default function ProjectTasks() {
                   </div>
                 )}
               </div>
+              {/* Activity Timeline */}
+<div className="mt-4 border-t pt-3">
+  <h3 className="text-xs font-semibold mb-2">
+    Activity Timeline
+  </h3>
+
+  {loadingLogs ? (
+    <p className="text-[11px] text-slate-400">
+      Loading activity...
+    </p>
+  ) : activityLogs.length === 0 ? (
+    <p className="text-[11px] text-slate-400">
+      No activity recorded.
+    </p>
+  ) : (
+    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+      {activityLogs.map((log) => (
+        <div
+          key={log.id}
+          className="border border-slate-200 rounded-lg px-2 py-2 text-[11px] bg-slate-50"
+        >
+          <div className="font-medium text-slate-700">
+  {formatLogMessage(log)}
+</div>
+
+<div className="text-[10px] text-slate-400 mt-1">
+  {new Date(log.created_at).toLocaleString()}
+</div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
             </section>
           </div>
         </div>
+      )}
+
+      {/* Create Task Modal */}
+      {showCreateModal && (
+        <Modal isOpen={true} onClose={() => !creating && setShowCreateModal(false)} size="xl">
+          <form onSubmit={handleCreateTask}>
+            <Modal.Header>
+              <Modal.Title>Create New Task</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Left Column */}
+                <div className="space-y-4">
+                  <Input
+                    label="Task Title"
+                    type="text"
+                    name="task"
+                    value={newTask.task}
+                    onChange={handleNewTaskChange}
+                    placeholder="Enter task title"
+                    required
+                    autoFocus
+                  />
+
+                  <Input
+                    label="Due Date"
+                    type="date"
+                    name="due_date"
+                    value={newTask.due_date}
+                    onChange={handleNewTaskChange}
+                  />
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Assign To
+                    </label>
+                    <select
+                      name="assigned_to"
+                      value={newTask.assigned_to}
+                      onChange={handleNewTaskChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                    >
+                      <option value="">Unassigned</option>
+                      {loadingUsers ? (
+                        <option disabled>Loading users...</option>
+                      ) : (
+                        users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.username} ({u.email})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Priority
+                    </label>
+                    <select
+                      name="priority"
+                      value={newTask.priority}
+                      onChange={handleNewTaskChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                    >
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Right Column - Description */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <div className="quill-editor-wrapper">
+                      <ReactQuill
+                        ref={createEditorRef}
+                        theme="snow"
+                        value={newTask.description}
+                        onChange={handleCreateDescriptionChange}
+                        className="rounded-lg"
+                        style={{ height: "245px" }}
+                        placeholder="Describe the task in detail..."
+                        modules={quillModules}
+                        formats={quillFormats}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subtasks Section - Full Width */}
+                <div className="md:col-span-2 border-t border-gray-200 pt-4 mt-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Subtasks (Optional)
+                    </label>
+                    <Button
+                      type="button"
+                      onClick={handleAddSubtaskRow}
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Subtask
+                    </Button>
+                  </div>
+
+                  {newSubtasks.length === 0 ? (
+                    <p className="text-sm text-gray-400">
+                      No subtasks added. Click &quot;Add Subtask&quot; to break this task into smaller pieces.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {newSubtasks.map((st, index) => (
+                        <div
+                          key={index}
+                          className="flex flex-col md:flex-row gap-2 items-start md:items-center bg-gray-50 border border-gray-200 rounded-lg p-3"
+                        >
+                          <input
+                            type="text"
+                            value={st.title}
+                            onChange={(e) =>
+                              handleNewSubtaskChange(
+                                index,
+                                "title",
+                                e.target.value
+                              )
+                            }
+                            placeholder="Subtask title"
+                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                          />
+                          <select
+                            value={st.assigned_to || ""}
+                            onChange={(e) =>
+                              handleNewSubtaskChange(
+                                index,
+                                "assigned_to",
+                                e.target.value
+                              )
+                            }
+                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[200px] focus:border-primary-500 focus:ring-primary-500/20"
+                          >
+                            <option value="">Unassigned</option>
+                            {users.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.username} ({u.email})
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            type="button"
+                            onClick={() => handleRemoveSubtaskRow(index)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger-600 hover:bg-danger-50"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                variant="secondary"
+                disabled={creating}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={creating}
+                disabled={creating}
+                className="gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create Task
+              </Button>
+            </Modal.Footer>
+          </form>
+        </Modal>
       )}
     </div>
   );

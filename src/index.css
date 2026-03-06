@@ -2,7 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* simple base styling */
-body {
-  @apply bg-slate-100 text-slate-900;
+@layer base {
+  /* Base styling with new theme colors */
+  body {
+    @apply bg-background text-gray-800 antialiased;
+  }
+
+  /* Better form focus states */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    @apply outline-none ring-2 ring-primary-500/20 border-primary-500;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Remove default button styles */
+  button {
+    @apply focus:outline-none;
+  }
+}
+
+@layer components {
+  /* Component utility classes will be added here as needed */
 }

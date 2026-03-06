@@ -23,6 +23,8 @@ import {
 import { useHuddle } from "../context/HuddleContext";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
+import { MessageSquare, Send, Hash, Lock, Users, Settings, Plus, Smile } from "lucide-react";
+import { Avatar, Button, Badge, Card } from "../components/ui";
 
 import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
@@ -2169,24 +2171,31 @@ useEffect(() => {
                 return (
                   <div
                     key={m.id}
-                    className={`flex ${
+                    className={`flex gap-2 ${
                       isOwn ? "justify-end" : "justify-start"
                     }`}
                   >
+                    {!isOwn && (
+                      <Avatar
+                        name={m.username || "User"}
+                        size="sm"
+                        className="shrink-0 mt-1"
+                      />
+                    )}
                     <div
-                      className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
+                      className={`max-w-[70%] rounded-lg px-3 py-2.5 shadow-sm ${
                         isOwn
-                          ? "bg-blue-600 text-white"
-                          : "bg-white border border-slate-200 text-slate-800"
+                          ? "bg-primary-600 text-white"
+                          : "bg-white border border-gray-200 text-gray-800"
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] font-semibold">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold">
                           {isOwn ? "You" : m.username || "User"}
                         </span>
                         <span
-                          className={`text-[9px] ${
-                            isOwn ? "text-blue-100" : "text-slate-400"
+                          className={`text-xs ${
+                            isOwn ? "text-primary-100" : "text-gray-400"
                           }`}
                         >
                           {time}
@@ -2194,32 +2203,35 @@ useEffect(() => {
                       </div>
 
                       {m.deletedAt ? (
-                        <div className="text-[10px] italic text-slate-300">
+                        <div className="text-xs italic text-gray-300">
                           This message was deleted.
                         </div>
                       ) : (
                         <>
                           <div
-                            className="text-[11px] whitespace-pre-wrap break-words prose prose-sm max-w-none"
+                            className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere prose prose-sm max-w-none"
+                            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                             dangerouslySetInnerHTML={{
                               __html: m.textHtml || m.text || "",
                             }}
                           />
 
                            {m.username === "AI Assistant" && !m.deletedAt && (
-  <div className="mt-1 flex justify-start">
-    <button
-      type="button"
+  <div className="mt-2 flex justify-start">
+    <Button
+      variant="ghost"
+      size="xs"
       onClick={() => handleExplainAI(m.id)}
       disabled={aiExplainLoading === m.id}
-      className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-700 border border-slate-300 rounded-full px-2 py-[2px] hover:bg-slate-100 transition"
+      loading={aiExplainLoading === m.id}
+      className="gap-1.5 text-xs"
       title="Why did AI respond this way?"
     >
       <span>🧠</span>
       <span>
         {aiExplainLoading === m.id ? "Explaining..." : "Why this reply?"}
       </span>
-    </button>
+    </Button>
   </div>
 )}
 

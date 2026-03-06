@@ -13,6 +13,8 @@ import Profile from "./pages/Profile";
 import Chat from "./pages/Chat";
 import Reports from "./pages/Reports.jsx";
 import AdminAttendance from "./pages/AdminAttendance.jsx";
+import StrategicIntelligence from "./pages/StrategicIntelligence.jsx";
+import Autopilot from "./pages/Autopilot.jsx";
 
 // ---- Intelligence pages (NEW) ----
 import UserPerformance from "./pages/intelligence/UserPerformance.jsx";
@@ -77,6 +79,17 @@ export default function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="chat" element={<Chat />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="intelligence" element={<StrategicIntelligence />} />
+
+          {/* ---- NEW: AI Autopilot ---- */}
+          <Route
+            path="autopilot"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                <Autopilot />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ---- NEW: User Intelligence ---- */}
           <Route

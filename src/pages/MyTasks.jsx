@@ -1,12 +1,14 @@
 // src/pages/MyTasks.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Edit2, Trash2, Link as LinkIcon, Upload } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import CommentsSection from "../components/CommentsSection.jsx";
 import Subtasks from "../components/Subtasks.jsx";
 import Select from "react-select";
+import { Card, Badge, Button, Modal, Input, Textarea } from "../components/ui";
 
 function statusLabel(status) {
   if (status === "pending") return "Pending";
@@ -22,14 +24,10 @@ function priorityLabel(priority) {
   return "Medium";
 }
 
-function priorityBadgeClass(priority) {
-  if (priority === "high") {
-    return "bg-red-100 text-red-700 border-red-200";
-  }
-  if (priority === "low") {
-    return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  }
-  return "bg-amber-50 text-amber-700 border-amber-200";
+function priorityBadgeColor(priority) {
+  if (priority === "high") return "danger";
+  if (priority === "low") return "success";
+  return "warning";
 }
 
 function isOverdue(task) {
@@ -115,6 +113,8 @@ export default function MyTasks() {
 
   // Attachments
   const [attachments, setAttachments] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -459,6 +459,20 @@ const cols = Array.from(colsMap.values());
     }
   };
 
+  const loadLogsForTask = async (taskId) => {
+  setLoadingLogs(true);
+  setActivityLogs([]);
+  try {
+    const res = await api.get(`/tasks/${taskId}/logs`);
+    setActivityLogs(res.data || []);
+  } catch (err) {
+    console.error("Failed to load activity logs:", err);
+    setActivityLogs([]);
+  } finally {
+    setLoadingLogs(false);
+  }
+};
+
   const handleCardClick = (task) => {
     setSelectedTaskDetails(task);
     setIsEditing(false);
@@ -473,6 +487,7 @@ const cols = Array.from(colsMap.values());
       priority: task.priority || "medium",
     });
     loadAttachmentsForTask(task.id);
+    loadLogsForTask(task.id);
   };
 
   const handleUploadAttachment = async () => {
@@ -618,6 +633,65 @@ const cols = Array.from(colsMap.values());
     setSelectedProjects(values);
   };
 
+  const formatLogMessage = (log) => {
+  const user = log.actor_username || "Someone";
+
+  const parse = (value) => {
+    if (!value) return null;
+    try {
+      return typeof value === "string" ? JSON.parse(value) : value;
+    } catch {
+      return value;
+    }
+  };
+
+  const oldVal = parse(log.old_value);
+  const newVal = parse(log.new_value);
+
+  switch (log.action_type) {
+    case "STATUS_CHANGED": {
+      const oldStatus = oldVal?.status || oldVal;
+      const newStatus = newVal?.status || newVal;
+      return `Status changed from "${oldStatus}" to "${newStatus}" by ${user}`;
+    }
+
+    case "PRIORITY_CHANGED": {
+      const oldPriority = oldVal?.priority || oldVal;
+      const newPriority = newVal?.priority || newVal;
+      return `Priority changed from "${oldPriority}" to "${newPriority}" by ${user}`;
+    }
+
+    case "ASSIGNEE_CHANGED": {
+  const from = log.old_assignee_username || "Unassigned";
+  const to = log.new_assignee_username || "Unassigned";
+  const actor = log.actor_username || "Someone";
+
+  return `Assignee changed from "${from}" to "${to}" by ${actor}`;
+}
+
+    case "DESCRIPTION_UPDATED":
+      return `Description updated by ${user}`;
+
+    case "TITLE_CHANGED": {
+      const oldTitle = oldVal?.task || oldVal;
+      const newTitle = newVal?.task || newVal;
+      return `Title changed from "${oldTitle}" to "${newTitle}" by ${user}`;
+    }
+
+    case "COMMENT_ADDED":
+      return `Comment added by ${user}`;
+
+    case "TASK_CREATED":
+      return `Task created by ${user}`;
+
+    case "TASK_DELETED":
+      return `Task deleted by ${user}`;
+
+    default:
+      return `${log.action_type} by ${user}`;
+  }
+};
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -732,64 +806,69 @@ const cols = Array.from(colsMap.values());
 
                   <div className="space-y-2">
                     {colTasks.map((t) => (
-                      <div
+                      <Card
                         key={t.id}
                         draggable={canDrag}
                         onDragStart={() => onDragStart(t.id)}
                         onDragEnd={onDragEnd}
                         className={
-                          "border rounded-lg px-2 py-2 text-xs bg-white " +
+                          "transition-all " +
                           (canDrag
-                            ? "cursor-grab active:cursor-grabbing "
+                            ? "cursor-grab active:cursor-grabbing hover:shadow-md hover:-translate-y-0.5 "
                             : "cursor-default ") +
                           (isOverdue(t)
-                            ? "border-red-300 bg-red-50"
-                            : "border-slate-200")
+                            ? "border-danger-300 bg-danger-50"
+                            : "border-gray-200 hover:border-primary-200")
                         }
                         onClick={() => handleCardClick(t)}
                       >
-                        <div className="font-medium text-[11px]">
-                          {t.task}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          Project: {t.project_name}
-                        </div>
-                        {t.assigned_to && (
-                          <div className="text-[10px] text-slate-500">
-                            Assigned to: {getAssigneeLabel(t.assigned_to)}
+                        <Card.Content className="p-3 space-y-2">
+                          <div className="font-medium text-sm text-gray-900">
+                            {t.task}
                           </div>
-                        )}
 
-                        {(t.subtasks_total ?? 0) > 0 && (
-                          <div className="text-[10px] text-slate-500">
-                            ({t.subtasks_completed ?? 0}/
-                            {t.subtasks_total ?? 0} subtasks completed)
+                          <div className="text-xs text-gray-500">
+                            {t.project_name}
                           </div>
-                        )}
 
-                        <div className="text-[10px] text-slate-400">
-                          {t.due_date &&
-                            `Due: ${new Date(
-                              t.due_date
-                            ).toLocaleDateString()}`}
-                        </div>
-
-                        <div className="mt-1 flex items-center justify-between">
-                          <span
-                            className={
-                              "inline-flex items-center rounded-full border px-2 py-[1px] text-[10px] font-medium " +
-                              priorityBadgeClass(t.priority)
-                            }
-                          >
-                            {priorityLabel(t.priority)}
-                          </span>
-                          {isOverdue(t) && (
-                            <span className="text-[10px] text-red-600 font-semibold">
-                              Overdue
-                            </span>
+                          {t.assigned_to && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <UserIcon className="w-3 h-3" />
+                              {getAssigneeLabel(t.assigned_to)}
+                            </div>
                           )}
-                        </div>
-                      </div>
+
+                          {(t.subtasks_total ?? 0) > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <CheckCircle2 className="w-3 h-3" />
+                              {t.subtasks_completed ?? 0}/{t.subtasks_total ?? 0} subtasks
+                            </div>
+                          )}
+
+                          {t.due_date && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(t.due_date).toLocaleDateString()}
+                            </div>
+                          )}
+
+                          <div className="mt-2 flex items-center justify-between">
+                            <Badge
+                              color={priorityBadgeColor(t.priority)}
+                              size="sm"
+                              variant="subtle"
+                            >
+                              {priorityLabel(t.priority)}
+                            </Badge>
+                            {isOverdue(t) && (
+                              <Badge color="danger" size="sm" variant="solid" className="gap-1">
+                                <AlertCircle className="w-3 h-3" />
+                                Overdue
+                              </Badge>
+                            )}
+                          </div>
+                        </Card.Content>
+                      </Card>
                     ))}
                   </div>
                 </div>
@@ -801,247 +880,302 @@ const cols = Array.from(colsMap.values());
 
       {/* Task details MODAL */}
       {selectedTaskDetails && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto">
-          <div className="mt-16 mb-8 w-full max-w-3xl px-4">
-            <section className="bg-white rounded-xl shadow-lg p-4">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h2 className="text-sm font-semibold">
-                    Task Details: {selectedTaskDetails.task}
-                  </h2>
-                  <p className="text-[11px] text-slate-500">
-                    Status: {statusLabel(selectedTaskDetails.status)}{" "}
-                    {selectedTaskDetails.due_date &&
-                      ` • Due: ${new Date(
-                        selectedTaskDetails.due_date
-                      ).toLocaleDateString()}`}
-                  </p>
+        <Modal
+          isOpen={true}
+          onClose={() => {
+            setSelectedTaskDetails(null);
+            setAttachments([]);
+            setIsEditing(false);
+          }}
+          size="lg"
+        >
+          <Modal.Header>
+            <div className="flex items-start justify-between w-full">
+              <div className="flex-1">
+                <Modal.Title>{selectedTaskDetails.task}</Modal.Title>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <Badge color={priorityBadgeColor(selectedTaskDetails.priority || "medium")} size="sm">
+                    {priorityLabel(selectedTaskDetails.priority || "medium")}
+                  </Badge>
+                  <Badge color="neutral" size="sm" variant="subtle">
+                    {statusLabel(selectedTaskDetails.status)}
+                  </Badge>
                   {selectedTaskDetails.project_name && (
-                    <p className="text-[11px] text-slate-500">
-                      Project: {selectedTaskDetails.project_name}
-                    </p>
+                    <Badge color="primary" size="sm" variant="subtle">
+                      {selectedTaskDetails.project_name}
+                    </Badge>
                   )}
-
-                  {(selectedTaskDetails.subtasks_total ?? 0) > 0 && (
-                    <p className="text-[11px] text-slate-500">
-                      Progress: {selectedTaskDetails.subtasks_completed ?? 0}/
-                      {selectedTaskDetails.subtasks_total ?? 0} subtasks
-                      completed
-                    </p>
+                  {isOverdue(selectedTaskDetails) && (
+                    <Badge color="danger" size="sm" className="gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Overdue
+                    </Badge>
                   )}
-
-                  {selectedTaskDetails.assigned_to && (
-                    <p className="text-[11px] text-slate-500">
-                      Assigned to:{" "}
-                      {getAssigneeLabel(selectedTaskDetails.assigned_to)}
-                    </p>
-                  )}
-
-                  <p className="text-[11px] text-slate-500">
-                    Priority:{" "}
-                    {priorityLabel(
-                      selectedTaskDetails.priority || "medium"
-                    )}
-                  </p>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  {canAdminEdit && (
-                    <div className="flex gap-2">
-                      <button
-                        className="text-[11px] text-blue-600 underline"
-                        onClick={() => setIsEditing((v) => !v)}
-                      >
-                        {isEditing ? "Cancel edit" : "Edit task"}
-                      </button>
-                      <button
-                        className="text-[11px] text-red-600 underline"
-                        onClick={handleDeleteTask}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      className="text-[11px] text-slate-600 underline"
-                      onClick={handleCopyTaskLink}
-                    >
-                      Copy link
-                    </button>
-                    <button
-                      className="text-[11px] text-slate-500 underline"
-                      onClick={() => {
-                        setSelectedTaskDetails(null);
-                        setAttachments([]);
-                        setIsEditing(false);
-                      }}
-                    >
-                      Close
-                    </button>
+                {selectedTaskDetails.due_date && (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-2">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Due: {new Date(selectedTaskDetails.due_date).toLocaleDateString()}
                   </div>
-                </div>
+                )}
+                {selectedTaskDetails.assigned_to && (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+                    <UserIcon className="w-3.5 h-3.5" />
+                    Assigned to: {getAssigneeLabel(selectedTaskDetails.assigned_to)}
+                  </div>
+                )}
+                {(selectedTaskDetails.subtasks_total ?? 0) > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Progress: {selectedTaskDetails.subtasks_completed ?? 0}/{selectedTaskDetails.subtasks_total ?? 0} subtasks
+                  </div>
+                )}
               </div>
+              <div className="flex items-center gap-2 ml-4">
+                {canAdminEdit && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditing((v) => !v)}
+                      className="gap-1.5"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      {isEditing ? "Cancel" : "Edit"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDeleteTask}
+                      className="gap-1.5 text-danger-600 hover:bg-danger-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </Button>
+                  </>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopyTaskLink}
+                  className="gap-1.5"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  Copy Link
+                </Button>
+              </div>
+            </div>
+          </Modal.Header>
+          <Modal.Body>
 
-              {/* Read-only description */}
-              {!isEditing && (
-                <div className="mt-3">
-                  <h3 className="text-xs font-semibold mb-1">Description</h3>
+            {/* Read-only description */}
+            {!isEditing && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Description</h3>
                   {selectedTaskDetails.description ? (
                     <div
-                      className="prose prose-sm max-w-none text-xs"
+                      className="prose prose-sm max-w-none text-sm text-gray-700"
                       dangerouslySetInnerHTML={{
                         __html: selectedTaskDetails.description,
                       }}
                     />
                   ) : (
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-sm text-gray-500">
                       No description provided.
                     </p>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Edit form */}
+            {isEditing && editTask && (
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <Input
+                    label="Task Title"
+                    type="text"
+                    name="task"
+                    value={editTask.task}
+                    onChange={handleEditFieldChange}
+                    required
+                  />
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Status
+                    </label>
+                    <select
+                      name="status"
+                      value={editTask.status || ""}
+                      onChange={handleEditFieldChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-colors"
+                    >
+                      <option value="">No status</option>
+                      {statusColumns.map((col) => (
+                        <option key={col.key} value={col.key}>
+                          {col.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Priority
+                    </label>
+                    <select
+                      name="priority"
+                      value={editTask.priority || "medium"}
+                      onChange={handleEditFieldChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-colors"
+                    >
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+
+                  <Input
+                    label="Due Date"
+                    type="date"
+                    name="due_date"
+                    value={editTask.due_date || ""}
+                    onChange={handleEditFieldChange}
+                  />
+
+                  <Input
+                    label="Assigned To"
+                    type="text"
+                    name="assigned_to"
+                    value={editTask.assigned_to || ""}
+                    onChange={handleEditFieldChange}
+                    placeholder="User ID or leave blank"
+                    helperText="Enter user ID to assign this task"
+                  />
+                </div>
+
+                <Textarea
+                  label="Description"
+                  name="description"
+                  value={editTask.description || ""}
+                  onChange={handleEditFieldChange}
+                  rows={4}
+                  placeholder="Update task description (HTML or text)"
+                />
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsEditing(false)}
+                    disabled={savingEdit}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleSaveEdit}
+                    loading={savingEdit}
+                    disabled={savingEdit}
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Subtasks panel */}
+            <div className="border-t border-gray-200 pt-4 mt-4">
+              <Subtasks taskId={selectedTaskDetails.id} />
+            </div>
+
+            {/* Comments */}
+            <div className="border-t border-gray-200 pt-4 mt-4">
+              <CommentsSection taskId={selectedTaskDetails.id} />
+            </div>
+
+            {/* Attachments */}
+            <div className="border-t border-gray-200 pt-4 mt-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Attachments</h3>
+
+              {loadingAttachments ? (
+                <p className="text-sm text-gray-400">
+                  Loading attachments...
+                </p>
+              ) : attachments.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  No attachments yet.
+                </p>
+              ) : (
+                <ul className="space-y-2 mb-4">
+                  {attachments.map((att) => (
+                    <li key={att.id} className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+                      <Upload className="w-4 h-4 text-gray-400" />
+                      {att.original_name}
+                    </li>
+                  ))}
+                </ul>
               )}
 
-              {/* Simple edit form */}
-              {isEditing && editTask && (
-                <div className="mt-3 border-t pt-3">
-                  <h3 className="text-xs font-semibold mb-2">
-                    Edit task (admin / manager)
-                  </h3>
-                  <div className="grid md:grid-cols-2 gap-3 text-xs">
-                    <div className="space-y-2">
-                      <label className="block">Title</label>
-                      <input
-                        type="text"
-                        name="task"
-                        value={editTask.task}
-                        onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
-                      />
-
-                      <label className="block mt-2">Status</label>
-                      <select
-                        name="status"
-                        value={editTask.status || ""}
-                        onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
-                      >
-                        <option value="">No status</option>
-                        {statusColumns.map((col) => (
-                          <option key={col.key} value={col.key}>
-                            {col.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <label className="block mt-2">Priority</label>
-                      <select
-                        name="priority"
-                        value={editTask.priority || "medium"}
-                        onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
-                      >
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                      </select>
-
-                      <label className="block mt-2">Due date</label>
-                      <input
-                        type="date"
-                        name="due_date"
-                        value={editTask.due_date || ""}
-                        onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="block">Assign to</label>
-                      <input
-                        type="text"
-                        name="assigned_to"
-                        value={editTask.assigned_to || ""}
-                        onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
-                        placeholder="User ID or leave blank"
-                      />
-
-                      <label className="block mt-2">Description</label>
-                      <textarea
-                        name="description"
-                        value={editTask.description || ""}
-                        onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1 min-h-[80px]"
-                        placeholder="Update description (HTML or text)"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex justify-end">
-                    <button
-                      type="button"
-                      disabled={savingEdit}
-                      onClick={handleSaveEdit}
-                      className="bg-blue-600 text-white text-[11px] rounded px-3 py-1 disabled:opacity-50"
-                    >
-                      {savingEdit ? "Saving..." : "Save changes"}
-                    </button>
-                  </div>
+              {selectedTaskDetails && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    className="text-sm flex-1"
+                    onChange={(e) =>
+                      setUploadFile(e.target.files?.[0] || null)
+                    }
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={uploading}
+                    loading={uploading}
+                    onClick={handleUploadAttachment}
+                    className="gap-1.5"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {uploading ? "Uploading..." : "Upload"}
+                  </Button>
                 </div>
               )}
+            </div>
 
-              {/* Subtasks panel */}
-              <Subtasks taskId={selectedTaskDetails.id} />
+            {/* Activity Timeline */}
+            <div className="border-t border-gray-200 pt-4 mt-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                Activity Timeline
+              </h3>
 
-              {/* Comments */}
-              <div className="mt-3 border-t pt-3">
-                <h3 className="text-xs font-semibold mb-1">Comments</h3>
-                <CommentsSection taskId={selectedTaskDetails.id} />
-              </div>
-
-              {/* Attachments */}
-              <div className="mt-3 border-t pt-3">
-                <h3 className="text-xs font-semibold mb-1">Attachments</h3>
-
-                {loadingAttachments ? (
-                  <p className="text-[11px] text-slate-400">
-                    Loading attachments...
-                  </p>
-                ) : attachments.length === 0 ? (
-                  <p className="text-[11px] text-slate-400">
-                    No attachments.
-                  </p>
-                ) : (
-                  <ul className="text-[11px] text-slate-600 list-disc ml-4">
-                    {attachments.map((att) => (
-                      <li key={att.id}>{att.original_name}</li>
-                    ))}
-                  </ul>
-                )}
-
-                {selectedTaskDetails && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      type="file"
-                      className="text-[11px]"
-                      onChange={(e) =>
-                        setUploadFile(e.target.files?.[0] || null)
-                      }
-                    />
-                    <button
-                      type="button"
-                      disabled={uploading}
-                      onClick={handleUploadAttachment}
-                      className="bg-slate-800 text-white text-[11px] rounded px-3 py-1 disabled:opacity-50"
+              {loadingLogs ? (
+                <p className="text-sm text-gray-400">
+                  Loading activity...
+                </p>
+              ) : activityLogs.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  No activity recorded.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {activityLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5"
                     >
-                      {uploading ? "Uploading..." : "Upload"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
-        </div>
+                      <div className="text-sm font-medium text-gray-700">
+                        {formatLogMessage(log)}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {new Date(log.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Modal.Body>
+        </Modal>
       )}
     </div>
   );

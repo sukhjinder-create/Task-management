@@ -1,8 +1,10 @@
 // src/components/CommentsSection.jsx
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { MessageSquare } from "lucide-react";
 import { useApi } from "../api";
 import toast from "react-hot-toast";
+import { Button, Badge, Avatar } from "./ui";
 
 export default function CommentsSection({ taskId }) {
   const api = useApi();
@@ -52,58 +54,77 @@ export default function CommentsSection({ taskId }) {
   }, [comments, location.search]);
 
   const handleAdd = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  e.preventDefault();
+  e.stopPropagation();
 
-    if (!text.trim()) return;
-    setAdding(true);
-    try {
-      const res = await api.post(`/comments/${taskId}`, {
-        comment_text: text,
-      });
-      setComments((prev) => [...prev, res.data]);
-      setText("");
-    } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Failed to add comment";
-      toast.error(msg);
-    } finally {
-      setAdding(false);
-    }
-  };
+  if (!text.trim()) return;
+  setAdding(true);
+
+  try {
+    await api.post(`/comments/${taskId}`, {
+      comment_text: text,
+    });
+
+    // ✅ Immediately reload comments (so username is included)
+    const refreshed = await api.get(`/comments/${taskId}`);
+    setComments(refreshed.data || []);
+
+    setText("");
+  } catch (err) {
+    console.error(err);
+    const msg = err.response?.data?.error || "Failed to add comment";
+    toast.error(msg);
+  } finally {
+    setAdding(false);
+  }
+};
 
   return (
     <div
-      className="mt-2 border-t border-slate-100 pt-2"
+      className="mt-4 border-t border-gray-200 pt-4"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-[11px] font-semibold mb-1">Comments</div>
+      <div className="flex items-center gap-2 mb-3">
+        <MessageSquare className="w-4 h-4 text-gray-500" />
+        <h3 className="text-sm font-semibold text-gray-900">Comments</h3>
+        {comments.length > 0 && (
+          <Badge color="neutral" size="sm">{comments.length}</Badge>
+        )}
+      </div>
+
       {loading ? (
-        <div className="text-[11px] text-slate-400">Loading comments...</div>
+        <div className="text-sm text-gray-400">Loading comments...</div>
       ) : comments.length === 0 ? (
-        <div className="text-[11px] text-slate-400">No comments yet.</div>
+        <div className="text-sm text-gray-400 mb-3">No comments yet. Be the first to comment!</div>
       ) : (
-        <div className="space-y-1 mb-2 max-h-40 overflow-y-auto">
+        <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
           {comments.map((c) => (
             <div
               key={c.id}
               id={`comment-${c.id}`}
               className={
-                "text-[11px] rounded px-1 " +
+                "rounded-lg p-3 transition-colors " +
                 (highlightId === String(c.id)
-                  ? "bg-yellow-50 border border-yellow-200"
-                  : "")
+                  ? "bg-warning-50 border border-warning-200"
+                  : "bg-gray-50")
               }
             >
-              <span className="font-semibold">
-                {c.username || c.added_by}:
-              </span>{" "}
-              <span>{c.comment_text}</span>
-              <span className="text-[9px] text-slate-400 ml-1">
-                {c.created_at
-                  ? new Date(c.created_at).toLocaleString()
-                  : ""}
-              </span>
+              <div className="flex items-start gap-2">
+                <Avatar name={c.username || c.added_by} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-semibold text-gray-900">
+                      {c.username || c.added_by}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {c.created_at
+                        ? new Date(c.created_at).toLocaleString()
+                        : ""}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700">{c.comment_text}</p>
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -111,23 +132,25 @@ export default function CommentsSection({ taskId }) {
 
       <form
         onSubmit={handleAdd}
-        className="flex gap-1"
+        className="flex gap-2"
         onClick={(e) => e.stopPropagation()}
       >
         <input
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder='Add a comment... (use @username to mention)'
-          className="flex-1 border rounded-lg px-2 py-1 text-[11px]"
+          placeholder="Add a comment... (use @username to mention)"
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
         />
-        <button
+        <Button
           type="submit"
           disabled={adding}
-          className="text-[11px] border border-slate-300 rounded px-2 py-1 hover:bg-slate-50 disabled:opacity-50"
+          loading={adding}
+          variant="primary"
+          size="sm"
         >
-          {adding ? "Adding..." : "Add"}
-        </button>
+          Add
+        </Button>
       </form>
     </div>
   );

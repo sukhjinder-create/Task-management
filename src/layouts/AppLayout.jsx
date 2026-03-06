@@ -1,11 +1,14 @@
 // src/layout/AppLayout.jsx
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
+import { LogOut } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../api";
 import toast from "react-hot-toast";
-import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow"; // ⬅ floating huddle UI
+import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow";
+import { Avatar, Badge, Button, Dropdown } from "../components/ui";
+import { cn } from "../utils/cn";
 
 export default function AppLayout({ children }) {
   const { logout, auth } = useAuth();
@@ -55,7 +58,6 @@ export default function AppLayout({ children }) {
     } catch {}
   }, [attendanceStatus]);
 
-  const [awsOpen, setAwsOpen] = useState(false);
   const [awsLoading, setAwsLoading] = useState(false);
   const [availableLoading, setAvailableLoading] = useState(false);
   const [lunchLoading, setLunchLoading] = useState(false);
@@ -70,26 +72,26 @@ export default function AppLayout({ children }) {
       case "available":
         return {
           label: "Available",
-          dotClass: "bg-emerald-500",
-          pillClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+          dotClass: "bg-success-500",
+          color: "success",
         };
       case "aws":
         return {
           label: "AWS",
-          dotClass: "bg-amber-500",
-          pillClass: "bg-amber-50 text-amber-700 border-amber-200",
+          dotClass: "bg-warning-500",
+          color: "warning",
         };
       case "lunch":
         return {
           label: "Lunch break",
-          dotClass: "bg-orange-500",
-          pillClass: "bg-orange-50 text-orange-700 border-orange-200",
+          dotClass: "bg-warning-600",
+          color: "warning",
         };
       default:
         return {
           label: "Offline",
-          dotClass: "bg-slate-400",
-          pillClass: "bg-slate-50 text-slate-600 border-slate-200",
+          dotClass: "bg-gray-400",
+          color: "neutral",
         };
     }
   }, [attendanceStatus]);
@@ -123,7 +125,6 @@ export default function AppLayout({ children }) {
       await api.post("/attendance/aws", { minutes });
       setAttendanceStatus("aws");
       toast.success(`AWS for ${minutes} minutes.`);
-      setAwsOpen(false);
     } catch (err) {
       const msg =
         err.response?.data?.error || "Failed to record AWS";
@@ -225,152 +226,123 @@ export default function AppLayout({ children }) {
     api,
   ]);
 
-  const baseSmallBtn =
-    "text-xs px-3 py-1 rounded-lg border shadow-sm hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed";
-
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
 
-      <div className="ml-60 flex-1 bg-slate-100 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center">
+      <div className="ml-60 flex-1 bg-background flex flex-col overflow-hidden">
+        {/* Enhanced Header */}
+        <header className="h-16 bg-white border-b border-gray-200 px-6 flex justify-between items-center">
+          {/* Left side: User info and status */}
           <div className="flex items-center gap-4">
             {user && (
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-slate-800 text-white text-xs flex items-center justify-center font-semibold">
-                  {user.username
-                    ? user.username.charAt(0).toUpperCase()
-                    : "U"}
-                </div>
+              <div className="flex items-center gap-3">
+                <Avatar name={user.username} size="md" />
                 <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-slate-800">
+                  <span className="text-sm font-semibold text-gray-900">
                     {user.username}
                   </span>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-xs text-gray-500 capitalize">
                     {user.role}
                   </span>
                 </div>
               </div>
             )}
 
-            <div
-              className={`inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full border text-[11px] ${statusMeta.pillClass}`}
-            >
-              <span
-                className={`inline-block w-2 h-2 rounded-full ${statusMeta.dotClass}`}
-              />
-              <span>{statusMeta.label}</span>
-            </div>
+            {/* Status Badge */}
+            <Badge color={statusMeta.color} size="md" variant="subtle">
+              <span className={cn("inline-block w-2 h-2 rounded-full", statusMeta.dotClass)} />
+              {statusMeta.label}
+            </Badge>
 
+            {/* Attendance Actions */}
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 onClick={handleToggleSign}
                 disabled={toggleLoading}
-                className={
-                  baseSmallBtn +
-                  " " +
-                  (attendanceStatus === "offline"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                    : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100")
-                }
+                loading={toggleLoading}
+                variant={attendanceStatus === "offline" ? "success" : "danger"}
+                size="sm"
               >
-                {toggleLoading
-                  ? "Updating..."
-                  : attendanceStatus === "offline"
-                  ? "Sign in"
-                  : "Sign off"}
-              </button>
+                {attendanceStatus === "offline" ? "Sign in" : "Sign off"}
+              </Button>
 
               {attendanceStatus !== "offline" && (
                 <>
                   {attendanceStatus === "available" && (
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setAwsOpen((p) => !p)}
-                        className={
-                          baseSmallBtn +
-                          " bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                        }
-                      >
-                        {awsLoading ? "AWS..." : "AWS"}
-                      </button>
-
-                      {awsOpen && (
-                        <div className="absolute right-0 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-20 text-xs">
-                          <div className="px-3 py-1.5 text-[11px] text-slate-500 border-b border-slate-100">
-                            Away from system
-                          </div>
-                          <button
-                            className="w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                            onClick={() => sendAws(15)}
-                          >
-                            15 minutes
-                          </button>
-                          <button
-                            className="w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                            onClick={() => sendAws(30)}
-                          >
-                            30 minutes
-                          </button>
-                          <button
-                            className="w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                            onClick={() => sendAws(60)}
-                          >
-                            60 minutes
-                          </button>
-                          <button
-                            className="w-full px-3 py-1.5 text-left hover:bg-slate-50 border-t border-slate-100"
-                            onClick={handleAwsCustom}
-                          >
-                            Custom…
-                          </button>
-                        </div>
+                    <Dropdown>
+                      {({ isOpen, setIsOpen }) => (
+                        <>
+                          <Dropdown.Trigger onClick={() => setIsOpen(!isOpen)}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={awsLoading}
+                              className="bg-warning-50 text-warning-700 border-warning-200 hover:bg-warning-100"
+                            >
+                              AWS
+                            </Button>
+                          </Dropdown.Trigger>
+                          <Dropdown.Menu isOpen={isOpen} align="left">
+                            <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200">
+                              Away from system
+                            </div>
+                            <Dropdown.Item onClick={() => sendAws(15)}>
+                              15 minutes
+                            </Dropdown.Item>
+                            <Dropdown.Item onClick={() => sendAws(30)}>
+                              30 minutes
+                            </Dropdown.Item>
+                            <Dropdown.Item onClick={() => sendAws(60)}>
+                              60 minutes
+                            </Dropdown.Item>
+                            <Dropdown.Divider />
+                            <Dropdown.Item onClick={handleAwsCustom}>
+                              Custom…
+                            </Dropdown.Item>
+                          </Dropdown.Menu>
+                        </>
                       )}
-                    </div>
+                    </Dropdown>
                   )}
 
                   {attendanceStatus === "available" && (
-                    <button
-                      type="button"
+                    <Button
                       onClick={handleLunchClick}
                       disabled={lunchLoading}
-                      className={
-                        baseSmallBtn +
-                        " bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
-                      }
+                      loading={lunchLoading}
+                      variant="secondary"
+                      size="sm"
+                      className="bg-warning-50 text-warning-700 border-warning-200 hover:bg-warning-100"
                     >
-                      {lunchLoading ? "Lunch..." : "Lunch"}
-                    </button>
+                      Lunch
+                    </Button>
                   )}
 
-                  {(attendanceStatus === "aws" ||
-                    attendanceStatus === "lunch") && (
-                    <button
-                      type="button"
+                  {(attendanceStatus === "aws" || attendanceStatus === "lunch") && (
+                    <Button
                       onClick={handleAvailableClick}
                       disabled={availableLoading}
-                      className={
-                        baseSmallBtn +
-                        " bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                      }
+                      loading={availableLoading}
+                      variant="secondary"
+                      size="sm"
+                      className="bg-primary-50 text-primary-700 border-primary-200 hover:bg-primary-100"
                     >
-                      {availableLoading ? "Updating..." : "Available"}
-                    </button>
+                      Available
+                    </Button>
                   )}
                 </>
               )}
             </div>
           </div>
 
-          <button
-            onClick={logout}
-            className="text-sm bg-red-100 text-red-600 px-4 py-1.5 rounded-lg hover:bg-red-200 border border-red-200"
-          >
+          {/* Right side: Logout */}
+          <Button onClick={logout} variant="danger" size="sm" leftIcon={<LogOut className="w-4 h-4" />}>
             Logout
-          </button>
+          </Button>
         </header>
 
+        {/* Main Content */}
         <main className="px-6 py-6 relative flex-1 overflow-y-auto">
           <Outlet />
           <GlobalHuddleWindow />

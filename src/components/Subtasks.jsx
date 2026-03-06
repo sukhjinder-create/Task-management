@@ -1,8 +1,10 @@
 // src/components/Subtasks.jsx
 import { useEffect, useState } from "react";
+import { ListTodo, Trash2, Check } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
+import { Button, Badge, Avatar } from "./ui";
 
 export default function Subtasks({ taskId }) {
   const api = useApi();
@@ -166,35 +168,48 @@ export default function Subtasks({ taskId }) {
   };
 
   return (
-    <div className="mt-3 border-t pt-3">
-      <h3 className="text-xs font-semibold mb-2">Subtasks</h3>
+    <div className="mt-4 border-t border-gray-200 pt-4">
+      <div className="flex items-center gap-2 mb-3">
+        <ListTodo className="w-4 h-4 text-gray-500" />
+        <h3 className="text-sm font-semibold text-gray-900">Subtasks</h3>
+        {subtasks.length > 0 && (
+          <Badge color="neutral" size="sm">
+            {subtasks.filter(s => s.status === "completed").length}/{subtasks.length}
+          </Badge>
+        )}
+      </div>
 
       {/* Existing subtasks list */}
       {loading ? (
-        <p className="text-[11px] text-slate-400">Loading subtasks...</p>
+        <p className="text-sm text-gray-400">Loading subtasks...</p>
       ) : subtasks.length === 0 ? (
-        <p className="text-[11px] text-slate-400">No subtasks yet.</p>
+        <p className="text-sm text-gray-400 mb-3">No subtasks yet. Add one below!</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 mb-4">
           {subtasks.map((s) => (
             <div
               key={s.id}
-              className="flex items-center gap-2 text-[11px] border rounded px-2 py-1 bg-slate-50"
+              className="flex items-center gap-3 text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 hover:bg-white transition-colors"
             >
               {/* Checkbox + title */}
-              <label className="flex items-center gap-2 flex-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="w-3 h-3"
-                  checked={s.status === "completed"}
-                  onChange={() => handleToggleStatus(s)}
-                />
+              <label className="flex items-center gap-3 flex-1 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    checked={s.status === "completed"}
+                    onChange={() => handleToggleStatus(s)}
+                  />
+                  {s.status === "completed" && (
+                    <Check className="w-3 h-3 text-white absolute top-0.5 left-0.5 pointer-events-none" />
+                  )}
+                </div>
                 <span
                   className={
                     "truncate " +
                     (s.status === "completed"
-                      ? "line-through text-slate-400"
-                      : "text-slate-700")
+                      ? "line-through text-gray-400"
+                      : "text-gray-900 group-hover:text-primary-600")
                   }
                   title={s.title || s.subtask}
                 >
@@ -202,9 +217,18 @@ export default function Subtasks({ taskId }) {
                 </span>
               </label>
 
+              {/* Assignee */}
+              {s.assigned_to && (
+                <Avatar
+                  name={users.find(u => u.id === s.assigned_to)?.username || "User"}
+                  size="xs"
+                  className="shrink-0"
+                />
+              )}
+
               {/* Assignee dropdown */}
               <select
-                className="border rounded px-2 py-[2px] text-[11px]"
+                className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:border-primary-500 focus:ring-primary-500/20"
                 value={s.assigned_to || ""}
                 onChange={(e) =>
                   handleChangeAssignee(s, e.target.value || null)
@@ -213,36 +237,39 @@ export default function Subtasks({ taskId }) {
                 <option value="">Unassigned</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.username} ({u.email})
+                    {u.username}
                   </option>
                 ))}
               </select>
 
               {/* Delete button */}
-              <button
+              <Button
                 type="button"
                 onClick={() => handleDeleteSubtask(s.id)}
-                className="text-[11px] text-red-500 px-1"
+                variant="ghost"
+                size="xs"
+                className="text-danger-600 hover:bg-danger-50 shrink-0"
                 title="Delete subtask"
               >
-                ✕
-              </button>
+                <Trash2 className="w-4 h-4" />
+              </Button>
             </div>
           ))}
         </div>
       )}
 
       {/* New subtask row */}
-      <div className="mt-3 flex items-center gap-2 text-[11px]">
+      <div className="flex items-center gap-2">
         <input
           type="text"
-          className="flex-1 border rounded px-2 py-1"
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
           placeholder="New subtask"
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAddSubtask()}
         />
         <select
-          className="border rounded px-2 py-1"
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
           value={newAssignedTo}
           onChange={(e) => setNewAssignedTo(e.target.value)}
         >
@@ -252,19 +279,21 @@ export default function Subtasks({ taskId }) {
           ) : (
             users.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.username} ({u.email})
+                {u.username}
               </option>
             ))
           )}
         </select>
-        <button
+        <Button
           type="button"
           disabled={adding}
+          loading={adding}
           onClick={handleAddSubtask}
-          className="bg-slate-800 text-white rounded px-3 py-1 disabled:opacity-50"
+          variant="primary"
+          size="sm"
         >
-          {adding ? "Adding..." : "Add"}
-        </button>
+          Add
+        </Button>
       </div>
     </div>
   );

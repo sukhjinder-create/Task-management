@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import { getAdminInsights, getExecutiveSummary } from "../services/intelligence.api";
 import { getSocket } from "../socket";
+import { Card, Badge, Button, Skeleton } from "../components/ui";
 
 function isTaskOverdue(task) {
   if (!task.due_date) return false;
@@ -531,38 +532,45 @@ const autonomousInsight = useMemo(() => {
 ====================================== */}
 
 {autonomousInsight && (
-  <section
-    className={`rounded-xl shadow p-5 border ${
+  <Card
+    className={
       autonomousInsight.type === "critical"
-        ? "bg-red-50 border-red-200"
+        ? "bg-danger-50 border-danger-200"
         : autonomousInsight.type === "warning"
-        ? "bg-amber-50 border-amber-200"
+        ? "bg-warning-50 border-warning-200"
         : autonomousInsight.type === "positive"
-        ? "bg-emerald-50 border-emerald-200"
-        : "bg-slate-50 border-slate-200"
-    }`}
+        ? "bg-success-50 border-success-200"
+        : "bg-gray-50 border-gray-200"
+    }
   >
-    <div className="flex items-start gap-3">
-
-      <div className="text-lg">
+    <Card.Content className="flex items-start gap-3">
+      <div className="text-2xl">
         {autonomousInsight.type === "critical" && "🔴"}
         {autonomousInsight.type === "warning" && "⚠️"}
         {autonomousInsight.type === "positive" && "✅"}
         {autonomousInsight.type === "neutral" && "🧠"}
       </div>
 
-      <div>
-        <div className="text-xs font-semibold text-slate-600 mb-1">
+      <div className="flex-1">
+        <Badge
+          color={
+            autonomousInsight.type === "critical" ? "danger" :
+            autonomousInsight.type === "warning" ? "warning" :
+            autonomousInsight.type === "positive" ? "success" :
+            "neutral"
+          }
+          size="sm"
+          className="mb-2"
+        >
           AI Autonomous Insight
-        </div>
+        </Badge>
 
-        <p className="text-sm text-slate-800 leading-relaxed">
+        <p className="text-sm text-gray-800 leading-relaxed">
           {autonomousInsight.message}
         </p>
       </div>
-
-    </div>
-  </section>
+    </Card.Content>
+  </Card>
 )}
 
       {/* ======================================
@@ -570,136 +578,139 @@ const autonomousInsight = useMemo(() => {
 ====================================== */}
 
 {(isAdmin || isManager || isUser) && (
-  <section className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl shadow p-5">
+  <Card className="bg-gradient-to-r from-gray-900 to-gray-800 text-white border-gray-700">
+    <Card.Content>
+      <h2 className="text-base font-semibold mb-4">
+        Workspace Control Center
+      </h2>
 
-    <h2 className="text-sm font-semibold mb-3">
-      Workspace Control Center
-    </h2>
+      <div className="grid md:grid-cols-4 gap-4">
+        {/* Risk Status */}
+        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+          <div className="text-sm text-gray-300">Current Risk State</div>
+          <div className="text-xl font-semibold mt-1">
+            {myPerformance?.intelligence?.risk?.level || "Analyzing"}
+          </div>
+        </div>
 
-    <div className="grid md:grid-cols-4 gap-4 text-xs">
+        {/* Overdue Pressure */}
+        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+          <div className="text-sm text-gray-300">Execution Pressure</div>
+          <div className="text-xl font-semibold mt-1">
+            {overdueCount > 5
+              ? "High"
+              : overdueCount > 0
+              ? "Moderate"
+              : "Stable"}
+          </div>
+        </div>
 
-      {/* Risk Status */}
-      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-        <div className="text-slate-300">Current Risk State</div>
-        <div className="text-lg font-semibold mt-1">
-          {myPerformance?.intelligence?.risk?.level || "Analyzing"}
+        {/* Momentum */}
+        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+          <div className="text-sm text-gray-300">Performance Momentum</div>
+          <div className="text-xl font-semibold mt-1">
+            {intelligence?.forecast?.trend || "Stable"}
+          </div>
+        </div>
+
+        {/* Integrations */}
+        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+          <div className="text-sm text-gray-300 mb-3">External Integrations</div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={connectAsana} size="xs" variant="primary">
+              Asana Connect
+            </Button>
+
+            <Button onClick={openAsanaViewer} size="xs" variant="secondary" className="bg-gray-700 border-gray-600 hover:bg-gray-600">
+              Asana Open
+            </Button>
+
+            <Button onClick={connectYouTrack} size="xs" className="bg-warning-600 hover:bg-warning-700">
+              YouTrack
+            </Button>
+
+            <Button onClick={openYouTrackViewer} size="xs" variant="secondary" className="bg-gray-700 border-gray-600 hover:bg-gray-600">
+              YT Open
+            </Button>
+          </div>
+
+          <div className="text-xs text-gray-400 mt-2">
+            Allow AI to observe external work activity.
+          </div>
         </div>
       </div>
-
-      {/* Overdue Pressure */}
-      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-        <div className="text-slate-300">Execution Pressure</div>
-        <div className="text-lg font-semibold mt-1">
-          {overdueCount > 5
-            ? "High"
-            : overdueCount > 0
-            ? "Moderate"
-            : "Stable"}
-        </div>
-      </div>
-
-      {/* Momentum */}
-      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-        <div className="text-slate-300">Performance Momentum</div>
-        <div className="text-lg font-semibold mt-1">
-          {intelligence?.forecast?.trend || "Stable"}
-        </div>
-      </div>
-
-      {/* Integrations */}
-<div className="bg-white/5 rounded-lg p-4 border border-white/10">
-  <div className="text-slate-300">External Integrations</div>
-
-  <div className="flex gap-2 mt-2">
-
-  {/* ASANA */}
-  <button onClick={connectAsana} className="text-xs bg-indigo-500 px-3 py-1.5 rounded-md font-semibold">
-    Asana Connect
-  </button>
-
-  <button onClick={openAsanaViewer} className="text-xs bg-slate-700 px-3 py-1.5 rounded-md font-semibold">
-    Asana Open
-  </button>
-
-  {/* YOUTRACK */}
-  <button onClick={connectYouTrack} className="text-xs bg-orange-500 px-3 py-1.5 rounded-md font-semibold">
-    YouTrack Connect
-  </button>
-
-  <button onClick={openYouTrackViewer} className="text-xs bg-slate-700 px-3 py-1.5 rounded-md font-semibold">
-    YouTrack Open
-  </button>
-
-</div>
-
-  <div className="text-[10px] text-slate-400 mt-2">
-    Allow AI to observe external work activity.
-  </div>
-</div>
-    </div>
-
-  </section>
+    </Card.Content>
+  </Card>
 )}
 
 {/* ================================
     EXECUTIVE INTELLIGENCE SUMMARY
 ================================ */}
 {isAdmin && executiveSummary && (
-  <section className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl shadow p-6">
-    <h2 className="text-lg font-semibold mb-2">
-      Executive Intelligence Insight
-    </h2>
+  <Card className="bg-gradient-to-r from-primary-600 to-primary-700 text-white border-primary-500">
+    <Card.Content>
+      <h2 className="text-lg font-semibold mb-3">
+        Executive Intelligence Insight
+      </h2>
 
-    {executiveSummary.status === "processing" && (
-      <p className="text-sm opacity-90">
-        🧠 AI is analyzing organizational performance...
-      </p>
-    )}
+      {executiveSummary.status === "processing" && (
+        <p className="text-sm opacity-90">
+          🧠 AI is analyzing organizational performance...
+        </p>
+      )}
 
-    {executiveSummary.status === "ready" && (
-      <>
-        <div className="text-sm leading-relaxed whitespace-pre-wrap">
-  {executiveSummary.text}
-</div>
+      {executiveSummary.status === "ready" && (
+        <>
+          <div className="text-sm leading-relaxed whitespace-pre-wrap">
+            {executiveSummary.text}
+          </div>
 
-        {executiveSummary.reasoning && (
-  <button
-    onClick={() => setShowReasoning(true)}
-    className="mt-4 text-xs font-semibold text-white/90 underline hover:text-white"
-  >
-    View AI analyst reasoning
-  </button>
-)}
-      </>
-    )}
-  </section>
+          {executiveSummary.reasoning && (
+            <Button
+              onClick={() => setShowReasoning(true)}
+              size="sm"
+              variant="ghost"
+              className="mt-4 text-white hover:bg-white/10"
+            >
+              View AI analyst reasoning
+            </Button>
+          )}
+        </>
+      )}
+    </Card.Content>
+  </Card>
 )}
 
 {/* ================================
     MY PERFORMANCE SNAPSHOT
 ================================ */}
 {myPerformance && (
-  <section className="bg-white rounded-xl shadow p-6 border border-slate-200 space-y-6">
+  <Card>
+    <Card.Content className="space-y-6">
+      {/* HEADER */}
+      <div className="flex justify-between items-center">
+        <Card.Title>
+          My Performance – {new Date().toISOString().slice(0, 7)}
+        </Card.Title>
 
-    {/* HEADER */}
-    <div className="flex justify-between items-center">
-      <h2 className="text-lg font-semibold">
-        My Performance – {new Date().toISOString().slice(0, 7)}
-      </h2>
-
-      <div className="text-right">
-        <div className="text-3xl font-bold text-indigo-600">
-          {myPerformance.score}
-        </div>
-        <div
-          className={`text-xs font-semibold ${
-            getRiskLevel(myPerformance.score).color
-          }`}
-        >
-          {getRiskLevel(myPerformance.score).label}
+        <div className="text-right">
+          <div className="text-4xl font-bold text-primary-600">
+            {myPerformance.score}
+          </div>
+          <Badge
+            color={
+              myPerformance.score >= 75 ? "success" :
+              myPerformance.score >= 50 ? "warning" :
+              "danger"
+            }
+            size="sm"
+            className="mt-1"
+          >
+            {getRiskLevel(myPerformance.score).label}
+          </Badge>
         </div>
       </div>
-    </div>
 
     {/* PROGRESS BAR */}
     <div>
@@ -867,7 +878,8 @@ const autonomousInsight = useMemo(() => {
           </ul>
         </div>
       )}
-  </section>
+    </Card.Content>
+  </Card>
 )}
       <section className="space-y-6">
         <div className="grid lg:grid-cols-3 gap-6">
