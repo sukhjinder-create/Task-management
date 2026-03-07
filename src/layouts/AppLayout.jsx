@@ -8,6 +8,7 @@ import { useApi } from "../api";
 import toast from "react-hot-toast";
 import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow";
 import { Avatar, Badge, Button, Dropdown } from "../components/ui";
+import ThemeSwitcher from "../components/ThemeSwitcher";
 import { cn } from "../utils/cn";
 
 export default function AppLayout({ children }) {
@@ -227,22 +228,22 @@ export default function AppLayout({ children }) {
   ]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden theme-bg theme-text">
       <Sidebar />
 
-      <div className="ml-60 flex-1 bg-background flex flex-col overflow-hidden">
+      <div className="ml-60 flex-1 theme-bg flex flex-col overflow-hidden">
         {/* Enhanced Header */}
-        <header className="h-16 bg-white border-b border-gray-200 px-6 flex justify-between items-center">
+        <header className="h-16 theme-surface border-b theme-border px-6 flex justify-between items-center">
           {/* Left side: User info and status */}
           <div className="flex items-center gap-4">
             {user && (
               <div className="flex items-center gap-3">
                 <Avatar name={user.username} size="md" />
                 <div className="flex flex-col">
-                  <span className="text-sm font-semibold text-gray-900">
+                  <span className="text-sm font-semibold theme-text">
                     {user.username}
                   </span>
-                  <span className="text-xs text-gray-500 capitalize">
+                  <span className="text-xs theme-text-muted capitalize">
                     {user.role}
                   </span>
                 </div>
@@ -284,7 +285,7 @@ export default function AppLayout({ children }) {
                             </Button>
                           </Dropdown.Trigger>
                           <Dropdown.Menu isOpen={isOpen} align="left">
-                            <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200">
+                            <div className="px-3 py-2 text-xs font-medium theme-text-muted border-b theme-border">
                               Away from system
                             </div>
                             <Dropdown.Item onClick={() => sendAws(15)}>
@@ -337,9 +338,12 @@ export default function AppLayout({ children }) {
           </div>
 
           {/* Right side: Logout */}
-          <Button onClick={logout} variant="danger" size="sm" leftIcon={<LogOut className="w-4 h-4" />}>
-            Logout
-          </Button>
+          <div className="flex items-center gap-3">
+            <ThemeSwitcher compact />
+            <Button onClick={logout} variant="danger" size="sm" leftIcon={<LogOut className="w-4 h-4" />}>
+              Logout
+            </Button>
+          </div>
         </header>
 
         {/* Main Content */}

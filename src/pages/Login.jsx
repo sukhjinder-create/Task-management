@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import ThemeSwitcher from "../components/ThemeSwitcher";
 
 export default function Login() {
   const { login } = useAuth();
@@ -78,20 +79,23 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100">
-      <div className="bg-white rounded-xl shadow p-6 w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center theme-bg p-4">
+      <div className="fixed top-4 right-4">
+        <ThemeSwitcher compact />
+      </div>
+      <div className="theme-surface border theme-border rounded-xl shadow p-6 w-full max-w-md">
         <h1 className="text-lg font-semibold mb-4 text-center">
           Task Management Login
         </h1>
 
         <form className="space-y-3" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
+            <label className="block text-xs font-medium theme-text-muted mb-1">
               Email
             </label>
             <input
               type="email"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border theme-border theme-surface rounded-lg px-3 py-2 text-sm"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
@@ -100,12 +104,12 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
+            <label className="block text-xs font-medium theme-text-muted mb-1">
               Password
             </label>
             <input
               type="password"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border theme-border theme-surface rounded-lg px-3 py-2 text-sm"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -116,7 +120,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="w-full theme-primary rounded-lg py-2 text-sm font-medium disabled:opacity-50"
           >
             {loading ? "Logging in..." : "Login"}
           </button>

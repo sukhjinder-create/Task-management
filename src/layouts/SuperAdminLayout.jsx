@@ -1,6 +1,7 @@
 // src/layouts/SuperAdminLayout.jsx
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import ThemeSwitcher from "../components/ThemeSwitcher";
 
 /**
  * SuperAdminLayout
@@ -56,12 +57,12 @@ export default function SuperAdminLayout() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-100">
+    <div className="flex h-screen theme-bg theme-text">
       {/* SIDEBAR */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col p-4">
+      <aside className="w-64 theme-surface border-r theme-border flex flex-col p-4">
         <div className="mb-6">
           <h2 className="text-lg font-semibold">Superadmin</h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs theme-text-muted">
             Platform Control Panel
           </p>
         </div>
@@ -72,7 +73,7 @@ export default function SuperAdminLayout() {
             end
             className={({ isActive }) =>
               `block px-3 py-2 rounded ${
-                isActive ? "bg-slate-700" : "hover:bg-slate-800"
+                isActive ? "bg-primary-100 text-primary-800" : "hover:bg-[var(--surface-soft)]"
               }`
             }
           >
@@ -83,7 +84,7 @@ export default function SuperAdminLayout() {
             to="/superadmin/payments"
             className={({ isActive }) =>
               `block px-3 py-2 rounded ${
-                isActive ? "bg-slate-700" : "hover:bg-slate-800"
+                isActive ? "bg-primary-100 text-primary-800" : "hover:bg-[var(--surface-soft)]"
               }`
             }
           >
@@ -94,7 +95,7 @@ export default function SuperAdminLayout() {
             to="/superadmin/settings"
             className={({ isActive }) =>
               `block px-3 py-2 rounded ${
-                isActive ? "bg-slate-700" : "hover:bg-slate-800"
+                isActive ? "bg-primary-100 text-primary-800" : "hover:bg-[var(--surface-soft)]"
               }`
             }
           >
@@ -104,18 +105,19 @@ export default function SuperAdminLayout() {
 
         <button
           onClick={logout}
-          className="mt-4 text-left px-3 py-2 rounded text-sm text-red-400 hover:bg-slate-800"
+          className="mt-4 text-left px-3 py-2 rounded text-sm text-red-500 hover:bg-[var(--surface-soft)]"
         >
           Logout
         </button>
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 bg-slate-50 overflow-auto">
-        <header className="bg-white border-b px-6 py-4">
-          <div className="text-sm text-slate-500">
+      <main className="flex-1 theme-bg overflow-auto">
+        <header className="theme-surface border-b theme-border px-6 py-4 flex items-center justify-between">
+          <div className="text-sm theme-text-muted">
             Superadmin Area
           </div>
+          <ThemeSwitcher compact />
         </header>
 
         <div className="p-6">

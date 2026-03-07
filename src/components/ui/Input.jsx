@@ -22,7 +22,7 @@ export const Input = forwardRef(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-gray-700 mb-1.5"
+            className="block text-sm font-medium theme-text-muted mb-1.5"
           >
             {label}
           </label>
@@ -40,13 +40,12 @@ export const Input = forwardRef(
             id={inputId}
             className={cn(
               'w-full px-3 py-2 text-sm',
-              'bg-white border rounded-lg',
+              'theme-input border rounded-lg',
               'transition-colors duration-200',
-              'placeholder:text-gray-400',
-              'disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed',
+              'placeholder:text-gray-400 disabled:opacity-70 disabled:cursor-not-allowed',
               error
                 ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20'
-                : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500/20',
+                : 'theme-border focus:border-primary-500 focus:ring-primary-500/20',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
               className
@@ -96,7 +95,7 @@ export const Textarea = forwardRef(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-gray-700 mb-1.5"
+            className="block text-sm font-medium theme-text-muted mb-1.5"
           >
             {label}
           </label>
@@ -108,14 +107,13 @@ export const Textarea = forwardRef(
           rows={rows}
           className={cn(
             'w-full px-3 py-2 text-sm',
-            'bg-white border rounded-lg',
+            'theme-input border rounded-lg',
             'transition-colors duration-200',
-            'placeholder:text-gray-400',
-            'disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed',
+            'placeholder:text-gray-400 disabled:opacity-70 disabled:cursor-not-allowed',
             'resize-y',
             error
               ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20'
-              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500/20',
+              : 'theme-border focus:border-primary-500 focus:ring-primary-500/20',
             className
           )}
           {...props}

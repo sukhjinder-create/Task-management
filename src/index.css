@@ -2,30 +2,236 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --app-bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-soft: #f1f5f9;
+  --surface-strong: #e2e8f0;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-soft: #475569;
+  --primary: #4f46e5;
+  --primary-contrast: #ffffff;
+  --ring: rgba(79, 70, 229, 0.25);
+  --overdue-bg: #fef2f2;
+  --overdue-border: #fecaca;
+  --overdue-text: #b91c1c;
+  --overdue-soft: #7f1d1d;
+}
+
+html[data-theme="dark"] {
+  --app-bg: #0b1020;
+  --surface: #111a2e;
+  --surface-soft: #1a2742;
+  --surface-strong: #24365a;
+  --border: #2a3a5c;
+  --text: #e2e8f0;
+  --text-muted: #cbd5e1;
+  --text-soft: #94a3b8;
+  --primary: #8b94ff;
+  --primary-contrast: #0b1020;
+  --ring: rgba(124, 131, 255, 0.35);
+  --overdue-bg: #2a1a27;
+  --overdue-border: #6b2f4d;
+  --overdue-text: #fecdd3;
+  --overdue-soft: #fda4af;
+}
+
+html[data-theme="ocean"] {
+  --app-bg: #f0f9ff;
+  --surface: #ffffff;
+  --surface-soft: #e0f2fe;
+  --surface-strong: #bae6fd;
+  --border: #bae6fd;
+  --text: #0c4a6e;
+  --text-muted: #075985;
+  --text-soft: #0284c7;
+  --primary: #0284c7;
+  --primary-contrast: #ffffff;
+  --ring: rgba(2, 132, 199, 0.28);
+  --overdue-bg: #fff3f3;
+  --overdue-border: #fecaca;
+  --overdue-text: #9f1239;
+  --overdue-soft: #be123c;
+}
+
+html[data-theme="forest"] {
+  --app-bg: #f4fbf6;
+  --surface: #ffffff;
+  --surface-soft: #e8f5ec;
+  --surface-strong: #cfe9d9;
+  --border: #cfe9d9;
+  --text: #14532d;
+  --text-muted: #2f855a;
+  --text-soft: #3f8f68;
+  --primary: #15803d;
+  --primary-contrast: #ffffff;
+  --ring: rgba(21, 128, 61, 0.28);
+  --overdue-bg: #fff4f4;
+  --overdue-border: #fca5a5;
+  --overdue-text: #9f1239;
+  --overdue-soft: #be123c;
+}
+
+html[data-theme="sunset"] {
+  --app-bg: #fff7ed;
+  --surface: #ffffff;
+  --surface-soft: #ffedd5;
+  --surface-strong: #fed7aa;
+  --border: #fed7aa;
+  --text: #7c2d12;
+  --text-muted: #9a3412;
+  --text-soft: #c2410c;
+  --primary: #ea580c;
+  --primary-contrast: #ffffff;
+  --ring: rgba(234, 88, 12, 0.28);
+  --overdue-bg: #fff1f2;
+  --overdue-border: #fda4af;
+  --overdue-text: #9f1239;
+  --overdue-soft: #be123c;
+}
+
+html[data-theme="yellow"] {
+  --app-bg: #fffbeb;
+  --surface: #fffef7;
+  --surface-soft: #fef3c7;
+  --surface-strong: #fde68a;
+  --border: #fcd34d;
+  --text: #78350f;
+  --text-muted: #92400e;
+  --text-soft: #b45309;
+  --primary: #d97706;
+  --primary-contrast: #ffffff;
+  --ring: rgba(217, 119, 6, 0.28);
+  --overdue-bg: #fff7ed;
+  --overdue-border: #fdba74;
+  --overdue-text: #9a3412;
+  --overdue-soft: #b45309;
+}
+
 @layer base {
-  /* Base styling with new theme colors */
-  body {
-    @apply bg-background text-gray-800 antialiased;
+  html,
+  body,
+  #root {
+    min-height: 100%;
   }
 
-  /* Better form focus states */
+  body {
+    background: var(--app-bg);
+    color: var(--text);
+    @apply antialiased;
+  }
+
   input:focus,
   textarea:focus,
   select:focus {
-    @apply outline-none ring-2 ring-primary-500/20 border-primary-500;
+    @apply outline-none;
+    box-shadow: 0 0 0 2px var(--ring);
+    border-color: var(--primary);
   }
 
-  /* Smooth scrolling */
   html {
     scroll-behavior: smooth;
   }
 
-  /* Remove default button styles */
   button {
     @apply focus:outline-none;
   }
 }
 
 @layer components {
-  /* Component utility classes will be added here as needed */
+  .theme-bg {
+    background: var(--app-bg);
+  }
+
+  .theme-surface {
+    background: var(--surface);
+  }
+
+  .theme-surface-soft {
+    background: var(--surface-soft);
+  }
+
+  .theme-surface-strong {
+    background: var(--surface-strong);
+  }
+
+  .theme-border {
+    border-color: var(--border);
+  }
+
+  .theme-text {
+    color: var(--text);
+  }
+
+  .theme-text-muted {
+    color: var(--text-muted);
+  }
+
+  .theme-text-soft {
+    color: var(--text-soft);
+  }
+
+  .theme-input {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .theme-primary {
+    background: var(--primary);
+    color: var(--primary-contrast);
+  }
+
+  .theme-primary-outline {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .theme-overdue-card {
+    background: var(--overdue-bg);
+    border-color: var(--overdue-border);
+  }
+
+  .theme-overdue-text {
+    color: var(--overdue-text);
+  }
+
+  .theme-overdue-soft {
+    color: var(--overdue-soft);
+  }
+}
+
+@layer utilities {
+  html[data-theme="dark"] .bg-white,
+  html[data-theme="dark"] .bg-slate-50,
+  html[data-theme="dark"] .bg-slate-100,
+  html[data-theme="dark"] .bg-gray-50,
+  html[data-theme="dark"] .bg-gray-100 {
+    background-color: var(--surface) !important;
+  }
+
+  html[data-theme="dark"] .text-slate-900,
+  html[data-theme="dark"] .text-slate-800,
+  html[data-theme="dark"] .text-gray-900,
+  html[data-theme="dark"] .text-gray-800 {
+    color: var(--text) !important;
+  }
+
+  html[data-theme="dark"] .text-slate-700,
+  html[data-theme="dark"] .text-slate-600,
+  html[data-theme="dark"] .text-slate-500,
+  html[data-theme="dark"] .text-gray-700,
+  html[data-theme="dark"] .text-gray-600,
+  html[data-theme="dark"] .text-gray-500 {
+    color: var(--text-muted) !important;
+  }
+
+  html[data-theme="dark"] .border-slate-200,
+  html[data-theme="dark"] .border-slate-300,
+  html[data-theme="dark"] .border-gray-200,
+  html[data-theme="dark"] .border-gray-300 {
+    border-color: var(--border) !important;
+  }
 }

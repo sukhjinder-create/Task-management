@@ -4,7 +4,7 @@ export function Card({ children, className, hover = false, clickable = false, ..
   return (
     <div
       className={cn(
-        'bg-white rounded-xl shadow border border-gray-200',
+        'theme-surface rounded-xl shadow border theme-border',
         'transition-all duration-200',
         hover && 'hover:shadow-md hover:-translate-y-0.5',
         clickable && 'cursor-pointer hover:shadow-md hover:-translate-y-0.5',
@@ -19,7 +19,7 @@ export function Card({ children, className, hover = false, clickable = false, ..
 
 export function CardHeader({ children, className, ...props }) {
   return (
-    <div className={cn('px-6 py-4 border-b border-gray-200', className)} {...props}>
+    <div className={cn('px-6 py-4 border-b theme-border', className)} {...props}>
       {children}
     </div>
   );
@@ -27,7 +27,7 @@ export function CardHeader({ children, className, ...props }) {
 
 export function CardTitle({ children, className, ...props }) {
   return (
-    <h3 className={cn('text-lg font-semibold text-gray-900', className)} {...props}>
+    <h3 className={cn('text-lg font-semibold theme-text', className)} {...props}>
       {children}
     </h3>
   );
@@ -35,7 +35,7 @@ export function CardTitle({ children, className, ...props }) {
 
 export function CardDescription({ children, className, ...props }) {
   return (
-    <p className={cn('text-sm text-gray-500 mt-1', className)} {...props}>
+    <p className={cn('text-sm theme-text-muted mt-1', className)} {...props}>
       {children}
     </p>
   );
@@ -51,7 +51,7 @@ export function CardContent({ children, className, ...props }) {
 
 export function CardFooter({ children, className, ...props }) {
   return (
-    <div className={cn('px-6 py-4 border-t border-gray-200 bg-gray-50/50', className)} {...props}>
+    <div className={cn('px-6 py-4 border-t theme-border theme-surface-soft', className)} {...props}>
       {children}
     </div>
   );

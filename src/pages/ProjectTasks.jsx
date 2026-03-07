@@ -1,7 +1,7 @@
 // src/pages/ProjectTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon } from "lucide-react";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -102,6 +102,20 @@ export default function ProjectTasks() {
   // Subtasks created at the time of creating the task
   // Each row: { title: "", assigned_to: "" }
   const [newSubtasks, setNewSubtasks] = useState([]);
+  const [nlCommand, setNlCommand] = useState("");
+  const [creatingFromNL, setCreatingFromNL] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const speechRecognitionRef = useRef(null);
+  const silenceTimerRef = useRef(null);
+  const latestTranscriptRef = useRef("");
+  const autoCreateTriggeredRef = useRef(false);
+  const creatingFromNLRef = useRef(false);
+  const [speechLang, setSpeechLang] = useState(
+    localStorage.getItem("nlSpeechLang") || "auto"
+  );
+  const [speechLangCustom, setSpeechLangCustom] = useState(
+    localStorage.getItem("nlSpeechLangCustom") || ""
+  );
 
   const [selectedTaskForComments, setSelectedTaskForComments] =
     useState(null);
@@ -146,6 +160,23 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   // 🔹 Quick-add task per column
   const [quickNewTitles, setQuickNewTitles] = useState({}); // { [statusKey]: "title" }
   const [quickCreating, setQuickCreating] = useState({}); // { [statusKey]: boolean }
+
+  useEffect(() => {
+    creatingFromNLRef.current = creatingFromNL;
+  }, [creatingFromNL]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        speechRecognitionRef.current?.stop();
+      } catch {
+        // ignore cleanup errors
+      }
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+    };
+  }, []);
 
   // ===== Load project + tasks =====
   useEffect(() => {
@@ -407,6 +438,132 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleCreateFromNaturalLanguage = async (commandOverride = null) => {
+    const command = (commandOverride ?? nlCommand).trim();
+    if (!command) {
+      toast.error("Type or speak a natural language command first");
+      return;
+    }
+
+    setCreatingFromNL(true);
+    try {
+      const res = await api.post("/tasks/nl/create", {
+        command,
+        project_id: projectId,
+        include_subtasks: true,
+        auto_assign_by_workload: true,
+        auto_set_dependencies: true,
+      });
+
+      const createdTasks = Array.isArray(res.data?.created)
+        ? res.data.created
+        : [];
+
+      if (createdTasks.length > 0) {
+        setTasks((prev) => [...createdTasks, ...prev]);
+      }
+
+      setNlCommand("");
+      toast.success(res.data?.summary || "Tasks created from natural language");
+      setShowCreateModal(false);
+    } catch (err) {
+      console.error("Error creating tasks from NL:", err);
+      toast.error(
+        err.response?.data?.error || "Failed to create tasks from command"
+      );
+    } finally {
+      setCreatingFromNL(false);
+      stopVoiceInput();
+    }
+  };
+
+  const startVoiceInput = () => {
+    const Recognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+      toast.error("Voice input is not supported in this browser");
+      return;
+    }
+
+    const resolvedLang =
+      speechLang === "custom"
+        ? (speechLangCustom.trim() || navigator.language || "en-US")
+        : speechLang === "auto"
+          ? (navigator.language || "en-US")
+          : speechLang;
+
+    if (!speechRecognitionRef.current) {
+      const recognition = new Recognition();
+      recognition.lang = resolvedLang;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        let transcript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0]?.transcript || "";
+        }
+        const normalized = transcript.trim();
+        latestTranscriptRef.current = normalized;
+        setNlCommand(normalized);
+
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
+
+        silenceTimerRef.current = setTimeout(async () => {
+          if (
+            autoCreateTriggeredRef.current ||
+            creatingFromNLRef.current ||
+            !latestTranscriptRef.current
+          ) {
+            return;
+          }
+
+          autoCreateTriggeredRef.current = true;
+          stopVoiceInput();
+          await handleCreateFromNaturalLanguage(latestTranscriptRef.current);
+        }, 2000);
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      speechRecognitionRef.current = recognition;
+    }
+
+    try {
+      speechRecognitionRef.current.lang = resolvedLang;
+      autoCreateTriggeredRef.current = false;
+      latestTranscriptRef.current = "";
+      speechRecognitionRef.current.start();
+      setIsListening(true);
+    } catch {
+      setIsListening(false);
+    }
+  };
+
+  const stopVoiceInput = () => {
+    try {
+      speechRecognitionRef.current?.stop();
+    } catch {
+      // ignore stop failures from stale sessions
+    }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+    setIsListening(false);
   };
 
   // ===== Status change from board =====
@@ -1568,6 +1725,97 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               <Modal.Title>Create New Task</Modal.Title>
             </Modal.Header>
             <Modal.Body>
+              <div className="mb-5 p-3 rounded-lg border border-primary-200 bg-primary-50">
+                <label className="block text-sm font-medium text-gray-800 mb-2">
+                  Natural Language Task Creation
+                </label>
+                <div className="flex flex-col md:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={nlCommand}
+                    onChange={(e) => setNlCommand(e.target.value)}
+                    placeholder='Type or speak: "Create 5 frontend tasks for login redesign, assign to Sarah, high priority, due Friday"'
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                    disabled={creating || creatingFromNL}
+                  />
+                  <Button
+                    type="button"
+                    variant={isListening ? "danger" : "secondary"}
+                    onClick={isListening ? stopVoiceInput : startVoiceInput}
+                    disabled={creating || creatingFromNL}
+                    className="gap-2"
+                  >
+                    {isListening ? (
+                      <>
+                        <MicOff className="w-4 h-4" />
+                        Stop
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="w-4 h-4" />
+                        Speak
+                      </>
+                    )}
+                  </Button>
+                  <select
+                    value={speechLang}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSpeechLang(v);
+                      localStorage.setItem("nlSpeechLang", v);
+                      if (speechRecognitionRef.current) {
+                        speechRecognitionRef.current.lang =
+                          v === "custom"
+                            ? (speechLangCustom.trim() || navigator.language || "en-US")
+                            : v === "auto"
+                              ? (navigator.language || "en-US")
+                              : v;
+                      }
+                    }}
+                    className="border border-gray-300 rounded-lg px-2 py-2 text-sm min-w-[150px] focus:border-primary-500 focus:ring-primary-500/20"
+                    disabled={creating || creatingFromNL || isListening}
+                  >
+                    <option value="auto">Auto language</option>
+                    <option value="en-US">English</option>
+                    <option value="hi-IN">Hindi</option>
+                    <option value="pa-IN">Punjabi</option>
+                    <option value="es-ES">Spanish</option>
+                    <option value="fr-FR">French</option>
+                    <option value="de-DE">German</option>
+                    <option value="ar-SA">Arabic</option>
+                    <option value="ja-JP">Japanese</option>
+                    <option value="custom">Custom code</option>
+                  </select>
+                  {speechLang === "custom" && (
+                    <input
+                      type="text"
+                      value={speechLangCustom}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setSpeechLangCustom(v);
+                        localStorage.setItem("nlSpeechLangCustom", v);
+                      }}
+                      placeholder="BCP-47: ta-IN, bn-IN, ru-RU, etc."
+                      className="border border-gray-300 rounded-lg px-2 py-2 text-sm min-w-[220px] focus:border-primary-500 focus:ring-primary-500/20"
+                      disabled={creating || creatingFromNL || isListening}
+                    />
+                  )}
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleCreateFromNaturalLanguage}
+                    loading={creatingFromNL}
+                    disabled={creating || creatingFromNL}
+                    className="gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Create With AI
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-600 mt-2">
+                  Voice mode listens continuously and auto-creates after 2 seconds of silence.
+                </p>
+              </div>
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Left Column */}
                 <div className="space-y-4">

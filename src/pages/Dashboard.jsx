@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
-import { getAdminInsights, getExecutiveSummary } from "../services/intelligence.api";
+import { getAdminInsights } from "../services/intelligence.api";
 import { getSocket } from "../socket";
 import { Card, Badge, Button, Skeleton } from "../components/ui";
 
@@ -41,9 +41,13 @@ export default function Dashboard() {
   const [performanceLoading, setPerformanceLoading] = useState(false);
   const [performanceTrend, setPerformanceTrend] = useState([]);
   const [projectPerformance, setProjectPerformance] = useState([]);
-  const [showReasoning, setShowReasoning] = useState(false);
   const [forecastReasoningOpen, setForecastReasoningOpen] = useState(false);
   const [healthScore, setHealthScore] = useState(null);
+  const [dashboardOverview, setDashboardOverview] = useState(null);
+  const [executiveDetail, setExecutiveDetail] = useState(null);
+  const [executiveDetailLoading, setExecutiveDetailLoading] = useState(false);
+  const [executiveDetailOpen, setExecutiveDetailOpen] = useState(false);
+  const [executiveModalView, setExecutiveModalView] = useState("summary");
  
 // ASANA VIEWER STATE
 
@@ -216,6 +220,21 @@ async function migrateAsanaProject() {
   }
 }
 
+async function openExecutiveDetail(view = "summary") {
+  try {
+    setExecutiveDetailLoading(true);
+    setExecutiveModalView(view);
+    setExecutiveDetailOpen(true);
+    const res = await api.get("/dashboard/executive-detail");
+    setExecutiveDetail(res.data);
+  } catch (err) {
+    toast.error(err?.response?.data?.error || "Failed to load executive detail");
+    setExecutiveDetailOpen(false);
+  } finally {
+    setExecutiveDetailLoading(false);
+  }
+}
+
 useEffect(() => {
   if (!selectedAsanaProject?.gid) return;
 
@@ -231,6 +250,17 @@ useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError("");
+      let overview = null;
+      try {
+        const overviewRes = await api.get("/dashboard/overview");
+        overview = overviewRes.data;
+        setDashboardOverview(overview);
+        if (typeof overview?.healthScore === "number") {
+          setHealthScore(overview.healthScore);
+        }
+      } catch (err) {
+        console.warn("Dashboard overview not available yet");
+      }
       // 🔥 Load workspace health (initial value)
 // ✅ Load workspace health baseline
 try {
@@ -255,22 +285,14 @@ try {
 } catch (err) {
   console.warn("Project performance not available");
 }
-      // Fetch executive summary (current month)    
-if (isAdmin) {
-  try {
-    setSummaryLoading(true);
-    const month = new Date().toISOString().slice(0, 7);
-
-    const summaryRes = await api.get(
-      `/intelligence/admin/executive-summary?month=${month}`
-    );
-
-    setExecutiveSummary(summaryRes.data);
-  } catch (err) {
-    console.warn("Executive summary not available yet");
-  } finally {
-    setSummaryLoading(false);
-  }
+      // Reflective summary for dashboard card
+if (overview?.executiveSummary) {
+  setExecutiveSummary({
+    status: "ready",
+    headline: overview.executiveSummary.headline || "",
+    text: overview.executiveSummary.narrative || "",
+    reasoning: null,
+  });
 }
 
 // Fetch my monthly performance
@@ -288,7 +310,16 @@ try {
 }
       try {
         const projectsRes = await api.get("/projects");
-        const proj = projectsRes.data || [];
+        let proj = projectsRes.data || [];
+        const scopedProjectIds = overview?.scope?.projectIds || [];
+        if (role !== "admin") {
+          if (scopedProjectIds.length === 0) {
+            proj = [];
+          } else {
+            const allowed = new Set(scopedProjectIds.map(String));
+            proj = proj.filter((p) => allowed.has(String(p.id)));
+          }
+        }
         setProjects(proj);
 
         const allProjectTasks = [];
@@ -393,6 +424,9 @@ useEffect(() => {
         setIntelligence(insightsRes.data);
       }
 
+      const overviewRes = await api.get("/dashboard/overview");
+      setDashboardOverview(overviewRes.data);
+
     } catch (err) {
       console.warn("Live intelligence refresh failed");
     }
@@ -407,29 +441,6 @@ useEffect(() => {
     );
   };
 }, [api, isAdmin]);
-
-  // 🔥 Auto-refresh executive summary while AI is generating
-useEffect(() => {
-  if (!executiveSummary || executiveSummary.status !== "processing") {
-    return;
-  }
-
-  const interval = setInterval(async () => {
-    try {
-      const month = new Date().toISOString().slice(0, 7);
-
-      const res = await api.get(
-        `/intelligence/admin/executive-summary?month=${month}`
-      );
-
-      setExecutiveSummary(res.data);
-    } catch (err) {
-      console.warn("Auto-refresh failed");
-    }
-  }, 5000); // check every 5 seconds
-
-  return () => clearInterval(interval);
-}, [executiveSummary, api]);
 
   // Flatten tasks with project reference
   const flatTasks = useMemo(() => {
@@ -450,16 +461,20 @@ useEffect(() => {
     return flatTasks;
   }, [flatTasks, isUser, auth.user.id]);
 
-  const totalProjects = projects.length;
-  const totalTasks = tasksForStats.length;
-  const pendingCount = tasksForStats.filter((t) => t.status === "pending").length;
-  const inProgressCount = tasksForStats.filter(
-    (t) => t.status === "in-progress"
-  ).length;
-  const completedCount = tasksForStats.filter(
-    (t) => t.status === "completed"
-  ).length;
-  const overdueCount = tasksForStats.filter((t) => isTaskOverdue(t)).length;
+  const totalProjects = dashboardOverview?.counts?.totalProjects ?? projects.length;
+  const totalTasks = dashboardOverview?.counts?.totalTasks ?? tasksForStats.length;
+  const pendingCount =
+    dashboardOverview?.counts?.pendingTasks ??
+    tasksForStats.filter((t) => t.status === "pending").length;
+  const inProgressCount =
+    dashboardOverview?.counts?.inProgressTasks ??
+    tasksForStats.filter((t) => t.status === "in-progress").length;
+  const completedCount =
+    dashboardOverview?.counts?.completedTasks ??
+    tasksForStats.filter((t) => t.status === "completed").length;
+  const overdueCount =
+    dashboardOverview?.counts?.overdueTasks ??
+    tasksForStats.filter((t) => isTaskOverdue(t)).length;
 
 
 /* ======================================
@@ -511,13 +526,16 @@ const autonomousInsight = useMemo(() => {
   );
   const myOverdueTasks = myTasks.filter((t) => isTaskOverdue(t));
 
-  // Top overdue tasks list (limit 5)
+  // Top overdue tasks list (scope-safe from dashboard overview when available)
   const topOverdue = useMemo(() => {
+    if (Array.isArray(dashboardOverview?.topOverdue)) {
+      return dashboardOverview.topOverdue;
+    }
     const arr = tasksForStats.filter((t) => isTaskOverdue(t));
     // sort by due_date ascending
     arr.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     return arr.slice(0, 5);
-  }, [tasksForStats]);
+  }, [tasksForStats, dashboardOverview]);
 
   function getRiskLevel(score) {
   if (score >= 75) return { label: "Low Risk", color: "text-emerald-600" };
@@ -647,37 +665,70 @@ const autonomousInsight = useMemo(() => {
 {/* ================================
     EXECUTIVE INTELLIGENCE SUMMARY
 ================================ */}
-{isAdmin && executiveSummary && (
+{false && isAdmin && dashboardOverview?.executiveSummary && (
   <Card className="bg-gradient-to-r from-primary-600 to-primary-700 text-white border-primary-500">
     <Card.Content>
       <h2 className="text-lg font-semibold mb-3">
         Executive Intelligence Insight
       </h2>
 
-      {executiveSummary.status === "processing" && (
-        <p className="text-sm opacity-90">
+      <div className="text-sm font-semibold opacity-95">
+        {dashboardOverview.executiveSummary.headline}
+        
           🧠 AI is analyzing organizational performance...
-        </p>
-      )}
+        
+      </div>
 
-      {executiveSummary.status === "ready" && (
+      {dashboardOverview?.executiveSummary && (
         <>
-          <div className="text-sm leading-relaxed whitespace-pre-wrap">
-            {executiveSummary.text}
+          <div className="text-sm leading-relaxed whitespace-pre-wrap mt-2 line-clamp-3">
+            {dashboardOverview.executiveSummary.narrative}
           </div>
 
-          {executiveSummary.reasoning && (
-            <Button
-              onClick={() => setShowReasoning(true)}
-              size="sm"
-              variant="ghost"
-              className="mt-4 text-white hover:bg-white/10"
-            >
-              View AI analyst reasoning
-            </Button>
-          )}
+          <Button
+            onClick={openExecutiveDetail}
+            size="sm"
+            variant="ghost"
+            className="mt-4 text-white hover:bg-white/10"
+          >
+            Read full executive summary & reasoning
+          </Button>
         </>
       )}
+    </Card.Content>
+  </Card>
+)}
+
+{isAdmin && dashboardOverview?.executiveSummary && (
+  <Card className="bg-gradient-to-r from-primary-600 to-primary-700 text-white border-primary-500">
+    <Card.Content>
+      <h2 className="text-lg font-semibold mb-3">
+        Executive Intelligence Insight
+      </h2>
+      <div className="text-sm font-semibold opacity-95">
+        {dashboardOverview.executiveSummary.headline}
+      </div>
+      <div className="text-sm leading-relaxed whitespace-pre-wrap mt-2 line-clamp-3">
+        {dashboardOverview.executiveSummary.narrative}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button
+          onClick={() => openExecutiveDetail("summary")}
+          size="sm"
+          variant="ghost"
+          className="text-white hover:bg-white/10"
+        >
+          Read Full Summary
+        </Button>
+        <Button
+          onClick={() => openExecutiveDetail("reasoning")}
+          size="sm"
+          variant="ghost"
+          className="text-white hover:bg-white/10"
+        >
+          View Reasoning
+        </Button>
+      </div>
     </Card.Content>
   </Card>
 )}
@@ -923,7 +974,7 @@ const autonomousInsight = useMemo(() => {
     <div className="space-y-2">
       {intelligence.leaderboard.map((u, index) => (
         <div
-          key={u.userId}
+          key={`${u.userId || u.username || "leader"}-${index}`}
           className="flex justify-between items-center text-sm border-b pb-2"
         >
           <div className="flex items-center gap-2">
@@ -1195,7 +1246,7 @@ const autonomousInsight = useMemo(() => {
                   <div className="text-[10px] text-slate-600">
                     Project:{" "}
                     <span className="font-semibold">
-                      {t._project?.name || "Unknown"}
+                      {t.project_name || t._project?.name || "Unknown"}
                     </span>
                   </div>
                   <div className="text-[10px] text-slate-500">
@@ -1246,24 +1297,86 @@ const autonomousInsight = useMemo(() => {
           {error}
         </div>
       )}
-      {showReasoning && (
+      {executiveDetailOpen && (
   <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-    <div className="bg-white rounded-xl shadow-xl w-[720px] max-w-[92%] p-6 relative">
+    <div className="bg-white rounded-xl shadow-xl w-[920px] max-w-[94%] p-6 relative max-h-[86vh] overflow-y-auto">
 
       <button
-        onClick={() => setShowReasoning(false)}
+        onClick={() => setExecutiveDetailOpen(false)}
         className="absolute top-3 right-4 text-slate-500 hover:text-black"
       >
         ✕
       </button>
 
       <h3 className="text-lg font-semibold mb-4">
-        AI Analyst Reasoning
+        Executive Summary and Reasoning
       </h3>
 
-      <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
-        {executiveSummary?.reasoning || "Reasoning not available."}
+      <div className="flex gap-2 mb-4">
+        <Button
+          size="xs"
+          variant={executiveModalView === "summary" ? "primary" : "outline"}
+          onClick={() => setExecutiveModalView("summary")}
+        >
+          Summary
+        </Button>
+        <Button
+          size="xs"
+          variant={executiveModalView === "reasoning" ? "primary" : "outline"}
+          onClick={() => setExecutiveModalView("reasoning")}
+        >
+          Reasoning
+        </Button>
       </div>
+
+      {executiveDetailLoading ? (
+        <div className="text-sm text-slate-500">Loading executive detail...</div>
+      ) : !executiveDetail ? (
+        <div className="text-sm text-slate-500">Executive detail not available.</div>
+      ) : (
+        <div className="space-y-5">
+          {executiveModalView === "summary" && (
+            <>
+              <div>
+                <div className="text-xs font-semibold text-slate-500 mb-2">REFLECTIVE SUMMARY</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {executiveDetail.reflectiveSummary?.headline}
+                </div>
+                <div className="text-sm text-slate-700 mt-1">
+                  {executiveDetail.reflectiveSummary?.narrative}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold text-slate-500 mb-2">FULL EXECUTIVE SUMMARY</div>
+                <div className="text-sm text-slate-800 whitespace-pre-line leading-relaxed">
+                  {executiveDetail.fullSummary}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold text-slate-500 mb-2">RECOMMENDATIONS</div>
+                <ul className="space-y-2 text-sm text-slate-700 list-disc list-inside">
+                  {(executiveDetail.recommendations || executiveDetail.priorities || []).map((line, idx) => (
+                    <li key={idx}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+
+          {executiveModalView === "reasoning" && (
+            <div>
+              <div className="text-xs font-semibold text-slate-500 mb-2">REASONING</div>
+              <ul className="space-y-2 text-sm text-slate-700 list-disc list-inside">
+                {(executiveDetail.reasoning || []).map((line, idx) => (
+                  <li key={idx}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   </div>

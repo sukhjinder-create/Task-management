@@ -117,10 +117,10 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="w-60 bg-white border-r border-gray-200 h-screen fixed left-0 top-0 flex flex-col">
+    <div className="w-60 theme-surface border-r theme-border h-screen fixed left-0 top-0 flex flex-col">
       {/* Logo/Brand */}
-      <div className="px-4 py-5 border-b border-gray-200">
-        <h1 className="text-xl font-bold text-gray-900">TaskManager</h1>
+      <div className="px-4 py-5 border-b theme-border">
+        <h1 className="text-xl font-bold theme-text">TaskManager</h1>
       </div>
 
       {/* Main Navigation */}
@@ -134,7 +134,7 @@ export default function Sidebar() {
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary-50 text-primary-700 border-l-2 border-primary-600 -ml-[2px] pl-[10px]'
-                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                  : 'theme-text-muted hover:bg-[var(--surface-soft)]'
               )
             }
           >
@@ -159,7 +159,7 @@ export default function Sidebar() {
               'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
               isActive
                 ? 'bg-primary-50 text-primary-700 border-l-2 border-primary-600 -ml-[2px] pl-[10px]'
-                : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                : 'theme-text-muted hover:bg-[var(--surface-soft)]'
             )
           }
         >
@@ -171,10 +171,10 @@ export default function Sidebar() {
         {adminItems.some(item => item.show) && (
           <>
             <div className="pt-4 pb-2">
-              <div className="h-px bg-gray-200" />
+              <div className="h-px theme-border" />
             </div>
             <div className="px-3 pt-2 pb-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <p className="text-xs font-semibold theme-text-muted uppercase tracking-wider">
                 Admin
               </p>
             </div>
@@ -187,7 +187,7 @@ export default function Sidebar() {
                     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                     isActive
                       ? 'bg-primary-50 text-primary-700 border-l-2 border-primary-600 -ml-[2px] pl-[10px]'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                      : 'theme-text-muted hover:bg-[var(--surface-soft)]'
                   )
                 }
               >
@@ -200,17 +200,17 @@ export default function Sidebar() {
       </nav>
 
       {/* User Profile Card */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t theme-border">
         <Link
           to="/profile"
-          className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--surface-soft)] transition-colors"
         >
           <Avatar name={auth.user?.username} size="md" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
+            <p className="text-sm font-medium theme-text truncate">
               {auth.user?.username}
             </p>
-            <p className="text-xs text-gray-500 truncate capitalize">
+            <p className="text-xs theme-text-muted truncate capitalize">
               {auth.user?.role}
             </p>
           </div>
