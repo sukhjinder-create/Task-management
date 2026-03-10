@@ -51,7 +51,7 @@ export function Modal({ isOpen, onClose, children, className, size = 'md', ...pr
       {/* Modal */}
       <div
         className={cn(
-          'relative w-full bg-white rounded-xl shadow-xl',
+          'relative w-full theme-surface theme-text rounded-xl shadow-xl border theme-border',
           'animate-in fade-in-0 zoom-in-95 duration-200',
           sizes[size],
           className
@@ -66,7 +66,7 @@ export function Modal({ isOpen, onClose, children, className, size = 'md', ...pr
 
 export function ModalHeader({ children, className, ...props }) {
   return (
-    <div className={cn('px-6 py-4 border-b border-gray-200', className)} {...props}>
+    <div className={cn('px-6 py-4 border-b theme-border', className)} {...props}>
       {children}
     </div>
   );
@@ -74,7 +74,7 @@ export function ModalHeader({ children, className, ...props }) {
 
 export function ModalTitle({ children, className, ...props }) {
   return (
-    <h2 className={cn('text-xl font-semibold text-gray-900', className)} {...props}>
+    <h2 className={cn('text-xl font-semibold theme-text', className)} {...props}>
       {children}
     </h2>
   );
@@ -90,7 +90,7 @@ export function ModalBody({ children, className, ...props }) {
 
 export function ModalFooter({ children, className, ...props }) {
   return (
-    <div className={cn('px-6 py-4 border-t border-gray-200 bg-gray-50/50 flex items-center justify-end gap-3', className)} {...props}>
+    <div className={cn('px-6 py-4 border-t theme-border theme-surface-soft flex items-center justify-end gap-3', className)} {...props}>
       {children}
     </div>
   );

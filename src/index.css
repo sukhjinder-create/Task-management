@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────
+   LIGHT (default)
+───────────────────────────────────────────────────────── */
 :root {
   --app-bg: #f8fafc;
   --surface: #ffffff;
@@ -20,24 +23,58 @@
   --overdue-soft: #7f1d1d;
 }
 
+/* ─────────────────────────────────────────────────────────
+   SYSTEM — CSS-native adaptive (no JS re-render needed)
+   Light: inherits :root above
+   Dark:  uses the standard navy-blue palette users expect
+          from an "OS dark mode" experience
+───────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] {
+    --app-bg: #0b1020;
+    --surface: #111a2e;
+    --surface-soft: #1a2742;
+    --surface-strong: #24365a;
+    --border: #2a3a5c;
+    --text: #e2e8f0;
+    --text-muted: #cbd5e1;
+    --text-soft: #94a3b8;
+    --primary: #8b94ff;
+    --primary-contrast: #0b1020;
+    --ring: rgba(124, 131, 255, 0.35);
+    --overdue-bg: #2a1a27;
+    --overdue-border: #6b2f4d;
+    --overdue-text: #fecdd3;
+    --overdue-soft: #fda4af;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   DARK — explicit choice, distinct zinc/charcoal + violet
+   Intentionally different from system dark (navy) so users
+   can tell them apart at a glance
+───────────────────────────────────────────────────────── */
 html[data-theme="dark"] {
-  --app-bg: #0b1020;
-  --surface: #111a2e;
-  --surface-soft: #1a2742;
-  --surface-strong: #24365a;
-  --border: #2a3a5c;
-  --text: #e2e8f0;
-  --text-muted: #cbd5e1;
-  --text-soft: #94a3b8;
-  --primary: #8b94ff;
-  --primary-contrast: #0b1020;
-  --ring: rgba(124, 131, 255, 0.35);
-  --overdue-bg: #2a1a27;
-  --overdue-border: #6b2f4d;
+  --app-bg: #0c0c0e;
+  --surface: #18181b;
+  --surface-soft: #27272a;
+  --surface-strong: #3f3f46;
+  --border: #52525b;
+  --text: #fafafa;
+  --text-muted: #d4d4d8;
+  --text-soft: #a1a1aa;
+  --primary: #a78bfa;
+  --primary-contrast: #0c0c0e;
+  --ring: rgba(167, 139, 250, 0.35);
+  --overdue-bg: #200a14;
+  --overdue-border: #6b1f3f;
   --overdue-text: #fecdd3;
   --overdue-soft: #fda4af;
 }
 
+/* ─────────────────────────────────────────────────────────
+   OCEAN
+───────────────────────────────────────────────────────── */
 html[data-theme="ocean"] {
   --app-bg: #f0f9ff;
   --surface: #ffffff;
@@ -56,6 +93,9 @@ html[data-theme="ocean"] {
   --overdue-soft: #be123c;
 }
 
+/* ─────────────────────────────────────────────────────────
+   FOREST
+───────────────────────────────────────────────────────── */
 html[data-theme="forest"] {
   --app-bg: #f4fbf6;
   --surface: #ffffff;
@@ -74,6 +114,9 @@ html[data-theme="forest"] {
   --overdue-soft: #be123c;
 }
 
+/* ─────────────────────────────────────────────────────────
+   SUNSET — warm orange/copper
+───────────────────────────────────────────────────────── */
 html[data-theme="sunset"] {
   --app-bg: #fff7ed;
   --surface: #ffffff;
@@ -92,24 +135,34 @@ html[data-theme="sunset"] {
   --overdue-soft: #be123c;
 }
 
+/* ─────────────────────────────────────────────────────────
+   YELLOW — golden amber, distinct from sunset
+   Key differences vs sunset:
+     · text is near-black warm (not red-brown)
+     · borders and surfaces are pure yellow (not orange-peach)
+     · primary is deep gold, not orange
+───────────────────────────────────────────────────────── */
 html[data-theme="yellow"] {
   --app-bg: #fffbeb;
-  --surface: #fffef7;
-  --surface-soft: #fef3c7;
-  --surface-strong: #fde68a;
-  --border: #fcd34d;
-  --text: #78350f;
-  --text-muted: #92400e;
-  --text-soft: #b45309;
-  --primary: #d97706;
+  --surface: #fffef5;
+  --surface-soft: #fef9c3;
+  --surface-strong: #fef08a;
+  --border: #fde047;
+  --text: #1c1200;
+  --text-muted: #3d2c00;
+  --text-soft: #7c5a00;
+  --primary: #ca8a04;
   --primary-contrast: #ffffff;
-  --ring: rgba(217, 119, 6, 0.28);
-  --overdue-bg: #fff7ed;
-  --overdue-border: #fdba74;
-  --overdue-text: #9a3412;
-  --overdue-soft: #b45309;
+  --ring: rgba(202, 138, 4, 0.28);
+  --overdue-bg: #fff1f2;
+  --overdue-border: #fda4af;
+  --overdue-text: #9f1239;
+  --overdue-soft: #be123c;
 }
 
+/* ─────────────────────────────────────────────────────────
+   BASE
+───────────────────────────────────────────────────────── */
 @layer base {
   html,
   body,
@@ -140,6 +193,9 @@ html[data-theme="yellow"] {
   }
 }
 
+/* ─────────────────────────────────────────────────────────
+   COMPONENT HELPERS
+───────────────────────────────────────────────────────── */
 @layer components {
   .theme-bg {
     background: var(--app-bg);
@@ -201,37 +257,202 @@ html[data-theme="yellow"] {
   .theme-overdue-soft {
     color: var(--overdue-soft);
   }
+
+  /* Active sidebar / nav link — adapts to every theme automatically */
+  .nav-link-active {
+    background-color: color-mix(in srgb, var(--primary) 12%, var(--surface));
+    color: var(--primary);
+    border-left-color: var(--primary);
+  }
+
+  /* Placeholder text using theme variable */
+  .theme-placeholder::placeholder {
+    color: var(--text-soft);
+    opacity: 1;
+  }
 }
 
+/* ─────────────────────────────────────────────────────────
+   UTILITY OVERRIDES — applied to ALL non-light themes so
+   components using hardcoded Tailwind classes respond to
+   the active theme instead of staying white/gray
+───────────────────────────────────────────────────────── */
 @layer utilities {
+  /* Background overrides */
   html[data-theme="dark"] .bg-white,
   html[data-theme="dark"] .bg-slate-50,
   html[data-theme="dark"] .bg-slate-100,
   html[data-theme="dark"] .bg-gray-50,
-  html[data-theme="dark"] .bg-gray-100 {
+  html[data-theme="dark"] .bg-gray-100,
+  html[data-theme="ocean"] .bg-white,
+  html[data-theme="ocean"] .bg-slate-50,
+  html[data-theme="ocean"] .bg-slate-100,
+  html[data-theme="ocean"] .bg-gray-50,
+  html[data-theme="ocean"] .bg-gray-100,
+  html[data-theme="forest"] .bg-white,
+  html[data-theme="forest"] .bg-slate-50,
+  html[data-theme="forest"] .bg-slate-100,
+  html[data-theme="forest"] .bg-gray-50,
+  html[data-theme="forest"] .bg-gray-100,
+  html[data-theme="sunset"] .bg-white,
+  html[data-theme="sunset"] .bg-slate-50,
+  html[data-theme="sunset"] .bg-slate-100,
+  html[data-theme="sunset"] .bg-gray-50,
+  html[data-theme="sunset"] .bg-gray-100,
+  html[data-theme="yellow"] .bg-white,
+  html[data-theme="yellow"] .bg-slate-50,
+  html[data-theme="yellow"] .bg-slate-100,
+  html[data-theme="yellow"] .bg-gray-50,
+  html[data-theme="yellow"] .bg-gray-100 {
     background-color: var(--surface) !important;
   }
 
+  /* Also override surface-soft backgrounds */
+  html[data-theme="dark"] .bg-slate-200,
+  html[data-theme="dark"] .bg-gray-200,
+  html[data-theme="ocean"] .bg-slate-200,
+  html[data-theme="ocean"] .bg-gray-200,
+  html[data-theme="forest"] .bg-slate-200,
+  html[data-theme="forest"] .bg-gray-200,
+  html[data-theme="sunset"] .bg-slate-200,
+  html[data-theme="sunset"] .bg-gray-200,
+  html[data-theme="yellow"] .bg-slate-200,
+  html[data-theme="yellow"] .bg-gray-200 {
+    background-color: var(--surface-soft) !important;
+  }
+
+  /* System dark mode backgrounds */
+  @media (prefers-color-scheme: dark) {
+    html[data-theme="system"] .bg-white,
+    html[data-theme="system"] .bg-slate-50,
+    html[data-theme="system"] .bg-slate-100,
+    html[data-theme="system"] .bg-gray-50,
+    html[data-theme="system"] .bg-gray-100 {
+      background-color: var(--surface) !important;
+    }
+    html[data-theme="system"] .bg-slate-200,
+    html[data-theme="system"] .bg-gray-200 {
+      background-color: var(--surface-soft) !important;
+    }
+  }
+
+  /* Text overrides — dark headings → theme text */
   html[data-theme="dark"] .text-slate-900,
   html[data-theme="dark"] .text-slate-800,
   html[data-theme="dark"] .text-gray-900,
-  html[data-theme="dark"] .text-gray-800 {
+  html[data-theme="dark"] .text-gray-800,
+  html[data-theme="ocean"] .text-slate-900,
+  html[data-theme="ocean"] .text-slate-800,
+  html[data-theme="ocean"] .text-gray-900,
+  html[data-theme="ocean"] .text-gray-800,
+  html[data-theme="forest"] .text-slate-900,
+  html[data-theme="forest"] .text-slate-800,
+  html[data-theme="forest"] .text-gray-900,
+  html[data-theme="forest"] .text-gray-800,
+  html[data-theme="sunset"] .text-slate-900,
+  html[data-theme="sunset"] .text-slate-800,
+  html[data-theme="sunset"] .text-gray-900,
+  html[data-theme="sunset"] .text-gray-800,
+  html[data-theme="yellow"] .text-slate-900,
+  html[data-theme="yellow"] .text-slate-800,
+  html[data-theme="yellow"] .text-gray-900,
+  html[data-theme="yellow"] .text-gray-800 {
     color: var(--text) !important;
   }
 
+  /* Text overrides — muted text */
   html[data-theme="dark"] .text-slate-700,
   html[data-theme="dark"] .text-slate-600,
   html[data-theme="dark"] .text-slate-500,
   html[data-theme="dark"] .text-gray-700,
   html[data-theme="dark"] .text-gray-600,
-  html[data-theme="dark"] .text-gray-500 {
+  html[data-theme="dark"] .text-gray-500,
+  html[data-theme="ocean"] .text-slate-700,
+  html[data-theme="ocean"] .text-slate-600,
+  html[data-theme="ocean"] .text-slate-500,
+  html[data-theme="ocean"] .text-gray-700,
+  html[data-theme="ocean"] .text-gray-600,
+  html[data-theme="ocean"] .text-gray-500,
+  html[data-theme="forest"] .text-slate-700,
+  html[data-theme="forest"] .text-slate-600,
+  html[data-theme="forest"] .text-slate-500,
+  html[data-theme="forest"] .text-gray-700,
+  html[data-theme="forest"] .text-gray-600,
+  html[data-theme="forest"] .text-gray-500,
+  html[data-theme="sunset"] .text-slate-700,
+  html[data-theme="sunset"] .text-slate-600,
+  html[data-theme="sunset"] .text-slate-500,
+  html[data-theme="sunset"] .text-gray-700,
+  html[data-theme="sunset"] .text-gray-600,
+  html[data-theme="sunset"] .text-gray-500,
+  html[data-theme="yellow"] .text-slate-700,
+  html[data-theme="yellow"] .text-slate-600,
+  html[data-theme="yellow"] .text-slate-500,
+  html[data-theme="yellow"] .text-gray-700,
+  html[data-theme="yellow"] .text-gray-600,
+  html[data-theme="yellow"] .text-gray-500 {
     color: var(--text-muted) !important;
   }
 
+  /* System dark text overrides */
+  @media (prefers-color-scheme: dark) {
+    html[data-theme="system"] .text-slate-900,
+    html[data-theme="system"] .text-slate-800,
+    html[data-theme="system"] .text-gray-900,
+    html[data-theme="system"] .text-gray-800 {
+      color: var(--text) !important;
+    }
+    html[data-theme="system"] .text-slate-700,
+    html[data-theme="system"] .text-slate-600,
+    html[data-theme="system"] .text-slate-500,
+    html[data-theme="system"] .text-gray-700,
+    html[data-theme="system"] .text-gray-600,
+    html[data-theme="system"] .text-gray-500 {
+      color: var(--text-muted) !important;
+    }
+    html[data-theme="system"] .border-slate-200,
+    html[data-theme="system"] .border-slate-300,
+    html[data-theme="system"] .border-gray-200,
+    html[data-theme="system"] .border-gray-300 {
+      border-color: var(--border) !important;
+    }
+  }
+
+  /* Border overrides */
   html[data-theme="dark"] .border-slate-200,
   html[data-theme="dark"] .border-slate-300,
   html[data-theme="dark"] .border-gray-200,
-  html[data-theme="dark"] .border-gray-300 {
+  html[data-theme="dark"] .border-gray-300,
+  html[data-theme="ocean"] .border-slate-200,
+  html[data-theme="ocean"] .border-slate-300,
+  html[data-theme="ocean"] .border-gray-200,
+  html[data-theme="ocean"] .border-gray-300,
+  html[data-theme="forest"] .border-slate-200,
+  html[data-theme="forest"] .border-slate-300,
+  html[data-theme="forest"] .border-gray-200,
+  html[data-theme="forest"] .border-gray-300,
+  html[data-theme="sunset"] .border-slate-200,
+  html[data-theme="sunset"] .border-slate-300,
+  html[data-theme="sunset"] .border-gray-200,
+  html[data-theme="sunset"] .border-gray-300,
+  html[data-theme="yellow"] .border-slate-200,
+  html[data-theme="yellow"] .border-slate-300,
+  html[data-theme="yellow"] .border-gray-200,
+  html[data-theme="yellow"] .border-gray-300 {
+    border-color: var(--border) !important;
+  }
+
+  /* Divide overrides */
+  html[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="dark"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="ocean"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="ocean"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="forest"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="forest"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="sunset"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="sunset"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="yellow"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+  html[data-theme="yellow"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
     border-color: var(--border) !important;
   }
 }

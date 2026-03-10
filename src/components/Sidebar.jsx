@@ -13,6 +13,7 @@ import {
   Users,
   Brain,
   Bot,
+  FlaskConical,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../api";
@@ -112,6 +113,7 @@ export default function Sidebar() {
 
   const adminItems = [
     { to: "/autopilot", label: "AI Autopilot", icon: Bot, show: isAdmin || isManager },
+    { to: "/testing-agent", label: "Testing Agent", icon: FlaskConical, show: isAdmin || isManager },
     { to: "/admin/attendance", label: "Attendance", icon: Clock, show: isAdmin },
     { to: "/admin/users", label: "Admin Panel", icon: Users, show: isAdmin },
   ];
@@ -133,7 +135,7 @@ export default function Sidebar() {
               cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary-50 text-primary-700 border-l-2 border-primary-600 -ml-[2px] pl-[10px]'
+                  ? 'nav-link-active border-l-2 -ml-[2px] pl-[10px]'
                   : 'theme-text-muted hover:bg-[var(--surface-soft)]'
               )
             }
@@ -150,7 +152,7 @@ export default function Sidebar() {
 
         {/* Profile Section */}
         <div className="pt-4 pb-2">
-          <div className="h-px bg-gray-200" />
+          <div className="h-px bg-[var(--border)]" />
         </div>
         <NavLink
           to="/profile"
@@ -158,7 +160,7 @@ export default function Sidebar() {
             cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
               isActive
-                ? 'bg-primary-50 text-primary-700 border-l-2 border-primary-600 -ml-[2px] pl-[10px]'
+                ? 'nav-link-active border-l-2 -ml-[2px] pl-[10px]'
                 : 'theme-text-muted hover:bg-[var(--surface-soft)]'
             )
           }
@@ -186,7 +188,7 @@ export default function Sidebar() {
                   cn(
                     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-primary-50 text-primary-700 border-l-2 border-primary-600 -ml-[2px] pl-[10px]'
+                      ? 'nav-link-active border-l-2 -ml-[2px] pl-[10px]'
                       : 'theme-text-muted hover:bg-[var(--surface-soft)]'
                   )
                 }

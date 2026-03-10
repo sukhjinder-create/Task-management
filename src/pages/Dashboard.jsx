@@ -558,7 +558,7 @@ const autonomousInsight = useMemo(() => {
         ? "bg-warning-50 border-warning-200"
         : autonomousInsight.type === "positive"
         ? "bg-success-50 border-success-200"
-        : "bg-gray-50 border-gray-200"
+        : "theme-surface-soft theme-border"
     }
   >
     <Card.Content className="flex items-start gap-3">
@@ -583,7 +583,7 @@ const autonomousInsight = useMemo(() => {
           AI Autonomous Insight
         </Badge>
 
-        <p className="text-sm text-gray-800 leading-relaxed">
+        <p className="text-sm theme-text leading-relaxed">
           {autonomousInsight.message}
         </p>
       </div>
@@ -596,7 +596,7 @@ const autonomousInsight = useMemo(() => {
 ====================================== */}
 
 {(isAdmin || isManager || isUser) && (
-  <Card className="bg-gradient-to-r from-gray-900 to-gray-800 text-white border-gray-700">
+  <Card className="theme-surface-strong theme-text border theme-border">
     <Card.Content>
       <h2 className="text-base font-semibold mb-4">
         Workspace Control Center
@@ -604,16 +604,16 @@ const autonomousInsight = useMemo(() => {
 
       <div className="grid md:grid-cols-4 gap-4">
         {/* Risk Status */}
-        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-          <div className="text-sm text-gray-300">Current Risk State</div>
+        <div className="theme-surface-soft rounded-lg p-4 border theme-border">
+          <div className="text-sm theme-text-muted">Current Risk State</div>
           <div className="text-xl font-semibold mt-1">
             {myPerformance?.intelligence?.risk?.level || "Analyzing"}
           </div>
         </div>
 
         {/* Overdue Pressure */}
-        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-          <div className="text-sm text-gray-300">Execution Pressure</div>
+        <div className="theme-surface-soft rounded-lg p-4 border theme-border">
+          <div className="text-sm theme-text-muted">Execution Pressure</div>
           <div className="text-xl font-semibold mt-1">
             {overdueCount > 5
               ? "High"
@@ -624,23 +624,23 @@ const autonomousInsight = useMemo(() => {
         </div>
 
         {/* Momentum */}
-        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-          <div className="text-sm text-gray-300">Performance Momentum</div>
+        <div className="theme-surface-soft rounded-lg p-4 border theme-border">
+          <div className="text-sm theme-text-muted">Performance Momentum</div>
           <div className="text-xl font-semibold mt-1">
             {intelligence?.forecast?.trend || "Stable"}
           </div>
         </div>
 
         {/* Integrations */}
-        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-          <div className="text-sm text-gray-300 mb-3">External Integrations</div>
+        <div className="theme-surface-soft rounded-lg p-4 border theme-border">
+          <div className="text-sm theme-text-muted mb-3">External Integrations</div>
 
           <div className="flex flex-wrap gap-2">
             <Button onClick={connectAsana} size="xs" variant="primary">
               Asana Connect
             </Button>
 
-            <Button onClick={openAsanaViewer} size="xs" variant="secondary" className="bg-gray-700 border-gray-600 hover:bg-gray-600">
+            <Button onClick={openAsanaViewer} size="xs" variant="secondary">
               Asana Open
             </Button>
 
@@ -648,12 +648,12 @@ const autonomousInsight = useMemo(() => {
               YouTrack
             </Button>
 
-            <Button onClick={openYouTrackViewer} size="xs" variant="secondary" className="bg-gray-700 border-gray-600 hover:bg-gray-600">
+            <Button onClick={openYouTrackViewer} size="xs" variant="secondary">
               YT Open
             </Button>
           </div>
 
-          <div className="text-xs text-gray-400 mt-2">
+          <div className="text-xs theme-text-muted mt-2">
             Allow AI to observe external work activity.
           </div>
         </div>
@@ -936,30 +936,30 @@ const autonomousInsight = useMemo(() => {
         <div className="grid lg:grid-cols-3 gap-6">
 {/* 🔥 Org Intelligence Overview */}
 {isAdmin && intelligence && (
-  <section className="bg-white rounded-xl shadow p-6 grid md:grid-cols-4 gap-6">
+  <section className="theme-surface rounded-xl shadow border theme-border p-6 grid md:grid-cols-4 gap-6">
     <div>
-      <div className="text-xs text-slate-500">Average Score</div>
+      <div className="text-xs theme-text-muted">Average Score</div>
       <div className="text-2xl font-bold">
         {intelligence.orgScore.averageScore ?? "-"}
       </div>
     </div>
 
     <div>
-      <div className="text-xs text-slate-500">Total Users</div>
+      <div className="text-xs theme-text-muted">Total Users</div>
       <div className="text-2xl font-bold">
         {intelligence.orgScore.userCount}
       </div>
     </div>
 
     <div>
-      <div className="text-xs text-slate-500">High Performers</div>
+      <div className="text-xs theme-text-muted">High Performers</div>
       <div className="text-2xl font-bold text-green-600">
         {intelligence.orgScore.highPerformers}
       </div>
     </div>
 
     <div>
-      <div className="text-xs text-slate-500">At Risk</div>
+      <div className="text-xs theme-text-muted">At Risk</div>
       <div className="text-2xl font-bold text-red-600">
         {intelligence.orgScore.atRiskUsers}
       </div>
@@ -968,7 +968,7 @@ const autonomousInsight = useMemo(() => {
 )}
 {/* 🔥 Performance Leaderboard */}
 {isAdmin && intelligence?.leaderboard && (
-  <section className="bg-slate-50 border border-slate-200 rounded-xl p-6">
+  <section className="theme-surface-soft border theme-border rounded-xl p-6">
     <h2 className="text-sm font-semibold mb-4">Top Performers</h2>
 
     <div className="space-y-2">
@@ -990,14 +990,14 @@ const autonomousInsight = useMemo(() => {
 </div>
 
 {isAdmin && intelligence?.forecast && (
-  <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+  <section className="theme-surface border theme-border rounded-xl p-6 space-y-4">
 
     <div className="flex justify-between items-center">
       <h2 className="text-sm font-semibold">
         Next Month Outlook
       </h2>
 
-      <span className="text-xs px-2 py-1 rounded-full bg-slate-100 font-medium">
+      <span className="text-xs px-2 py-1 rounded-full theme-surface-soft theme-text font-medium">
         {intelligence.forecast.trend}
       </span>
     </div>
@@ -1006,21 +1006,21 @@ const autonomousInsight = useMemo(() => {
     <div className="grid md:grid-cols-3 gap-6 text-sm">
 
       <div>
-        <div className="text-slate-500">Predicted Average</div>
+        <div className="theme-text-muted">Predicted Average</div>
         <div className="text-2xl font-semibold">
           {intelligence.forecast.predictedAverage ?? "-"}
         </div>
       </div>
 
       <div>
-        <div className="text-slate-500">Trend Direction</div>
+        <div className="theme-text-muted">Trend Direction</div>
         <div className="text-lg font-semibold text-emerald-600">
           {intelligence.forecast.trend}
         </div>
       </div>
 
       <div>
-        <div className="text-slate-500">Risk Projection</div>
+        <div className="theme-text-muted">Risk Projection</div>
         <div className="text-lg font-semibold text-red-600">
           {intelligence.forecast.riskProjection ?? "-"}
         </div>
@@ -1031,11 +1031,11 @@ const autonomousInsight = useMemo(() => {
     {/* AI Interpretation */}
     {executiveSummary?.outlook && (
       <div className="border-t pt-4">
-        <div className="text-xs font-semibold text-slate-500 mb-2">
+        <div className="text-xs font-semibold theme-text-muted mb-2">
           AI PERFORMANCE INTERPRETATION
         </div>
 
-        <p className="text-sm text-slate-700 leading-relaxed">
+        <p className="text-sm theme-text leading-relaxed">
           {executiveSummary.outlook}
         </p>
       </div>
@@ -1043,11 +1043,11 @@ const autonomousInsight = useMemo(() => {
 
     {/* AI Decision Guidance */}
 <div className="border-t pt-4 mt-4">
-  <div className="text-xs font-semibold text-slate-500 mb-2">
+  <div className="text-xs font-semibold theme-text-muted mb-2">
     RECOMMENDED ACTION
   </div>
 
-  <p className="text-sm text-slate-700">
+  <p className="text-sm theme-text">
     {intelligence.forecast.trend === "declining"
       ? "Intervention recommended. Focus on overdue workload and coaching reinforcement."
       : intelligence.forecast.trend === "improving"
@@ -1074,7 +1074,7 @@ const autonomousInsight = useMemo(() => {
           {/* ===============================
    WORKSPACE HEALTH PULSE
 ================================ */}
-<section className="bg-white rounded-xl shadow p-4 border border-slate-200">
+<section className="theme-surface rounded-xl shadow p-4 border theme-border">
   <div className="flex justify-between items-center mb-2">
     <h2 className="text-sm font-semibold">
       Workspace Health Pulse
@@ -1094,7 +1094,7 @@ const autonomousInsight = useMemo(() => {
 </span>
   </div>
 
-  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+  <div className="w-full theme-surface-soft rounded-full h-2 overflow-hidden">
     <div
       className="h-2 rounded-full transition-all duration-700"
       style={{
@@ -1109,11 +1109,11 @@ const autonomousInsight = useMemo(() => {
     />
   </div>
 
-  <p className="text-[11px] text-slate-500 mt-2">
+  <p className="text-[11px] theme-text-muted mt-2">
     Live organizational health reacting to task execution in real time.
   </p>
 </section>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs theme-text-muted">
             Role: {role}. Showing an overview of projects and tasks you are allowed
             to access.
           </p>
@@ -1121,27 +1121,27 @@ const autonomousInsight = useMemo(() => {
       </section>
 
       {/* High-level stats */}
-      <section className="bg-white rounded-xl shadow p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+      <section className="theme-surface rounded-xl shadow border theme-border p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
         <div>
-          <div className="text-slate-500">Projects</div>
+          <div className="theme-text-muted">Projects</div>
           <div className="text-lg font-semibold">{totalProjects}</div>
         </div>
         <div>
-          <div className="text-slate-500">
+          <div className="theme-text-muted">
             {isUser ? "My tasks" : "Total tasks"}
           </div>
           <div className="text-lg font-semibold">{totalTasks}</div>
         </div>
         <div>
-          <div className="text-slate-500">Pending</div>
+          <div className="theme-text-muted">Pending</div>
           <div className="text-lg font-semibold">{pendingCount}</div>
         </div>
         <div>
-          <div className="text-slate-500">In progress</div>
+          <div className="theme-text-muted">In progress</div>
           <div className="text-lg font-semibold">{inProgressCount}</div>
         </div>
         <div>
-          <div className="text-slate-500">Overdue</div>
+          <div className="theme-text-muted">Overdue</div>
           <div className="text-lg font-semibold text-red-600">
             {overdueCount}
           </div>
@@ -1219,15 +1219,15 @@ const autonomousInsight = useMemo(() => {
       </section>
 
       {/* Top overdue tasks */}
-      <section className="bg-white rounded-xl shadow p-4">
+      <section className="theme-surface rounded-xl shadow border theme-border p-4">
         <h2 className="text-sm font-semibold mb-3">Top overdue tasks</h2>
 
         {loading && (
-          <div className="text-sm text-slate-500">Loading overdue tasks...</div>
+          <div className="text-sm theme-text-muted">Loading overdue tasks...</div>
         )}
 
         {!loading && topOverdue.length === 0 && (
-          <div className="text-sm text-slate-500">
+          <div className="text-sm theme-text-muted">
             No overdue tasks in your scope. 🎉
           </div>
         )}
@@ -1236,20 +1236,20 @@ const autonomousInsight = useMemo(() => {
           {topOverdue.map((t) => (
             <div
               key={t.id}
-              className="border border-red-200 bg-red-50 rounded-lg px-3 py-2 text-xs"
+              className="theme-overdue-card border rounded-lg px-3 py-2 text-xs"
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="font-medium text-[11px]">
+                  <div className="font-medium text-[11px] theme-overdue-text">
                     {t.task}
                   </div>
-                  <div className="text-[10px] text-slate-600">
+                  <div className="text-[10px] theme-overdue-text">
                     Project:{" "}
                     <span className="font-semibold">
                       {t.project_name || t._project?.name || "Unknown"}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-500">
+                  <div className="text-[10px] theme-overdue-soft">
                     Due:{" "}
                     {t.due_date
                       ? new Date(t.due_date).toLocaleDateString()
@@ -1257,7 +1257,7 @@ const autonomousInsight = useMemo(() => {
                   </div>
                 </div>
                 {t.assigned_to && (
-                  <div className="text-[10px] text-slate-500">
+                  <div className="text-[10px] theme-overdue-soft">
                     Assigned: {t.assigned_to}
                   </div>
                 )}
@@ -1272,11 +1272,11 @@ const autonomousInsight = useMemo(() => {
 ================================ */}
 {forecastReasoningOpen && (
   <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-    <div className="bg-white w-full max-w-2xl rounded-xl shadow-xl p-6 relative">
+    <div className="theme-surface theme-text border theme-border w-full max-w-2xl rounded-xl shadow-xl p-6 relative">
 
       <button
         onClick={() => setForecastReasoningOpen(false)}
-        className="absolute top-3 right-4 text-slate-400 hover:text-slate-700"
+        className="absolute top-3 right-4 theme-text-soft hover:text-[var(--text)]"
       >
         ✕
       </button>
@@ -1285,7 +1285,7 @@ const autonomousInsight = useMemo(() => {
         AI Forecast Reasoning
       </h2>
 
-      <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed max-h-[60vh] overflow-y-auto">
+      <div className="text-sm theme-text whitespace-pre-line leading-relaxed max-h-[60vh] overflow-y-auto">
   {intelligence?.forecast?.reasoning || "Forecast reasoning unavailable"}
 </div>
     </div>
@@ -1299,11 +1299,11 @@ const autonomousInsight = useMemo(() => {
       )}
       {executiveDetailOpen && (
   <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-    <div className="bg-white rounded-xl shadow-xl w-[920px] max-w-[94%] p-6 relative max-h-[86vh] overflow-y-auto">
+    <div className="theme-surface theme-text border theme-border rounded-xl shadow-xl w-[920px] max-w-[94%] p-6 relative max-h-[86vh] overflow-y-auto">
 
       <button
         onClick={() => setExecutiveDetailOpen(false)}
-        className="absolute top-3 right-4 text-slate-500 hover:text-black"
+        className="absolute top-3 right-4 theme-text-muted hover:text-[var(--text)]"
       >
         ✕
       </button>
@@ -1330,33 +1330,33 @@ const autonomousInsight = useMemo(() => {
       </div>
 
       {executiveDetailLoading ? (
-        <div className="text-sm text-slate-500">Loading executive detail...</div>
+        <div className="text-sm theme-text-muted">Loading executive detail...</div>
       ) : !executiveDetail ? (
-        <div className="text-sm text-slate-500">Executive detail not available.</div>
+        <div className="text-sm theme-text-muted">Executive detail not available.</div>
       ) : (
         <div className="space-y-5">
           {executiveModalView === "summary" && (
             <>
               <div>
-                <div className="text-xs font-semibold text-slate-500 mb-2">REFLECTIVE SUMMARY</div>
-                <div className="text-sm font-semibold text-slate-900">
+                <div className="text-xs font-semibold theme-text-muted mb-2">REFLECTIVE SUMMARY</div>
+                <div className="text-sm font-semibold theme-text">
                   {executiveDetail.reflectiveSummary?.headline}
                 </div>
-                <div className="text-sm text-slate-700 mt-1">
+                <div className="text-sm theme-text mt-1">
                   {executiveDetail.reflectiveSummary?.narrative}
                 </div>
               </div>
 
               <div>
-                <div className="text-xs font-semibold text-slate-500 mb-2">FULL EXECUTIVE SUMMARY</div>
-                <div className="text-sm text-slate-800 whitespace-pre-line leading-relaxed">
+                <div className="text-xs font-semibold theme-text-muted mb-2">FULL EXECUTIVE SUMMARY</div>
+                <div className="text-sm theme-text whitespace-pre-line leading-relaxed">
                   {executiveDetail.fullSummary}
                 </div>
               </div>
 
               <div>
-                <div className="text-xs font-semibold text-slate-500 mb-2">RECOMMENDATIONS</div>
-                <ul className="space-y-2 text-sm text-slate-700 list-disc list-inside">
+                <div className="text-xs font-semibold theme-text-muted mb-2">RECOMMENDATIONS</div>
+                <ul className="space-y-2 text-sm theme-text list-disc list-inside">
                   {(executiveDetail.recommendations || executiveDetail.priorities || []).map((line, idx) => (
                     <li key={idx}>{line}</li>
                   ))}
@@ -1367,8 +1367,8 @@ const autonomousInsight = useMemo(() => {
 
           {executiveModalView === "reasoning" && (
             <div>
-              <div className="text-xs font-semibold text-slate-500 mb-2">REASONING</div>
-              <ul className="space-y-2 text-sm text-slate-700 list-disc list-inside">
+              <div className="text-xs font-semibold theme-text-muted mb-2">REASONING</div>
+              <ul className="space-y-2 text-sm theme-text list-disc list-inside">
                 {(executiveDetail.reasoning || []).map((line, idx) => (
                   <li key={idx}>{line}</li>
                 ))}
@@ -1389,7 +1389,7 @@ const autonomousInsight = useMemo(() => {
   <div className="fixed inset-0 bg-black/60 z-50 flex flex-col">
 
     {/* HEADER */}
-    <div className="bg-white px-6 py-4 flex justify-between items-center border-b">
+    <div className="theme-surface px-6 py-4 flex justify-between items-center border-b theme-border">
       <div className="flex items-center gap-3">
 
   {selectedAsanaProject && (
@@ -1398,7 +1398,7 @@ const autonomousInsight = useMemo(() => {
         setSelectedAsanaProject(null);
         setAsanaTasks([]);
       }}
-      className="text-xs bg-slate-200 px-2 py-1 rounded"
+      className="text-xs theme-surface-soft theme-text px-2 py-1 rounded"
     >
       ← Back
     </button>
@@ -1418,17 +1418,17 @@ const autonomousInsight = useMemo(() => {
           setSelectedAsanaProject(null);
           setAsanaTasks([]);
         }}
-        className="text-slate-500 hover:text-black"
+        className="theme-text-muted hover:text-[var(--text)]"
       >
         ✕
       </button>
     </div>
 
     {/* BODY */}
-    <div className="flex-1 bg-slate-50 overflow-auto p-6">
+    <div className="flex-1 theme-bg overflow-auto p-6">
 
       {asanaLoading && (
-  <div className="animate-pulse text-sm text-slate-400">
+  <div className="animate-pulse text-sm theme-text-soft">
     Syncing live Asana data...
   </div>
 )}
@@ -1444,10 +1444,10 @@ const autonomousInsight = useMemo(() => {
   setAsanaSearch("");
   loadAsanaProject(p, 1, "");
 }}
-              className="bg-white border rounded-lg p-4 cursor-pointer hover:shadow"
+              className="theme-surface border theme-border rounded-lg p-4 cursor-pointer hover:shadow"
             >
               <div className="font-semibold">{p.name}</div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs theme-text-muted">
                 Click to view tasks
               </div>
             </div>
@@ -1457,7 +1457,7 @@ const autonomousInsight = useMemo(() => {
 
       {/* TASK TABLE */}
       {selectedAsanaProject && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="theme-surface rounded-lg border theme-border overflow-hidden">
           {/* ✅ SEARCH BAR */}
     <div className="p-3 border-b flex gap-2 items-center justify-between">
 
@@ -1468,7 +1468,7 @@ const autonomousInsight = useMemo(() => {
       setAsanaPage(1);
       setAsanaSearch(e.target.value);
     }}
-    className="border rounded px-2 py-1 text-xs w-64"
+    className="theme-input border theme-border rounded px-2 py-1 text-xs w-64"
   />
 
   <button
@@ -1481,7 +1481,7 @@ const autonomousInsight = useMemo(() => {
 
 </div>
           <table className="w-full text-xs">
-            <thead className="bg-slate-100">
+            <thead className="theme-surface-soft">
               <tr>
                 <th className="p-3 text-left">Task</th>
                 <th className="p-3 text-left">Assignee</th>
@@ -1543,7 +1543,7 @@ const autonomousInsight = useMemo(() => {
   <button
     disabled={asanaPage === 1}
     onClick={() => setAsanaPage(p => p - 1)}
-    className="px-3 py-1 bg-slate-200 rounded disabled:opacity-40"
+    className="px-3 py-1 theme-surface-soft theme-text rounded disabled:opacity-40"
   >
     Previous
   </button>
@@ -1558,14 +1558,14 @@ const autonomousInsight = useMemo(() => {
     const val = Number(e.target.value);
     if (val > 0) setAsanaPage(val);
   }}
-  className="w-16 border rounded px-1 py-0.5 text-center"
+  className="w-16 theme-input border theme-border rounded px-1 py-0.5 text-center"
 />
   </span>
 
   <button
     disabled={!asanaHasMore}
     onClick={() => setAsanaPage(p => p + 1)}
-    className="px-3 py-1 bg-slate-200 rounded disabled:opacity-40"
+    className="px-3 py-1 theme-surface-soft theme-text rounded disabled:opacity-40"
   >
     Next
   </button>
@@ -1583,7 +1583,7 @@ const autonomousInsight = useMemo(() => {
 {youtrackOpen && (
   <div className="fixed inset-0 bg-black/60 z-50 flex flex-col">
 
-    <div className="bg-white px-6 py-4 flex justify-between border-b">
+    <div className="theme-surface px-6 py-4 flex justify-between border-b theme-border">
       <h2 className="font-semibold">
         {selectedYoutrackProject
           ? `YouTrack — ${selectedYoutrackProject.name}`
@@ -1601,19 +1601,19 @@ const autonomousInsight = useMemo(() => {
       </button>
     </div>
 
-    <div className="flex-1 bg-slate-50 overflow-auto p-6">
+    <div className="flex-1 theme-bg overflow-auto p-6">
 
       {!selectedYoutrackProject && (
 
   <>
     {youtrackLoading && (
-      <div className="text-sm text-slate-400">
+      <div className="text-sm theme-text-soft">
         Loading YouTrack projects...
       </div>
     )}
 
     {!youtrackLoading && youtrackProjects.length === 0 && (
-      <div className="text-sm text-slate-500">
+      <div className="text-sm theme-text-muted">
         No projects found or access not granted.
       </div>
     )}
@@ -1626,7 +1626,7 @@ const autonomousInsight = useMemo(() => {
         <div
           key={p.id}
           onClick={() => loadYouTrackProject(p)}
-          className="bg-white border rounded-lg p-4 cursor-pointer hover:shadow"
+          className="theme-surface border theme-border rounded-lg p-4 cursor-pointer hover:shadow"
         >
           <div className="font-semibold">{p.name}</div>
         </div>
@@ -1636,8 +1636,8 @@ const autonomousInsight = useMemo(() => {
 )}
 
       {selectedYoutrackProject && (
-        <table className="w-full text-xs bg-white rounded border">
-          <thead className="bg-slate-100">
+        <table className="w-full text-xs theme-surface rounded border theme-border">
+          <thead className="theme-surface-soft">
   <tr>
     <th className="p-3 text-left">Issue</th>
     <th className="p-3 text-left">Assignee</th>

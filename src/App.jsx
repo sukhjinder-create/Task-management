@@ -15,6 +15,7 @@ import Reports from "./pages/Reports.jsx";
 import AdminAttendance from "./pages/AdminAttendance.jsx";
 import StrategicIntelligence from "./pages/StrategicIntelligence.jsx";
 import Autopilot from "./pages/Autopilot.jsx";
+import TestingAgent from "./pages/TestingAgent.jsx";
 
 // ---- Intelligence pages (NEW) ----
 import UserPerformance from "./pages/intelligence/UserPerformance.jsx";
@@ -87,6 +88,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin", "manager"]}>
                 <Autopilot />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="testing-agent"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                <TestingAgent />
               </ProtectedRoute>
             }
           />

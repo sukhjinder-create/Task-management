@@ -21,6 +21,8 @@ function getSystemTheme() {
 }
 
 function resolveTheme(theme) {
+  // "system" resolves for consumers that need to know the actual effective mode
+  // but we never put "dark"/"light" on the element for system — CSS handles it
   return theme === "system" ? getSystemTheme() : theme;
 }
 
@@ -44,24 +46,17 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.setAttribute("data-theme", resolvedTheme);
-    root.style.colorScheme = resolvedTheme === "dark" ? "dark" : "light";
-  }, [resolvedTheme]);
-
-  useEffect(() => {
-    if (!window.matchMedia) return undefined;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => {
-      if (theme === "system") {
-        const root = document.documentElement;
-        const nextResolved = getSystemTheme();
-        root.setAttribute("data-theme", nextResolved);
-        root.style.colorScheme = nextResolved === "dark" ? "dark" : "light";
-      }
-    };
-    media.addEventListener?.("change", handler);
-    return () => media.removeEventListener?.("change", handler);
-  }, [theme]);
+    if (theme === "system") {
+      // Keep data-theme="system" — CSS media query inside [data-theme="system"]
+      // handles the dark/light switch automatically without JS rerender
+      root.setAttribute("data-theme", "system");
+      // "light dark" tells the browser to adapt scrollbars, form controls, etc.
+      root.style.colorScheme = "light dark";
+    } else {
+      root.setAttribute("data-theme", theme);
+      root.style.colorScheme = resolvedTheme === "dark" ? "dark" : "light";
+    }
+  }, [theme, resolvedTheme]);
 
   const value = useMemo(
     () => ({

@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { FolderKanban, Plus, Edit2, Trash2, Users as UsersIcon } from "lucide-react";
+import { FolderKanban, Plus, Edit2, Trash2, Users as UsersIcon, GitBranch } from "lucide-react";
 import toast from "react-hot-toast";
 import { Card, Button, Modal, Input, Badge } from "../components/ui";
+import GitAutomationModal from "../components/GitAutomationModal";
 
 export default function Projects() {
   const api = useApi();
@@ -18,6 +19,9 @@ export default function Projects() {
   const [newProject, setNewProject] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  const [showGitModal, setShowGitModal] = useState(false);
+  const [selectedProjectForGit, setSelectedProjectForGit] = useState(null);
 
   const canManageProjects =
     auth.user.role === "admin" || auth.user.role === "manager";
@@ -105,7 +109,6 @@ export default function Projects() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <Card>
         <Card.Content className="p-6">
           <div className="flex items-center justify-between">
@@ -151,7 +154,6 @@ export default function Projects() {
         </Card.Content>
       </Card>
 
-      {/* Error message */}
       {error && (
         <Card className="border-danger-200 bg-danger-50">
           <Card.Content className="p-4">
@@ -160,7 +162,6 @@ export default function Projects() {
         </Card>
       )}
 
-      {/* No permission message */}
       {!canManageProjects && (
         <Card className="border-warning-200 bg-warning-50">
           <Card.Content className="p-4">
@@ -171,14 +172,12 @@ export default function Projects() {
         </Card>
       )}
 
-      {/* Loading state */}
       {loading && (
         <div className="text-center py-12">
           <p className="text-sm text-gray-500">Loading projects...</p>
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && projects.length === 0 && (
         <Card>
           <Card.Content className="p-12 text-center">
@@ -210,7 +209,6 @@ export default function Projects() {
         </Card>
       )}
 
-      {/* Projects Grid */}
       {!loading && projects.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => (
@@ -225,6 +223,20 @@ export default function Projects() {
                     <FolderKanban className="w-5 h-5 text-primary-600" />
                   </div>
                   <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                    {canManageProjects && (
+                      <Button
+                        onClick={() => {
+                          setSelectedProjectForGit(p);
+                          setShowGitModal(true);
+                        }}
+                        variant="ghost"
+                        size="xs"
+                        className="text-gray-600 hover:text-primary-600"
+                        title="Git automation settings"
+                      >
+                        <GitBranch className="w-4 h-4" />
+                      </Button>
+                    )}
                     {canManageProjects && (
                       <Button
                         onClick={() => handleRenameProject(p)}
@@ -250,9 +262,7 @@ export default function Projects() {
                   </div>
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-2">{p.name}</h3>
-                <p className="text-xs text-gray-500">
-                  Created by {p.added_by}
-                </p>
+                <p className="text-xs text-gray-500">Created by {p.added_by}</p>
                 <p className="text-xs text-gray-400">
                   {p.created_at
                     ? new Date(p.created_at).toLocaleDateString()
@@ -264,7 +274,18 @@ export default function Projects() {
         </div>
       )}
 
-      {/* Create Project Modal */}
+      {showGitModal && selectedProjectForGit && (
+        <GitAutomationModal
+          isOpen={showGitModal}
+          onClose={() => {
+            setShowGitModal(false);
+            setSelectedProjectForGit(null);
+          }}
+          project={selectedProjectForGit}
+          canManage={canManageProjects}
+        />
+      )}
+
       {showCreateModal && (
         <Modal isOpen={true} onClose={() => !creating && setShowCreateModal(false)}>
           <form onSubmit={handleCreateProject}>

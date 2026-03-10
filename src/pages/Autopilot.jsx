@@ -275,8 +275,8 @@ export default function Autopilot() {
               <Bot className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">AI Autopilot</h1>
-              <p className="text-gray-600">
+              <h1 className="text-3xl font-bold theme-text">AI Autopilot</h1>
+              <p className="theme-text-muted">
                 Autonomous task management powered by AI
                 {user?.username ? ` · ${user.username}` : ""}
               </p>
@@ -320,14 +320,14 @@ export default function Autopilot() {
         )}
       </div>
 
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b theme-border mb-6">
         <div className="flex gap-4">
           <button
             onClick={() => setActiveTab("pending")}
             className={`pb-2 px-4 font-semibold transition ${
               activeTab === "pending"
                 ? "border-b-2 border-blue-600 text-blue-600"
-                : "text-gray-600 hover:text-gray-900"
+                : "theme-text-muted hover:text-[var(--text)]"
             }`}
           >
             Pending Actions ({actions.length})
@@ -337,7 +337,7 @@ export default function Autopilot() {
             className={`pb-2 px-4 font-semibold transition inline-flex items-center gap-2 ${
               activeTab === "history"
                 ? "border-b-2 border-blue-600 text-blue-600"
-                : "text-gray-600 hover:text-gray-900"
+                : "theme-text-muted hover:text-[var(--text)]"
             }`}
           >
             <History className="w-4 h-4" />
@@ -348,7 +348,7 @@ export default function Autopilot() {
             className={`pb-2 px-4 font-semibold transition ${
               activeTab === "settings"
                 ? "border-b-2 border-blue-600 text-blue-600"
-                : "text-gray-600 hover:text-gray-900"
+                : "theme-text-muted hover:text-[var(--text)]"
             }`}
           >
             Settings
@@ -431,30 +431,30 @@ export default function Autopilot() {
 
       {activeTab === "history" && (
         <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="theme-surface border theme-border rounded-lg p-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
               <div className="md:col-span-2">
-                <label className="text-xs text-gray-600 mb-1 block">Search</label>
+                <label className="text-xs theme-text-muted mb-1 block">Search</label>
                 <div className="relative">
-                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 theme-text-soft absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     value={historyFilters.search}
                     onChange={(e) =>
                       setHistoryFilters((prev) => ({ ...prev, search: e.target.value }))
                     }
                     placeholder="Task, reason, action type, approver..."
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full pl-9 pr-3 py-2 border theme-border theme-input rounded-lg text-sm"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">Status</label>
+                <label className="text-xs theme-text-muted mb-1 block">Status</label>
                 <select
                   value={historyFilters.status}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, status: e.target.value }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border theme-border theme-input rounded-lg text-sm"
                 >
                   <option value="all">All</option>
                   <option value="executed">Executed</option>
@@ -464,31 +464,31 @@ export default function Autopilot() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">From date</label>
+                <label className="text-xs theme-text-muted mb-1 block">From date</label>
                 <input
                   type="date"
                   value={historyFilters.fromDate}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, fromDate: e.target.value }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border theme-border theme-input rounded-lg text-sm"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">To date</label>
+                <label className="text-xs theme-text-muted mb-1 block">To date</label>
                 <input
                   type="date"
                   value={historyFilters.toDate}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, toDate: e.target.value }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border theme-border theme-input rounded-lg text-sm"
                 />
               </div>
             </div>
 
             <div className="flex items-center justify-between mt-3">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm theme-text-muted">
                 {historyPagination.total} records
               </div>
               <div className="flex items-center gap-2">
@@ -500,7 +500,7 @@ export default function Autopilot() {
                       limit: parseInt(e.target.value, 10),
                     }))
                   }
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="px-3 py-2 border theme-border rounded-lg text-sm theme-input"
                 >
                   <option value={10}>10 / page</option>
                   <option value={20}>20 / page</option>
@@ -508,7 +508,7 @@ export default function Autopilot() {
                 </select>
                 <button
                   onClick={() => fetchHistory(historyPagination.page)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 inline-flex items-center gap-1"
+                  className="px-3 py-2 border theme-border rounded-lg text-sm hover:bg-[var(--surface-soft)] inline-flex items-center gap-1 theme-surface-soft theme-text"
                 >
                   <RefreshCw className="w-4 h-4" />
                   Refresh
@@ -517,17 +517,17 @@ export default function Autopilot() {
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="theme-surface border theme-border rounded-lg overflow-hidden">
             {historyLoading ? (
-              <div className="p-8 text-center text-gray-600">Loading history...</div>
+              <div className="p-8 text-center theme-text-muted">Loading history...</div>
             ) : historyItems.length === 0 ? (
-              <div className="p-8 text-center text-gray-600">
+              <div className="p-8 text-center theme-text-muted">
                 No historical actions found for the selected filters.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-600">
+                  <thead className="theme-surface-soft theme-text-muted">
                     <tr>
                       <th className="text-left px-4 py-3 font-semibold">Date</th>
                       <th className="text-left px-4 py-3 font-semibold">Action</th>
@@ -539,28 +539,28 @@ export default function Autopilot() {
                   </thead>
                   <tbody>
                     {historyItems.map((row) => (
-                      <tr key={row.id} className="border-t border-gray-100">
-                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                      <tr key={row.id} className="border-t theme-border">
+                        <td className="px-4 py-3 theme-text whitespace-nowrap">
                           {formatDateTime(row.executed_at || row.approved_at || row.created_at)}
                         </td>
-                        <td className="px-4 py-3 text-gray-900 whitespace-nowrap">
+                        <td className="px-4 py-3 theme-text whitespace-nowrap">
                           {humanizeActionType(row.action_type)}
                         </td>
-                        <td className="px-4 py-3 text-gray-700">
+                        <td className="px-4 py-3 theme-text">
                           <div>{row.task_title || "N/A"}</div>
                           {row.project_name && (
-                            <div className="text-xs text-gray-500">{row.project_name}</div>
+                            <div className="text-xs theme-text-muted">{row.project_name}</div>
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <StatusPill status={row.status} />
                         </td>
-                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        <td className="px-4 py-3 theme-text whitespace-nowrap">
                           {row.approved_by_username ||
                             row.decision_by_username ||
                             "system"}
                         </td>
-                        <td className="px-4 py-3 text-gray-600 max-w-xl">
+                        <td className="px-4 py-3 theme-text-muted max-w-xl">
                           <div className="truncate" title={row.reason}>
                             {row.reason}
                           </div>

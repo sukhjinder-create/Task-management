@@ -30,7 +30,7 @@ export const Input = forwardRef(
 
         <div className="relative">
           {leftIcon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-soft)]">
               {leftIcon}
             </div>
           )}
@@ -42,10 +42,10 @@ export const Input = forwardRef(
               'w-full px-3 py-2 text-sm',
               'theme-input border rounded-lg',
               'transition-colors duration-200',
-              'placeholder:text-gray-400 disabled:opacity-70 disabled:cursor-not-allowed',
+              'placeholder:text-[var(--text-soft)] disabled:opacity-70 disabled:cursor-not-allowed',
               error
                 ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20'
-                : 'theme-border focus:border-primary-500 focus:ring-primary-500/20',
+                : 'theme-border focus:border-[var(--primary)] focus:ring-[var(--ring)]',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
               className
@@ -54,7 +54,7 @@ export const Input = forwardRef(
           />
 
           {rightIcon && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-soft)]">
               {rightIcon}
             </div>
           )}
@@ -65,7 +65,7 @@ export const Input = forwardRef(
         )}
 
         {helperText && !error && (
-          <p className="mt-1.5 text-xs text-gray-500">{helperText}</p>
+          <p className="mt-1.5 text-xs text-[var(--text-muted)]">{helperText}</p>
         )}
       </div>
     );
@@ -109,11 +109,11 @@ export const Textarea = forwardRef(
             'w-full px-3 py-2 text-sm',
             'theme-input border rounded-lg',
             'transition-colors duration-200',
-            'placeholder:text-gray-400 disabled:opacity-70 disabled:cursor-not-allowed',
+            'placeholder:text-[var(--text-soft)] disabled:opacity-70 disabled:cursor-not-allowed',
             'resize-y',
             error
               ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20'
-              : 'theme-border focus:border-primary-500 focus:ring-primary-500/20',
+              : 'theme-border focus:border-[var(--primary)] focus:ring-[var(--ring)]',
             className
           )}
           {...props}
@@ -124,7 +124,7 @@ export const Textarea = forwardRef(
         )}
 
         {helperText && !error && (
-          <p className="mt-1.5 text-xs text-gray-500">{helperText}</p>
+          <p className="mt-1.5 text-xs text-[var(--text-muted)]">{helperText}</p>
         )}
       </div>
     );
