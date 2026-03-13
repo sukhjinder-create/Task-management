@@ -300,42 +300,84 @@ useEffect(() => {
 ====================================== */
 
 const autonomousInsight = useMemo(() => {
-  if (!myPerformance) return null;
-
   const risk = myPerformance?.intelligence?.risk?.level;
   const overdue = overdueCount;
   const trend = intelligence?.forecast?.trend;
+  const inProgress = inProgressCount;
+  const completed = completedCount;
+  const total = totalTasks;
 
+  const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const overdueRate = total > 0 ? Math.round((overdue / total) * 100) : 0;
+
+  // Critical: high risk + many overdue
   if (risk === "High" && overdue > 3) {
     return {
       type: "critical",
-      message:
-        "Execution risk rising. Overdue workload and behavioral signals indicate potential performance decline.",
+      headline: "Execution Risk Detected",
+      message: `${overdue} overdue task${overdue !== 1 ? "s" : ""} are accumulating with a High risk profile. ${inProgress} task${inProgress !== 1 ? "s" : ""} currently in progress. Immediate attention needed to prevent further delays.`,
+      stats: [
+        { label: "Overdue", value: overdue, color: "text-red-600" },
+        { label: "In Progress", value: inProgress, color: "text-orange-500" },
+        { label: "Completion Rate", value: `${completionRate}%`, color: "text-gray-600" },
+      ],
     };
   }
 
+  // Warning: any overdue tasks
+  if (overdue > 0) {
+    return {
+      type: "warning",
+      headline: "Overdue Tasks Need Attention",
+      message: `${overdue} task${overdue !== 1 ? "s are" : " is"} past due (${overdueRate}% of total workload). ${inProgress} task${inProgress !== 1 ? "s are" : " is"} actively in progress. Address blockers to restore delivery momentum.`,
+      stats: [
+        { label: "Overdue", value: overdue, color: "text-amber-600" },
+        { label: "In Progress", value: inProgress, color: "text-blue-600" },
+        { label: "Completion Rate", value: `${completionRate}%`, color: "text-gray-600" },
+      ],
+    };
+  }
+
+  // Declining trend
   if (trend === "declining") {
     return {
       type: "warning",
-      message:
-        "Performance momentum is declining. Early intervention recommended before productivity drops further.",
+      headline: "Performance Momentum Declining",
+      message: `Completion velocity is trending downward. ${completed} task${completed !== 1 ? "s" : ""} completed so far with ${inProgress} currently in progress. Early intervention recommended.`,
+      stats: [
+        { label: "Completed", value: completed, color: "text-green-600" },
+        { label: "In Progress", value: inProgress, color: "text-blue-600" },
+        { label: "Trend", value: "↓ Declining", color: "text-amber-600" },
+      ],
     };
   }
 
-  if (trend === "improving" && risk === "Low") {
+  // Positive: improving trend, no overdue
+  if ((trend === "improving" || completionRate > 60) && overdue === 0) {
     return {
       type: "positive",
-      message:
-        "Performance momentum improving. Current execution patterns are strengthening organizational stability.",
+      headline: "Strong Execution Momentum",
+      message: `${completed} task${completed !== 1 ? "s" : ""} completed with ${overdue} overdue — execution is on track. ${inProgress} task${inProgress !== 1 ? "s" : ""} actively progressing.`,
+      stats: [
+        { label: "Completed", value: completed, color: "text-green-600" },
+        { label: "In Progress", value: inProgress, color: "text-blue-600" },
+        { label: "Completion Rate", value: `${completionRate}%`, color: "text-green-600" },
+      ],
     };
   }
 
+  // Neutral fallback — still show real numbers
   return {
     type: "neutral",
-    message:
-      "Workspace operating within normal parameters. No immediate intervention required.",
+    headline: "Workspace Status Normal",
+    message: `${total} total task${total !== 1 ? "s" : ""} across ${totalProjects} project${totalProjects !== 1 ? "s" : ""}. ${inProgress} in progress, ${completed} completed, ${overdue} overdue.`,
+    stats: [
+      { label: "Total Tasks", value: total, color: "text-gray-700" },
+      { label: "In Progress", value: inProgress, color: "text-blue-600" },
+      { label: "Completed", value: completed, color: "text-green-600" },
+    ],
   };
-}, [myPerformance, overdueCount, intelligence]);
+}, [myPerformance, overdueCount, intelligence, inProgressCount, completedCount, totalTasks, totalProjects]);
 
   // My tasks subset (for admin/manager too)
   const myTasks = useMemo(
@@ -368,45 +410,43 @@ const autonomousInsight = useMemo(() => {
 ====================================== */}
 
 {autonomousInsight && (
-  <Card
-    className={
-      autonomousInsight.type === "critical"
-        ? "bg-danger-50 border-danger-200"
-        : autonomousInsight.type === "warning"
-        ? "bg-warning-50 border-warning-200"
-        : autonomousInsight.type === "positive"
-        ? "bg-success-50 border-success-200"
-        : "theme-surface-soft theme-border"
-    }
-  >
-    <Card.Content className="flex items-start gap-3">
-      <div className="text-2xl">
+  <div className={`rounded-xl border p-4 ${
+    autonomousInsight.type === "critical" ? "bg-red-50 border-red-200" :
+    autonomousInsight.type === "warning"  ? "bg-amber-50 border-amber-200" :
+    autonomousInsight.type === "positive" ? "bg-emerald-50 border-emerald-200" :
+    "bg-blue-50 border-blue-100"
+  }`}>
+    <div className="flex items-start gap-3">
+      <div className="text-xl mt-0.5">
         {autonomousInsight.type === "critical" && "🔴"}
-        {autonomousInsight.type === "warning" && "⚠️"}
+        {autonomousInsight.type === "warning"  && "⚠️"}
         {autonomousInsight.type === "positive" && "✅"}
-        {autonomousInsight.type === "neutral" && "🧠"}
+        {autonomousInsight.type === "neutral"  && "🧠"}
       </div>
-
-      <div className="flex-1">
-        <Badge
-          color={
-            autonomousInsight.type === "critical" ? "danger" :
-            autonomousInsight.type === "warning" ? "warning" :
-            autonomousInsight.type === "positive" ? "success" :
-            "neutral"
-          }
-          size="sm"
-          className="mb-2"
-        >
-          AI Autonomous Insight
-        </Badge>
-
-        <p className="text-sm theme-text leading-relaxed">
-          {autonomousInsight.message}
-        </p>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <span className={`text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+            autonomousInsight.type === "critical" ? "bg-red-100 text-red-700" :
+            autonomousInsight.type === "warning"  ? "bg-amber-100 text-amber-700" :
+            autonomousInsight.type === "positive" ? "bg-emerald-100 text-emerald-700" :
+            "bg-blue-100 text-blue-700"
+          }`}>AI Insight</span>
+          <span className="text-sm font-semibold theme-text">{autonomousInsight.headline}</span>
+        </div>
+        <p className="text-sm text-gray-600 leading-relaxed mb-3">{autonomousInsight.message}</p>
+        {autonomousInsight.stats && (
+          <div className="flex gap-4 flex-wrap">
+            {autonomousInsight.stats.map((s) => (
+              <div key={s.label} className="flex flex-col">
+                <span className={`text-lg font-bold ${s.color}`}>{s.value}</span>
+                <span className="text-xs text-gray-500">{s.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    </Card.Content>
-  </Card>
+    </div>
+  </div>
 )}
 
       {/* ======================================
@@ -416,39 +456,59 @@ const autonomousInsight = useMemo(() => {
 {(isAdmin || isManager || isUser) && (
   <Card className="theme-surface-strong theme-text border theme-border">
     <Card.Content>
-      <h2 className="text-base font-semibold mb-4">
-        Workspace Control Center
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-semibold">Workspace Overview</h2>
+        <span className="text-xs text-gray-400">Live</span>
+      </div>
 
-      <div className="grid md:grid-cols-4 gap-4">
-        {/* Risk Status */}
-        <div className="theme-surface-soft rounded-lg p-4 border theme-border">
-          <div className="text-sm theme-text-muted">Current Risk State</div>
-          <div className="text-xl font-semibold mt-1">
-            {myPerformance?.intelligence?.risk?.level || "Analyzing"}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Overdue */}
+        <div className={`rounded-lg p-4 border ${overdueCount > 5 ? "bg-red-50 border-red-200" : overdueCount > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-100"}`}>
+          <div className="text-xs font-medium text-gray-500 mb-1">Overdue Tasks</div>
+          <div className={`text-2xl font-bold ${overdueCount > 5 ? "text-red-600" : overdueCount > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+            {overdueCount}
+          </div>
+          <div className={`text-xs mt-1 font-semibold ${overdueCount > 5 ? "text-red-500" : overdueCount > 0 ? "text-amber-500" : "text-emerald-500"}`}>
+            {overdueCount > 5 ? "⚠ High pressure" : overdueCount > 0 ? "Needs attention" : "✓ All on track"}
           </div>
         </div>
 
-        {/* Overdue Pressure */}
-        <div className="theme-surface-soft rounded-lg p-4 border theme-border">
-          <div className="text-sm theme-text-muted">Execution Pressure</div>
-          <div className="text-xl font-semibold mt-1">
-            {overdueCount > 5
-              ? "High"
-              : overdueCount > 0
-              ? "Moderate"
-              : "Stable"}
+        {/* In Progress */}
+        <div className="rounded-lg p-4 border bg-blue-50 border-blue-100">
+          <div className="text-xs font-medium text-gray-500 mb-1">In Progress</div>
+          <div className="text-2xl font-bold text-blue-600">{inProgressCount}</div>
+          <div className="text-xs mt-1 text-blue-500 font-semibold">
+            of {totalTasks} total tasks
           </div>
         </div>
 
-        {/* Momentum */}
-        <div className="theme-surface-soft rounded-lg p-4 border theme-border">
-          <div className="text-sm theme-text-muted">Performance Momentum</div>
-          <div className="text-xl font-semibold mt-1">
-            {intelligence?.forecast?.trend || "Stable"}
+        {/* Completed */}
+        <div className="rounded-lg p-4 border bg-emerald-50 border-emerald-100">
+          <div className="text-xs font-medium text-gray-500 mb-1">Completed</div>
+          <div className="text-2xl font-bold text-emerald-600">{completedCount}</div>
+          <div className="text-xs mt-1 text-emerald-500 font-semibold">
+            {totalTasks > 0 ? `${Math.round((completedCount / totalTasks) * 100)}% completion rate` : "No tasks yet"}
           </div>
         </div>
 
+        {/* Risk / Trend */}
+        <div className={`rounded-lg p-4 border ${
+          myPerformance?.intelligence?.risk?.level === "High" ? "bg-red-50 border-red-200" :
+          myPerformance?.intelligence?.risk?.level === "Medium" ? "bg-amber-50 border-amber-200" :
+          "bg-gray-50 border-gray-200"
+        }`}>
+          <div className="text-xs font-medium text-gray-500 mb-1">Risk Level</div>
+          <div className={`text-2xl font-bold ${
+            myPerformance?.intelligence?.risk?.level === "High" ? "text-red-600" :
+            myPerformance?.intelligence?.risk?.level === "Medium" ? "text-amber-600" :
+            "text-gray-600"
+          }`}>
+            {myPerformance?.intelligence?.risk?.level || "—"}
+          </div>
+          <div className="text-xs mt-1 text-gray-500 font-semibold capitalize">
+            {intelligence?.forecast?.trend ? `Trend: ${intelligence.forecast.trend}` : `${totalProjects} project${totalProjects !== 1 ? "s" : ""} active`}
+          </div>
+        </div>
       </div>
     </Card.Content>
   </Card>
@@ -528,202 +588,230 @@ const autonomousInsight = useMemo(() => {
 {/* ================================
     MY PERFORMANCE SNAPSHOT
 ================================ */}
-{myPerformance && (
-  <Card>
-    <Card.Content className="space-y-6">
-      {/* HEADER */}
-      <div className="flex justify-between items-center">
-        <Card.Title>
-          My Performance – {new Date().toISOString().slice(0, 7)}
-        </Card.Title>
+{myPerformance && (() => {
+  const score = myPerformance.score ?? 0;
+  const risk = myPerformance.intelligence?.risk;
+  const dims = myPerformance.intelligence?.dimensions || {};
+  const signals = myPerformance.intelligence?.signals || [];
+  const coaching = Array.isArray(myPerformance.coaching) ? myPerformance.coaching : [];
+  const monthLabel = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
 
-        <div className="text-right">
-          <div className="text-4xl font-bold text-primary-600">
-            {myPerformance.score}
+  // Real task counts for current user
+  const myTotal = myTasks.length;
+  const myCompleted = myTasks.filter(t => t.status === "completed").length;
+  const myInProgress = myTasks.filter(t => t.status === "in_progress" || t.status === "in-progress").length;
+  const myOverdue = myOverdueTasks.length;
+  const myCompletionRate = myTotal > 0 ? Math.round((myCompleted / myTotal) * 100) : 0;
+
+  // Trend delta
+  const prevScore = performanceTrend.length >= 2 ? performanceTrend[performanceTrend.length - 2]?.score : null;
+  const delta = prevScore != null ? score - prevScore : null;
+
+  // Dimension meta
+  const dimMeta = {
+    executionDiscipline: { label: "Execution Discipline", good: "high", icon: "⚡" },
+    timelinessIndex:     { label: "Timeliness",           good: "high", icon: "⏱" },
+    workloadStress:      { label: "Workload Stress",       good: "low",  icon: "🔥" },
+    velocityScore:       { label: "Task Velocity",         good: "high", icon: "🚀" },
+  };
+
+  const getDimColor = (key, value) => {
+    const isGoodHigh = dimMeta[key]?.good === "high";
+    if (isGoodHigh) return value >= 70 ? "bg-emerald-500" : value >= 40 ? "bg-amber-400" : "bg-red-400";
+    // good = low (workload stress)
+    return value <= 40 ? "bg-emerald-500" : value <= 70 ? "bg-amber-400" : "bg-red-400";
+  };
+
+  const getDimTextColor = (key, value) => {
+    const isGoodHigh = dimMeta[key]?.good === "high";
+    if (isGoodHigh) return value >= 70 ? "text-emerald-600" : value >= 40 ? "text-amber-600" : "text-red-600";
+    return value <= 40 ? "text-emerald-600" : value <= 70 ? "text-amber-600" : "text-red-600";
+  };
+
+  return (
+  <Card>
+    <Card.Content className="space-y-5">
+
+      {/* HEADER ROW */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">My Performance</div>
+          <div className="text-lg font-bold theme-text">{monthLabel}</div>
+          {myPerformance.explanation && (
+            <p className="text-xs text-gray-500 mt-1 max-w-sm leading-relaxed">{myPerformance.explanation}</p>
+          )}
+        </div>
+        <div className="text-right shrink-0">
+          <div className={`text-4xl font-bold ${score >= 75 ? "text-emerald-600" : score >= 50 ? "text-amber-500" : "text-red-500"}`}>
+            {score}
+            <span className="text-base font-normal text-gray-400">/100</span>
           </div>
-          <Badge
-            color={
-              myPerformance.score >= 75 ? "success" :
-              myPerformance.score >= 50 ? "warning" :
-              "danger"
-            }
-            size="sm"
-            className="mt-1"
-          >
-            {getRiskLevel(myPerformance.score).label}
-          </Badge>
+          {delta != null && (
+            <div className={`text-xs font-semibold mt-0.5 ${delta >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+              {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} vs last month
+            </div>
+          )}
+          <div className={`text-xs font-bold mt-1 px-2 py-0.5 rounded-full inline-block ${
+            risk?.level === "High" ? "bg-red-100 text-red-700" :
+            risk?.level === "Medium" ? "bg-amber-100 text-amber-700" :
+            "bg-emerald-100 text-emerald-700"
+          }`}>
+            {risk?.level || "—"} Risk
+          </div>
         </div>
       </div>
 
-    {/* PROGRESS BAR */}
-    <div>
-      <div className="w-full bg-slate-200 rounded-full h-2">
+      {/* SCORE BAR */}
+      <div className="w-full bg-gray-100 rounded-full h-2.5">
         <div
-          className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
-          style={{ width: `${myPerformance.score}%` }}
+          className={`h-2.5 rounded-full transition-all duration-700 ${score >= 75 ? "bg-emerald-500" : score >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+          style={{ width: `${Math.min(score, 100)}%` }}
         />
       </div>
-    </div>
 
-    {/* EXPLANATION */}
-    {myPerformance.explanation && (
-      <div className="text-sm text-slate-600">
-        {myPerformance.explanation}
-      </div>
-    )}
-
-    {/* TREND (LAST 3 MONTHS) */}
-    {performanceTrend.length > 0 && (
-      <div>
-        <h3 className="text-sm font-semibold mb-2">Performance Trend</h3>
-        <div className="flex gap-4">
-          {performanceTrend.map((item, idx) => (
-            <div
-              key={idx}
-              className="flex flex-col items-center text-xs"
-            >
-              <div className="text-slate-500">{item.month}</div>
-              <div className="font-semibold text-indigo-600">
-                {item.score}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
-
-    {/* PROJECT-WISE PERFORMANCE */}
-    {projectPerformance.length > 0 && (
-      <div>
-        <h3 className="text-sm font-semibold mb-2">
-          Project-wise Productivity
-        </h3>
-
-        <div className="space-y-2">
-          {projectPerformance.map((proj) => (
-            <div
-              key={proj.project_id}
-              className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs"
-            >
-              <div className="flex justify-between mb-1">
-                <span className="font-semibold">
-                  {proj.project_name || proj.projectName}
-                </span>
-                <span className="font-bold text-indigo-600">
-                  {proj.score || 0}
-                </span>
-              </div>
-
-              <div className="w-full bg-slate-200 rounded-full h-1.5">
-                <div
-                  className="bg-indigo-500 h-1.5 rounded-full"
-                  style={{ width: `${proj.score}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
-
-    {/* ================================
-    BEHAVIORAL INTELLIGENCE
-================================ */}
-{myPerformance.intelligence && (
-  <div className="mt-6 space-y-5">
-
-    <h3 className="text-sm font-semibold">
-      Behavioral Intelligence Profile
-    </h3>
-
-    {/* DIMENSIONS */}
-    <div className="grid md:grid-cols-2 gap-4 text-xs">
-      {Object.entries(myPerformance.intelligence.dimensions).map(
-        ([key, value]) => (
-          <div key={key}>
-            <div className="flex justify-between mb-1">
-              <span className="capitalize text-slate-600">
-                {key.replace(/([A-Z])/g, " $1")}
-              </span>
-              <span className="font-semibold">
-                {Math.round(value)}
-              </span>
-            </div>
-
-            <div className="w-full bg-slate-200 rounded-full h-1.5">
-              <div
-                className="bg-indigo-500 h-1.5 rounded-full transition-all duration-700"
-                style={{ width: `${value}%` }}
-              />
-            </div>
+      {/* MY TASK STATS */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: "My Tasks", value: myTotal, color: "text-gray-700", bg: "bg-gray-50 border-gray-200" },
+          { label: "Completed", value: myCompleted, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+          { label: "In Progress", value: myInProgress, color: "text-blue-600", bg: "bg-blue-50 border-blue-200" },
+          { label: "Overdue", value: myOverdue, color: myOverdue > 0 ? "text-red-600" : "text-gray-400", bg: myOverdue > 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200" },
+        ].map(s => (
+          <div key={s.label} className={`rounded-lg border p-3 text-center ${s.bg}`}>
+            <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 font-medium">{s.label}</div>
           </div>
-        )
-      )}
-    </div>
-
-    {/* RISK */}
-    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs">
-      <div className="flex justify-between">
-        <span className="font-semibold">Risk Probability</span>
-        <span className={`font-bold ${
-          myPerformance.intelligence.risk.level === "High"
-            ? "text-red-600"
-            : myPerformance.intelligence.risk.level === "Medium"
-            ? "text-amber-600"
-            : "text-emerald-600"
-        }`}>
-          {Math.round(myPerformance.intelligence.risk.probability)}%
-          {" "}({myPerformance.intelligence.risk.level})
-        </span>
+        ))}
       </div>
-    </div>
 
-    {/* SIGNALS */}
-    {myPerformance.intelligence.signals?.length > 0 && (
-      <div>
-        <h4 className="text-xs font-semibold mb-2">
-          Detected Behavioral Signals
-        </h4>
-
-        <div className="flex flex-wrap gap-2">
-          {myPerformance.intelligence.signals.map((s, idx) => (
-            <span
-              key={idx}
-              className="bg-red-100 text-red-700 text-[10px] px-2 py-1 rounded-full"
-            >
-              {s}
-            </span>
-          ))}
+      {/* COMPLETION RATE BAR */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-gray-500 w-28 shrink-0">Completion rate</span>
+        <div className="flex-1 bg-gray-100 rounded-full h-2">
+          <div className="bg-emerald-500 h-2 rounded-full transition-all duration-700" style={{ width: `${myCompletionRate}%` }} />
         </div>
+        <span className="text-xs font-bold text-emerald-600 w-8 text-right">{myCompletionRate}%</span>
       </div>
-    )}
-  </div>
-)}
 
-    {/* COACHING */}
-    {Array.isArray(myPerformance.coaching) &&
-      myPerformance.coaching.length > 0 && (
+      {/* BEHAVIORAL DIMENSIONS */}
+      {Object.keys(dims).length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold mb-2">
-            Coaching Suggestions
-          </h3>
-          <ul className="space-y-2 text-sm text-slate-600">
-            {myPerformance.coaching.map((nudge, idx) => (
-  <li
-    key={idx}
-    className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
-  >
-    {typeof nudge === "string"
-      ? nudge
-      : nudge.message || nudge.action}
-  </li>
-))}
-          </ul>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Behavioral Profile</div>
+          <div className="grid grid-cols-2 gap-3">
+            {Object.entries(dims).map(([key, value]) => {
+              const meta = dimMeta[key] || { label: key.replace(/([A-Z])/g, " $1"), icon: "•" };
+              const barColor = getDimColor(key, value);
+              const textColor = getDimTextColor(key, value);
+              return (
+                <div key={key} className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">{meta.icon}</span>
+                      <span className="text-xs text-gray-600 font-medium">{meta.label}</span>
+                    </div>
+                    <span className={`text-sm font-bold ${textColor}`}>{Math.round(value)}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div className={`${barColor} h-1.5 rounded-full transition-all duration-700`} style={{ width: `${Math.min(value, 100)}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
+
+      {/* RISK + SIGNALS */}
+      {risk && (
+        <div className={`rounded-lg border p-3 flex items-start justify-between gap-3 ${
+          risk.level === "High" ? "bg-red-50 border-red-200" :
+          risk.level === "Medium" ? "bg-amber-50 border-amber-200" :
+          "bg-emerald-50 border-emerald-200"
+        }`}>
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-1">Performance Risk</div>
+            <div className={`text-2xl font-bold ${risk.level === "High" ? "text-red-600" : risk.level === "Medium" ? "text-amber-600" : "text-emerald-600"}`}>
+              {Math.round(risk.probability)}%
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">probability of underperformance</div>
+          </div>
+          {signals.length > 0 && (
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-gray-500 mb-1.5">Active Signals</div>
+              <div className="flex flex-wrap gap-1.5">
+                {signals.map((s, i) => (
+                  <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                    risk.level === "High" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                  }`}>{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TREND */}
+      {performanceTrend.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Score Trend</div>
+          <div className="flex items-end gap-2">
+            {performanceTrend.map((item, idx) => {
+              const h = Math.max(8, Math.round((item.score / 100) * 48));
+              const isLatest = idx === performanceTrend.length - 1;
+              return (
+                <div key={idx} className="flex flex-col items-center gap-1 flex-1">
+                  <span className="text-[10px] font-bold text-gray-600">{item.score}</span>
+                  <div
+                    className={`w-full rounded-t-sm transition-all ${isLatest ? "bg-indigo-500" : "bg-gray-200"}`}
+                    style={{ height: `${h}px` }}
+                  />
+                  <span className="text-[10px] text-gray-400">{item.month?.slice(5)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* PROJECT BREAKDOWN */}
+      {projectPerformance.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Project</div>
+          <div className="space-y-2">
+            {projectPerformance.map((proj) => (
+              <div key={proj.project_id} className="flex items-center gap-3">
+                <span className="text-xs text-gray-600 w-32 truncate shrink-0">{proj.project_name || proj.projectName}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-2">
+                  <div className={`h-2 rounded-full ${proj.score >= 75 ? "bg-emerald-500" : proj.score >= 50 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${proj.score || 0}%` }} />
+                </div>
+                <span className={`text-xs font-bold w-8 text-right ${proj.score >= 75 ? "text-emerald-600" : proj.score >= 50 ? "text-amber-500" : "text-red-500"}`}>{proj.score || 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* COACHING */}
+      {coaching.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recommendations</div>
+          <div className="space-y-2">
+            {coaching.map((nudge, idx) => (
+              <div key={idx} className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5">
+                <span className="text-indigo-400 mt-0.5 shrink-0">→</span>
+                <span className="text-xs text-indigo-800 leading-relaxed">
+                  {typeof nudge === "string" ? nudge : nudge.message || nudge.action}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </Card.Content>
   </Card>
-)}
+  );
+})()}
       <section className="space-y-6">
         <div className="grid lg:grid-cols-3 gap-6">
 {/* 🔥 Org Intelligence Overview */}

@@ -305,17 +305,22 @@ export default function Autopilot() {
         </div>
 
         {stats && (
-          <div className="grid grid-cols-5 gap-4">
-            <StatCard label="Pending" value={stats.pending} icon={Clock3} color="yellow" />
-            <StatCard label="Executed" value={stats.executed} icon={CheckCircle2} color="green" />
-            <StatCard label="Rejected" value={stats.rejected} icon={XCircle} color="red" />
-            <StatCard label="Auto-Approved" value={stats.autoApproved} icon={Zap} color="purple" />
-            <StatCard
-              label="Confidence"
-              value={`${Math.round((stats.avgConfidence || 0) * 100)}%`}
-              icon={Target}
-              color="blue"
-            />
+          <div>
+            <p className="text-xs text-gray-400 mb-2 text-right">
+              Executed / Rejected / Auto-Approved counts show last 7 days
+            </p>
+            <div className="grid grid-cols-5 gap-4">
+              <StatCard label="Pending" value={stats.pending} icon={Clock3} color="yellow" />
+              <StatCard label="Executed (7d)" value={stats.executed} icon={CheckCircle2} color="green" />
+              <StatCard label="Rejected (7d)" value={stats.rejected} icon={XCircle} color="red" />
+              <StatCard label="Auto-Approved (7d)" value={stats.autoApproved} icon={Zap} color="purple" />
+              <StatCard
+                label="Avg Confidence (7d)"
+                value={`${Math.round((stats.avgConfidence || 0) * 100)}%`}
+                icon={Target}
+                color="blue"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -671,7 +676,7 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
     reassign: "Auto-Assignment",
     adjust_deadline: "Deadline Adjustment",
     escalate: "Escalation",
-    create_standup: "Standup Summary",
+    create_standup: "Daily Standup",
   };
 
   const confidenceColor = (score) => {
@@ -681,7 +686,107 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
   };
 
   const Icon = actionIcons[action.action_type] || Bot;
+  const isStandup = action.action_type === "create_standup";
+  const cs = action.current_state || {};
+  const pc = action.proposed_changes || {};
 
+  if (isStandup) {
+    return (
+      <div className="bg-white border border-blue-200 rounded-lg p-6 hover:shadow-md transition">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+            <FileText className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-bold text-gray-900">
+              Daily Standup — {pc.project_name || cs.project_name || "Project"}
+            </h3>
+            <p className="text-xs text-gray-500">
+              Ready to post to <span className="font-semibold text-blue-600">#daily-standups</span>
+            </p>
+          </div>
+          <span className={`text-sm font-semibold ${confidenceColor(action.confidence_score)}`}>
+            {Math.round(action.confidence_score * 100)}% confidence
+          </span>
+        </div>
+
+        {/* Stats row */}
+        <div className="flex gap-3 mb-4 flex-wrap">
+          {cs.status_changes != null && (
+            <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full">
+              {cs.status_changes} task movements
+            </span>
+          )}
+          {cs.stuck_tasks > 0 && (
+            <span className="px-2 py-1 bg-orange-50 text-orange-700 text-xs font-semibold rounded-full">
+              {cs.stuck_tasks} stuck task{cs.stuck_tasks !== 1 ? "s" : ""}
+            </span>
+          )}
+          {cs.new_tasks > 0 && (
+            <span className="px-2 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full">
+              {cs.new_tasks} new task{cs.new_tasks !== 1 ? "s" : ""}
+            </span>
+          )}
+          {cs.overdue_count > 0 && (
+            <span className="px-2 py-1 bg-red-50 text-red-700 text-xs font-semibold rounded-full">
+              {cs.overdue_count} overdue
+            </span>
+          )}
+          {cs.active_count != null && (
+            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
+              {cs.active_count} active tasks
+            </span>
+          )}
+        </div>
+
+        {/* Preview / Expand */}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-blue-600 hover:text-blue-700 text-sm font-semibold mb-3"
+        >
+          <span className="inline-flex items-center gap-1">
+            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            {expanded ? "Hide" : "Preview"} standup content
+          </span>
+        </button>
+
+        {expanded && pc.summary && (
+          <div className="mt-2 mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg max-h-72 overflow-y-auto">
+            <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+              {pc.summary}
+            </pre>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3 pt-4 border-t border-gray-200">
+          <button
+            onClick={onApprove}
+            disabled={processing}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="inline-flex items-center justify-center gap-1">
+              <Check className="w-4 h-4" />
+              {processing ? "Posting..." : "Post to #daily-standups"}
+            </span>
+          </button>
+          <button
+            onClick={() => onReject(null)}
+            disabled={processing}
+            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-semibold hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="inline-flex items-center gap-1">
+              <X className="w-4 h-4" />
+              Dismiss
+            </span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Default card for reassign / adjust_deadline / escalate / handle_overdue
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition">
       <div className="flex items-start justify-between">
@@ -689,7 +794,7 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
           <div className="flex items-center gap-3 mb-3">
             <Icon className="w-8 h-8 text-slate-700" />
             <div>
-              <h3 className="text-lg font-bold text-gray-900">{actionLabels[action.action_type]}</h3>
+              <h3 className="text-lg font-bold text-gray-900">{actionLabels[action.action_type] || action.action_type}</h3>
               {action.task_title && <p className="text-sm text-gray-600">Task: {action.task_title}</p>}
             </div>
             <div className={`ml-auto text-sm font-semibold ${confidenceColor(action.confidence_score)}`}>
