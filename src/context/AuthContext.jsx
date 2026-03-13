@@ -78,10 +78,19 @@ export function AuthProvider({ children }) {
     window.dispatchEvent(new CustomEvent("auth:logout"));
   };
 
+  const updateUser = (patch) => {
+    setAuth((prev) => {
+      const updated = { ...prev, user: { ...prev.user, ...patch } };
+      localStorage.setItem("auth", JSON.stringify({ user: updated.user, token: updated.token }));
+      return updated;
+    });
+  };
+
   const value = {
     auth,
     login,
     logout,
+    updateUser,
   };
 
   if (!auth.isReady) return null;

@@ -2,6 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ── Quill Chat Overrides ──────────────────────────────── */
+/* Make the toolbar minimal and unobtrusive */
+.ql-toolbar.ql-snow {
+  border: none !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 6px 10px !important;
+  background: #fafafa;
+}
+.ql-container.ql-snow {
+  border: none !important;
+  font-size: 13px;
+}
+.ql-editor {
+  min-height: 48px !important;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 10px 12px !important;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ql-editor.ql-blank::before {
+  color: #94a3b8;
+  font-style: normal;
+  font-size: 13px;
+}
+.ql-toolbar .ql-stroke { stroke: #94a3b8; }
+.ql-toolbar .ql-fill { fill: #94a3b8; }
+.ql-toolbar button:hover .ql-stroke,
+.ql-toolbar button.ql-active .ql-stroke { stroke: #3b82f6 !important; }
+.ql-toolbar button:hover .ql-fill,
+.ql-toolbar button.ql-active .ql-fill { fill: #3b82f6 !important; }
+
+/* Chat message prose overrides */
+.chat-prose p { margin: 0; }
+.chat-prose ul, .chat-prose ol { padding-left: 1.25rem; margin: 0.25rem 0; }
+.chat-prose a { color: #3b82f6; text-decoration: underline; }
+.chat-prose strong { color: inherit; }
+
 /* ─────────────────────────────────────────────────────────
    LIGHT (default)
 ───────────────────────────────────────────────────────── */

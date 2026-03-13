@@ -221,6 +221,7 @@ export default function Subtasks({ taskId }) {
               {s.assigned_to && (
                 <Avatar
                   name={users.find(u => u.id === s.assigned_to)?.username || "User"}
+                  src={users.find(u => u.id === s.assigned_to)?.avatar_url}
                   size="xs"
                   className="shrink-0"
                 />

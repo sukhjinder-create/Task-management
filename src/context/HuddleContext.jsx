@@ -1,12 +1,11 @@
 // src/context/HuddleContext.jsx
-import { createContext, useContext, useState, useEffect, useRef } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useHuddleCall } from "../hooks/useHuddleCall";
 import { getSocket } from "../socket";
 import { useAuth } from "./AuthContext";
 
 const HuddleContext = createContext(null);
 
-// KEY for saved ongoing huddle (restores even after refresh)
 const HUDDLE_STATE_KEY = "activeHuddleState";
 
 export function HuddleProvider({ children }) {
@@ -14,14 +13,6 @@ export function HuddleProvider({ children }) {
   const user = auth?.user;
 
   const [activeHuddle, setActiveHuddle] = useState(null);
-
-  // Stores the REAL channel used by WebRTC (because you may navigate anywhere)
-  const currentChannelIdRef = useRef(null);
-  useEffect(() => {
-  if (activeHuddle?.channelId) {
-    currentChannelIdRef.current = activeHuddle.channelId;
-  }
-}, [activeHuddle]);
 
   // ---------------------------
   // Load persistent huddle at startup
@@ -33,7 +24,6 @@ export function HuddleProvider({ children }) {
         const parsed = JSON.parse(saved);
         if (parsed?.huddleId && parsed?.channelId) {
           setActiveHuddle(parsed);
-          currentChannelIdRef.current = parsed.channelId;
         }
       }
     } catch (e) {
@@ -42,57 +32,79 @@ export function HuddleProvider({ children }) {
   }, []);
 
   // ---------------------------
-  // WebRTC Hook — completely global
+  // WebRTC Hook
   // ---------------------------
- const call = useHuddleCall({
-  channelId: null,
-  currentUser: user,
-});
+  const call = useHuddleCall({ currentUser: user });
 
-useEffect(() => {
-  if (activeHuddle?.channelId) {
-    call.setChannelId(activeHuddle.channelId);
-  }
-}, [activeHuddle, call]);
+  // Keep channelId and huddleId refs in sync with active huddle
+  useEffect(() => {
+    if (activeHuddle?.channelId) {
+      call.setChannelId(activeHuddle.channelId);
+    }
+    if (activeHuddle?.huddleId) {
+      call.setHuddleId(activeHuddle.huddleId);
+    }
+  }, [activeHuddle]); // eslint-disable-line react-hooks/exhaustive-deps
 
-const rtc = {
-  // media
-  localStream: call.localStream,
-  remotePeers: call.remotePeers,
-
-  // UI expects THESE names
-  isMuted: !call.micEnabled,
-  isCameraOff: !call.camEnabled,
-  isScreenSharing: call.screenSharing,
-
-  // UI buttons call THESE
-  toggleMute: call.toggleMic,
-  toggleCamera: call.toggleCamera,
-  startScreenShare: call.startScreenShare,
-  stopScreenShare: call.stopScreenShare,
-
-  // lifecycle
-  joinHuddle: call.startCall,
-  leaveHuddle: call.leaveCall,
-};
-
-useEffect(() => {
-  if (!activeHuddle) return;
-  if (!rtc) return;
-
-  rtc.joinHuddle();
-}, [activeHuddle, rtc]);
+  // Join call when a huddle becomes active — only once per huddleId
+  const joinedHuddleRef = useRef(null);
+  useEffect(() => {
+    if (!activeHuddle?.huddleId) return;
+    if (joinedHuddleRef.current === activeHuddle.huddleId) return;
+    joinedHuddleRef.current = activeHuddle.huddleId;
+    call.startCall();
+  }, [activeHuddle?.huddleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
-  // Persist huddle state always
+  // Persist huddle state
   // ---------------------------
   useEffect(() => {
     if (activeHuddle?.huddleId) {
       localStorage.setItem(HUDDLE_STATE_KEY, JSON.stringify(activeHuddle));
     } else {
       localStorage.removeItem(HUDDLE_STATE_KEY);
+      joinedHuddleRef.current = null;
     }
   }, [activeHuddle]);
+
+  // ---------------------------
+  // End huddle for all (host action)
+  // ---------------------------
+  const endHuddleForAll = useCallback(() => {
+    const socket = getSocket();
+    if (!socket || !activeHuddle) return;
+    socket.emit("huddle:end", {
+      channelId: activeHuddle.channelId,
+      huddleId: activeHuddle.huddleId,
+    });
+    setActiveHuddle(null);
+    call.leaveCall();
+  }, [activeHuddle, call]);
+
+  // ---------------------------
+  // rtc object exposed to UI
+  // ---------------------------
+  const rtc = {
+    localStream: call.localStream,
+    remotePeers: call.remotePeers,
+    isMuted: !call.micEnabled,
+    isCameraOff: !call.camEnabled,
+    isScreenSharing: call.screenSharing,
+    activeSpeakerId: call.activeSpeakerId,
+    networkQuality: call.networkQuality,
+    // Legacy Chat.jsx fields
+    joined: call.inCall,
+    connecting: call.connecting,
+    error: "",
+    toggleMute: call.toggleMic,
+    toggleCamera: call.toggleCamera,
+    startScreenShare: call.startScreenShare,
+    stopScreenShare: call.stopScreenShare,
+    joinHuddle: call.startCall,
+    leaveHuddle: call.leaveCall,
+    muteAll: call.muteAll,
+    endHuddleForAll,
+  };
 
   // ---------------------------
   // SOCKET: listen for huddle start/end
@@ -101,7 +113,6 @@ useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
-    // When someone starts a huddle
     const onStarted = (payload) => {
       setActiveHuddle({
         huddleId: payload.huddleId,
@@ -109,17 +120,16 @@ useEffect(() => {
         startedBy: payload.startedBy,
         at: payload.at,
       });
-      currentChannelIdRef.current = payload.channelId;
     };
 
-    // When someone ends a huddle
     const onEnded = (payload) => {
-      if (!activeHuddle) return;
-
-      if (payload.huddleId === activeHuddle.huddleId) {
-        setActiveHuddle(null);
-        rtc.leaveHuddle();
-      }
+      setActiveHuddle((prev) => {
+        if (prev && payload.huddleId === prev.huddleId) {
+          call.leaveCall();
+          return null;
+        }
+        return prev;
+      });
     };
 
     socket.on("huddle:started", onStarted);
@@ -129,14 +139,7 @@ useEffect(() => {
       socket.off("huddle:started", onStarted);
       socket.off("huddle:ended", onEnded);
     };
-  }, [activeHuddle, rtc]);
-
-  // ---------------------------
-  // Chat page tells us which channel we are focusing
-  // ---------------------------
-  const setChannelForHuddle = (channelId) => {
-    currentChannelIdRef.current = channelId;
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
   // PROVIDER VALUE
@@ -147,7 +150,7 @@ useEffect(() => {
         activeHuddle,
         setActiveHuddle,
         rtc,
-        setChannelForHuddle,
+        currentUser: user,
       }}
     >
       {children}

@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+﻿import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   Beaker, Play, RefreshCw, Save, Search, Settings, FileCode2,
   ChevronDown, ChevronRight, Terminal, CheckCircle2, XCircle,
   AlertTriangle, Clock, GitBranch, Layers, Cpu, Globe, Camera,
   SkipForward, Wand2, Zap, TrendingUp, Eye, Info, Sparkles,
   Shield, Activity, Maximize2, Minimize2, X as XIcon, Monitor,
+  Download, Square, FileText,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../api";
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Helpers
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function formatDate(v) {
   if (!v) return "-";
   const d = new Date(v);
@@ -23,9 +24,24 @@ function formatMs(ms) {
   return n < 1000 ? `${n}ms` : `${(n / 1000).toFixed(1)}s`;
 }
 
+async function downloadRunReportPdf(runId) {
+  const res = await api.get(`/testing-agent/runs/${runId}/report.pdf`, { responseType: "blob" });
+  const blob = new Blob([res.data], { type: "application/pdf" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `testing-agent-report-${runId}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 const STATUS_META = {
   passed:    { label: "Passed",    bg: "bg-green-100",  text: "text-green-700",  border: "border-green-200", Icon: CheckCircle2 },
   failed:    { label: "Failed",    bg: "bg-red-100",    text: "text-red-700",    border: "border-red-200",   Icon: XCircle },
+  cancelled: { label: "Stopped",   bg: "bg-slate-100",  text: "text-slate-700",  border: "border-slate-200", Icon: Square },
+  cancel_requested: { label: "Stopping", bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200", Icon: Clock },
   partial:   { label: "Partial",   bg: "bg-amber-100",  text: "text-amber-700",  border: "border-amber-200", Icon: AlertTriangle },
   blocked:   { label: "Blocked",   bg: "bg-amber-100",  text: "text-amber-700",  border: "border-amber-200", Icon: AlertTriangle },
   running:   { label: "Running",   bg: "bg-blue-100",   text: "text-blue-700",   border: "border-blue-200",  Icon: Clock },
@@ -73,9 +89,9 @@ function Toggle({ label, description, checked, onChange }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Performance chips
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PerfChips({ metrics }) {
   if (!metrics) return null;
   const { loadComplete, firstByte, resourceCount } = metrics;
@@ -89,9 +105,9 @@ function PerfChips({ metrics }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Browser step row (enhanced)
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function BrowserStepRow({ step, defaultShowScreenshot = false }) {
   const [showShot, setShowShot] = useState(defaultShowScreenshot);
   const hasSS = Boolean(step.screenshot) && step.screenshot !== true;
@@ -146,9 +162,9 @@ function BrowserStepRow({ step, defaultShowScreenshot = false }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // AI Insights panel
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function InsightsPanel({ insights }) {
   const [open, setOpen] = useState(true);
   if (!insights) return null;
@@ -175,13 +191,13 @@ function InsightsPanel({ insights }) {
             {insights.whatWorked?.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-green-700 mb-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />What Worked</p>
-                <ul className="space-y-0.5">{insights.whatWorked.map((w, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-green-500 mt-0.5">•</span>{w}</li>)}</ul>
+                <ul className="space-y-0.5">{insights.whatWorked.map((w, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-green-500 mt-0.5">-</span>{w}</li>)}</ul>
               </div>
             )}
             {insights.whatFailed?.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-red-700 mb-1 flex items-center gap-1"><XCircle className="w-3 h-3" />What Failed</p>
-                <ul className="space-y-0.5">{insights.whatFailed.map((w, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-red-500 mt-0.5">•</span>{w}</li>)}</ul>
+                <ul className="space-y-0.5">{insights.whatFailed.map((w, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-red-500 mt-0.5">-</span>{w}</li>)}</ul>
               </div>
             )}
           </div>
@@ -194,13 +210,13 @@ function InsightsPanel({ insights }) {
           {insights.recommendations?.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1"><Info className="w-3 h-3" />Recommendations</p>
-              <ul className="space-y-0.5">{insights.recommendations.map((r, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-blue-500 mt-0.5">→</span>{r}</li>)}</ul>
+              <ul className="space-y-0.5">{insights.recommendations.map((r, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-blue-500 mt-0.5">-&gt;</span>{r}</li>)}</ul>
             </div>
           )}
           {insights.nextTestsToRun?.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-purple-700 mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3" />Suggested Next Tests</p>
-              <ul className="space-y-0.5">{insights.nextTestsToRun.map((t, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-purple-500 mt-0.5">→</span>{t}</li>)}</ul>
+              <ul className="space-y-0.5">{insights.nextTestsToRun.map((t, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-purple-500 mt-0.5">-&gt;</span>{t}</li>)}</ul>
             </div>
           )}
           {insights.performanceNote && (
@@ -214,18 +230,19 @@ function InsightsPanel({ insights }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
-// Live Run Panel — mini screen + step list + fullscreen
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Live Run Panel â€” mini screen + step list + fullscreen
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LiveRunPanel({ runId, onFinished }) {
   const [liveSteps, setLiveSteps] = useState([]);
   const [status, setStatus] = useState("running");
+  const [stopRequested, setStopRequested] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState(null); // { screenshot, caption, ts }
   const intervalRef = useRef(null);
   const finishedRef = useRef(false);         // prevent duplicate onFinished calls
-  const onFinishedRef = useRef(onFinished);  // stable ref — avoids re-subscribing
+  const onFinishedRef = useRef(onFinished);  // stable ref â€” avoids re-subscribing
   const bottomRef = useRef(null);
 
   // Keep onFinishedRef current without affecting effect deps
@@ -237,6 +254,7 @@ function LiveRunPanel({ runId, onFinished }) {
     setLiveSteps([]);
     setCurrentScreen(null);
     setStatus("running");
+    setStopRequested(false);
 
     const poll = async () => {
       try {
@@ -249,7 +267,8 @@ function LiveRunPanel({ runId, onFinished }) {
         if (cs?.screenshot) setCurrentScreen(cs);
         const s = run?.status || "running";
         setStatus(s);
-        if (s !== "running" && !finishedRef.current) {
+        if (s === "cancel_requested") setStopRequested(true);
+        if (!["running", "cancel_requested"].includes(s) && !finishedRef.current) {
           finishedRef.current = true;
           clearInterval(intervalRef.current);
           onFinishedRef.current?.(run);
@@ -259,7 +278,7 @@ function LiveRunPanel({ runId, onFinished }) {
     poll();
     intervalRef.current = setInterval(poll, 2000);
     return () => clearInterval(intervalRef.current);
-  }, [runId]); // only runId — onFinished handled via ref
+  }, [runId]); // only runId â€” onFinished handled via ref
 
   // Auto-scroll step list to bottom
   useEffect(() => {
@@ -270,12 +289,26 @@ function LiveRunPanel({ runId, onFinished }) {
 
   if (!runId) return null;
 
-  const done = status !== "running";
+  const done = !["running", "cancel_requested"].includes(status);
   const passed = liveSteps.filter((s) => s.status === "passed").length;
   const failed = liveSteps.filter((s) => s.status === "failed").length;
   const lastStep = liveSteps[liveSteps.length - 1];
 
-  // Latest screenshot (base64, not stripped to `true`) — fallback when currentScreen not available
+  async function handleStopRun() {
+    if (!runId || stopRequested || done) return;
+    try {
+      setStopRequested(true);
+      setStatus("cancel_requested");
+      await api.post(`/testing-agent/runs/${runId}/stop`);
+      toast("Stop requested");
+    } catch {
+      setStopRequested(false);
+      setStatus("running");
+      toast.error("Failed to stop run");
+    }
+  }
+
+  // Latest screenshot (base64, not stripped to `true`) â€” fallback when currentScreen not available
   const latestScreenshot = [...liveSteps].reverse()
     .find((s) => s.screenshot && s.screenshot !== true)?.screenshot ?? null;
 
@@ -284,7 +317,7 @@ function LiveRunPanel({ runId, onFinished }) {
   const displayCaption = (!done && currentScreen?.caption) ? currentScreen.caption
     : lastStep ? `${lastStep.action}: ${lastStep.description}` : null;
 
-  // ── Reusable screenshot viewport ──
+  // â”€â”€ Reusable screenshot viewport â”€â”€
   function ScreenView({ className = "" }) {
     return (
       <div className={`relative bg-gray-900 rounded-lg overflow-hidden ${className}`}
@@ -294,7 +327,7 @@ function LiveRunPanel({ runId, onFinished }) {
           : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               <span className="w-6 h-6 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-              <p className="text-xs text-gray-400">Agent starting up…</p>
+              <p className="text-xs text-gray-400">Agent starting up...</p>
             </div>
           )
         }
@@ -302,9 +335,11 @@ function LiveRunPanel({ runId, onFinished }) {
         {displayCaption && (
           <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white px-3 py-1.5 flex items-center gap-2">
             {!done
-              ? <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+              ? <span className={`w-2 h-2 rounded-full ${stopRequested ? "bg-orange-400" : "bg-green-400"} animate-pulse shrink-0`} />
               : status === "passed"
                 ? <CheckCircle2 className="w-3 h-3 text-green-400 shrink-0" />
+                : status === "cancelled"
+                  ? <Square className="w-3 h-3 text-slate-300 shrink-0" />
                 : <XCircle className="w-3 h-3 text-red-400 shrink-0" />
             }
             <span className="text-xs text-gray-200 truncate">{displayCaption}</span>
@@ -317,12 +352,12 @@ function LiveRunPanel({ runId, onFinished }) {
     );
   }
 
-  // ── Step list ──
+  // â”€â”€ Step list â”€â”€
   function StepList({ maxH = "max-h-48" }) {
     return (
       <div className={`space-y-1 overflow-y-auto ${maxH} pr-0.5`}>
         {liveSteps.length === 0 && (
-          <p className="text-xs text-blue-400 text-center py-3 animate-pulse">Waiting for first step…</p>
+          <p className="text-xs text-blue-400 text-center py-3 animate-pulse">Waiting for first step...</p>
         )}
         {liveSteps.map((step, i) => (
           <div key={i}
@@ -334,6 +369,8 @@ function LiveRunPanel({ runId, onFinished }) {
               ? <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
               : step.status === "failed"
                 ? <XCircle className="w-3 h-3 text-red-500 shrink-0" />
+                : step.status === "cancelled"
+                  ? <Square className="w-3 h-3 text-slate-500 shrink-0" />
                 : i === liveSteps.length - 1 && !done
                   ? <span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
                   : <Clock className="w-3 h-3 text-gray-300 shrink-0" />}
@@ -350,7 +387,7 @@ function LiveRunPanel({ runId, onFinished }) {
     );
   }
 
-  // ── Fullscreen overlay ──
+  // â”€â”€ Fullscreen overlay â”€â”€
   if (fullscreen) {
     return (
       <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
@@ -360,17 +397,28 @@ function LiveRunPanel({ runId, onFinished }) {
             ? <span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
             : status === "passed"
               ? <CheckCircle2 className="w-4 h-4 text-green-400" />
+              : status === "cancelled"
+                ? <Square className="w-4 h-4 text-slate-300" />
               : <XCircle className="w-4 h-4 text-red-400" />
           }
           <span className="text-sm font-semibold text-white">
-            {done ? (status === "passed" ? "Run completed" : "Run finished") : "Live Agent View"}
+            {done ? (status === "passed" ? "Run completed" : status === "cancelled" ? "Run stopped" : "Run finished") : stopRequested ? "Stopping run..." : "Live Agent View"}
           </span>
           <span className="flex gap-2 text-xs ml-2">
-            {passed > 0 && <span className="text-green-400 font-semibold">{passed} ✓</span>}
-            {failed > 0 && <span className="text-red-400 font-semibold">{failed} ✗</span>}
+            {passed > 0 && <span className="text-green-400 font-semibold">{passed} passed</span>}
+            {failed > 0 && <span className="text-red-400 font-semibold">{failed} failed</span>}
             <span className="text-gray-400">{liveSteps.length} steps</span>
           </span>
           <div className="ml-auto flex items-center gap-2">
+            {!done && (
+              <button
+                onClick={handleStopRun}
+                disabled={stopRequested}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-red-500/15 text-red-200 hover:bg-red-500/25 disabled:opacity-60 text-xs font-semibold"
+              >
+                <Square className="w-3.5 h-3.5" />{stopRequested ? "Stopping..." : "Stop"}
+              </button>
+            )}
             <button onClick={() => setFullscreen(false)}
               className="text-gray-400 hover:text-white p-1.5 rounded hover:bg-gray-700 transition-colors"
               title="Exit fullscreen">
@@ -398,7 +446,7 @@ function LiveRunPanel({ runId, onFinished }) {
     );
   }
 
-  // ── Normal (mini) panel ──
+  // â”€â”€ Normal (mini) panel â”€â”€
   return (
     <div className="mt-4 border border-blue-200 rounded-xl overflow-hidden bg-blue-50/30 shadow-sm">
       {/* Header */}
@@ -407,19 +455,31 @@ function LiveRunPanel({ runId, onFinished }) {
           ? <span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin shrink-0" />
           : status === "passed"
             ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+            : status === "cancelled"
+              ? <Square className="w-4 h-4 text-slate-600 shrink-0" />
             : <XCircle className="w-4 h-4 text-red-500 shrink-0" />
         }
         <span className="text-sm font-semibold text-blue-800">
-          {done ? (status === "passed" ? "Completed" : "Finished") : "Live…"}
+          {done ? (status === "passed" ? "Completed" : status === "cancelled" ? "Stopped" : "Finished") : stopRequested ? "Stopping..." : "Live..."}
         </span>
         {liveSteps.length > 0 && (
           <span className="flex gap-1.5 text-xs ml-1">
-            {passed > 0 && <span className="text-green-600 font-semibold">{passed} ✓</span>}
-            {failed > 0 && <span className="text-red-500 font-semibold">{failed} ✗</span>}
+            {passed > 0 && <span className="text-green-600 font-semibold">{passed} passed</span>}
+            {failed > 0 && <span className="text-red-500 font-semibold">{failed} failed</span>}
             <span className="text-blue-400">{liveSteps.length} steps</span>
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
+          {!done && (
+            <button
+              onClick={handleStopRun}
+              disabled={stopRequested}
+              title="Stop run"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-60 text-xs font-semibold"
+            >
+              <Square className="w-3.5 h-3.5" />{stopRequested ? "Stopping" : "Stop"}
+            </button>
+          )}
           <button onClick={() => setFullscreen(true)} title="Fullscreen"
             className="p-1 rounded hover:bg-blue-200 text-blue-500 transition-colors">
             <Maximize2 className="w-3.5 h-3.5" />
@@ -443,9 +503,9 @@ function LiveRunPanel({ runId, onFinished }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Collapsible test case row
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TestCaseRow({ tc }) {
   const [open, setOpen] = useState(false);
   return (
@@ -502,9 +562,9 @@ function CommandOutput({ cmd }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Multi-scenario cards
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SCENARIO_META = {
   happy_path:    { label: "Happy Path",    Icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50", border: "border-green-200" },
   error_handling:{ label: "Error Handling",Icon: Shield,       color: "text-red-600",   bg: "bg-red-50",   border: "border-red-200" },
@@ -542,9 +602,9 @@ function ScenarioCard({ scenario, onViewDetails }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Full QA Report Panel (for deep exploration runs)
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SEVERITY_META = {
   critical: { bg: "bg-red-100",    text: "text-red-700",    border: "border-red-300",    dot: "bg-red-500" },
   high:     { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-300", dot: "bg-orange-500" },
@@ -632,9 +692,9 @@ function QAReportPanel({ report, phases }) {
         {phases && (
           <div className="flex flex-wrap gap-3 text-xs text-gray-500 border-t border-gray-200 pt-2 mt-1">
             <span>Modules: <b className="text-gray-700">{phases.recon?.modulesDiscovered || 0}</b></span>
-            <span>Modals found: <b className="text-gray-700">{phases.recon?.totalModalsFound ?? "—"}</b></span>
-            <span>Buttons clicked: <b className="text-gray-700">{phases.recon?.totalButtonsFound ?? "—"}</b></span>
-            <span>Tabs explored: <b className="text-gray-700">{phases.recon?.totalTabsFound ?? "—"}</b></span>
+            <span>Modals found: <b className="text-gray-700">{phases.recon?.totalModalsFound ?? "-"}</b></span>
+            <span>Buttons clicked: <b className="text-gray-700">{phases.recon?.totalButtonsFound ?? "-"}</b></span>
+            <span>Tabs explored: <b className="text-gray-700">{phases.recon?.totalTabsFound ?? "-"}</b></span>
             <span>Test cases run: <b className="text-gray-700">{phases.plan?.totalTestCases || 0}</b></span>
           </div>
         )}
@@ -667,7 +727,7 @@ function QAReportPanel({ report, phases }) {
       {/* Bugs tab */}
       {section === "bugs" && (
         <div className="space-y-2">
-          {report.bugsFound?.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No bugs found — great health!</p>}
+          {report.bugsFound?.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No bugs found - great health!</p>}
           {report.bugsFound?.map((bug, i) => <BugCard key={i} bug={bug} />)}
         </div>
       )}
@@ -687,7 +747,7 @@ function QAReportPanel({ report, phases }) {
                 <p className="text-xs text-gray-600">{m.summary}</p>
                 {m.issues?.length > 0 && (
                   <ul className="space-y-0.5">
-                    {m.issues.map((issue, j) => <li key={j} className="text-xs text-red-600 flex items-start gap-1"><span className="text-red-400 mt-0.5">•</span>{issue}</li>)}
+                    {m.issues.map((issue, j) => <li key={j} className="text-xs text-red-600 flex items-start gap-1"><span className="text-red-400 mt-0.5">-</span>{issue}</li>)}
                   </ul>
                 )}
                 {m.testedFeatures?.length > 0 && (
@@ -742,7 +802,7 @@ function QAReportPanel({ report, phases }) {
           {report.coverageGaps?.length > 0 && (
             <div className="mt-2">
               <p className="text-xs font-semibold text-gray-600 mb-1.5">Coverage Gaps (untested areas)</p>
-              {report.coverageGaps.map((g, i) => <p key={i} className="text-xs text-gray-600 flex items-start gap-1.5 mb-1"><span className="text-gray-400 mt-0.5">→</span>{g}</p>)}
+              {report.coverageGaps.map((g, i) => <p key={i} className="text-xs text-gray-600 flex items-start gap-1.5 mb-1"><span className="text-gray-400 mt-0.5">-&gt;</span>{g}</p>)}
             </div>
           )}
         </div>
@@ -751,9 +811,41 @@ function QAReportPanel({ report, phases }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Run detail modal
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function NarrativeReportPanel({ reportDocument }) {
+  const [open, setOpen] = useState(true);
+  if (!reportDocument?.sections?.length) return null;
+
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-2 px-4 py-3 text-left border-b border-gray-100">
+        <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+        <span className="text-sm font-semibold text-gray-800 flex-1">Narrative Report</span>
+        <span className="text-xs text-gray-400">{reportDocument.generatedAt ? formatDate(reportDocument.generatedAt) : ""}</span>
+        {open ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
+      {open && (
+        <div className="p-4 space-y-4">
+          {reportDocument.sections.map((section) => (
+            <div key={section.title} className="space-y-1.5">
+              <h4 className="text-sm font-semibold text-gray-800">{section.title}</h4>
+              <div className="space-y-1">
+                {section.lines.map((line, index) => (
+                  <p key={`${section.title}-${index}`} className="text-xs text-gray-600 leading-relaxed">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RunDetailModal({ run, onClose }) {
   if (!run) return null;
   const output = run.output_json || {};
@@ -769,6 +861,7 @@ function RunDetailModal({ run, onClose }) {
   const execCtx = output.executionContext || {};
   const insights = output.insights || null;
   const qaReport = output.qaReport || null;
+  const reportDocument = output.reportDocument || null;
 
   const modeMeta = {
     browser:          { label: "Browser",       Icon: Globe,    color: "text-blue-600",   bg: "bg-blue-50" },
@@ -793,10 +886,18 @@ function RunDetailModal({ run, onClose }) {
             </span>
             <div>
               <div className="font-semibold text-gray-900">{run.task_name || "Unknown task"}</div>
-              <div className="text-xs text-gray-500">{run.project_name} · {formatDate(run.created_at)}</div>
+              <div className="text-xs text-gray-500">{run.project_name} - {formatDate(run.created_at)}</div>
             </div>
           </div>
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-lg hover:bg-gray-100">Close</button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => downloadRunReportPdf(run.id).catch(() => toast.error("Failed to download PDF report"))}
+              className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-semibold"
+            >
+              <Download className="w-3.5 h-3.5" /> PDF Report
+            </button>
+            <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-lg hover:bg-gray-100">Close</button>
+          </div>
         </div>
 
         <div className="overflow-y-auto flex-1 p-5 space-y-5">
@@ -821,6 +922,12 @@ function RunDetailModal({ run, onClose }) {
               <InfoTile label="Repository" value={execCtx.repoPath ? execCtx.repoPath.split(/[/\\]/).pop() : "-"} />
               <InfoTile label="Framework" value={execCtx.framework || "-"} />
             </div>
+          )}
+
+          {reportDocument && (
+            <section>
+              <NarrativeReportPanel reportDocument={reportDocument} />
+            </section>
           )}
 
           {/* Full QA Report (deep exploration) */}
@@ -883,7 +990,7 @@ function RunDetailModal({ run, onClose }) {
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
               <GitBranch className="w-4 h-4 text-gray-400" />
               <span>Branch: <span className="font-mono font-semibold">{gitContext.branch}</span></span>
-              {gitContext.changedFiles?.length > 0 && <span className="text-gray-400">· {gitContext.changedFiles.length} changed files</span>}
+              {gitContext.changedFiles?.length > 0 && <span className="text-gray-400">- {gitContext.changedFiles.length} changed files</span>}
             </div>
           )}
 
@@ -933,9 +1040,9 @@ function InfoTile({ label, value, valueColor = "text-gray-800" }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Main component
-// ─────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function TestingAgent() {
   const [settings, setSettings] = useState(null);
   const [settingsDraft, setSettingsDraft] = useState(null);
@@ -1060,23 +1167,23 @@ export default function TestingAgent() {
     finally { setProfilesLoading(false); }
   }
 
-  // ── Actions ──
+  // â”€â”€ Actions â”€â”€
   async function handleAutoDiscover() {
     if (!selectedTaskId) { toast.error("Select a task first"); return; }
     if (!autoUrl.trim().startsWith("http")) { toast.error("Enter a valid URL starting with http"); return; }
     setRunning(true); setLiveRunId(null); setAutoResult(null);
     try {
-      const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/auto-discover`, { url: autoUrl.trim(), timeoutMs: 60000 });
+      const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/auto-discover`, { url: autoUrl.trim(), timeoutMs: 0 });
       if (res.data?.runId && res.data?.status === "running") {
-        // Async mode — live panel takes over
+        // Async mode â€” live panel takes over
         setLiveRunId(res.data.runId);
         // running stays true; onFinished callback will clear it
       } else {
         // Legacy sync response
         setAutoResult(res.data);
         const s = res.data?.status;
-        if (s === "passed") toast.success(`Auto-test passed — ${res.data.summary?.passed}/${res.data.summary?.total} steps`);
-        else toast.error(`Auto-test found issues — ${res.data.summary?.failed} step(s) failed`, { duration: 5000 });
+        if (s === "passed") toast.success(`Auto-test passed - ${res.data.summary?.passed}/${res.data.summary?.total} steps`);
+        else toast.error(`Auto-test found issues - ${res.data.summary?.failed} step(s) failed`, { duration: 5000 });
         await loadRuns(1, historySearch);
         setRunning(false);
       }
@@ -1091,16 +1198,16 @@ export default function TestingAgent() {
     if (!browserInstructions.trim()) { toast.error("Enter test instructions first"); return; }
     setRunning(true); setLiveRunId(null);
     try {
-      const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/browser-run`, { instructions: browserInstructions.trim(), timeoutMs: 300000 });
+      const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/browser-run`, { instructions: browserInstructions.trim(), timeoutMs: 0 });
       if (res.data?.runId && res.data?.status === "running") {
-        // Async mode — live panel takes over
+        // Async mode â€” live panel takes over
         setLiveRunId(res.data.runId);
         // running stays true; onFinished callback will clear it
       } else {
         // Legacy sync response
         const { status, summary } = res.data;
-        if (status === "passed") toast.success(`Browser test passed — ${summary?.passed || 0}/${summary?.total || 0} steps`);
-        else toast.error(`Browser test failed — ${summary?.failed || 0} step(s) failed`, { duration: 5000 });
+        if (status === "passed") toast.success(`Browser test passed - ${summary?.passed || 0}/${summary?.total || 0} steps`);
+        else toast.error(`Browser test failed - ${summary?.failed || 0} step(s) failed`, { duration: 5000 });
         await loadRuns(1, historySearch);
         setRunning(false);
       }
@@ -1114,21 +1221,21 @@ export default function TestingAgent() {
     if (!selectedTaskId) { toast.error("Select a task first"); return; }
     if (!multiDescription.trim()) { toast.error("Enter a feature description first"); return; }
     setRunning(true); setMultiResult(null); setLiveRunId(null);
+    let liveStarted = false;
     try {
       const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/multi-scenario`, {
         description: multiDescription.trim(),
         url: multiUrl.trim() || null,
-        timeoutMs: 90000,
+        timeoutMs: 0,
       });
+      if (res.data?.runId && res.data?.status === "running") { liveStarted = true; setLiveRunId(res.data.runId); return; }
       setMultiResult(res.data);
       const os = res.data?.overallStatus;
       if (os === "passed") toast.success(`All ${res.data.summary?.total} scenarios passed`);
-      else if (os === "partial") toast(`${res.data.summary?.passed} of ${res.data.summary?.total} scenarios passed`, { icon: "⚠️" });
-      else toast.error(`All scenarios failed`, { duration: 5000 });
+      else if (os === "partial") toast(`${res.data.summary?.passed} of ${res.data.summary?.total} scenarios passed`);
+      else if (os === "cancelled") toast("Multi-scenario run stopped"); else toast.error(`Scenario run found issues - ${res.data.summary?.failed ?? "?"} scenario(s) failed`, { duration: 5000 });
       await loadRuns(1, historySearch);
-    } catch (err) {
-      toast.error(err?.response?.data?.details || err?.response?.data?.error || "Multi-scenario run failed", { duration: 6000 });
-    } finally { setRunning(false); }
+    } catch (err) { toast.error(err?.response?.data?.details || err?.response?.data?.error || "Multi-scenario run failed", { duration: 6000 }); } finally { if (!liveStarted) setRunning(false); }
   }
 
   async function handleDeepTest() {
@@ -1139,7 +1246,7 @@ export default function TestingAgent() {
     try {
       const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/deep-explore`, {
         instructions: deepInstructions.trim(),
-        timeoutMs: 600000,
+        timeoutMs: 0,
       });
       if (res.data?.runId && res.data?.status === "running") {
         setLiveRunId(res.data.runId);
@@ -1147,8 +1254,8 @@ export default function TestingAgent() {
       } else {
         // sync fallback
         const { status, summary } = res.data;
-        if (status === "passed") toast.success(`Deep test passed — ${summary?.modules} modules, ${summary?.passed}/${summary?.total} steps`);
-        else toast.error(`Deep test done — ${summary?.failed} step(s) failed`, { duration: 5000 });
+        if (status === "passed") toast.success(`Deep test passed - ${summary?.modules} modules, ${summary?.passed}/${summary?.total} steps`);
+        else toast.error(`Deep test done - ${summary?.failed} step(s) failed`, { duration: 5000 });
         await loadRuns(1, historySearch);
         setRunning(false);
       }
@@ -1212,11 +1319,11 @@ export default function TestingAgent() {
     finally { setSavingProfileId(""); }
   }
 
-  // ── RENDER ──
+  // â”€â”€ RENDER â”€â”€
   const TABS = [
     { key: "auto",   label: "Auto-Test",      Icon: Wand2,     desc: "Paste URL, AI does the rest" },
     { key: "guided", label: "Guided Test",     Icon: Globe,     desc: "Natural language instructions" },
-    { key: "deep",   label: "Deep Test",       Icon: Eye,       desc: "Login → explore all modules" },
+    { key: "deep",   label: "Deep Test",       Icon: Eye,       desc: "Login -> explore all modules" },
     { key: "multi",  label: "Multi-Scenario",  Icon: Layers,    desc: "4 scenarios in one shot" },
     { key: "cli",    label: "CLI Tests",       Icon: Terminal,  desc: "Run your test commands" },
   ];
@@ -1230,7 +1337,7 @@ export default function TestingAgent() {
         </div>
         <div>
           <h1 className="text-2xl font-bold theme-text">Testing Agent</h1>
-          <p className="text-sm theme-text-muted">AI-powered browser automation · self-healing selectors · live insights</p>
+          <p className="text-sm theme-text-muted">AI-powered browser automation - self-healing selectors - live insights</p>
         </div>
       </div>
 
@@ -1300,18 +1407,18 @@ export default function TestingAgent() {
             <option value="">Select a task...</option>
             {taskOptions.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.taskKey ? `[${t.taskKey}] ` : ""}{t.task} — {t.projectName}
+                {t.taskKey ? `[${t.taskKey}] ` : ""}{t.task} - {t.projectName}
               </option>
             ))}
           </select>
           {selectedTask && (
             <div className="text-xs theme-text-muted theme-surface-soft rounded-lg p-2">
-              Status: <b>{selectedTask.status || "n/a"}</b> · Priority: <b>{selectedTask.priority || "n/a"}</b>
-              {selectedTask.assigneeName && <> · Assignee: <b>{selectedTask.assigneeName}</b></>}
+              Status: <b>{selectedTask.status || "n/a"}</b> - Priority: <b>{selectedTask.priority || "n/a"}</b>
+              {selectedTask.assigneeName && <> - Assignee: <b>{selectedTask.assigneeName}</b></>}
             </div>
           )}
 
-          {/* Mode tabs — 5 tabs */}
+          {/* Mode tabs â€” 5 tabs */}
           <div className="grid grid-cols-3 gap-1.5">
             {TABS.map(({ key, label, Icon }) => (
               <button key={key} onClick={() => setRunMode(key)}
@@ -1322,12 +1429,12 @@ export default function TestingAgent() {
             ))}
           </div>
 
-          {/* ── AUTO-TEST TAB ── */}
+          {/* â”€â”€ AUTO-TEST TAB â”€â”€ */}
           {runMode === "auto" && (
             <div className="space-y-2">
               <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg px-3 py-2">
                 <p className="text-xs text-indigo-700 font-semibold">AI Auto-Discovery</p>
-                <p className="text-xs text-indigo-600 mt-0.5">Paste any URL — AI explores the page, builds a test plan, executes it, and gives you insights. No instructions needed.</p>
+                <p className="text-xs text-indigo-600 mt-0.5">Paste any URL - AI explores the page, builds a test plan, executes it, and gives you insights. No instructions needed.</p>
               </div>
               <label className="block text-xs font-medium theme-text-muted">URL to test</label>
               <input
@@ -1340,14 +1447,15 @@ export default function TestingAgent() {
                 className="w-full px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
               >
                 <Wand2 className="w-4 h-4" />
-                {running ? "AI is exploring your app…" : "Auto-Test This URL"}
+                {running ? "AI is exploring your app..." : "Auto-Test This URL"}
               </button>
               {liveRunId && <LiveRunPanel runId={liveRunId} onFinished={(run) => {
                 setRunning(false);
                 const s = run?.status;
                 const sum = run?.output_json?.summary;
-                if (s === "passed") toast.success(`Auto-test passed — ${sum?.passed ?? "?"}/${sum?.total ?? "?"} steps`);
-                else toast.error(`Auto-test found issues — ${sum?.failed ?? "?"} step(s) failed`, { duration: 5000 });
+                if (s === "cancelled") toast("Auto-test stopped");
+                else if (s === "passed") toast.success(`Auto-test passed - ${sum?.passed ?? "?"}/${sum?.total ?? "?"} steps`);
+                else toast.error(`Auto-test found issues - ${sum?.failed ?? "?"} step(s) failed`, { duration: 5000 });
                 loadRuns(1, historySearch);
               }} />}
               {autoResult && !running && (
@@ -1363,7 +1471,7 @@ export default function TestingAgent() {
             </div>
           )}
 
-          {/* ── GUIDED TEST TAB ── */}
+          {/* â”€â”€ GUIDED TEST TAB â”€â”€ */}
           {runMode === "guided" && (
             <div className="space-y-2">
               <label className="block text-xs font-medium theme-text-muted">Test instructions</label>
@@ -1378,26 +1486,25 @@ export default function TestingAgent() {
                 className="w-full px-3 py-2 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm"
               >
                 <Globe className="w-4 h-4" />
-                {running ? "Running browser…" : "Run Browser Test"}
+                {running ? "Running browser..." : "Run Browser Test"}
               </button>
               <p className="text-xs theme-text-soft">AI parses your instructions, executes them with self-healing Playwright automation, and captures screenshots + AI failure analysis at each step.</p>
               {liveRunId && <LiveRunPanel runId={liveRunId} onFinished={(run) => {
                 setRunning(false);
                 const s = run?.status;
                 const sum = run?.output_json?.summary;
-                if (s === "passed") toast.success(`Browser test passed — ${sum?.passed ?? "?"}/${sum?.total ?? "?"} steps`);
-                else toast.error(`Browser test finished — ${sum?.failed ?? "?"} step(s) failed`, { duration: 5000 });
+                if (s === "cancelled") toast("Browser test stopped"); else if (s === "passed") toast.success(`Browser test passed - ${sum?.passed ?? "?"}/${sum?.total ?? "?"} steps`); else toast.error(`Browser test finished - ${sum?.failed ?? "?"} step(s) failed`, { duration: 5000 });
                 loadRuns(1, historySearch);
               }} />}
             </div>
           )}
 
-          {/* ── MULTI-SCENARIO TAB ── */}
+          {/* â”€â”€ MULTI-SCENARIO TAB â”€â”€ */}
           {runMode === "multi" && (
             <div className="space-y-2">
               <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg px-3 py-2">
                 <p className="text-xs text-orange-700 font-semibold">4-Scenario Coverage</p>
-                <p className="text-xs text-orange-600 mt-0.5">Describe a feature → AI generates and runs: happy path, error handling, edge cases, and performance tests.</p>
+                <p className="text-xs text-orange-600 mt-0.5">Describe a feature -&gt; AI generates and runs: happy path, error handling, edge cases, and performance tests.</p>
               </div>
               <label className="block text-xs font-medium theme-text-muted">Feature / app description</label>
               <textarea
@@ -1418,9 +1525,9 @@ export default function TestingAgent() {
                 className="w-full px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
               >
                 <Layers className="w-4 h-4" />
-                {running ? "Running 4 scenarios…" : "Run 4 Scenarios"}
+                {running ? "Running 4 scenarios..." : "Run 4 Scenarios"}
               </button>
-              <p className="text-xs theme-text-soft">Each scenario runs as a separate browser session. Takes 3-8 minutes depending on complexity.</p>
+              <p className="text-xs theme-text-soft">Each scenario runs as a separate browser session. Takes 3-8 minutes depending on complexity.</p>{liveRunId && <LiveRunPanel runId={liveRunId} onFinished={(run) => { setRunning(false); const output = run?.output_json || {}; const result = { description: output.description || multiDescription.trim(), scenarios: Array.isArray(output.scenarios) ? output.scenarios : [], overallStatus: output.overallStatus || run?.status || "failed", summary: output.summary || {}, }; setMultiResult(result); const os = result.overallStatus; if (run?.status === "cancelled" || os === "cancelled") toast("Multi-scenario run stopped"); else if (os === "passed") toast.success(`All ${result.summary?.total ?? "?"} scenarios passed`); else if (os === "partial") toast(`${result.summary?.passed ?? 0} of ${result.summary?.total ?? "?"} scenarios passed`); else toast.error(`Scenario run found issues - ${result.summary?.failed ?? "?"} scenario(s) failed`, { duration: 5000 }); loadRuns(1, historySearch); }} />}
               {multiResult && !running && (
                 <div className="mt-2 space-y-2">
                   <div className="flex items-center justify-between">
@@ -1437,13 +1544,13 @@ export default function TestingAgent() {
             </div>
           )}
 
-          {/* ── DEEP TEST TAB ── */}
+          {/* â”€â”€ DEEP TEST TAB â”€â”€ */}
           {runMode === "deep" && (
             <div className="space-y-2">
               <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-lg px-3 py-2 space-y-1">
-                <p className="text-xs text-violet-700 font-semibold">3-Phase Deep Test — Recon → Precise Test Cases → Aggressive Execution</p>
+                <p className="text-xs text-violet-700 font-semibold">3-Phase Deep Test - Recon -&gt; Precise Test Cases -&gt; Aggressive Execution</p>
                 <div className="text-xs text-violet-600 space-y-0.5">
-                  <p><span className="font-semibold">Phase 1:</span> Logs in, visits every module, <b>clicks every button</b>, opens every modal, explores every tab — builds a complete feature map.</p>
+                  <p><span className="font-semibold">Phase 1:</span> Logs in, visits every module, <b>clicks every button</b>, opens every modal, explores every tab - builds a complete feature map.</p>
                   <p><span className="font-semibold">Phase 2:</span> AI generates <b>precise test cases</b> per module based on exact fields found (XSS, SQL injection, empty submit, boundary values).</p>
                   <p><span className="font-semibold">Phase 3:</span> Executes all tests aggressively. Produces a full QA bug report with severity ratings.</p>
                 </div>
@@ -1464,7 +1571,7 @@ export default function TestingAgent() {
                   <li>Include the full URL with <code className="bg-amber-100 px-1 rounded">https://</code></li>
                   <li>Include login credentials if the app requires authentication</li>
                   <li>Say "test all modules" or "explore every feature" to trigger deep mode</li>
-                  <li>Runs can take 5–15 minutes for large apps — live progress shows below</li>
+                  <li>Runs can take 5-15 minutes for large apps - live progress shows below</li>
                 </ul>
               </div>
 
@@ -1474,7 +1581,7 @@ export default function TestingAgent() {
                 className="w-full px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
               >
                 <Eye className="w-4 h-4" />
-                {running ? "Deep exploring… (live below)" : "Start Deep Test"}
+                {running ? "Deep exploring... (live below)" : "Start Deep Test"}
               </button>
 
               {liveRunId && (
@@ -1484,11 +1591,16 @@ export default function TestingAgent() {
                     setRunning(false);
                     const s = run?.status;
                     const sum = run?.output_json?.summary;
+                    if (s === "cancelled") {
+                      toast("Deep test stopped");
+                      loadRuns(1, historySearch);
+                      return;
+                    }
                     const modules = sum?.modules ?? "?";
                     const bugs = sum?.bugsFound ?? 0;
                     const score = sum?.overallHealthScore;
-                    if (s === "passed") toast.success(`Deep test complete — ${modules} modules, ${bugs} bugs found, health ${score ?? "?"}/10`, { duration: 6000 });
-                    else toast.error(`Deep test done — ${bugs} bugs, ${sum?.failed ?? "?"} failures across ${modules} modules`, { duration: 6000 });
+                    if (s === "passed") toast.success(`Deep test complete - ${modules} modules, ${bugs} bugs found, health ${score ?? "?"}/10`, { duration: 6000 });
+                    else toast.error(`Deep test done - ${bugs} bugs, ${sum?.failed ?? "?"} failures across ${modules} modules`, { duration: 6000 });
                     loadRuns(1, historySearch);
                   }}
                 />
@@ -1496,7 +1608,7 @@ export default function TestingAgent() {
             </div>
           )}
 
-          {/* ── CLI TAB ── */}
+          {/* â”€â”€ CLI TAB â”€â”€ */}
           {runMode === "cli" && (
             <div className="space-y-2">
               <div className="flex gap-2">
@@ -1511,7 +1623,7 @@ export default function TestingAgent() {
                   <Play className="w-4 h-4" />{running ? "Running..." : "Run Tests"}
                 </button>
               </div>
-              <p className="text-xs theme-text-soft">"Generate Cases" uses AI to create task-specific test scenarios. "Run Tests" executes CLI commands — requires repo path in Project Execution Profiles below.</p>
+              <p className="text-xs theme-text-soft">"Generate Cases" uses AI to create task-specific test scenarios. "Run Tests" executes CLI commands - requires repo path in Project Execution Profiles below.</p>
             </div>
           )}
         </div>
@@ -1577,7 +1689,7 @@ export default function TestingAgent() {
         )}
 
         <div className="flex items-center justify-between mt-4 text-sm theme-text-muted">
-          <div>{pagination.total} total runs · page {pagination.page} / {pagination.totalPages}</div>
+          <div>{pagination.total} total runs - page {pagination.page} / {pagination.totalPages}</div>
           <div className="flex gap-2">
             <button onClick={() => loadRuns(Math.max(1, pagination.page - 1), historySearch)} disabled={!pagination.hasPrev} className="px-3 py-1.5 rounded-lg border theme-border disabled:opacity-40 hover:bg-[var(--surface-soft)] theme-text">Previous</button>
             <button onClick={() => loadRuns(pagination.page + 1, historySearch)} disabled={!pagination.hasNext} className="px-3 py-1.5 rounded-lg border theme-border disabled:opacity-40 hover:bg-[var(--surface-soft)] theme-text">Next</button>
@@ -1618,7 +1730,7 @@ export default function TestingAgent() {
                         <span className={p.repoPathExists ? "text-green-600 font-medium" : "text-red-500"}>
                           {p.repoPathExists ? "path found" : "path not configured"}
                         </span>
-                        {p.framework && p.framework !== "unknown" && <><span>·</span><span className="font-mono">{p.framework}</span></>}
+                        {p.framework && p.framework !== "unknown" && <><span>-</span><span className="font-mono">{p.framework}</span></>}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -1712,3 +1824,4 @@ function StatCard({ label, value, color, icon }) {
     </div>
   );
 }
+

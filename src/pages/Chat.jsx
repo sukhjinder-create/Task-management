@@ -35,12 +35,12 @@ import ReportsModal from "../components/ReportsModal";
 const GENERAL_CHANNEL_KEY = "team-general";
 const AVAILABILITY_CHANNEL_KEY = "availability-updates";
 const PROJECT_MANAGER_CHANNEL_KEY = "project-manager";
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "😮", "😢"];
+const QUICK_REACTIONS = ["👍", "👎", "❤️", "😂", "🎉", "😮", "😢", "🔥", "✅", "👀", "🙏", "💯"];
 const quillModules = {
   toolbar: [
-    ["bold", "italic", "underline"],
-    [{ list: "ordered" }, { list: "bullet" }],
+    ["bold", "italic"],
     ["link"],
+    [{ list: "bullet" }],
   ],
 };
 const quillFormats = ["bold", "italic", "underline", "list", "bullet", "link"];
@@ -214,7 +214,9 @@ const [reportContext, setReportContext] = useState(null);
   // Rich editor content (main channel)
   const [editorHtml, setEditorHtml] = useState("");
   const [sending, setSending] = useState(false);
-  const [attachment, setAttachment] = useState(null);
+  const [attachment, setAttachment] = useState(null); // legacy single-file preview
+  const [pendingAttachments, setPendingAttachments] = useState([]); // uploaded attachments ready to send
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   // Typing indicators: channelId -> { userId -> { username, at } }
   const [typingByChannel, setTypingByChannel] = useState({});
@@ -231,8 +233,16 @@ const [reportContext, setReportContext] = useState(null);
   const lastTypingSentRef = useRef(0);
 
   const [openReactionFor, setOpenReactionFor] = useState(null);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Unread counts per channel (cleared when channel is selected)
+  const [unreadByChannel, setUnreadByChannel] = useState({});
+
+  // @mention autocomplete
+  const [mentionQuery, setMentionQuery] = useState(null); // null = closed, string = query
+  const [mentionAnchor, setMentionAnchor] = useState(0); // cursor position of "@"
 
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingOriginalChannel, setEditingOriginalChannel] = useState(null);
@@ -425,18 +435,47 @@ useEffect(() => {
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
+  // Only top-level messages in main view (parentId === null); thread replies stay in sidebar
+  const topLevelMessages = useMemo(
+    () => activeMessages.filter((m) => !m.parentId),
+    [activeMessages]
+  );
+
+  // reply count per message id (derived from all messages in the channel)
+  const replyCountById = useMemo(() => {
+    const counts = {};
+    for (const m of activeMessages) {
+      if (m.parentId) {
+        counts[m.parentId] = (counts[m.parentId] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [activeMessages]);
+
   const messagesToRender = useMemo(() => {
-    if (!normalizedSearch) return activeMessages;
-    return activeMessages.filter((m) => {
+    if (!normalizedSearch) return topLevelMessages;
+    return topLevelMessages.filter((m) => {
       const text = (m.textHtml || m.text || "").toLowerCase();
       return text.includes(normalizedSearch);
     });
-  }, [activeMessages, normalizedSearch]);
+  }, [topLevelMessages, normalizedSearch]);
 
   const lastMessageId =
-    activeMessages.length > 0
-      ? activeMessages[activeMessages.length - 1].id
+    topLevelMessages.length > 0
+      ? topLevelMessages[topLevelMessages.length - 1].id
       : null;
+
+  // Build userId → full avatar URL map from users list
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+  const userAvatarMap = useMemo(() => {
+    const map = {};
+    for (const u of users) {
+      if (u.avatar_url) {
+        map[u.id] = u.avatar_url.startsWith("http") ? u.avatar_url : `${BACKEND_URL}${u.avatar_url}`;
+      }
+    }
+    return map;
+  }, [users]);
 
   const isHuddleActiveHere =
     activeHuddle && activeHuddle.channelId === activeChannelKey;
@@ -488,10 +527,15 @@ useEffect(() => {
     [channels]
   );
 
-  // thread derived
-  const threadMessages = activeThreadKey
-    ? messagesByChannel[activeThreadKey] || []
-    : [];
+  // thread derived — filter replies from the parent channel by parentId
+  const threadMessages = useMemo(() => {
+    if (!activeThreadKey || !threadRootMessage?.id) return [];
+    const parentKey = threadParents[activeThreadKey] || activeChannelKey;
+    const parentMsgs = messagesByChannel[parentKey] || [];
+    return parentMsgs
+      .filter((m) => m.parentId === threadRootMessage.id)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  }, [activeThreadKey, threadRootMessage, messagesByChannel, threadParents, activeChannelKey]);
 
   const threadParentChannelKey =
     activeThreadKey && threadParents[activeThreadKey]
@@ -859,6 +903,18 @@ if (
       [channelId]: [...existing, normalizedWithEmoji],
     };
   });
+
+  // 🔴 Track unread for non-active channels (not own messages)
+  if (
+    channelId !== activeChannelRef.current &&
+    normalizedWithEmoji.userId !== user.id &&
+    !normalizedWithEmoji.system
+  ) {
+    setUnreadByChannel((prev) => ({
+      ...prev,
+      [channelId]: (prev[channelId] || 0) + 1,
+    }));
+  }
 };
 
     const handleSystem = (payload) => {
@@ -1169,23 +1225,7 @@ useEffect(() => {
   };
 }, [activeChannelKey]);
 
-  // JOIN / LEAVE thread channel (sidebar)
-  useEffect(() => {
-    let socket = getSocket();
-    if (!socket && auth.token) {
-      socket = initSocket(auth.token);
-    }
-    if (!socket) return;
-    if (!activeThreadKey) return;
-
-    joinChatChannel(activeThreadKey);
-
-    return () => {
-      if (activeThreadKey) {
-        leaveChatChannel(activeThreadKey);
-      }
-    };
-  }, [activeThreadKey, auth.token]);
+  // Thread sidebar uses messages already loaded from the parent channel — no extra socket join needed
 
   // ----- THREAD HANDLERS (SIDEBAR) -----
   const handleOpenThread = (message) => {
@@ -1220,7 +1260,7 @@ useEffect(() => {
   return;
 }
 
-    if (!html) return;
+    if (!html && pendingAttachments.length === 0) return;
     if (!connected) return;
 
     // EDIT MODE
@@ -1285,6 +1325,8 @@ useEffect(() => {
 
     // Locally show plaintext so UI is snappy (apply emoji conversion)
     const plainWithEmoji = convertEmojiShortcodes(html);
+    // Capture attachments before any async/state operations
+    const attachmentsToSend = [...pendingAttachments];
 
     setMessagesByChannel((prev) => {
   const existing = prev[activeChannelKey] || [];
@@ -1307,17 +1349,22 @@ useEffect(() => {
         createdAt: new Date().toISOString(),
         parentId: null,
         reactions: {},
+        attachments: attachmentsToSend,
       },
     ],
   };
 });
 
     // 🔐 Encrypt for recipients before sending to backend
-    let encryptedHtml = html;
+    // Use a zero-width space so attachment-only messages are never rejected
+    // by the backend's empty-text guard (the guard allows empty text when
+    // attachments are present, but this acts as an extra safety net)
+    const textToEncrypt = html || (attachmentsToSend.length > 0 ? "\u200b" : "");
+    let encryptedHtml = textToEncrypt;
     try {
       const recipientIds = getRecipientIdsForChannelKey(activeChannelKey);
       encryptedHtml = await encryptForRecipients(
-        html,
+        textToEncrypt,
         user.id,
         recipientIds,
         usersWithKeys
@@ -1327,14 +1374,16 @@ useEffect(() => {
     }
 
     sendChatMessage({
-  channelId: activeChannelKey,
-  text: encryptedHtml,          // 🔐 encrypted (for users)
-  tempId,
-  parentId: null,
-});
+      channelId: activeChannelKey,
+      text: encryptedHtml,
+      tempId,
+      parentId: null,
+      attachments: attachmentsToSend,
+    });
 
     setEditorHtml("");
     setAttachment(null);
+    setPendingAttachments([]);
     setSending(false);
   };
 
@@ -1351,35 +1400,39 @@ useEffect(() => {
     }
 
     const tempId = createUniqueId("temp");
-    const channelId = activeThreadKey;
+    // Thread replies belong in the parent channel (not in the virtual thread:xxx key)
+    const parentChannelKey = threadParentChannelKey || activeChannelKey;
     const parentId = threadRootMessage.id;
 
-    // Locally show plaintext (apply emoji conversion)
+    // Locally show plaintext immediately (optimistic update in parent channel)
     const plainWithEmoji = convertEmojiShortcodes(html);
 
     setMessagesByChannel((prev) => {
-      const existing = prev[channelId] || [];
-      const next = [
-        ...existing,
-        {
-          id: tempId,
-          channelId,
-          textHtml: plainWithEmoji,
-          userId: user.id,
-          username: user.username,
-          createdAt: new Date().toISOString(),
-          parentId,
-          reactions: {},
-        },
-      ];
-      return { ...prev, [channelId]: next };
+      const existing = prev[parentChannelKey] || [];
+      if (existing.some((m) => m.id === tempId)) return prev;
+      return {
+        ...prev,
+        [parentChannelKey]: [
+          ...existing,
+          {
+            id: tempId,
+            channelId: parentChannelKey,
+            textHtml: plainWithEmoji,
+            userId: user.id,
+            username: user.username,
+            createdAt: new Date().toISOString(),
+            parentId,
+            reactions: {},
+            attachments: [],
+          },
+        ],
+      };
     });
 
-    // 🔐 Encrypt for recipients of the *parent channel*
+    // 🔐 Encrypt for recipients of the parent channel
     let encryptedHtml = html;
     try {
-      const parentKey = threadParentChannelKey || activeChannelKey;
-      const recipientIds = getRecipientIdsForChannelKey(parentKey);
+      const recipientIds = getRecipientIdsForChannelKey(parentChannelKey);
       encryptedHtml = await encryptForRecipients(
         html,
         user.id,
@@ -1391,11 +1444,11 @@ useEffect(() => {
     }
 
     sendChatMessage({
-  channelId: activeChannelKey,
-  text: encryptedHtml,          // 🔐 encrypted (for users)
-  tempId,
-  parentId: null,
-});
+      channelId: parentChannelKey,
+      text: encryptedHtml,
+      tempId,
+      parentId,
+    });
 
     setThreadEditorHtml("");
   };
@@ -1408,6 +1461,7 @@ useEffect(() => {
     setActiveThreadKey(null);
     setThreadRootMessage(null);
     setThreadEditorHtml("");
+    setUnreadByChannel((prev) => ({ ...prev, [key]: 0 }));
   };
 
   const handleSelectGeneral = () => {
@@ -1416,6 +1470,7 @@ useEffect(() => {
     setActiveThreadKey(null);
     setThreadRootMessage(null);
     setThreadEditorHtml("");
+    setUnreadByChannel((prev) => ({ ...prev, [GENERAL_CHANNEL_KEY]: 0 }));
   };
 
   const handleSelectChannel = (channelKey) => {
@@ -1424,6 +1479,7 @@ useEffect(() => {
     setActiveThreadKey(null);
     setThreadRootMessage(null);
     setThreadEditorHtml("");
+    setUnreadByChannel((prev) => ({ ...prev, [channelKey]: 0 }));
   };
 
   const handleAttachmentClick = () => {
@@ -1432,13 +1488,35 @@ useEffect(() => {
     }
   };
 
-  const handleAttachmentChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      setAttachment(null);
-      return;
+  const handleAttachmentChange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    // reset so same file can be selected again
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    setUploadingAttachment(true);
+    try {
+      const uploaded = await Promise.all(
+        files.map(async (file) => {
+          const formData = new FormData();
+          formData.append("file", file);
+          const res = await api.post("/upload/chat-attachment", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          return res.data; // { url, name, size, type }
+        })
+      );
+      setPendingAttachments((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      toast.error("Failed to upload attachment");
+      console.error("Attachment upload failed:", err);
+    } finally {
+      setUploadingAttachment(false);
     }
-    setAttachment(file);
+  };
+
+  const handleRemovePendingAttachment = (index) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Typing in main composer
@@ -1453,6 +1531,15 @@ useEffect(() => {
     ) {
       sendTyping(activeChannelKey);
       lastTypingSentRef.current = now;
+    }
+
+    // @mention detection: extract plain text from HTML and find trailing @word
+    const plain = value.replace(/<[^>]+>/g, "");
+    const atMatch = plain.match(/@(\w*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+    } else {
+      setMentionQuery(null);
     }
   };
 
@@ -1503,6 +1590,18 @@ useEffect(() => {
     if (!activeChannelKey) return;
     sendReadReceipt(activeChannelKey, at);
   }, [connected, activeChannelKey, activeMessages]);
+
+  const handleScrollMessages = (e) => {
+    const el = e.currentTarget;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollBtn(distFromBottom > 250);
+  };
+
+  const scrollToBottom = () => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  };
 
   const handleToggleHuddle = () => {
     if (!connected || !rtc) return;
@@ -1715,657 +1814,848 @@ useEffect(() => {
 }
 
   return (
-    <div className="h-full flex gap-4">
-      {/* LEFT: CHANNELS + DMS */}
-      <aside className="w-64 bg-white rounded-xl shadow p-3 flex flex-col text-xs">
-        <div className="flex items-center justify-between mb-3">
-          {/* 🤖 AI Assistant – Global User Preference */}
-<div className="mb-3 p-2 rounded-lg bg-slate-50 border">
-  <div className="flex items-center justify-between">
-    <div className="flex items-center gap-2">
-      <span className="text-sm">🤖</span>
-      <div className="flex flex-col">
-        <span className="text-[11px] font-medium">AI Assistant</span>
-        <span className="text-[10px] text-slate-400">
-          Auto-reply & suggestions
-        </span>
-      </div>
-    </div>
+    <div className="h-full flex overflow-hidden rounded-xl shadow-lg">
 
-    <button
-      type="button"
-      disabled={loadingAiPref}
-      onClick={async () => {
-        const next = !aiReplyEnabled;
-        setAiReplyEnabled(next);
-
-        try {
-          setLoadingAiPref(true);
-          await api.put(`/users/${user.id}/ai-preference`, {
-            aiReplyEnabled: next,
-          });
-        } catch {
-          toast.error("Failed to update AI preference");
-          setAiReplyEnabled(!next);
-        } finally {
-          setLoadingAiPref(false);
-        }
-      }}
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-        aiReplyEnabled ? "bg-blue-600" : "bg-slate-300"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-          aiReplyEnabled ? "translate-x-4" : "translate-x-1"
-        }`}
-      />
-    </button>
-  </div>
-</div>
-          <div>
-            <div className="text-[11px] font-semibold text-slate-500">
-              Channels
-            </div>
-            <div className="inline-flex items-center gap-1 text-[10px] text-slate-500 mt-1">
-              <span
-                className={`w-2 h-2 rounded-full ${statusDotClass}`}
-              ></span>
-              <span>{statusLabel}</span>
-            </div>
+      {/* ===== LEFT SIDEBAR — dark ===== */}
+      <aside className="w-60 bg-slate-900 flex flex-col shrink-0">
+        {/* App header */}
+        <div className="px-4 py-3.5 border-b border-slate-700/60 shrink-0">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-100 font-bold text-sm tracking-tight">Workspace</span>
+            <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
           </div>
-
-          <button
-            type="button"
-            onClick={() => setOpenCreate(true)}
-            className="text-[14px] leading-none px-2 hover:bg-slate-100 rounded"
-            title="Create channel"
-          >
-            +
-          </button>
+          <div className="text-[11px] text-slate-400 mt-0.5 truncate">{user.username}</div>
         </div>
 
-        {/* GENERAL */}
-        <button
-          type="button"
-          onClick={handleSelectGeneral}
-          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs mb-2 ${
-            isGeneralChannel
-              ? "bg-blue-50 text-blue-700"
-              : "text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <span className="text-base">#</span>
-            <span>team-general</span>
-          </span>
-        </button>
-
-        {/* SYSTEM CHANNELS (pinned) */}
-        <button
-          type="button"
-          onClick={() => handleSelectChannel(AVAILABILITY_CHANNEL_KEY)}
-          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs mb-1 ${
-            activeChannelKey === AVAILABILITY_CHANNEL_KEY
-              ? "bg-blue-50 text-blue-700"
-              : "text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <span className="text-base">#</span>
-            <span>availability-updates</span>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleSelectChannel(PROJECT_MANAGER_CHANNEL_KEY)}
-          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs mb-2 ${
-            activeChannelKey === PROJECT_MANAGER_CHANNEL_KEY
-              ? "bg-blue-50 text-blue-700"
-              : "text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <span className="text-base">#</span>
-            <span>project-manager</span>
-          </span>
-        </button>
-
-        {/* PUBLIC CHANNELS */}
-        {publicChannels.length > 0 && (
-          <div className="mb-3 space-y-1">
-            {publicChannels.map((ch) => {
-              const isActive = activeChannelKey === ch.key;
-              return (
-                <button
-                  key={ch.id}
-                  type="button"
-                  onClick={() => handleSelectChannel(ch.key)}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
-                    isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="text-base">#</span>
-                    <span>{ch.name}</span>
-                  </span>
-
-                  {/* settings control - span instead of button */}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSettingsChannel(ch);
-                      setOpenSettings(true);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setSettingsChannel(ch);
-                        setOpenSettings(true);
-                      }
-                    }}
-                    className="text-[12px] hover:text-slate-900 cursor-pointer"
-                    title="Channel settings"
-                    aria-label={`Channel settings for ${ch.name}`}
-                  >
-                    ⋮
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* PRIVATE CHANNELS */}
-        {privateChannels.length > 0 && (
-          <div className="mb-3 space-y-1">
-            <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-              Private <span className="text-[9px]">🔒</span>
+        {/* AI Toggle */}
+        <div className="px-4 py-2.5 border-b border-slate-700/60 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🤖</span>
+              <div>
+                <div className="text-[11px] text-slate-200 font-medium">AI Assistant</div>
+                <div className="text-[10px] text-slate-500">Auto-reply</div>
+              </div>
             </div>
+            <button
+              type="button"
+              disabled={loadingAiPref}
+              onClick={async () => {
+                const next = !aiReplyEnabled;
+                setAiReplyEnabled(next);
+                try {
+                  setLoadingAiPref(true);
+                  await api.put(`/users/${user.id}/ai-preference`, { aiReplyEnabled: next });
+                } catch {
+                  toast.error("Failed to update AI preference");
+                  setAiReplyEnabled(!next);
+                } finally {
+                  setLoadingAiPref(false);
+                }
+              }}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${aiReplyEnabled ? "bg-blue-500" : "bg-slate-600"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${aiReplyEnabled ? "translate-x-4" : "translate-x-1"}`} />
+            </button>
+          </div>
+        </div>
 
-            {privateChannels.map((ch) => {
-              const isActive = activeChannelKey === ch.key;
-              return (
-                <button
-                  key={ch.id}
-                  type="button"
-                  onClick={() => handleSelectChannel(ch.key)}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
-                    isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-700 hover:bg-slate-50"
-                  }`}
+        {/* Scrollable nav */}
+        <nav className="flex-1 overflow-y-auto py-3">
+
+          {/* CHANNELS section header */}
+          <div className="px-4 pt-1 pb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Channels</span>
+            <button
+              type="button"
+              onClick={() => setOpenCreate(true)}
+              className="text-slate-400 hover:text-slate-200 transition-colors"
+              title="Create channel"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+
+          {/* Pinned system channels */}
+          {[
+            { key: GENERAL_CHANNEL_KEY, label: "team-general" },
+            { key: AVAILABILITY_CHANNEL_KEY, label: "availability-updates" },
+            { key: PROJECT_MANAGER_CHANNEL_KEY, label: "project-manager" },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => key === GENERAL_CHANNEL_KEY ? handleSelectGeneral() : handleSelectChannel(key)}
+              className={`w-full flex items-center justify-between px-4 py-1.5 text-left transition-colors ${
+                activeChannelKey === key
+                  ? "bg-slate-700 text-white"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              }`}
+            >
+              <span className="flex items-center gap-2 text-[12px] min-w-0">
+                <Hash size={12} className="shrink-0 text-slate-500" />
+                <span className="truncate">{label}</span>
+              </span>
+              {(unreadByChannel[key] || 0) > 0 && (
+                <span className="ml-1 text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                  {unreadByChannel[key]}
+                </span>
+              )}
+            </button>
+          ))}
+
+          {/* Public channels */}
+          {publicChannels.map((ch) => {
+            const isActive = activeChannelKey === ch.key;
+            return (
+              <button
+                key={ch.id}
+                type="button"
+                onClick={() => handleSelectChannel(ch.key)}
+                className={`group/ch w-full flex items-center justify-between px-4 py-1.5 text-left transition-colors ${
+                  isActive ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+              >
+                <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
+                  <Hash size={12} className="shrink-0 text-slate-500" />
+                  <span className="truncate">{ch.name}</span>
+                  {(unreadByChannel[ch.key] || 0) > 0 && (
+                    <span className="ml-1 text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                      {unreadByChannel[ch.key]}
+                    </span>
+                  )}
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); } }}
+                  className="opacity-0 group-hover/ch:opacity-100 text-slate-500 hover:text-slate-200 transition-opacity shrink-0 ml-1"
+                  title={`Settings for ${ch.name}`}
                 >
-                  <span className="flex items-center gap-2">
-                    <span>🔒</span>
-                    <span>{ch.name}</span>
-                  </span>
+                  <Settings size={11} />
+                </span>
+              </button>
+            );
+          })}
 
-                  {/* settings control - span instead of button */}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSettingsChannel(ch);
-                      setOpenSettings(true);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setSettingsChannel(ch);
-                        setOpenSettings(true);
-                      }
-                    }}
-                    className="text-[12px] cursor-pointer"
-                    title="Channel settings"
-                    aria-label={`Channel settings for ${ch.name}`}
-                  >
-                    ⋮
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* DMs */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="text-[11px] font-semibold text-slate-500 mb-1">
-            Direct messages
-          </div>
-
-          <div className="space-y-1 flex-1 overflow-y-auto pr-1 pb-6">
-            {loadingUsers ? (
-              <div className="text-[11px] text-slate-400">
-                Loading teammates...
+          {/* Private channels */}
+          {privateChannels.length > 0 && (
+            <>
+              <div className="px-4 pt-4 pb-1.5">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                  <Lock size={9} /> Private
+                </span>
               </div>
-            ) : sortedTeammates.length === 0 ? (
-              <div className="text-[11px] text-slate-400">
-                No teammates found.
-              </div>
-            ) : (
-              sortedTeammates.map((u) => {
-                const presence = presenceMap[u.id]?.status || "offline";
-                const color = presenceColor(presence);
-                const label = presenceLabel(presence);
-                const key = dmKeyFor(user.id, u.id);
-                const isActive = activeChannelKey === key;
-
+              {privateChannels.map((ch) => {
+                const isActive = activeChannelKey === ch.key;
                 return (
                   <button
-                    key={u.id}
+                    key={ch.id}
                     type="button"
-                    onClick={() => handleSelectDm(u)}
-                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left ${
-                      isActive
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-slate-700 hover:bg-slate-50"
+                    onClick={() => handleSelectChannel(ch.key)}
+                    className={`group/ch w-full flex items-center justify-between px-4 py-1.5 text-left transition-colors ${
+                      isActive ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[11px] font-semibold">
-                        {u.username?.[0]?.toUpperCase() || "?"}
-                      </div>
-
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-[11px] font-medium truncate">
-                          {u.username}
-                        </span>
-                        <span className="text-[10px] text-slate-400 truncate">
-                          {label}
-                        </span>
-                      </div>
-                    </div>
-
+                    <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
+                      <Lock size={11} className="shrink-0 text-slate-500" />
+                      <span className="truncate">{ch.name}</span>
+                    </span>
                     <span
-                      className={`w-2 h-2 rounded-full ${color}`}
-                    ></span>
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); } }}
+                      className="opacity-0 group-hover/ch:opacity-100 text-slate-500 hover:text-slate-200 transition-opacity shrink-0 ml-1"
+                    >
+                      <Settings size={11} />
+                    </span>
                   </button>
                 );
-              })
-            )}
+              })}
+            </>
+          )}
+
+          {/* DMs section */}
+          <div className="px-4 pt-4 pb-1.5">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Direct Messages</span>
+          </div>
+
+          {loadingUsers ? (
+            <div className="px-4 text-[11px] text-slate-500">Loading...</div>
+          ) : sortedTeammates.length === 0 ? (
+            <div className="px-4 text-[11px] text-slate-500">No teammates yet.</div>
+          ) : (
+            sortedTeammates.map((u) => {
+              const presence = presenceMap[u.id]?.status || "offline";
+              const color = presenceColor(presence);
+              const dmKey = dmKeyFor(user.id, u.id);
+              const isActive = activeChannelKey === dmKey;
+              const unread = unreadByChannel[dmKey] || 0;
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => handleSelectDm(u)}
+                  className={`w-full flex items-center justify-between px-4 py-1.5 text-left transition-colors ${
+                    isActive ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="relative shrink-0">
+                      {u.avatar_url ? (
+                        <img
+                          src={u.avatar_url.startsWith("http") ? u.avatar_url : `${BACKEND_URL}${u.avatar_url}`}
+                          alt={u.username}
+                          className="w-6 h-6 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-semibold text-slate-200">
+                          {u.username?.[0]?.toUpperCase() || "?"}
+                        </div>
+                      )}
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-slate-900 ${color}`} />
+                    </div>
+                    <span className="text-[12px] font-medium truncate">{u.username}</span>
+                  </div>
+                  {unread > 0 ? (
+                    <span className="text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                      {unread}
+                    </span>
+                  ) : (
+                    <span className={`w-1.5 h-1.5 rounded-full ${color} shrink-0`} />
+                  )}
+                </button>
+              );
+            })
+          )}
+
+          <div className="h-4" />
+        </nav>
+
+        {/* ── Your profile footer ── */}
+        <div className="px-4 py-3 border-t border-slate-700/60 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="relative shrink-0">
+              {user.avatar_url ? (
+                <img
+                  src={user.avatar_url.startsWith("http") ? user.avatar_url : `${BACKEND_URL}${user.avatar_url}`}
+                  alt={user.username}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-[12px] font-bold">
+                  {user.username?.[0]?.toUpperCase() || "?"}
+                </div>
+              )}
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-semibold text-slate-200 truncate">{user.username}</div>
+              <div className="text-[10px] text-slate-500 capitalize truncate">{user.role || "member"}</div>
+            </div>
+            <div className={`w-2 h-2 rounded-full shrink-0 ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
           </div>
         </div>
       </aside>
 
-      {/* CENTER: MAIN CHAT */}
-      <div className="flex-1 flex flex-col space-y-4">
-        {/* Header */}
-        <section className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">{activeChannelTitle}</h1>
-            <p className="text-xs text-slate-500">
-              {isDmChannel
-                ? "Private 1:1 conversation between you and your teammate."
-                : "Team or channel-wide real-time chat."}
-            </p>
+      {/* ===== MAIN CHAT AREA ===== */}
+      <div className="flex-1 flex flex-col bg-white min-w-0 relative">
+
+        {/* Disconnect banner */}
+        {!connected && !joining && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-[11px] font-medium shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-200 animate-pulse" />
+            <span>Disconnected — trying to reconnect…</span>
           </div>
+        )}
 
-          <div className="flex items-center gap-3 text-xs">
-            
-                        {/* DM presence pill */}
-            {!isGeneralChannel && isDmChannel && activeDmUser && (
-              <div className="flex items-center gap-1">
-                <span
-                  className={`w-2 h-2 rounded-full ${dmPresenceClass}`}
-                ></span>
-                <span className="text-slate-600">{dmPresenceText}</span>
-              </div>
-            )}
-            <input
-  type="text"
-  value={searchQuery}
-  onChange={(e) => setSearchQuery(e.target.value)}
-  placeholder="Search in channel..."
-  className="text-xs border rounded-full px-2 py-[2px] w-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
-/>
-
-            {/* Huddle button */}
-            {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
-            <button
-              type="button"
-              onClick={handleToggleHuddle}
-              className="inline-flex items-center gap-1 rounded-full border px-3 py-[4px] text-[11px] hover:bg-slate-50"
-            >
-              <span>🔊</span>
-              <span>{huddleButtonLabel}</span>
-            </button>
-            )}
-
-            {/* Connection status pill */}
-            <span className="inline-flex items-center gap-1 rounded-full border px-2 py-[2px]">
-              <span
-                className={`w-2 h-2 rounded-full ${statusDotClass}`}
-              ></span>
-              <span className="text-[11px]">{statusLabel}</span>
-            </span>
-
-            {/* Signed-in user */}
-            <span className="text-slate-500 text-[11px]">
-              You are signed in as{" "}
-              <span className="font-semibold">{user.username}</span>
-            </span>
-          </div>
-        </section>
-
-        {/* MAIN CHAT BODY */}
-        <section className="bg-white rounded-xl shadow p-4 flex-1 flex flex-col min-h-0">
-          {/* Huddle banner in this channel */}
-          {isHuddleActiveHere && (
-            <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] flex items-center justify-between">
-              <div className="flex flex-col">
-                <span>
-                  🔊 Huddle in progress{" "}
-                  <span className="font-semibold">
-                    (started by {activeHuddle.startedBy?.username})
-                  </span>
-                </span>
-                {huddleError && (
-                  <span className="text-[10px] text-red-600 mt-1">
-                    {huddleError}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {huddleConnecting && (
-                  <span className="text-[10px] text-slate-500">
-                    Joining...
-                  </span>
-                )}
-                {!huddleJoined && !huddleConnecting && (
-                  <button
-                    type="button"
-                    onClick={() => rtc?.joinHuddle?.()}
-                    className="text-[10px] border border-amber-300 rounded px-2 py-1 hover:bg-amber-100"
-                  >
-                    Join huddle
-                  </button>
-                )}
-                {huddleJoined && (
-                  <span className="text-[10px] text-amber-700">
-                    You&apos;re in this huddle (see floating window)
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Editing indicator */}
-          {editingMessageId && (
-            <div className="mb-2 text-[10px] text-amber-600 flex items-center gap-2">
-              <span>Editing a message...</span>
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                className="underline hover:no-underline"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {/* Messages List */}
-          <div
-            ref={listRef}
-            className="flex-1 overflow-y-auto border border-slate-100 bg-slate-50 rounded-lg p-3 space-y-2 text-xs"
-          >
-            {loadingHistory && activeMessages.length === 0 ? (
-              <div className="text-[11px] text-slate-400">
-                Loading conversation...
-              </div>
-            ) : messagesToRender.length === 0 ? (
-              <div className="text-[11px] text-slate-400">
-                No messages yet. Say hi 👋
+        {/* Channel header */}
+        <header className="px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            {isDmChannel && activeDmUser ? (
+              <div className="relative shrink-0">
+                <Avatar name={activeDmUser.username} src={userAvatarMap[activeDmUser.id]} size="sm" />
+                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${dmPresenceClass}`} />
               </div>
             ) : (
-              messagesToRender.map((m) => {
-                const isSystem = m.system;
-                const isOwn =
-                  !m.system &&
-                  String(m.userId || m.user_id) === String(user.id);
-                const time = m.createdAt
-                  ? new Date(m.createdAt).toLocaleTimeString()
-                  : "";
-                if (isSystem) {
-  const time = m.createdAt
-    ? new Date(m.createdAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "";
+              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                <Hash size={15} className="text-slate-500" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="font-semibold text-slate-800 text-sm truncate">{activeChannelTitle}</h1>
+              <p className="text-[11px] text-slate-400 truncate">
+                {isDmChannel
+                  ? dmPresenceText
+                  : activeChannelKey === AVAILABILITY_CHANNEL_KEY
+                  ? "Read-only — attendance events"
+                  : activeChannel?.description || "Team channel"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search..."
+              className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 w-32 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-slate-50"
+            />
+            {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
+              <button
+                type="button"
+                onClick={handleToggleHuddle}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                  isHuddleActiveHere
+                    ? "bg-amber-50 border-amber-200 text-amber-700"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <span>🔊</span>
+                <span>{huddleButtonLabel}</span>
+              </button>
+            )}
+            {!isDmChannel && (
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                <Users size={12} className="text-slate-400" />
+                <span>{Object.values(presenceMap).filter(p => p.status === "online" || p.status === "available").length} online</span>
+              </div>
+            )}
+          </div>
+        </header>
 
-  return (
-    <div
-      key={m.id}
-      className="w-full text-center text-[10px] text-slate-500 my-2"
-    >
-      <span className="opacity-80">
-        — {m.textHtml || m.text} —
-      </span>
-      {time && (
-        <span className="ml-2 text-[9px] text-slate-400">
-          {time}
-        </span>
-      )}
-    </div>
-  );
-}
+        {/* Huddle banner */}
+        {isHuddleActiveHere && (
+          <div className="mx-4 mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] flex items-center justify-between shrink-0">
+            <div>
+              <span>🔊 Huddle in progress · started by <span className="font-semibold">{activeHuddle.startedBy?.username}</span></span>
+              {huddleError && <div className="text-[10px] text-red-600 mt-0.5">{huddleError}</div>}
+            </div>
+            <div className="flex items-center gap-2">
+              {huddleConnecting && <span className="text-[10px] text-slate-500">Joining...</span>}
+              {!huddleJoined && !huddleConnecting && (
+                <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-amber-300 rounded px-2 py-1 hover:bg-amber-100">
+                  Join huddle
+                </button>
+              )}
+              {huddleJoined && <span className="text-[10px] text-amber-700">You&apos;re in this huddle</span>}
+            </div>
+          </div>
+        )}
 
-                const isLastOwn = isOwn && m.id === lastMessageId;
-                const readers = isLastOwn
-                  ? getReadersForMessage(m.createdAt)
-                  : [];
+        {/* Editing banner */}
+        {editingMessageId && (
+          <div className="mx-4 mt-2 px-3 py-1.5 bg-amber-50 border-l-2 border-amber-400 rounded text-[11px] flex items-center justify-between shrink-0">
+            <span className="text-amber-700 font-medium">Editing message</span>
+            <button type="button" onClick={handleCancelEdit} className="text-amber-600 hover:text-amber-800 text-[10px] underline">Cancel</button>
+          </div>
+        )}
 
-                const reactions = m.reactions || {};
-                const reactionEntries = Object.entries(reactions);
+        {/* ===== MESSAGES ===== */}
+        <div ref={listRef} onScroll={handleScrollMessages} className="flex-1 overflow-y-auto px-5 py-4" style={{ scrollbarWidth: "thin" }}>
+          {loadingHistory && activeMessages.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-[12px] text-slate-400">Loading conversation...</div>
+            </div>
+          ) : messagesToRender.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+                <MessageSquare size={20} className="text-slate-400" />
+              </div>
+              <div>
+                <div className="text-sm font-medium text-slate-600">No messages yet</div>
+                <div className="text-[11px] text-slate-400 mt-1">Be the first to say hi 👋</div>
+              </div>
+            </div>
+          ) : (
+            messagesToRender.map((m, idx) => {
+              const isSystem = m.system;
+              const isOwn = !m.system && String(m.userId || m.user_id) === String(user.id);
+              const time = m.createdAt
+                ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "";
 
-                return (
-                  <div
-                    key={m.id}
-                    className={`flex gap-2 ${
-                      isOwn ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    {!isOwn && (
-                      <Avatar
-                        name={m.username || "User"}
-                        size="sm"
-                        className="shrink-0 mt-1"
-                      />
-                    )}
-                    <div
-                      className={`max-w-[70%] rounded-lg px-3 py-2.5 shadow-sm ${
-                        isOwn
-                          ? "bg-primary-600 text-white"
-                          : "bg-white border border-gray-200 text-gray-800"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold">
-                          {isOwn ? "You" : m.username || "User"}
-                        </span>
-                        <span
-                          className={`text-xs ${
-                            isOwn ? "text-primary-100" : "text-gray-400"
-                          }`}
-                        >
-                          {time}
-                        </span>
+              const prev = messagesToRender[idx - 1];
+              const prevDate = prev?.createdAt ? new Date(prev.createdAt).toDateString() : null;
+              const thisDate = m.createdAt ? new Date(m.createdAt).toDateString() : null;
+              const showDateDivider = thisDate && thisDate !== prevDate;
+              const dateDividerLabel = thisDate ? formatDateLabel(m.createdAt) : null;
+
+              const FIVE_MIN = 5 * 60 * 1000;
+              const prevNonSystem = messagesToRender.slice(0, idx).filter(x => !x.system).at(-1);
+              const isGrouped =
+                !isSystem &&
+                prevNonSystem &&
+                (prevNonSystem.userId || prevNonSystem.user_id) === (m.userId || m.user_id) &&
+                m.createdAt && prevNonSystem.createdAt &&
+                (new Date(m.createdAt) - new Date(prevNonSystem.createdAt)) < FIVE_MIN;
+
+              const isLastOwn = isOwn && m.id === lastMessageId;
+              const readers = isLastOwn ? getReadersForMessage(m.createdAt) : [];
+              const reactions = m.reactions || {};
+              const reactionEntries = Object.entries(reactions);
+
+              return (
+                <div key={m.id}>
+                  {/* Date divider */}
+                  {showDateDivider && (
+                    <div className="flex items-center gap-3 my-5">
+                      <div className="flex-1 h-px bg-slate-100" />
+                      <span className="text-[10px] text-slate-400 font-medium px-2 bg-white">{dateDividerLabel}</span>
+                      <div className="flex-1 h-px bg-slate-100" />
+                    </div>
+                  )}
+
+                  {/* System message */}
+                  {isSystem ? (
+                    <div className="flex items-center justify-center my-1.5">
+                      <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 rounded-full px-3 py-0.5">
+                        {m.textHtml || m.text}
+                      </span>
+                      {time && <span className="text-[9px] text-slate-300 ml-2">{time}</span>}
+                    </div>
+                  ) : (
+                    /* ── Normal message row — full-width hover highlight ── */
+                    <div className={`group relative -mx-5 px-5 hover:bg-slate-50/80 transition-colors rounded ${isGrouped ? "py-0.5" : "pt-3 pb-0.5"}`}>
+                      <div className="flex gap-3">
+                        {/* Avatar or grouped time hint */}
+                        {isGrouped ? (
+                          <div className="w-8 shrink-0 flex items-start justify-center pt-1">
+                            <span className="text-[9px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity leading-4 tabular-nums">{time}</span>
+                          </div>
+                        ) : (
+                          <div className="w-8 shrink-0 mt-0.5 cursor-pointer">
+                            <Avatar name={m.username || "User"} src={userAvatarMap[m.userId || m.user_id]} size="sm" />
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0 pr-20">
+                          {/* Sender name + timestamp */}
+                          {!isGrouped && (
+                            <div className="flex items-baseline gap-2 mb-0.5">
+                              <span className={`text-[13px] font-bold ${isOwn ? "text-blue-700" : "text-slate-800"}`}>
+                                {isOwn ? "You" : m.username || "User"}
+                              </span>
+                              <span className="text-[10px] text-slate-400 tabular-nums">{time}</span>
+                              {m.username === "AI Assistant" && (
+                                <span className="text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5 font-medium">AI</span>
+                              )}
+                            </div>
+                          )}
+
+                          {m.deletedAt ? (
+                            <div className="text-[12px] text-slate-300 italic flex items-center gap-1.5">
+                              <span>🚫</span> <span>This message was deleted.</span>
+                            </div>
+                          ) : (
+                            <>
+                              {(m.textHtml || m.text) && (
+                                <div
+                                  className="text-[13px] text-slate-700 leading-relaxed break-words chat-prose"
+                                  style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+                                  dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
+                                />
+                              )}
+
+                              {/* Attachments */}
+                              {(m.attachments || []).length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {(m.attachments || []).map((att, ai) => {
+                                    const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+                                    const fullUrl = att.url?.startsWith("http") ? att.url : `${BACKEND}${att.url}`;
+                                    const isImage = att.type?.startsWith("image/");
+                                    const isVideo = att.type?.startsWith("video/");
+                                    const isAudio = att.type?.startsWith("audio/");
+                                    return (
+                                      <div key={ai}>
+                                        {isImage && (
+                                          <a href={fullUrl} target="_blank" rel="noreferrer">
+                                            <img src={fullUrl} alt={att.name} className="max-h-52 max-w-sm rounded-xl object-contain border border-slate-200 hover:brightness-95 transition-all shadow-sm" />
+                                          </a>
+                                        )}
+                                        {isVideo && <video src={fullUrl} controls className="max-h-52 max-w-sm rounded-xl shadow-sm" />}
+                                        {isAudio && <audio src={fullUrl} controls className="w-64 mt-1" />}
+                                        {!isImage && !isVideo && !isAudio && (
+                                          <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer"
+                                            className="inline-flex items-center gap-2 text-[12px] text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2.5 shadow-sm hover:shadow transition-all">
+                                            <span className="text-base">📄</span>
+                                            <div>
+                                              <div className="font-medium truncate max-w-[180px]">{att.name}</div>
+                                              {att.size && <div className="text-[10px] text-slate-400">{(att.size / 1024).toFixed(0)} KB</div>}
+                                            </div>
+                                          </a>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Reactions row */}
+                              {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && reactionEntries.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {reactionEntries.map(([emoji, info]) => {
+                                    const userIds = info.userIds || [];
+                                    const count = typeof info.count === "number" ? info.count : userIds.length;
+                                    const hasReacted = userIds.includes(user.id);
+                                    return (
+                                      <button
+                                        key={emoji}
+                                        type="button"
+                                        onClick={() => handleToggleReaction(m.id, emoji)}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12px] border transition-all ${
+                                          hasReacted
+                                            ? "bg-blue-50 border-blue-300 text-blue-700 font-semibold shadow-sm"
+                                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                                        }`}
+                                      >
+                                        <span>{emoji}</span>
+                                        <span className="text-[11px]">{count}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Inline reaction picker */}
+                              {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && openReactionFor === m.id && (
+                                <div className="mt-2 inline-flex flex-wrap gap-1 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30">
+                                  {QUICK_REACTIONS.map((emoji) => (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={() => handleAddReactionFromPicker(m.id, emoji)}
+                                      className="text-lg px-1.5 py-0.5 hover:bg-slate-100 rounded-xl transition-colors hover:scale-125 transform"
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Thread replies pill */}
+                              {replyCountById[m.id] > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenThread(m)}
+                                  className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-full px-3 py-1 transition-colors"
+                                >
+                                  <MessageSquare size={11} />
+                                  {replyCountById[m.id]} repl{replyCountById[m.id] === 1 ? "y" : "ies"}
+                                </button>
+                              )}
+
+                              {/* Read receipts */}
+                              {isLastOwn && !m.deletedAt && (
+                                <div className="mt-1 text-[10px] text-slate-400 flex items-center gap-1">
+                                  <span>{readers.length === 0 ? "✓ Delivered" : `✓✓ Seen by ${readers.map(r => r.username).join(", ")}`}</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
 
-                      {m.deletedAt ? (
-                        <div className="text-xs italic text-gray-300">
-                          This message was deleted.
+                      {/* ── Right-side action toolbar (appears on row hover) ── */}
+                      {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && !m.deletedAt && (
+                        <div className="absolute top-1.5 right-4 hidden group-hover:flex items-center bg-white border border-slate-200 rounded-lg shadow-md overflow-hidden z-20">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReactionPicker(m.id)}
+                            className="p-2 hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors border-r border-slate-100"
+                            title="Add reaction"
+                          >
+                            <Smile size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenThread(m)}
+                            className="p-2 hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors border-r border-slate-100"
+                            title="Reply in thread"
+                          >
+                            <MessageSquare size={14} />
+                          </button>
+                          {m.username === "AI Assistant" && (
+                            <button
+                              type="button"
+                              onClick={() => handleExplainAI(m.id)}
+                              disabled={aiExplainLoading === m.id}
+                              className="p-2 hover:bg-violet-50 text-slate-400 hover:text-violet-600 transition-colors border-r border-slate-100 text-sm leading-none"
+                              title="Why this reply?"
+                            >
+                              🧠
+                            </button>
+                          )}
+                          {isOwn && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditMessage(m)}
+                              className="p-2 hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors border-r border-slate-100 text-sm leading-none"
+                              title="Edit message"
+                            >
+                              ✏️
+                            </button>
+                          )}
+                          {isOwn && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMessage(m.id)}
+                              className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors text-sm leading-none"
+                              title="Delete message"
+                            >
+                              🗑️
+                            </button>
+                          )}
                         </div>
-                      ) : (
-                        <>
-                          <div
-                            className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere prose prose-sm max-w-none"
-                            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                            dangerouslySetInnerHTML={{
-                              __html: m.textHtml || m.text || "",
-                            }}
-                          />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
 
-                           {m.username === "AI Assistant" && !m.deletedAt && (
-  <div className="mt-2 flex justify-start">
-    <Button
-      variant="ghost"
-      size="xs"
-      onClick={() => handleExplainAI(m.id)}
-      disabled={aiExplainLoading === m.id}
-      loading={aiExplainLoading === m.id}
-      className="gap-1.5 text-xs"
-      title="Why did AI respond this way?"
-    >
-      <span>🧠</span>
-      <span>
-        {aiExplainLoading === m.id ? "Explaining..." : "Why this reply?"}
-      </span>
-    </Button>
-  </div>
-)}
+        {/* Scroll to bottom button */}
+        {showScrollBtn && (
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            className="absolute bottom-28 right-8 z-20 flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 text-[11px] font-medium px-3 py-2 rounded-full shadow-lg hover:shadow-xl hover:bg-slate-50 transition-all"
+          >
+            ↓ Jump to latest
+          </button>
+        )}
 
-                          {/* Reactions */}
-                          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && reactionEntries.length > 0 && (
-                            <div
-                              className={`mt-1 flex flex-wrap gap-1 ${
-                                isOwn ? "justify-end" : "justify-start"
-                              }`}
-                            >
-                              {reactionEntries.map(([emoji, info]) => {
-                                const userIds = info.userIds || [];
-                                const count =
-                                  typeof info.count === "number"
-                                    ? info.count
-                                    : userIds.length;
-                                const hasReacted = userIds.includes(user.id);
+        {/* Typing indicator */}
+        {typingUsernames.length > 0 && (
+          <div className="px-5 py-1 text-[11px] text-slate-400 flex items-center gap-2 shrink-0">
+            <div className="flex gap-0.5">
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+            <span>
+              {typingUsernames.length === 1
+                ? `${typingUsernames[0]} is typing...`
+                : `${typingUsernames.join(", ")} are typing...`}
+            </span>
+          </div>
+        )}
 
-                                return (
-                                  <button
-                                    key={emoji}
-                                    type="button"
-                                    onClick={() =>
-                                      handleToggleReaction(m.id, emoji)
-                                    }
-                                    className={`px-2 py-[2px] rounded-full text-[10px] border flex items-center gap-1 ${
-                                      hasReacted
-                                        ? isOwn
-                                          ? "bg-blue-500 border-blue-300 text-white"
-                                          : "bg-blue-50 border-blue-300 text-blue-700"
-                                        : isOwn
-                                        ? "bg-blue-700 border-blue-500 text-blue-50"
-                                        : "bg-slate-100 border-slate-300 text-slate-700"
-                                    }`}
-                                  >
-                                    <span>{emoji}</span>
-                                    <span>{count}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
+        {/* ===== COMPOSER ===== */}
+        <div className="px-4 pb-4 pt-1 shrink-0">
+          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY ? (
+            <form onSubmit={handleSend}>
+              {/* @mention dropdown */}
+              {mentionQuery !== null && (
+                <div className="relative mb-1">
+                  <div className="absolute bottom-0 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-56 max-h-44 overflow-y-auto">
+                    {users
+                      .filter(u => u.id !== user.id && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
+                      .slice(0, 8)
+                      .map(u => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const replaced = editorHtml.replace(
+                              /@\w*((?:<\/[^>]+>)*)$/,
+                              (_, closingTags) => `@${u.username} ${closingTags || ""}`
+                            );
+                            setEditorHtml(replaced);
+                            setMentionQuery(null);
+                          }}
+                        >
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url.startsWith("http") ? u.avatar_url : `${BACKEND_URL}${u.avatar_url}`} alt={u.username} className="w-6 h-6 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-semibold">{u.username?.[0]?.toUpperCase()}</div>
                           )}
-                        
-                          {/* Add Reaction */}
-                          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
-                          <div
-                            className={`mt-1 flex ${
-                              isOwn ? "justify-end" : "justify-start"
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleOpenReactionPicker(m.id)}
-                              className={`text-[10px] px-2 py-[2px] rounded-full border ${
-                                isOwn
-                                  ? "border-blue-500 text-blue-100 hover:bg-blue-500/40"
-                                  : "border-slate-300 text-slate-500 hover:bg-slate-100"
-                              }`}
-                            >
-                              ➕ Add reaction
-                            </button>
-                          </div>
-                          )}
+                          <span className="text-[12px] font-medium">{u.username}</span>
+                          <span className="text-[10px] text-slate-400 capitalize ml-auto">{u.role}</span>
+                        </button>
+                      ))}
+                    {users.filter(u => u.id !== user.id && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase())).length === 0 && (
+                      <div className="px-3 py-2 text-[11px] text-slate-400">No matches</div>
+                    )}
+                  </div>
+                </div>
+              )}
 
-                          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && openReactionFor === m.id && (
-                            <div
-                              className={`mt-1 inline-flex flex-wrap gap-1 px-2 py-1 rounded-full ${
-                                isOwn ? "bg-blue-700/40" : "bg-slate-100"
-                              }`}
-                            >
-                              {QUICK_REACTIONS.map((emoji) => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={() =>
-                                    handleAddReactionFromPicker(m.id, emoji)
-                                  }
-                                  className="text-[12px] px-1"
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+              {/* Pending attachment previews */}
+              {pendingAttachments.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {pendingAttachments.map((att, i) => {
+                    const isImage = att.type?.startsWith("image/");
+                    return (
+                      <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px]">
+                        {isImage ? (
+                          <img src={`${BACKEND_URL}${att.url}`} alt={att.name} className="h-8 w-8 object-cover rounded" />
+                        ) : (
+                          <span>📎</span>
+                        )}
+                        <span className="max-w-[120px] truncate text-slate-600">{att.name}</span>
+                        <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="text-slate-300 hover:text-red-400 ml-0.5">✕</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-                          {/* Thread + Edit/Delete */}
-                          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
-                          <div
-                            className={`mt-1 flex ${
-                              isOwn ? "justify-end" : "justify-start"
-                            } gap-2 text-[10px] opacity-80`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleOpenThread(m)}
-                              className="underline hover:no-underline"
-                            >
-                              Reply in thread
-                            </button>
+              {/* Integrated composer box */}
+              <div
+                className="border border-slate-200 rounded-xl bg-white shadow-sm focus-within:ring-2 focus-within:ring-blue-300 focus-within:border-blue-300 transition-shadow"
+                onKeyDown={(e) => {
+                  if (e.ctrlKey && e.key === "Enter") {
+                    e.preventDefault();
+                    handleSend(e);
+                  }
+                  if (e.key === "Escape" && editingMessageId) {
+                    handleCancelEdit();
+                  }
+                }}
+              >
+                <ReactQuill
+                  theme="snow"
+                  value={editorHtml}
+                  onChange={handleEditorChange}
+                  modules={quillModules}
+                  formats={quillFormats}
+                  placeholder={connected ? `Message ${isDmChannel && activeDmUser ? activeDmUser.username : activeChannelTitle}… (Ctrl+Enter to send)` : "Connecting..."}
+                  className="text-sm"
+                />
+                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={handleAttachmentClick}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="Attach file (images, docs, video)"
+                    >
+                      📎
+                    </button>
+                    {uploadingAttachment && (
+                      <span className="text-[10px] text-slate-400 ml-1 animate-pulse">Uploading…</span>
+                    )}
+                    <span className="text-[10px] text-slate-300 ml-2 hidden sm:block">Ctrl+Enter to send</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {editingMessageId && (
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="text-[11px] text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={!connected || (!editorHtml.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment}
+                      className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[12px] font-semibold px-4 py-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
+                    >
+                      <Send size={12} />
+                      <span>{sending ? "Sending…" : editingMessageId ? "Save edit" : "Send"}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
 
-                            {isOwn && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditMessage(m)}
-                                  className="underline hover:no-underline"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleDeleteMessage(m.id)
-                                  }
-                                  className="underline hover:no-underline"
-                                >
-                                  Delete
-                                </button>
-                              </>
-                            )}
-                          </div>
-                          )}
+              <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={handleAttachmentChange} />
+            </form>
+          ) : (
+            <div className="text-center py-3 text-[11px] text-slate-400 italic bg-slate-50 rounded-xl border border-slate-100">
+              This channel is read-only — attendance updates are posted automatically.
+            </div>
+          )}
+        </div>
+      </div>
 
-                          {/* Read receipts */}
-                          {isLastOwn && !m.deletedAt && (
-                            <div className="mt-1 text-[9px] text-blue-100">
-                              {readers.length === 0
-                                ? "Delivered"
-                                : `Seen by ${readers
-                                    .map((r) => r.username)
-                                    .join(", ")}`}
-                            </div>
-                          )}
-                        </>
+      {/* ===== THREAD SIDEBAR ===== */}
+      {activeThreadKey && threadRootMessage && (
+        <aside className="w-80 bg-white border-l border-slate-100 flex flex-col shrink-0">
+          {/* Header */}
+          <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
+            <div>
+              <div className="text-[12px] font-semibold text-slate-800">Thread</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                in {threadParentChannel ? `#${threadParentChannel.name}` : "this channel"}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCloseThread}
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Root message preview */}
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Avatar name={threadRootMessage.username || "User"} src={userAvatarMap[threadRootMessage.userId || threadRootMessage.user_id]} size="sm" />
+              <span className="text-[11px] font-semibold text-slate-700">
+                {threadRootMessage.username === user.username ? "You" : threadRootMessage.username || "User"}
+              </span>
+            </div>
+            <div
+              className="text-[11px] text-slate-600 whitespace-pre-wrap break-words line-clamp-4"
+              dangerouslySetInnerHTML={{ __html: threadRootMessage.textHtml || threadRootMessage.text || "" }}
+            />
+          </div>
+
+          {/* Replies */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
+            {threadMessages.length === 0 ? (
+              <div className="text-[11px] text-slate-400 text-center mt-8">No replies yet. Start the conversation.</div>
+            ) : (
+              threadMessages.map((m) => {
+                const isOwn = String(m.userId || m.user_id) === String(user.id);
+                const time = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+                return (
+                  <div key={m.id} className="flex gap-2.5">
+                    <div className="w-7 shrink-0 mt-0.5">
+                      <Avatar name={m.username || "User"} src={userAvatarMap[m.userId || m.user_id]} size="sm" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-1.5 mb-0.5">
+                        <span className="text-[11px] font-semibold text-slate-800">{isOwn ? "You" : m.username || "User"}</span>
+                        <span className="text-[9px] text-slate-400">{time}</span>
+                      </div>
+                      {(m.textHtml || m.text) && (
+                        <div
+                          className="text-[12px] text-slate-700 leading-relaxed whitespace-pre-wrap break-words"
+                          dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
+                        />
+                      )}
+                      {(m.attachments || []).length > 0 && (
+                        <div className="mt-1 flex flex-col gap-1">
+                          {(m.attachments || []).map((att, ai) => {
+                            const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+                            const fullUrl = att.url?.startsWith("http") ? att.url : `${BACKEND}${att.url}`;
+                            const isImage = att.type?.startsWith("image/");
+                            const isVideo = att.type?.startsWith("video/");
+                            const isAudio = att.type?.startsWith("audio/");
+                            return (
+                              <div key={ai}>
+                                {isImage && <a href={fullUrl} target="_blank" rel="noreferrer"><img src={fullUrl} alt={att.name} className="max-h-32 max-w-full rounded-lg object-contain border border-slate-200" /></a>}
+                                {isVideo && <video src={fullUrl} controls className="max-h-32 max-w-full rounded-lg" />}
+                                {isAudio && <audio src={fullUrl} controls className="w-full" />}
+                                {!isImage && !isVideo && !isAudio && (
+                                  <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:underline">
+                                    <span>📎</span><span className="truncate max-w-[160px]">{att.name}</span>
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2374,194 +2664,9 @@ useEffect(() => {
             )}
           </div>
 
-          {/* Attachment preview */}
-          {attachment && (
-            <div className="mt-2 text-[11px] text-slate-600">
-              Attachment selected:{" "}
-              <span className="font-medium">{attachment.name}</span>{" "}
-              <span className="text-slate-400">
-                (sending files can be wired later)
-              </span>
-            </div>
-          )}
-
-          {/* Typing indicator */}
-          {typingUsernames.length > 0 && (
-            <div className="mt-1 text-[10px] text-slate-500">
-              {typingUsernames.length === 1
-                ? `${typingUsernames[0]} is typing...`
-                : `${typingUsernames.join(", ")} are typing...`}
-            </div>
-          )}
-
-          {/* Main composer */}
-          {/* Main composer */}
-<form
-  onSubmit={handleSend}
-  className="mt-3 text-xs"
->
-  {activeChannelKey !== AVAILABILITY_CHANNEL_KEY ? (
-    <>
-      <div className="flex items-end gap-2">
-        <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden">
-          <ReactQuill
-            theme="snow"
-            value={editorHtml}
-            onChange={handleEditorChange}
-            modules={quillModules}
-            formats={quillFormats}
-            placeholder={
-              connected
-                ? "Write a message... (Ctrl+Enter to send)"
-                : "Connect to chat..."
-            }
-            className="text-xs"
-          />
-        </div>
-
-        <div className="flex flex-col items-end gap-2">
-          <button
-            type="button"
-            onClick={handleAttachmentClick}
-            className="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white hover:bg-slate-50"
-          >
-            📎 Attach
-          </button>
-
-          <button
-            type="submit"
-            disabled={!connected || !editorHtml.trim() || sending}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {sending
-              ? "Sending..."
-              : editingMessageId
-              ? "Save"
-              : "Send"}
-          </button>
-        </div>
-      </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        onChange={handleAttachmentChange}
-      />
-    </>
-  ) : (
-    <div className="text-[11px] text-slate-400 italic">
-      This channel is read-only. Attendance updates are posted automatically.
-    </div>
-  )}
-</form>
-
-        </section>
-      </div>
-
-      {/* RIGHT: THREAD SIDEBAR */}
-      {activeThreadKey && threadRootMessage && (
-        <aside className="w-[340px] bg-white rounded-xl shadow flex flex-col text-xs">
-          {/* Header */}
-          <div className="px-4 py-3 border-b flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-[11px] font-semibold text-slate-700">
-                Thread
-              </span>
-              <span className="text-[10px] text-slate-400">
-                in{" "}
-                {threadParentChannel
-                  ? `#${threadParentChannel.name}`
-                  : "this channel"}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleCloseThread}
-              className="text-[12px] text-slate-400 hover:text-slate-700"
-              title="Close thread"
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* Root message */}
-          <div className="px-4 py-3 border-b bg-slate-50">
-            <div className="text-[10px] font-semibold mb-1">
-              {threadRootMessage.username === user.username
-                ? "You"
-                : threadRootMessage.username || "User"}
-            </div>
-            <div
-              className="text-[11px] whitespace-pre-wrap break-words"
-              dangerouslySetInnerHTML={{
-                __html:
-                  threadRootMessage.textHtml ||
-                  threadRootMessage.text ||
-                  "",
-              }}
-            />
-          </div>
-
-          {/* Thread messages */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-2 bg-white">
-            {threadMessages.length === 0 ? (
-              <div className="text-[11px] text-slate-400">
-                No replies yet. Start the conversation.
-              </div>
-            ) : (
-              threadMessages.map((m) => {
-                const isOwn =
-                  String(m.userId || m.user_id) === String(user.id);
-                const time = m.createdAt
-                  ? new Date(m.createdAt).toLocaleTimeString()
-                  : "";
-                return (
-                  <div
-                    key={m.id}
-                    className={`flex ${
-                      isOwn ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-lg px-3 py-2 shadow-sm ${
-                        isOwn
-                          ? "bg-blue-600 text-white"
-                          : "bg-slate-50 border border-slate-200 text-slate-800"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] font-semibold">
-                          {isOwn ? "You" : m.username || "User"}
-                        </span>
-                        <span
-                          className={`text-[9px] ${
-                            isOwn ? "text-blue-100" : "text-slate-400"
-                          }`}
-                        >
-                          {time}
-                        </span>
-                      </div>
-                      <div
-                        className="text-[11px] whitespace-pre-wrap break-words"
-                        dangerouslySetInnerHTML={{
-                          __html: m.textHtml || m.text || "",
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
           {/* Thread composer */}
-          
-          <form
-            onSubmit={handleSendThread}
-            className="border-t px-3 py-2 flex flex-col gap-2"
-          >
-            <div className="border border-slate-300 rounded-lg overflow-hidden">
+          <form onSubmit={handleSendThread} className="border-t border-slate-100 px-3 py-3 shrink-0">
+            <div className="border border-slate-200 rounded-xl bg-white focus-within:ring-2 focus-within:ring-blue-200 focus-within:border-blue-300 transition-shadow">
               <ReactQuill
                 theme="snow"
                 value={threadEditorHtml}
@@ -2571,15 +2676,16 @@ useEffect(() => {
                 placeholder="Reply in thread..."
                 className="text-xs"
               />
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={!connected || !(threadEditorHtml || "").trim()}
-                className="bg-blue-600 text-white px-3 py-1 rounded-lg text-[11px] hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Reply
-              </button>
+              <div className="flex justify-end px-3 py-2 border-t border-slate-100">
+                <button
+                  type="submit"
+                  disabled={!connected || !(threadEditorHtml || "").trim()}
+                  className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Send size={11} />
+                  <span>Reply</span>
+                </button>
+              </div>
             </div>
           </form>
         </aside>

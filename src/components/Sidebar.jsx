@@ -14,6 +14,8 @@ import {
   Brain,
   Bot,
   FlaskConical,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../api";
@@ -22,35 +24,27 @@ import { subscribeToUnreadCount } from "../notificationBus";
 import { Avatar, Badge } from "./ui";
 import { cn } from "../utils/cn";
 
-export default function Sidebar() {
+const COLLAPSED_KEY = "sidebarCollapsed";
+
+export default function Sidebar({ collapsed, onToggle }) {
   const { auth } = useAuth();
   const role = auth.user?.role;
   const api = useApi();
 
-  // Dynamic label for tasks tab
   const tasksLabel = role === "user" ? "My Tasks" : "Tasks";
-
   const isAdmin = role === "admin";
   const isManager = role === "manager";
-  const isUser = role === "user";
 
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
-    // Guard - don't call API when no token (prevents 401 noise)
     if (!auth?.token) {
       const unsubscribeBus = subscribeToUnreadCount((count) => {
-        if (!cancelled) {
-          setUnreadCount(count);
-        }
+        if (!cancelled) setUnreadCount(count);
       });
-
-      return () => {
-        cancelled = true;
-        unsubscribeBus();
-      };
+      return () => { cancelled = true; unsubscribeBus(); };
     }
 
     async function loadNotificationsCount() {
@@ -58,164 +52,164 @@ export default function Sidebar() {
         const res = await api.get("/notifications");
         if (cancelled) return;
         const list = res.data || [];
-        const unread = list.filter((n) => !n.is_read).length;
-        setUnreadCount(unread);
+        setUnreadCount(list.filter((n) => !n.is_read).length);
       } catch (err) {
         console.error("Failed to load notifications for sidebar:", err);
-        // no toast: avoid noise on every app load
       }
     }
 
     loadNotificationsCount();
 
-    // Socket: listen for new notifications and bump the counter
     let socket = getSocket();
-    if (!socket && auth.token) {
-      socket = initSocket(auth.token);
-    }
+    if (!socket && auth.token) socket = initSocket(auth.token);
 
     let offSocket = () => {};
-
     if (socket) {
-      const onNotification = () => {
-        if (cancelled) return;
-        setUnreadCount((prev) => prev + 1);
-      };
+      const onNotification = () => { if (!cancelled) setUnreadCount((prev) => prev + 1); };
       socket.on("notification", onNotification);
       offSocket = () => socket.off("notification", onNotification);
     }
 
-    // Subscribe to global unread-count changes coming from Notifications page
     const unsubscribeBus = subscribeToUnreadCount((count) => {
-      if (!cancelled) {
-        setUnreadCount(count);
-      }
+      if (!cancelled) setUnreadCount(count);
     });
 
-    return () => {
-      cancelled = true;
-      offSocket();
-      unsubscribeBus();
-    };
+    return () => { cancelled = true; offSocket(); unsubscribeBus(); };
   }, [api, auth.token]);
 
-  // Navigation items configuration
   const navItems = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, show: true },
-    { to: "/projects", label: "Projects", icon: FolderKanban, show: true },
-    { to: "/my-tasks", label: tasksLabel, icon: CheckSquare, show: true },
-    { to: "/reports", label: "Reports", icon: FileText, show: true },
-    { to: "/intelligence", label: "Intelligence", icon: Brain, show: true },
-    { to: "/chat", label: "Team Chat", icon: MessageSquare, show: true },
-    { to: "/notifications", label: "Notifications", icon: Bell, show: true, badge: unreadCount },
+    { to: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard, show: true },
+    { to: "/projects",      label: "Projects",      icon: FolderKanban,    show: true },
+    { to: "/my-tasks",      label: tasksLabel,       icon: CheckSquare,     show: true },
+    { to: "/reports",       label: "Reports",        icon: FileText,        show: true },
+    { to: "/intelligence",  label: "Intelligence",   icon: Brain,           show: true },
+    { to: "/chat",          label: "Team Chat",      icon: MessageSquare,   show: true },
+    { to: "/notifications", label: "Notifications",  icon: Bell,            show: true, badge: unreadCount },
   ];
-
 
   const adminItems = [
-    { to: "/autopilot", label: "AI Autopilot", icon: Bot, show: isAdmin || isManager },
-    { to: "/testing-agent", label: "Testing Agent", icon: FlaskConical, show: isAdmin || isManager },
-    { to: "/admin/attendance", label: "Attendance", icon: Clock, show: isAdmin },
-    { to: "/admin/users", label: "Admin Panel", icon: Users, show: isAdmin },
+    { to: "/autopilot",       label: "AI Autopilot",  icon: Bot,          show: isAdmin || isManager },
+    { to: "/testing-agent",   label: "Testing Agent", icon: FlaskConical, show: isAdmin || isManager },
+    { to: "/admin/attendance", label: "Attendance",   icon: Clock,        show: isAdmin },
+    { to: "/admin/users",     label: "Admin Panel",   icon: Users,        show: isAdmin },
   ];
 
+  // Shared NavLink class builder
+  const linkClass = ({ isActive }) =>
+    cn(
+      "flex items-center rounded-lg text-sm font-medium transition-colors",
+      collapsed ? "justify-center px-0 py-2.5 mx-1" : "gap-3 px-3 py-2.5",
+      isActive
+        ? collapsed
+          ? "bg-[var(--primary-light,#eff6ff)] text-[var(--primary,#2563eb)]"
+          : "nav-link-active border-l-2 -ml-[2px] pl-[10px]"
+        : "theme-text-muted hover:bg-[var(--surface-soft)]"
+    );
+
   return (
-    <div className="w-60 theme-surface border-r theme-border h-screen fixed left-0 top-0 flex flex-col">
-      {/* Logo/Brand */}
-      <div className="px-4 py-5 border-b theme-border">
-        <h1 className="text-xl font-bold theme-text">TaskManager</h1>
+    <div
+      className={cn(
+        "theme-surface border-r theme-border h-screen fixed left-0 top-0 flex flex-col z-40",
+        "transition-[width] duration-200 ease-in-out",
+        collapsed ? "w-16" : "w-60"
+      )}
+    >
+      {/* ── Brand + toggle ──────────────────────────────── */}
+      <div className={cn(
+        "border-b theme-border flex items-center shrink-0",
+        collapsed ? "justify-center py-5 px-2" : "px-4 py-5 justify-between"
+      )}>
+        {!collapsed && (
+          <h1 className="text-xl font-bold theme-text truncate">TaskManager</h1>
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={cn(
+            "p-1.5 rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted transition-colors shrink-0",
+            collapsed && "mx-auto"
+          )}
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
       </div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.filter(item => item.show).map(({ to, label, icon: Icon, badge }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                isActive
-                  ? 'nav-link-active border-l-2 -ml-[2px] pl-[10px]'
-                  : 'theme-text-muted hover:bg-[var(--surface-soft)]'
-              )
-            }
-          >
-            <Icon className="w-5 h-5 shrink-0" />
-            <span className="flex-1">{label}</span>
-            {badge > 0 && (
-              <Badge color="danger" size="sm" variant="solid">
-                {badge}
-              </Badge>
+      {/* ── Main nav ────────────────────────────────────── */}
+      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
+        {navItems.filter((i) => i.show).map(({ to, label, icon: Icon, badge }) => (
+          <NavLink key={to} to={to} title={collapsed ? label : undefined} className={linkClass}>
+            <div className="relative shrink-0">
+              <Icon className="w-5 h-5" />
+              {/* Dot badge in collapsed mode */}
+              {badge > 0 && collapsed && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+              )}
+            </div>
+            {!collapsed && (
+              <>
+                <span className="flex-1 truncate">{label}</span>
+                {badge > 0 && (
+                  <Badge color="danger" size="sm" variant="solid">{badge}</Badge>
+                )}
+              </>
             )}
           </NavLink>
         ))}
 
-        {/* Profile Section */}
-        <div className="pt-4 pb-2">
+        {/* Profile link */}
+        <div className="pt-3 pb-1">
           <div className="h-px bg-[var(--border)]" />
         </div>
         <NavLink
           to="/profile"
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-              isActive
-                ? 'nav-link-active border-l-2 -ml-[2px] pl-[10px]'
-                : 'theme-text-muted hover:bg-[var(--surface-soft)]'
-            )
-          }
+          title={collapsed ? "Profile" : undefined}
+          className={linkClass}
         >
           <User className="w-5 h-5 shrink-0" />
-          <span className="flex-1">Profile</span>
+          {!collapsed && <span className="flex-1 truncate">Profile</span>}
         </NavLink>
 
-        {/* Admin Section */}
-        {adminItems.some(item => item.show) && (
+        {/* Admin section */}
+        {adminItems.some((i) => i.show) && (
           <>
-            <div className="pt-4 pb-2">
+            <div className="pt-3 pb-1">
               <div className="h-px theme-border" />
             </div>
-            <div className="px-3 pt-2 pb-1">
-              <p className="text-xs font-semibold theme-text-muted uppercase tracking-wider">
-                Admin
-              </p>
-            </div>
-            {adminItems.filter(item => item.show).map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'nav-link-active border-l-2 -ml-[2px] pl-[10px]'
-                      : 'theme-text-muted hover:bg-[var(--surface-soft)]'
-                  )
-                }
-              >
+            {!collapsed && (
+              <div className="px-3 pt-1 pb-1">
+                <p className="text-xs font-semibold theme-text-muted uppercase tracking-wider">
+                  Admin
+                </p>
+              </div>
+            )}
+            {adminItems.filter((i) => i.show).map(({ to, label, icon: Icon }) => (
+              <NavLink key={to} to={to} title={collapsed ? label : undefined} className={linkClass}>
                 <Icon className="w-5 h-5 shrink-0" />
-                <span className="flex-1">{label}</span>
+                {!collapsed && <span className="flex-1 truncate">{label}</span>}
               </NavLink>
             ))}
           </>
         )}
       </nav>
 
-      {/* User Profile Card */}
-      <div className="p-4 border-t theme-border">
+      {/* ── User card ───────────────────────────────────── */}
+      <div className="p-3 border-t theme-border shrink-0">
         <Link
           to="/profile"
-          className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--surface-soft)] transition-colors"
+          title={collapsed ? auth.user?.username : undefined}
+          className={cn(
+            "flex items-center rounded-lg hover:bg-[var(--surface-soft)] transition-colors p-2",
+            collapsed ? "justify-center" : "gap-3"
+          )}
         >
-          <Avatar name={auth.user?.username} size="md" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium theme-text truncate">
-              {auth.user?.username}
-            </p>
-            <p className="text-xs theme-text-muted truncate capitalize">
-              {auth.user?.role}
-            </p>
-          </div>
+          <Avatar name={auth.user?.username} src={auth.user?.avatar_url} size="md" />
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium theme-text truncate">{auth.user?.username}</p>
+              <p className="text-xs theme-text-muted truncate capitalize">{auth.user?.role}</p>
+            </div>
+          )}
         </Link>
       </div>
     </div>

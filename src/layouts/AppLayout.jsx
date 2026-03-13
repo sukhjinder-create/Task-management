@@ -1,5 +1,5 @@
 // src/layout/AppLayout.jsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import Sidebar from "../components/Sidebar";
@@ -11,12 +11,36 @@ import { Avatar, Badge, Button, Dropdown } from "../components/ui";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { cn } from "../utils/cn";
 
+const SIDEBAR_KEY = "sidebarCollapsed";
+
 export default function AppLayout({ children }) {
-  const { logout, auth } = useAuth();
+  const { logout, auth, updateUser } = useAuth();
   const navigate = useNavigate();
   const api = useApi();
 
   const user = auth?.user;
+
+  // Refresh stale auth.user from server on mount (avatar_url etc. may have changed since last login)
+  const refreshedRef = useRef(false);
+  useEffect(() => {
+    if (!auth?.token || refreshedRef.current) return;
+    refreshedRef.current = true;
+    api.get("/users/me").then((res) => {
+      if (res.data) updateUser(res.data);
+    }).catch(() => {/* silent — stale data is acceptable fallback */});
+  }, [auth?.token]);
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_KEY) === "true"
+  );
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_KEY, String(next));
+      return next;
+    });
+  };
 
   const [attendanceStatus, setAttendanceStatus] = useState(() => {
     try {
@@ -229,16 +253,21 @@ export default function AppLayout({ children }) {
 
   return (
     <div className="flex h-screen overflow-hidden theme-bg theme-text">
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
-      <div className="ml-60 flex-1 theme-bg flex flex-col overflow-hidden">
+      <div
+        className={cn(
+          "flex-1 theme-bg flex flex-col overflow-hidden transition-[margin-left] duration-200 ease-in-out",
+          sidebarCollapsed ? "ml-16" : "ml-60"
+        )}
+      >
         {/* Enhanced Header */}
         <header className="h-16 theme-surface border-b theme-border px-6 flex justify-between items-center">
           {/* Left side: User info and status */}
           <div className="flex items-center gap-4">
             {user && (
               <div className="flex items-center gap-3">
-                <Avatar name={user.username} size="md" />
+                <Avatar name={user.username} src={user.avatar_url} size="md" />
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold theme-text">
                     {user.username}

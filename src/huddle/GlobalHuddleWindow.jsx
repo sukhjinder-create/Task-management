@@ -1,214 +1,180 @@
 // src/huddle/GlobalHuddleWindow.jsx
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useHuddle } from "../context/HuddleContext";
+import {
+  Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
+  PhoneOff, Maximize2, Minimize2, VolumeX,
+} from "lucide-react";
 
-// Small helper component for remote peer video
-function RemotePeerVideo({ peer }) {
-  const videoRef = useRef(null);
-
+// ── Call timer ──────────────────────────────────────────────────────────────
+function useCallTimer(startedAt) {
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
-    const video = videoRef.current;
+    if (!startedAt) return;
+    const base = new Date(startedAt).getTime();
+    setElapsed(Math.floor((Date.now() - base) / 1000));
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - base) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  const h = Math.floor(elapsed / 3600);
+  const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
+  const s = String(elapsed % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+}
+
+// ── Attach a stream to a <video> ref safely ─────────────────────────────────
+function useVideoRef(stream, muted = false) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const video = ref.current;
     if (!video) return;
+    if (!stream) { video.srcObject = null; return; }
+    if (video.srcObject !== stream) video.srcObject = stream;
+    video.muted = muted;
+    const play = () => video.play().catch(() => {});
+    if (video.readyState >= 2) play();
+    else video.onloadedmetadata = play;
+  }, [stream, muted]);
+  return ref;
+}
 
-    if (!peer || !peer.stream) {
-      if (video.srcObject) video.srcObject = null;
-      return;
-    }
-
-    if (video.srcObject !== peer.stream) {
-      video.srcObject = peer.stream;
-    }
-
-    const play = () => {
-      video.play().catch(() => {
-        /* ignore autoplay errors */
-      });
-    };
-
-    if (video.readyState >= 2) {
-      play();
-    } else {
-      video.onloadedmetadata = play;
-    }
-  }, [peer]);
+// ── Single video tile ────────────────────────────────────────────────────────
+function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false }) {
+  const videoRef = useVideoRef(stream, isLocal);
+  const initials = (name || "?")[0].toUpperCase();
 
   return (
-  <div className="absolute bottom-3 right-3">
-    <video
-      ref={videoRef}
-      playsInline
-      className="w-32 h-24 object-cover rounded-lg border border-white/20 shadow-lg"
-    />
-    <div className="absolute bottom-0 left-0 right-0 text-[10px] text-white bg-black/60 px-1 rounded-b">
-      {peer.username || "User"}
-    </div>
-  </div>
-);}
+    <div
+      className={`relative bg-[#1a1d27] rounded-xl overflow-hidden flex items-center justify-center w-full h-full transition-all ${
+        isActiveSpeaker ? "ring-2 ring-green-400 ring-offset-1 ring-offset-[#0f111a]" : ""
+      }`}
+    >
+      {stream && !isCameraOff ? (
+        <video ref={videoRef} playsInline className="w-full h-full object-cover" />
+      ) : (
+        <div className="flex flex-col items-center gap-2 select-none">
+          <div className="w-16 h-16 rounded-full bg-slate-600 flex items-center justify-center text-2xl font-semibold text-white">
+            {initials}
+          </div>
+          <span className="text-slate-400 text-xs">{name || "User"}</span>
+        </div>
+      )}
 
+      {/* Bottom name bar */}
+      <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/60 rounded px-2 py-0.5 text-[11px] text-white pointer-events-none">
+        {isMuted
+          ? <MicOff size={10} className="text-red-400 shrink-0" />
+          : <Mic size={10} className="text-green-400 shrink-0" />
+        }
+        <span className="truncate max-w-[100px]">{isLocal ? `${name} (You)` : (name || "User")}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Control button ────────────────────────────────────────────────────────────
+function CtrlBtn({ onClick, title, active = false, danger = false, wide = false, children }) {
+  let cls = "flex items-center justify-center rounded-full transition-colors font-medium ";
+  if (wide) cls += "gap-2 px-4 h-11 text-sm ";
+  else cls += "w-11 h-11 ";
+  if (danger) cls += "bg-red-600 hover:bg-red-500 text-white";
+  else if (active) cls += "bg-blue-600 hover:bg-blue-500 text-white";
+  else cls += "bg-slate-700 hover:bg-slate-600 text-white";
+
+  return (
+    <button type="button" onClick={onClick} title={title} className={cls}>
+      {children}
+    </button>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function GlobalHuddleWindow() {
   const huddleCtx = useHuddle();
   const activeHuddle = huddleCtx?.activeHuddle || null;
-  const isHost =
-  activeHuddle?.startedBy?.userId === huddleCtx?.currentUser?.id;
   const rtc = huddleCtx?.rtc || null;
+  const currentUser = huddleCtx?.currentUser || null;
+
+  const isHost = String(activeHuddle?.startedBy?.userId) === String(currentUser?.id);
+  const callTimer = useCallTimer(activeHuddle?.at);
   const activeSpeakerId = rtc?.activeSpeakerId;
+  const networkQuality = rtc?.networkQuality || "good";
 
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  // Default size for floating window
+  const [isMaximized, setIsMaximized] = useState(false);
   const [pos, setPos] = useState({ x: 200, y: 120 });
-  const [size, setSize] = useState({ w: 540, h: 400 }); // a bit bigger by default
+  const [size, setSize] = useState({ w: 620, h: 440 });
 
   const windowRef = useRef(null);
-  const localVideoRef = useRef(null);
-
   const dragging = useRef(false);
   const resizing = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const resizeStart = useRef({ w: 0, h: 0, x: 0, y: 0 });
+  const prevSizeRef = useRef({ pos: null, size: null });
 
-  // -------------------------
-  // Attach local video stream (no blinking)
-  // -------------------------
-  useEffect(() => {
-    const video = localVideoRef.current;
-    if (!video) return;
+  const remotePeers = Array.isArray(rtc?.remotePeers) ? rtc.remotePeers : [];
 
-    // If rtc is not ready yet, clear stream & bail
-    if (!rtc || !rtc.localStream) {
-      if (video.srcObject) video.srcObject = null;
-      return;
-    }
+  // All participants: local first, then remotes
+  const participants = [
+    {
+      userId: "local",
+      username: currentUser?.username || "You",
+      stream: rtc?.localStream,
+      isMuted: rtc?.isMuted,
+      isCameraOff: rtc?.isCameraOff,
+      isLocal: true,
+    },
+    ...remotePeers.map((p) => ({
+      userId: p.userId,
+      username: p.username || "User",
+      stream: p.stream,
+      isMuted: p.isMuted,
+      isCameraOff: false,
+      isLocal: false,
+    })),
+  ];
 
-    if (video.srcObject !== rtc.localStream) {
-      video.srcObject = rtc.localStream;
-    }
+  // Grid columns based on participant count
+  const count = participants.length;
+  const gridCols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
 
-    video.muted = true;
-
-    const play = () => {
-      video.play().catch(() => {
-        /* ignore autoplay errors */
-      });
-    };
-
-    if (video.readyState >= 2) {
-      play();
-    } else {
-      video.onloadedmetadata = play;
-    }
-  }, [rtc]);
-
-  // -------------------------
-  // Dragging
-  // -------------------------
+  // ── Drag ────────────────────────────────────────────────────────────────────
   const onMouseDownDrag = (e) => {
-    if (isFullscreen) return;
+    if (isMaximized) return;
     dragging.current = true;
-    dragOffset.current = {
-      x: e.clientX - pos.x,
-      y: e.clientY - pos.y,
-    };
+    dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
   };
 
-  const onMouseMove = (e) => {
+  const onMouseMove = useCallback((e) => {
     if (dragging.current) {
-      const nextX = e.clientX - dragOffset.current.x;
-      const nextY = e.clientY - dragOffset.current.y;
-
       const maxX = Math.max(0, window.innerWidth - size.w);
       const maxY = Math.max(0, window.innerHeight - size.h - 40);
-
       setPos({
-        x: Math.min(Math.max(0, nextX), maxX),
-        y: Math.min(Math.max(0, nextY), maxY),
+        x: Math.min(Math.max(0, e.clientX - dragOffset.current.x), maxX),
+        y: Math.min(Math.max(0, e.clientY - dragOffset.current.y), maxY),
       });
     }
     if (resizing.current) {
       const dx = e.clientX - resizeStart.current.x;
       const dy = e.clientY - resizeStart.current.y;
-      const minW = 380;
-      const minH = 280;
-
-      const nextW = Math.max(minW, resizeStart.current.w + dx);
-      const nextH = Math.max(minH, resizeStart.current.h + dy);
-
       setSize({
-        w: nextW,
-        h: nextH,
+        w: Math.max(420, resizeStart.current.w + dx),
+        h: Math.max(320, resizeStart.current.h + dy),
       });
     }
-  };
+  }, [size.w, size.h]);
 
-  const onMouseUp = () => {
+  const onMouseUp = useCallback(() => {
     dragging.current = false;
     resizing.current = false;
-  };
+  }, []);
 
-  // -------------------------
-  // Resizing
-  // -------------------------
   const onMouseDownResize = (e) => {
-    if (isFullscreen) return;
+    if (isMaximized) return;
     e.stopPropagation();
     resizing.current = true;
-    resizeStart.current = {
-      w: size.w,
-      h: size.h,
-      x: e.clientX,
-      y: e.clientY,
-    };
+    resizeStart.current = { w: size.w, h: size.h, x: e.clientX, y: e.clientY };
   };
 
-  // -------------------------
-  // Fullscreen toggle
-  // -------------------------
-  const toggleFullscreen = () => {
-    if (!rtc) return;
-
-    if (!isFullscreen) {
-      setPos({ x: 0, y: 0 });
-      setSize({ w: window.innerWidth, h: window.innerHeight });
-      setIsFullscreen(true);
-      if (typeof rtc.requestFullscreen === "function") {
-        rtc.requestFullscreen();
-      }
-    } else {
-      setSize({ w: 540, h: 400 });
-      setPos({ x: 200, y: 120 });
-      setIsFullscreen(false);
-      if (typeof rtc.exitFullscreen === "function") {
-        rtc.exitFullscreen();
-      }
-    }
-  };
-
-  // Keep fullscreen window in sync with viewport resize
-  useEffect(() => {
-    if (!isFullscreen) return;
-
-    const handleResize = () => {
-      setSize({ w: window.innerWidth, h: window.innerHeight });
-      setPos({ x: 0, y: 0 });
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isFullscreen]);
-
-  // -------------------------
-  // Close / Leave Huddle
-  // -------------------------
-  const leave = () => {
-    if (!rtc) return;
-    if (typeof rtc.leaveHuddle === "function") {
-      rtc.leaveHuddle();
-    }
-  };
-
-  // -------------------------
-  // Global mouse events for drag / resize
-  // -------------------------
   useEffect(() => {
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
@@ -216,151 +182,186 @@ export default function GlobalHuddleWindow() {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onMouseMove, onMouseUp]);
 
-  // If no active huddle or no rtc, hide window completely
+  // ── Maximize ────────────────────────────────────────────────────────────────
+  const toggleMaximize = () => {
+    if (!isMaximized) {
+      prevSizeRef.current = { pos: { ...pos }, size: { ...size } };
+      setPos({ x: 0, y: 0 });
+      setSize({ w: window.innerWidth, h: window.innerHeight });
+      setIsMaximized(true);
+    } else {
+      const prev = prevSizeRef.current;
+      setPos(prev.pos || { x: 200, y: 120 });
+      setSize(prev.size || { w: 620, h: 440 });
+      setIsMaximized(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isMaximized) return;
+    const onResize = () => { setSize({ w: window.innerWidth, h: window.innerHeight }); setPos({ x: 0, y: 0 }); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [isMaximized]);
+
   if (!activeHuddle || !rtc) return null;
 
-  const remotePeers = Array.isArray(rtc.remotePeers) ? rtc.remotePeers : [];
+  // Network quality badge
+  const netColor = { good: "text-green-400", ok: "text-yellow-400", poor: "text-red-400" }[networkQuality];
+  const netLabel = { good: "●", ok: "◑", poor: "○" }[networkQuality];
+
+  const videoAreaH = size.h - 108; // header ~44px + controls ~64px
 
   return (
     <div
       ref={windowRef}
-      className="fixed bg-[#0f111a] text-white shadow-2xl rounded-xl border border-slate-800 z-[999999]"
+      className="fixed bg-[#0f111a] text-white shadow-2xl z-[999999] flex flex-col select-none"
       style={{
         left: pos.x,
         top: pos.y,
         width: size.w,
         height: size.h,
-        transition: isFullscreen ? "all 0.2s ease" : "none",
+        borderRadius: isMaximized ? 0 : "0.75rem",
+        border: isMaximized ? "none" : "1px solid #1e293b",
+        transition: isMaximized ? "all 0.18s ease" : "none",
       }}
     >
-      {/* ██████████████ TOP BAR ██████████████ */}
+      {/* ── TOP BAR ───────────────────────────────────────────────────────── */}
       <div
         onMouseDown={onMouseDownDrag}
-        className="w-full px-3 py-2 bg-[#1b1e27] cursor-move rounded-t-xl flex justify-between items-center select-none"
+        className="w-full px-4 py-2.5 bg-[#1b1e27] flex justify-between items-center shrink-0 cursor-move"
+        style={{ borderRadius: isMaximized ? 0 : "0.75rem 0.75rem 0 0" }}
       >
-        <div className="font-semibold text-sm">
-          Huddle – {activeHuddle.startedBy?.username || "Huddle"}
+        <div className="flex items-center gap-2.5">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <span className="font-semibold text-sm truncate max-w-[180px]">
+            {activeHuddle.startedBy?.username || "Huddle"}
+          </span>
+          <span className="font-mono text-xs text-slate-400">{callTimer}</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Fullscreen Button */}
+        <div className="flex items-center gap-3">
+          <span className={`text-xs font-bold ${netColor}`} title={`Connection: ${networkQuality}`}>
+            {netLabel} {networkQuality.charAt(0).toUpperCase() + networkQuality.slice(1)}
+          </span>
+          <span className="text-xs text-slate-500">{participants.length} participant{participants.length !== 1 ? "s" : ""}</span>
           <button
             type="button"
-            onClick={toggleFullscreen}
-            className="px-3 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600"
+            onClick={toggleMaximize}
+            className="p-1.5 rounded hover:bg-slate-700 transition-colors"
+            title={isMaximized ? "Restore" : "Maximize"}
           >
-            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-          </button>
-
-          {/* Single End Button (for this window) */}
-          <button
-            type="button"
-            onClick={leave}
-            className="px-3 py-1 text-xs rounded bg-red-600 hover:bg-red-500"
-          >
-            End
+            {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
         </div>
       </div>
 
-      {/* ██████████████ VIDEO AREA ██████████████ */}
-      <div
-        className="relative w-full bg-black overflow-hidden"
-        style={{ height: size.h - 110 }}
-      >
+      {/* ── VIDEO GRID ────────────────────────────────────────────────────── */}
+      <div className="flex-1 bg-[#0f111a] p-2 overflow-hidden min-h-0" style={{ height: videoAreaH }}>
         <div
-          ref={rtc.fullscreenTargetRef}
-          className="w-full h-full flex items-center justify-center bg-black"
+          className="w-full h-full gap-2"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+            gridTemplateRows: `repeat(${Math.ceil(count / gridCols)}, 1fr)`,
+          }}
         >
-          {/* Local video */}
-          {rtc.localStream ? (
-            <video
-  ref={localVideoRef}
-  muted
-  playsInline
-  className={`w-full h-full object-cover rounded-lg ${
-  activeSpeakerId === "local"
-    ? "ring-4 ring-green-400"
-    : ""
-}`}
-/>
-          ) : (
-            <div className="text-gray-400 text-sm">Connecting camera…</div>
-          )}
-          <div className="absolute top-2 right-2 bg-black/70 rounded-lg p-2 text-[11px]">
-  <div className="font-semibold mb-1">Participants</div>
-
-  <div className="space-y-1">
-    <div>You (You)</div>
-    {remotePeers.map(p => (
-      <div key={p.userId}>
-        {p.isMuted ? "🔇" : "🎤"} {p.username || "User"}
-      </div>
-    ))}
-  </div>
-</div>
+          {participants.map((p) => (
+            <VideoTile
+              key={p.userId}
+              stream={p.stream}
+              name={p.username}
+              isMuted={p.isMuted}
+              isCameraOff={p.isCameraOff}
+              isLocal={p.isLocal}
+              isActiveSpeaker={activeSpeakerId === (p.isLocal ? "local" : p.userId)}
+            />
+          ))}
         </div>
-        {/* Remote videos */}
-        {remotePeers.map((peer) => (
-          <RemotePeerVideo key={peer.userId || peer.id} peer={peer} />
-        ))}
       </div>
 
-      {/* ██████████████ CONTROL BAR ██████████████ */}
-      <div className="w-full bg-[#1b1e27] py-3 px-6 flex justify-center gap-6 rounded-b-xl">
-        {/* MUTE */}
-        <button
-          type="button"
-          onClick={() => rtc.toggleMute && rtc.toggleMute()}
-          className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600"
+      {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
+      <div
+        className="w-full bg-[#1b1e27] py-3 px-6 flex justify-center items-center gap-3 shrink-0"
+        style={{ borderRadius: isMaximized ? 0 : "0 0 0.75rem 0.75rem" }}
+      >
+        {/* Mic */}
+        <CtrlBtn
+          onClick={() => rtc.toggleMute?.()}
+          title={rtc.isMuted ? "Unmute microphone" : "Mute microphone"}
+          danger={rtc.isMuted}
         >
-          {rtc.isMuted ? "🔇" : "🎤"}
-        </button>
+          {rtc.isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+        </CtrlBtn>
 
-        {/* CAMERA */}
-        <button
-          type="button"
-          onClick={() => rtc.toggleCamera && rtc.toggleCamera()}
-          className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600"
+        {/* Camera */}
+        <CtrlBtn
+          onClick={() => rtc.toggleCamera?.()}
+          title={rtc.isCameraOff ? "Turn on camera" : "Turn off camera"}
+          danger={rtc.isCameraOff}
         >
-          {rtc.isCameraOff ? "📷❌" : "📷"}
-        </button>
+          {rtc.isCameraOff ? <VideoOff size={18} /> : <Video size={18} />}
+        </CtrlBtn>
 
-        {/* SCREEN SHARE */}
-        <button
-          type="button"
+        {/* Screen share */}
+        <CtrlBtn
           onClick={() =>
             rtc.isScreenSharing
-              ? rtc.stopScreenShare && rtc.stopScreenShare()
-              : rtc.startScreenShare && rtc.startScreenShare()
+              ? rtc.stopScreenShare?.()
+              : rtc.startScreenShare?.()
           }
-          className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600"
+          title={rtc.isScreenSharing ? "Stop sharing screen" : "Share your screen"}
+          active={rtc.isScreenSharing}
         >
-          {rtc.isScreenSharing ? "🛑" : "🖥️"}
-        </button>
+          {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
+        </CtrlBtn>
 
+        {/* Mute all — host only */}
         {isHost && (
-  <button
-    type="button"
-    onClick={() => rtc.muteAll?.()}
-    className="w-12 h-12 flex items-center justify-center rounded-full bg-red-700 hover:bg-red-600"
-    title="Mute all"
-  >
-    🔇
-  </button>
-)}
+          <CtrlBtn onClick={() => rtc.muteAll?.()} title="Mute all participants">
+            <VolumeX size={18} />
+          </CtrlBtn>
+        )}
 
+        <div className="w-px h-7 bg-slate-600 mx-1" />
+
+        {/* Leave / End for all */}
+        {isHost ? (
+          <CtrlBtn
+            onClick={() => rtc.endHuddleForAll?.()}
+            title="End call for everyone"
+            danger
+            wide
+          >
+            <PhoneOff size={16} />
+            <span>End for all</span>
+          </CtrlBtn>
+        ) : (
+          <CtrlBtn
+            onClick={() => rtc.leaveHuddle?.()}
+            title="Leave call"
+            danger
+            wide
+          >
+            <PhoneOff size={16} />
+            <span>Leave</span>
+          </CtrlBtn>
+        )}
       </div>
 
-      {/* Resize handle */}
-      {!isFullscreen && (
+      {/* ── RESIZE HANDLE ─────────────────────────────────────────────────── */}
+      {!isMaximized && (
         <div
           onMouseDown={onMouseDownResize}
-          className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize bg-slate-500 rounded"
-        />
+          className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize opacity-40 hover:opacity-80 transition-opacity"
+          title="Resize"
+        >
+          <svg viewBox="0 0 12 12" fill="currentColor" className="text-slate-400">
+            <path d="M10 2L2 10M6 2L2 6M10 6L6 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </div>
       )}
     </div>
   );

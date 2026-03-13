@@ -110,7 +110,7 @@ export default function CommentsSection({ taskId }) {
               }
             >
               <div className="flex items-start gap-2">
-                <Avatar name={c.username || c.added_by} size="sm" />
+                <Avatar name={c.username || c.added_by} src={c.avatar_url} size="sm" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold text-gray-900">

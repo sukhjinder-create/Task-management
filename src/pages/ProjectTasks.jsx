@@ -1646,13 +1646,41 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     No attachments.
                   </p>
                 ) : (
-                  <ul className="text-[11px] text-slate-600 list-disc ml-4">
-                    {attachments.map((att) => (
-                      <li key={att.id}>
-                        {att.original_name}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="flex flex-col gap-1.5">
+                    {attachments.map((att) => {
+                      const fullUrl = att.url?.startsWith("http")
+                        ? att.url
+                        : `http://localhost:3000${att.url}`;
+                      const isImage = att.mime_type?.startsWith("image/");
+                      return (
+                        <div key={att.id} className="flex items-center gap-2 text-[11px]">
+                          {isImage && (
+                            <a href={fullUrl} target="_blank" rel="noreferrer">
+                              <img
+                                src={fullUrl}
+                                alt={att.original_name}
+                                className="h-10 w-14 object-cover rounded border border-slate-200"
+                              />
+                            </a>
+                          )}
+                          <a
+                            href={fullUrl}
+                            download={att.original_name}
+                            className="text-blue-600 hover:underline truncate max-w-[200px]"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            📎 {att.original_name}
+                          </a>
+                          {att.file_size && (
+                            <span className="text-slate-400">
+                              ({(att.file_size / 1024).toFixed(1)} KB)
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
 
                 {selectedTaskDetails && (

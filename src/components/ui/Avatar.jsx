@@ -1,5 +1,13 @@
 import { cn } from '../../utils/cn';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
+function resolveAvatarUrl(src) {
+  if (!src) return null;
+  if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('blob:') || src.startsWith('data:')) return src;
+  return `${BACKEND_URL}${src}`;
+}
+
 const avatarSizes = {
   xs: 'w-6 h-6 text-xs',
   sm: 'w-8 h-8 text-sm',
@@ -20,6 +28,7 @@ function getInitials(name) {
 
 export function Avatar({ name, src, alt, size = 'md', status, className, ...props }) {
   const initials = getInitials(name || alt);
+  const resolvedSrc = resolveAvatarUrl(src);
 
   return (
     <div className={cn('relative inline-block', className)} {...props}>
@@ -30,11 +39,17 @@ export function Avatar({ name, src, alt, size = 'md', status, className, ...prop
           avatarSizes[size]
         )}
       >
-        {src ? (
-          <img src={src} alt={alt || name} className="w-full h-full object-cover" />
-        ) : (
-          <span>{initials}</span>
-        )}
+        {resolvedSrc ? (
+          <img
+            src={resolvedSrc}
+            alt={alt || name}
+            className="w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+          />
+        ) : null}
+        <span style={{ display: resolvedSrc ? 'none' : 'flex' }} className="w-full h-full items-center justify-center">
+          {initials}
+        </span>
       </div>
 
       {/* Status indicator */}
@@ -68,7 +83,7 @@ export function AvatarGroup({ users = [], max = 3, size = 'md', className }) {
         <Avatar
           key={index}
           name={user.name || user.username}
-          src={user.avatar || user.profilePicture}
+          src={user.avatar_url || user.avatar || user.profilePicture}
           size={size}
           className="ring-2 ring-white"
         />
