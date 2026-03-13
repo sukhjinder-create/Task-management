@@ -16,6 +16,7 @@ import {
   FlaskConical,
   ChevronLeft,
   ChevronRight,
+  Hash,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../api";
@@ -90,8 +91,9 @@ export default function Sidebar({ collapsed, onToggle }) {
   const adminItems = [
     { to: "/autopilot",       label: "AI Autopilot",  icon: Bot,          show: isAdmin || isManager },
     { to: "/testing-agent",   label: "Testing Agent", icon: FlaskConical, show: isAdmin || isManager },
-    { to: "/admin/attendance", label: "Attendance",   icon: Clock,        show: isAdmin },
-    { to: "/admin/users",     label: "Admin Panel",   icon: Users,        show: isAdmin },
+    { to: "/admin/attendance",      label: "Attendance",      icon: Clock,        show: isAdmin },
+    { to: "/admin/users",          label: "Admin Panel",     icon: Users,        show: isAdmin },
+    { to: "/admin/migrations",      label: "Migrations",      icon: Hash,         show: isAdmin },
   ];
 
   // Shared NavLink class builder

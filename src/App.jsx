@@ -16,6 +16,8 @@ import AdminAttendance from "./pages/AdminAttendance.jsx";
 import StrategicIntelligence from "./pages/StrategicIntelligence.jsx";
 import Autopilot from "./pages/Autopilot.jsx";
 import TestingAgent from "./pages/TestingAgent.jsx";
+import SlackMigration from "./pages/SlackMigration.jsx";
+import Migrations from "./pages/Migrations.jsx";
 
 // ---- Intelligence pages (NEW) ----
 import UserPerformance from "./pages/intelligence/UserPerformance.jsx";
@@ -97,6 +99,24 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin", "manager"]}>
                 <TestingAgent />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="admin/slack-migration"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <SlackMigration />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="admin/migrations"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Migrations />
               </ProtectedRoute>
             }
           />

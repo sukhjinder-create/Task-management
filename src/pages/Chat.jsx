@@ -246,6 +246,7 @@ const [reportContext, setReportContext] = useState(null);
 
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingOriginalChannel, setEditingOriginalChannel] = useState(null);
+  const [collapsedSlackGroups, setCollapsedSlackGroups] = useState({});
 
   // -----------------------
   // Superadmin / single-workspace mode
@@ -504,11 +505,30 @@ useEffect(() => {
           key !== AVAILABILITY_CHANNEL_KEY &&
           key !== PROJECT_MANAGER_CHANNEL_KEY &&
           !key.startsWith("dm:") &&
-          !key.startsWith("thread:")
+          !key.startsWith("thread:") &&
+          !key.startsWith("slack-")
         );
       }),
     [channels]
   );
+
+  // Slack-imported channels grouped by prefix (slack-engineering-*, slack-marketing-*, etc.)
+  const slackChannelGroups = useMemo(() => {
+    const slack = (channels || []).filter((ch) => {
+      if (!ch) return false;
+      const key = ch.key || "";
+      const isPrivate = ch.is_private ?? ch.isPrivate ?? false;
+      return !isPrivate && key.startsWith("slack-");
+    });
+    const groups = {};
+    for (const ch of slack) {
+      const parts = ch.key.replace(/^slack-/, "").split(/[-_]/);
+      const prefix = parts[0] || "general";
+      if (!groups[prefix]) groups[prefix] = [];
+      groups[prefix].push(ch);
+    }
+    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [channels]);
 
   const privateChannels = useMemo(
     () =>
@@ -1938,6 +1958,59 @@ useEffect(() => {
               </button>
             );
           })}
+
+          {/* Slack imported channels — grouped by prefix */}
+          {slackChannelGroups.length > 0 && (
+            <>
+              <div className="px-4 pt-4 pb-1">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Slack</span>
+              </div>
+              {slackChannelGroups.map(([prefix, chs]) => {
+                const isCollapsed = collapsedSlackGroups[prefix];
+                const groupUnread = chs.reduce((sum, ch) => sum + (unreadByChannel[ch.key] || 0), 0);
+                return (
+                  <div key={prefix}>
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedSlackGroups((prev) => ({ ...prev, [prefix]: !prev[prefix] }))}
+                      className="w-full flex items-center gap-1.5 px-4 py-1 text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                      <span className="text-[9px]">{isCollapsed ? "▶" : "▼"}</span>
+                      <span className="text-[11px] font-medium capitalize flex-1 text-left">{prefix}</span>
+                      {groupUnread > 0 && (
+                        <span className="text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                          {groupUnread}
+                        </span>
+                      )}
+                    </button>
+                    {!isCollapsed && chs.map((ch) => {
+                      const isActive = activeChannelKey === ch.key;
+                      return (
+                        <button
+                          key={ch.id}
+                          type="button"
+                          onClick={() => handleSelectChannel(ch.key)}
+                          className={`group/ch w-full flex items-center justify-between pl-7 pr-4 py-1.5 text-left transition-colors ${
+                            isActive ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
+                            <Hash size={11} className="shrink-0 text-slate-500" />
+                            <span className="truncate">{ch.name}</span>
+                            {(unreadByChannel[ch.key] || 0) > 0 && (
+                              <span className="ml-1 text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                                {unreadByChannel[ch.key]}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </>
+          )}
 
           {/* Private channels */}
           {privateChannels.length > 0 && (
