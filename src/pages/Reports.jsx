@@ -1,132 +1,89 @@
 // src/pages/Reports.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
-
 import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
+  CheckCircle2, AlertCircle, Clock, BarChart2,
+  Download, TrendingUp, Users, Layers, X, ChevronLeft, ChevronRight,
+} from "lucide-react";
+import {
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
 
-// ---- Status config + helpers ----
+// ─── Status / Priority meta ──────────────────────────────────────────────────
 
-// canonical config for known statuses (keys from DB)
 const STATUS_META = {
-  pending: {
-    label: "To Do", // UI label instead of "Pending"
-    color: "#facc15", // amber
-  },
-  "in-progress": {
-    label: "In Progress",
-    color: "#60a5fa", // soft blue
-  },
-  completed: {
-    label: "Completed",
-    color: "#22c55e", // green
-  },
-  stage: {
-    label: "Stage",
-    color: "#a855f7", // purple
-  },
+  pending:     { label: "To Do",       color: "#f59e0b", bg: "bg-amber-100",  text: "text-amber-700"  },
+  "in-progress":{ label: "In Progress", color: "#3b82f6", bg: "bg-blue-100",   text: "text-blue-700"   },
+  completed:   { label: "Completed",   color: "#22c55e", bg: "bg-green-100",  text: "text-green-700"  },
+  stage:       { label: "Stage",       color: "#a855f7", bg: "bg-purple-100", text: "text-purple-700" },
 };
-
-// fallback colors for any extra custom statuses
 const FALLBACK_COLORS = ["#fb923c", "#ec4899", "#06b6d4", "#ef4444"];
 
-function getStatusMeta(statusKey, index = 0) {
-  const base = STATUS_META[statusKey] || {};
-  const label =
-    base.label ||
-    (statusKey
-      ? statusKey.charAt(0).toUpperCase() + statusKey.slice(1)
-      : "Unknown");
-  const color = base.color || FALLBACK_COLORS[index % FALLBACK_COLORS.length];
-  return { label, color };
-}
-
-function statusLabel(status) {
-  // use the same label mapping everywhere (tables, etc.)
-  return getStatusMeta(status).label;
-}
-
-function priorityLabel(priority) {
-  if (priority === "high") return "High";
-  if (priority === "low") return "Low";
-  return "Medium";
-}
-
-// simple “chips multi-select” component
-function MultiSelectChips({ label, options, value, onChange, getLabel }) {
-  const remaining = options.filter((opt) => !value.includes(opt.id));
-
-  const handleAdd = (id) => {
-    if (!id) return;
-    onChange([...value, id]);
+function getStatusMeta(key, idx = 0) {
+  const base = STATUS_META[key] || {};
+  return {
+    label: base.label || (key ? key.charAt(0).toUpperCase() + key.slice(1) : "Unknown"),
+    color: base.color || FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+    bg:    base.bg    || "bg-slate-100",
+    text:  base.text  || "text-slate-700",
   };
+}
 
-  const handleRemove = (id) => {
-    onChange(value.filter((v) => v !== id));
-  };
+const PRIORITY_META = {
+  high:   { label: "High",   bg: "bg-red-100",    text: "text-red-700"    },
+  medium: { label: "Medium", bg: "bg-yellow-100", text: "text-yellow-700" },
+  low:    { label: "Low",    bg: "bg-emerald-100",text: "text-emerald-700"},
+};
+function getPriorityMeta(p) {
+  return PRIORITY_META[p] || { label: p || "Medium", bg: "bg-slate-100", text: "text-slate-600" };
+}
 
+// ─── MultiSelectChips ────────────────────────────────────────────────────────
+
+function MultiSelectChips({ label, options, value, onChange, getLabel, getKey }) {
+  const getId = getKey || ((o) => o.id);
+  const remaining = options.filter((o) => !value.includes(getId(o)));
   return (
-    <div className="flex flex-col gap-1 text-xs">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold">{label}</span>
-        <span className="text-[10px] text-slate-400">
-          Leave empty for all.
-        </span>
-      </div>
-
-      <div className="flex flex-wrap gap-1 mb-1 min-h-[24px]">
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-semibold text-slate-700">{label}</label>
+      <div className="flex flex-wrap gap-1 min-h-[26px]">
         {value.length === 0 && (
-          <span className="text-[11px] text-slate-400">
-            No filter applied.
-          </span>
+          <span className="text-[11px] text-slate-400 italic">All</span>
         )}
         {value.map((id) => {
-          const opt = options.find((o) => o.id === id);
+          const opt = options.find((o) => getId(o) === id);
           return (
             <span
               key={id}
-              className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-[2px]"
+              className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[11px] text-indigo-700"
             >
-              <span className="text-[11px] text-slate-700">
-                {getLabel(opt)}
-              </span>
+              {getLabel(opt)}
               <button
                 type="button"
-                className="text-[11px] text-slate-500 hover:text-red-500"
-                onClick={() => handleRemove(id)}
+                className="hover:text-red-500"
+                onClick={() => onChange(value.filter((v) => v !== id))}
               >
-                ✕
+                <X className="w-2.5 h-2.5" />
               </button>
             </span>
           );
         })}
       </div>
-
       <select
-        className="border rounded-lg px-2 py-1 text-xs"
+        className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
         onChange={(e) => {
-          handleAdd(e.target.value);
+          if (e.target.value) onChange([...value, e.target.value]);
           e.target.value = "";
         }}
         value=""
       >
-        <option value="">Select…</option>
-        {remaining.map((opt) => (
-          <option key={opt.id} value={opt.id}>
-            {getLabel(opt)}
+        <option value="">Add filter...</option>
+        {remaining.map((o) => (
+          <option key={getId(o)} value={getId(o)}>
+            {getLabel(o)}
           </option>
         ))}
       </select>
@@ -134,612 +91,653 @@ function MultiSelectChips({ label, options, value, onChange, getLabel }) {
   );
 }
 
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+
+function KpiCard({ icon: Icon, label, value, sub, color }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-start gap-3">
+      <div className={`p-2 rounded-lg ${color}`}>
+        <Icon className="w-4 h-4 text-white" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-slate-500 font-medium truncate">{label}</p>
+        <p className="text-2xl font-bold text-slate-800 leading-tight">{value}</p>
+        {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const TODAY = new Date().toISOString().slice(0, 10);
+
+function fmtDate(d) {
+  if (!d) return "-";
+  return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function isOverdue(task) {
+  if (task.status === "completed" || !task.due_date) return false;
+  return new Date(task.due_date).toISOString().slice(0, 10) < TODAY;
+}
+
+function exportCsv(tasks) {
+  const header = ["ID", "Task", "Project", "Sprint", "Assignee", "Status", "Priority", "Due Date", "Created"];
+  const rows = tasks.map((t) => [
+    t.display_id || t.id,
+    `"${(t.task || "").replace(/"/g, '""')}"`,
+    t.project_name || "",
+    t.sprint_name || "",
+    t.username || "",
+    t.status || "",
+    t.priority || "",
+    t.due_date ? t.due_date.slice(0, 10) : "",
+    t.created_at ? t.created_at.slice(0, 10) : "",
+  ]);
+  const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `report-${TODAY}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function Reports() {
   const api = useApi();
   const { auth } = useAuth();
   const user = auth.user;
 
-  const [projects, setProjects] = useState([]);
-  const [users, setUsers] = useState([]);
+  // meta
+  const [projects, setProjects]   = useState([]);
+  const [users, setUsers]         = useState([]);
+  const [sprints, setSprints]     = useState([]);
 
   // filters
   const [selectedProjectIds, setSelectedProjectIds] = useState([]);
-  const [selectedUserIds, setSelectedUserIds] = useState([]);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedUserIds,    setSelectedUserIds]    = useState([]);
+  const [selectedSprintIds,  setSelectedSprintIds]  = useState([]);
+  const [fromDate, setFromDate]     = useState("");
+  const [toDate,   setToDate]       = useState("");
+  const [statusFilter,   setStatusFilter]   = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
 
+  // result
   const [loading, setLoading] = useState(false);
-  const [report, setReport] = useState(null);
+  const [report,  setReport]  = useState(null);
 
-  // which statuses exist in this report (in order)
-  const statusOrder = useMemo(() => {
-    if (!report || !report.byStatus) return [];
+  // tasks table
+  const [page,     setPage]     = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [sortKey,  setSortKey]  = useState("overdue"); // overdue | due_date | created_at | status | priority
 
-    const raw = report.byStatus.map((row) => row.status);
-    const uniq = [];
-    raw.forEach((s) => {
-      if (s && !uniq.includes(s)) uniq.push(s);
-    });
-
-    // keep our 3 main ones in a nice order at the front
-    const preferred = ["pending", "in-progress", "completed"];
-    const ordered = [];
-    preferred.forEach((key) => {
-      if (uniq.includes(key)) ordered.push(key);
-    });
-    uniq.forEach((key) => {
-      if (!ordered.includes(key)) ordered.push(key);
-    });
-
-    return ordered;
-  }, [report]);
-
-  // ---- aggregated status per user (for stacked bar) ----
-  const userStatusData = useMemo(() => {
-    if (!report || !report.tasks || statusOrder.length === 0) return [];
-
-    const map = new Map();
-
-    report.tasks.forEach((t) => {
-      const name = t.username || "-";
-      if (!map.has(name)) {
-        const base = { name };
-        statusOrder.forEach((s) => {
-          base[s] = 0;
-        });
-        map.set(name, base);
-      }
-      if (statusOrder.includes(t.status)) {
-        map.get(name)[t.status] += 1;
-      }
-    });
-
-    return Array.from(map.values());
-  }, [report, statusOrder]);
-
-  // ---- aggregated status per project (for stacked bar) ----
-  const projectStatusData = useMemo(() => {
-    if (!report || !report.tasks || statusOrder.length === 0) return [];
-
-    const map = new Map();
-
-    report.tasks.forEach((t) => {
-      const name = t.project_name || "No project";
-      if (!map.has(name)) {
-        const base = { name };
-        statusOrder.forEach((s) => {
-          base[s] = 0;
-        });
-        map.set(name, base);
-      }
-      if (statusOrder.includes(t.status)) {
-        map.get(name)[t.status] += 1;
-      }
-    });
-
-    return Array.from(map.values());
-  }, [report, statusOrder]);
-
-  // pie chart data using same labels & colors
-  const statusPieData = useMemo(() => {
-    return (report?.byStatus || []).map((row, idx) => {
-      const { label, color } = getStatusMeta(row.status, idx);
-      return {
-        name: `${label} (${row.count})`,
-        value: row.count,
-        status: row.status,
-        color,
-      };
-    });
-  }, [report]);
-
-  // pagination for raw tasks table
-  const [pageSize, setPageSize] = useState(10); // 10–100
-  const [page, setPage] = useState(1);
-
+  // ── Load meta ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    async function loadMeta() {
+    if (!user) return;
+    async function load() {
       try {
-        const [projRes, userRes] = await Promise.all([
+        const [pRes, uRes, sRes] = await Promise.all([
           api.get("/projects"),
           api.get("/users"),
+          api.get("/sprints"),
         ]);
-        setProjects(projRes.data || []);
-        setUsers(userRes.data || []);
+        setProjects(pRes.data || []);
+        setUsers(uRes.data || []);
+        setSprints(sRes.data || []);
       } catch (err) {
-        console.error("Failed to load projects/users for reports:", err);
-        toast.error("Failed to load metadata for reports");
+        console.error("Reports meta load failed", err);
       }
     }
-
-    if (user) loadMeta();
+    load();
   }, [user, api]);
 
-  const handleRunReport = async () => {
+  // ── Run report ─────────────────────────────────────────────────────────────
+  const handleRun = async () => {
     setLoading(true);
-    setPage(1); // reset pagination on new run
-
+    setPage(1);
     try {
-      const params = new URLSearchParams();
+      const p = new URLSearchParams();
+      if (selectedProjectIds.length) p.set("projects", selectedProjectIds.join(","));
+      if (selectedUserIds.length)    p.set("users",    selectedUserIds.join(","));
+      if (selectedSprintIds.length)  p.set("sprints",  selectedSprintIds.join(","));
+      if (fromDate)                  p.set("from",     fromDate);
+      if (toDate)                    p.set("to",       toDate);
+      if (statusFilter   !== "all")  p.set("status",   statusFilter);
+      if (priorityFilter !== "all")  p.set("priority", priorityFilter);
 
-      if (selectedProjectIds.length > 0) {
-        params.append("projects", selectedProjectIds.join(","));
-      }
-      if (selectedUserIds.length > 0) {
-        params.append("users", selectedUserIds.join(","));
-      }
-      if (fromDate) params.append("from", fromDate);
-      if (toDate) params.append("to", toDate);
-      if (statusFilter !== "all") params.append("status", statusFilter);
-      if (priorityFilter !== "all") params.append("priority", priorityFilter);
-
-      const url = `/reports/combined?${params.toString()}`;
-      const res = await api.get(url);
-      setReport(res.data || null);
+      const { data } = await api.get(`/reports/combined?${p}`);
+      setReport(data || null);
     } catch (err) {
-      console.error("Failed to run report:", err);
-      const msg = err.response?.data?.error || "Failed to run report";
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Failed to run report");
     } finally {
       setLoading(false);
     }
   };
 
-  // pagination for tasks table
-  const pagedTasks = useMemo(() => {
-    if (!report?.tasks) return [];
-    const start = (page - 1) * pageSize;
-    return report.tasks.slice(start, start + pageSize);
-  }, [report, page, pageSize]);
-
-  const totalPages = useMemo(() => {
-    if (!report?.tasks) return 1;
-    return Math.max(1, Math.ceil(report.tasks.length / pageSize));
-  }, [report, pageSize]);
-
-  const handleChangePageSize = (e) => {
-    let size = Number(e.target.value) || 10;
-    if (size < 10) size = 10;
-    if (size > 100) size = 100;
-    setPageSize(size);
-    setPage(1);
+  const handleReset = () => {
+    setSelectedProjectIds([]);
+    setSelectedUserIds([]);
+    setSelectedSprintIds([]);
+    setFromDate(""); setToDate("");
+    setStatusFilter("all"); setPriorityFilter("all");
+    setReport(null);
   };
 
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const statusOrder = useMemo(() => {
+    if (!report?.byStatus) return [];
+    const raw = report.byStatus.map((r) => r.status).filter(Boolean);
+    const preferred = ["pending", "in-progress", "completed"];
+    const ordered = preferred.filter((k) => raw.includes(k));
+    raw.forEach((k) => { if (!ordered.includes(k)) ordered.push(k); });
+    return ordered;
+  }, [report]);
+
+  const statusPieData = useMemo(() =>
+    (report?.byStatus || []).map((row, i) => {
+      const { label, color } = getStatusMeta(row.status, i);
+      return { name: label, value: row.count, color };
+    }), [report]);
+
+  const userChartData = useMemo(() => {
+    if (!report?.tasks || !statusOrder.length) return [];
+    const map = new Map();
+    report.tasks.forEach((t) => {
+      const name = t.username || "Unassigned";
+      if (!map.has(name)) { const base = { name }; statusOrder.forEach((s) => { base[s] = 0; }); map.set(name, base); }
+      if (statusOrder.includes(t.status)) map.get(name)[t.status]++;
+    });
+    return Array.from(map.values());
+  }, [report, statusOrder]);
+
+  const projectChartData = useMemo(() => {
+    if (!report?.tasks || !statusOrder.length) return [];
+    const map = new Map();
+    report.tasks.forEach((t) => {
+      const name = t.project_name || "No project";
+      if (!map.has(name)) { const base = { name }; statusOrder.forEach((s) => { base[s] = 0; }); map.set(name, base); }
+      if (statusOrder.includes(t.status)) map.get(name)[t.status]++;
+    });
+    return Array.from(map.values());
+  }, [report, statusOrder]);
+
+  // sorted + paginated tasks
+  const sortedTasks = useMemo(() => {
+    if (!report?.tasks) return [];
+    const tasks = [...report.tasks];
+    if (sortKey === "overdue") {
+      tasks.sort((a, b) => {
+        const ao = isOverdue(a) ? 0 : 1, bo = isOverdue(b) ? 0 : 1;
+        if (ao !== bo) return ao - bo;
+        const ad = a.due_date || "9999", bd = b.due_date || "9999";
+        return ad < bd ? -1 : ad > bd ? 1 : 0;
+      });
+    } else if (sortKey === "due_date") {
+      tasks.sort((a, b) => {
+        const ad = a.due_date || "9999", bd = b.due_date || "9999";
+        return ad < bd ? -1 : ad > bd ? 1 : 0;
+      });
+    } else if (sortKey === "status") {
+      const order = { pending: 0, "in-progress": 1, completed: 2 };
+      tasks.sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
+    } else if (sortKey === "priority") {
+      const order = { high: 0, medium: 1, low: 2 };
+      tasks.sort((a, b) => (order[a.priority] ?? 3) - (order[b.priority] ?? 3));
+    } else {
+      tasks.sort((a, b) => (b.created_at || "") > (a.created_at || "") ? 1 : -1);
+    }
+    return tasks;
+  }, [report, sortKey]);
+
+  const totalPages  = Math.max(1, Math.ceil(sortedTasks.length / pageSize));
+  const pagedTasks  = sortedTasks.slice((page - 1) * pageSize, page * pageSize);
+
+  const summary = report?.summary || {};
+  const completionPct = summary.total > 0 ? Math.round((summary.completed / summary.total) * 100) : 0;
+
+  const ThBtn = ({ k, children }) => (
+    <th
+      className={`px-3 py-2 text-left text-[11px] font-semibold cursor-pointer select-none whitespace-nowrap
+        ${sortKey === k ? "text-indigo-600" : "text-slate-500 hover:text-slate-700"}`}
+      onClick={() => { setSortKey(k); setPage(1); }}
+    >
+      {children}{sortKey === k && " ↑"}
+    </th>
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      {/* HEADER */}
-      <section className="bg-white rounded-xl shadow p-4 flex justify-between items-center">
+    <div className="space-y-5 pb-10">
+
+      {/* ── HEADER ── */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Reports</h1>
-          <p className="text-xs text-slate-500">
-            Analyse tasks by project, user, status and priority. All filters are
-            optional – leave them empty to report on everything you can access.
+          <h1 className="text-xl font-bold text-slate-800">Reports</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Analyse tasks across projects, users, sprints, and time periods.
           </p>
         </div>
-      </section>
+        {report && (
+          <button
+            onClick={() => exportCsv(report.tasks)}
+            className="flex items-center gap-1.5 text-xs bg-slate-800 text-white rounded-lg px-3 py-2 hover:bg-slate-700"
+          >
+            <Download className="w-3.5 h-3.5" /> Export CSV
+          </button>
+        )}
+      </div>
 
-      {/* FILTERS */}
-      <section className="bg-white rounded-xl shadow p-4 text-xs space-y-4">
-        <h2 className="text-sm font-semibold mb-1">Filters</h2>
+      {/* ── FILTERS ── */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-slate-700">Filters</h2>
+          <button
+            onClick={handleReset}
+            className="text-[11px] text-slate-400 hover:text-slate-600 underline"
+          >
+            Reset all
+          </button>
+        </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           <MultiSelectChips
-            label="Projects (multi-select)"
+            label="Projects"
             options={projects}
             value={selectedProjectIds}
             onChange={setSelectedProjectIds}
-            getLabel={(p) => (p ? p.name : "-")}
+            getLabel={(p) => p ? p.name : "-"}
           />
-
           <MultiSelectChips
-            label="Users (multi-select)"
+            label="Users"
             options={users}
             value={selectedUserIds}
             onChange={setSelectedUserIds}
-            getLabel={(u) =>
-              u ? `${u.username || "-"} (${u.email || "no email"})` : "-"
-            }
+            getLabel={(u) => u ? (u.username || u.email || "-") : "-"}
           />
+          <MultiSelectChips
+            label="Sprints"
+            options={sprints}
+            value={selectedSprintIds}
+            onChange={setSelectedSprintIds}
+            getLabel={(s) => s ? `${s.name} (${s.project_name || "?"})` : "-"}
+          />
+        </div>
 
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {/* From */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold">From</label>
+            <label className="text-xs font-semibold text-slate-700">From</label>
             <input
               type="date"
               value={fromDate}
+              max={toDate || TODAY}
               onChange={(e) => setFromDate(e.target.value)}
-              className="border rounded-lg px-2 py-1 text-xs"
+              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
             />
-            <span className="text-[10px] text-slate-400">
-              Empty means “from the beginning”.
-            </span>
           </div>
-
+          {/* To */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold">To</label>
+            <label className="text-xs font-semibold text-slate-700">To</label>
             <input
               type="date"
               value={toDate}
+              min={fromDate || undefined}
+              max={TODAY}
               onChange={(e) => setToDate(e.target.value)}
-              className="border rounded-lg px-2 py-1 text-xs"
+              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
             />
-            <span className="text-[10px] text-slate-400">
-              Empty means “up to now”.
-            </span>
           </div>
-
+          {/* Status */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold">Status (UI filter)</label>
+            <label className="text-xs font-semibold text-slate-700">Status</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="border rounded-lg px-2 py-1 text-xs"
+              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
             >
-              <option value="all">All</option>
+              <option value="all">All statuses</option>
               <option value="pending">To Do</option>
               <option value="in-progress">In Progress</option>
               <option value="completed">Completed</option>
             </select>
           </div>
-
+          {/* Priority */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold">
-              Priority (UI filter)
-            </label>
+            <label className="text-xs font-semibold text-slate-700">Priority</label>
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className="border rounded-lg px-2 py-1 text-xs"
+              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
             >
-              <option value="all">All</option>
+              <option value="all">All priorities</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>
               <option value="low">Low</option>
             </select>
           </div>
+          {/* Run button spanning remaining */}
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label className="text-xs font-semibold text-transparent select-none">Run</label>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleRun}
+              className="h-[30px] bg-indigo-600 text-white text-xs font-semibold rounded-lg px-5 hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? "Running..." : "Run Report"}
+            </button>
+          </div>
         </div>
+      </div>
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            disabled={loading}
-            onClick={handleRunReport}
-            className="bg-blue-600 text-white text-xs rounded-lg px-4 py-2 hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? "Running..." : "Run report"}
-          </button>
-        </div>
-      </section>
-
-      {/* STATUS PIE + SUMMARY */}
+      {/* ── KPI CARDS ── */}
       {report && (
-        <section className="bg-white rounded-xl shadow p-4 space-y-4">
-          <h2 className="text-sm font-semibold mb-1">Status distribution</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KpiCard icon={BarChart2}    label="Total Tasks"   value={summary.total ?? 0}       color="bg-indigo-500" />
+          <KpiCard icon={CheckCircle2} label="Completed"     value={summary.completed ?? 0}   sub={`${completionPct}% completion rate`} color="bg-emerald-500" />
+          <KpiCard icon={Clock}        label="In Progress"   value={summary.in_progress ?? 0} color="bg-blue-500" />
+          <KpiCard icon={AlertCircle}  label="Overdue"       value={summary.overdue ?? 0}     color="bg-red-500" />
+        </div>
+      )}
 
-          <div className="w-full h-[320px]">
-            <ResponsiveContainer>
+      {/* ── CHARTS ROW ── */}
+      {report && statusPieData.length > 0 && (
+        <div className="grid md:grid-cols-3 gap-5">
+          {/* Pie */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">By Status</h3>
+            <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie
-                  data={statusPieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={95}
-                  paddingAngle={3}
-                  labelLine={false}
-                  label={({ name }) => name}
-                >
-                  {statusPieData.map((entry, index) => (
-                    <Cell
-                      key={index}
-                      fill={entry.color}
-                      stroke="#ffffff"
-                      strokeWidth={1}
-                    />
+                <Pie data={statusPieData} dataKey="value" nameKey="name"
+                  cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3}>
+                  {statusPieData.map((e, i) => (
+                    <Cell key={i} fill={e.color} stroke="#fff" strokeWidth={2} />
                   ))}
                 </Pie>
-                <Tooltip
-                  contentStyle={{
-                    fontSize: "11px",
-                  }}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  height={32}
-                  formatter={(value) => (
-                    <span className="text-[11px] text-slate-600">{value}</span>
-                  )}
-                />
+                <Tooltip contentStyle={{ fontSize: "11px" }} />
+                <Legend height={28} iconSize={10} wrapperStyle={{ fontSize: "11px" }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </section>
-      )}
 
-      {/* BY STATUS / USER / PROJECT TABLES + CHARTS */}
-      {report && (
-        <section className="bg-white rounded-xl shadow p-4 space-y-6 text-xs">
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* By Status table */}
-            <div>
-              <h3 className="font-semibold mb-2">By Status</h3>
-              <table className="w-full text-[11px] border-collapse">
-                <thead className="border-b border-slate-200 bg-slate-50">
-                  <tr>
-                    <th className="text-left px-2 py-1">Status</th>
-                    <th className="text-right px-2 py-1">Tasks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.byStatus?.map((row) => (
-                    <tr
-                      key={row.status}
-                      className="border-b border-slate-100"
-                    >
-                      <td className="px-2 py-1">
-                        {statusLabel(row.status)}
-                      </td>
-                      <td className="px-2 py-1 text-right">{row.count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* By User table */}
-            <div>
-              <h3 className="font-semibold mb-2">By User</h3>
-              <table className="w-full text-[11px] border-collapse">
-                <thead className="border-b border-slate-200 bg-slate-50">
-                  <tr>
-                    <th className="text-left px-2 py-1">User</th>
-                    <th className="text-left px-2 py-1">Email</th>
-                    <th className="text-right px-2 py-1">Tasks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.byUser?.map((row) => (
-                    <tr
-                      key={row.id || row.username}
-                      className="border-b border-slate-100"
-                    >
-                      <td className="px-2 py-1">{row.username || "-"}</td>
-                      <td className="px-2 py-1">{row.email || "-"}</td>
-                      <td className="px-2 py-1 text-right">
-                        {row.task_count}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* By Project table */}
-            <div>
-              <h3 className="font-semibold mb-2">By Project</h3>
-              <table className="w-full text-[11px] border-collapse">
-                <thead className="border-b border-slate-200 bg-slate-50">
-                  <tr>
-                    <th className="text-left px-2 py-1">Project</th>
-                    <th className="text-right px-2 py-1">Tasks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.byProject?.map((row) => (
-                    <tr
-                      key={row.id || row.name}
-                      className="border-b border-slate-100"
-                    >
-                      <td className="px-2 py-1">{row.name || "-"}</td>
-                      <td className="px-2 py-1 text-right">
-                        {row.task_count}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {/* User bar */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">By User</h3>
+            {userChartData.length === 0
+              ? <p className="text-xs text-slate-400 mt-8 text-center">No data</p>
+              : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={userChartData} margin={{ top: 4, right: 8, left: -20, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="name" angle={-30} textAnchor="end" height={55} tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                  <Tooltip contentStyle={{ fontSize: "11px" }} />
+                  {statusOrder.map((k, i) => {
+                    const { label, color } = getStatusMeta(k, i);
+                    return <Bar key={k} dataKey={k} stackId="a" name={label} fill={color} />;
+                  })}
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
-          {/* STACKED Charts for User & Project breakdowns */}
-          <div className="grid md:grid-cols-2 gap-8 mt-10">
-            {/* STACKED: Tasks by user */}
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Tasks by user</h3>
-              {userStatusData.length === 0 ? (
-                <p className="text-xs text-slate-400">No data for users.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart
-                    data={userStatusData}
-                    margin={{ top: 10, right: 20, left: 0, bottom: 40 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis
-                      dataKey="name"
-                      angle={-35}
-                      textAnchor="end"
-                      height={60}
-                      tick={{ fontSize: 11, fill: "#0f172a" }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tick={{ fontSize: 11, fill: "#0f172a" }}
-                    />
-                    <Tooltip />
-                    <Legend
-                      verticalAlign="top"
-                      align="center"
-                      wrapperStyle={{ fontSize: 11, color: "#0f172a" }}
-                    />
-                    {statusOrder.map((statusKey, index) => {
-                      const { label, color } = getStatusMeta(statusKey, index);
-                      return (
-                        <Bar
-                          key={statusKey}
-                          dataKey={statusKey}
-                          stackId="a"
-                          name={label}
-                          fill={color}
-                          barSize={18}
-                        />
-                      );
-                    })}
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-
-            {/* STACKED: Tasks by project */}
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Tasks by project</h3>
-              {projectStatusData.length === 0 ? (
-                <p className="text-xs text-slate-400">
-                  No data for projects.
-                </p>
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart
-                    data={projectStatusData}
-                    margin={{ top: 10, right: 20, left: 0, bottom: 40 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis
-                      dataKey="name"
-                      angle={-35}
-                      textAnchor="end"
-                      height={60}
-                      tick={{ fontSize: 11, fill: "#0f172a" }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tick={{ fontSize: 11, fill: "#0f172a" }}
-                    />
-                    <Tooltip />
-                    <Legend
-                      verticalAlign="top"
-                      align="center"
-                      wrapperStyle={{ fontSize: 11, color: "#0f172a" }}
-                    />
-                    {statusOrder.map((statusKey, index) => {
-                      const { label, color } = getStatusMeta(statusKey, index);
-                      return (
-                        <Bar
-                          key={statusKey}
-                          dataKey={statusKey}
-                          stackId="a"
-                          name={label}
-                          fill={color}
-                          barSize={18}
-                        />
-                      );
-                    })}
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+          {/* Project bar */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">By Project</h3>
+            {projectChartData.length === 0
+              ? <p className="text-xs text-slate-400 mt-8 text-center">No data</p>
+              : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={projectChartData} margin={{ top: 4, right: 8, left: -20, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="name" angle={-30} textAnchor="end" height={55} tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                  <Tooltip contentStyle={{ fontSize: "11px" }} />
+                  {statusOrder.map((k, i) => {
+                    const { label, color } = getStatusMeta(k, i);
+                    return <Bar key={k} dataKey={k} stackId="a" name={label} fill={color} />;
+                  })}
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
-        </section>
+        </div>
       )}
 
-      {/* DETAILED TASKS TABLE + PAGINATION */}
+      {/* ── BREAKDOWN TABLES ── */}
       {report && (
-        <section className="bg-white rounded-xl shadow p-4 text-xs space-y-3">
-          <div className="flex justify-between items-center mb-1">
-            <h2 className="text-sm font-semibold">Tasks (detailed)</h2>
+        <div className="grid md:grid-cols-3 gap-5">
+          {/* By Status */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Status breakdown</h3>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left py-1.5 text-slate-500 font-semibold">Status</th>
+                  <th className="text-right py-1.5 text-slate-500 font-semibold">Tasks</th>
+                  <th className="text-right py-1.5 text-slate-500 font-semibold">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byStatus?.map((row) => {
+                  const { label, bg, text } = getStatusMeta(row.status);
+                  const pct = summary.total > 0 ? Math.round((row.count / summary.total) * 100) : 0;
+                  return (
+                    <tr key={row.status} className="border-b border-slate-50">
+                      <td className="py-1.5">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${bg} ${text}`}>{label}</span>
+                      </td>
+                      <td className="py-1.5 text-right font-semibold text-slate-700">{row.count}</td>
+                      <td className="py-1.5 text-right text-slate-400">{pct}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* By User */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">User breakdown</h3>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left py-1.5 text-slate-500 font-semibold">User</th>
+                  <th className="text-right py-1.5 text-slate-500 font-semibold">Tasks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byUser?.map((row) => (
+                  <tr key={row.id || row.username} className="border-b border-slate-50">
+                    <td className="py-1.5">
+                      <div className="font-medium text-slate-700 truncate max-w-[120px]">{row.username || "Unassigned"}</div>
+                      <div className="text-[10px] text-slate-400 truncate max-w-[120px]">{row.email || ""}</div>
+                    </td>
+                    <td className="py-1.5 text-right font-semibold text-slate-700">{row.task_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* By Sprint */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Sprint breakdown</h3>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left py-1.5 text-slate-500 font-semibold">Sprint</th>
+                  <th className="text-right py-1.5 text-slate-500 font-semibold">Tasks</th>
+                  <th className="text-right py-1.5 text-slate-500 font-semibold">Done</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.bySprint?.length === 0 && (
+                  <tr><td colSpan={3} className="py-3 text-center text-slate-400 italic">No sprints in this range</td></tr>
+                )}
+                {report.bySprint?.map((row) => (
+                  <tr key={row.id || row.name} className="border-b border-slate-50">
+                    <td className="py-1.5">
+                      <div className="font-medium text-slate-700 truncate max-w-[120px]">{row.name || "Backlog"}</div>
+                      {row.sprint_status && (
+                        <span className="text-[10px] text-slate-400">{row.sprint_status}</span>
+                      )}
+                    </td>
+                    <td className="py-1.5 text-right font-semibold text-slate-700">{row.task_count}</td>
+                    <td className="py-1.5 text-right text-slate-400">{row.completed_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── TASKS TABLE ── */}
+      {report && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+          {/* Table header */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-500">Rows per page:</span>
+              <h2 className="text-sm font-semibold text-slate-700">
+                Tasks
+              </h2>
+              <span className="text-[11px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                {sortedTasks.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-[11px] text-slate-500">Sort:</label>
+              <select
+                value={sortKey}
+                onChange={(e) => { setSortKey(e.target.value); setPage(1); }}
+                className="border border-slate-200 rounded px-2 py-1 text-[11px] text-slate-700"
+              >
+                <option value="overdue">Overdue first</option>
+                <option value="due_date">Due date</option>
+                <option value="status">Status</option>
+                <option value="priority">Priority</option>
+                <option value="created_at">Newest first</option>
+              </select>
+              <label className="text-[11px] text-slate-500">Per page:</label>
               <select
                 value={pageSize}
-                onChange={handleChangePageSize}
-                className="border rounded-lg px-2 py-1 text-[11px]"
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="border border-slate-200 rounded px-2 py-1 text-[11px] text-slate-700"
               >
-                {[10, 25, 50, 75, 100].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
+                {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
           </div>
 
-          {report.tasks?.length === 0 ? (
-            <p className="text-[11px] text-slate-400">
-              No tasks for this filter.
-            </p>
+          {/* Table */}
+          {sortedTasks.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-10">No tasks match the current filters.</p>
           ) : (
-            <>
-              <table className="w-full text-[11px] border-collapse">
-                <thead className="border-b border-slate-200 bg-slate-50">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="text-left px-2 py-1">Task</th>
-                    <th className="text-left px-2 py-1">Project</th>
-                    <th className="text-left px-2 py-1">Assignee</th>
-                    <th className="text-left px-2 py-1">Status</th>
-                    <th className="text-left px-2 py-1">Priority</th>
-                    <th className="text-left px-2 py-1">Due date</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 w-20">ID</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500">Task</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 w-28">Project</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 w-28">Sprint</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 w-24">Assignee</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 w-24 cursor-pointer hover:text-indigo-600" onClick={() => { setSortKey("status"); setPage(1); }}>
+                      Status{sortKey === "status" ? " ↑" : ""}
+                    </th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 w-20 cursor-pointer hover:text-indigo-600" onClick={() => { setSortKey("priority"); setPage(1); }}>
+                      Priority{sortKey === "priority" ? " ↑" : ""}
+                    </th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 w-24 cursor-pointer hover:text-indigo-600" onClick={() => { setSortKey("due_date"); setPage(1); }}>
+                      Due{sortKey === "due_date" ? " ↑" : ""}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedTasks.map((t) => (
-                    <tr key={t.id} className="border-b border-slate-100">
-                      <td className="px-2 py-1">{t.task}</td>
-                      <td className="px-2 py-1">{t.project_name || "-"}</td>
-                      <td className="px-2 py-1">{t.assigned_to || "-"}</td>
-                      <td className="px-2 py-1">{statusLabel(t.status)}</td>
-                      <td className="px-2 py-1">
-                        {priorityLabel(t.priority)}
-                      </td>
-                      <td className="px-2 py-1">
-                        {t.due_date
-                          ? new Date(t.due_date).toLocaleDateString()
-                          : "-"}
-                      </td>
-                    </tr>
-                  ))}
+                  {pagedTasks.map((t) => {
+                    const overdue = isOverdue(t);
+                    const { bg: sBg, text: sText, label: sLabel } = getStatusMeta(t.status);
+                    const { bg: pBg, text: pText, label: pLabel } = getPriorityMeta(t.priority);
+                    return (
+                      <tr
+                        key={t.id}
+                        className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${overdue ? "bg-red-50 hover:bg-red-50" : ""}`}
+                      >
+                        <td className="px-3 py-2 font-mono text-[10px] text-slate-400 whitespace-nowrap">
+                          {t.display_id || "-"}
+                        </td>
+                        <td className="px-3 py-2 max-w-[220px]">
+                          <div className="flex items-start gap-1.5">
+                            {overdue && <AlertCircle className="w-3 h-3 text-red-500 shrink-0 mt-0.5" />}
+                            <span className="truncate text-slate-800 font-medium" title={t.task}>{t.task}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-slate-500 truncate max-w-[110px]" title={t.project_name}>
+                          {t.project_name || "-"}
+                        </td>
+                        <td className="px-3 py-2 max-w-[110px]">
+                          {t.sprint_name
+                            ? <span className="inline-block bg-indigo-50 text-indigo-600 text-[10px] px-1.5 py-0.5 rounded truncate max-w-full" title={t.sprint_name}>{t.sprint_name}</span>
+                            : <span className="text-slate-300 text-[10px]">Backlog</span>
+                          }
+                        </td>
+                        <td className="px-3 py-2 text-slate-500 truncate max-w-[90px]" title={t.username}>
+                          {t.username || <span className="text-slate-300">-</span>}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${sBg} ${sText}`}>
+                            {sLabel}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${pBg} ${pText}`}>
+                            {pLabel}
+                          </span>
+                        </td>
+                        <td className={`px-3 py-2 whitespace-nowrap text-xs ${overdue ? "text-red-600 font-semibold" : "text-slate-500"}`}>
+                          {fmtDate(t.due_date)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-[11px] text-slate-500">
-                  Showing{" "}
-                  {report.tasks.length === 0
-                    ? 0
-                    : (page - 1) * pageSize + 1}{" "}
-                  – {Math.min(page * pageSize, report.tasks.length)} of{" "}
-                  {report.tasks.length}
-                </span>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="px-2 py-1 border rounded text-[11px] disabled:opacity-40"
-                  >
-                    Prev
-                  </button>
-                  <span className="text-[11px] text-slate-500">
-                    Page {page} of {totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() =>
-                      setPage((p) => Math.min(totalPages, p + 1))
-                    }
-                    className="px-2 py-1 border rounded text-[11px] disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </>
+            </div>
           )}
-        </section>
+
+          {/* Pagination */}
+          {sortedTasks.length > 0 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedTasks.length)} of {sortedTasks.length} tasks
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="p-1 rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+                <span className="text-[11px] text-slate-500 px-2">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="p-1 rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50"
+                >
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

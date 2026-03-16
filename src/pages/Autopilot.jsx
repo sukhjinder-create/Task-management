@@ -28,6 +28,8 @@ import {
  * Approval queue for AI-generated actions
  */
 
+const TODAY = new Date().toISOString().slice(0, 10);
+
 export default function Autopilot() {
   const { auth } = useAuth();
   const user = auth?.user;
@@ -473,6 +475,7 @@ export default function Autopilot() {
                 <input
                   type="date"
                   value={historyFilters.fromDate}
+                  max={historyFilters.toDate || TODAY}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, fromDate: e.target.value }))
                   }
@@ -484,6 +487,8 @@ export default function Autopilot() {
                 <input
                   type="date"
                   value={historyFilters.toDate}
+                  min={historyFilters.fromDate || undefined}
+                  max={TODAY}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, toDate: e.target.value }))
                   }

@@ -68,7 +68,9 @@ const [savingAISettings, setSavingAISettings] = useState(false);
 const aiRes = await api.get("/workspaces/ai-settings");
 setAiEnabled(!!aiRes.data?.aiEnabled);
 setAiName(aiRes.data?.aiName || "AI Assistant");
-        setUsers(usersRes.data || []);
+        setUsers((usersRes.data || []).filter(
+          (u) => u.role !== "system" && !u.is_system && !u.username?.startsWith("AI_System_")
+        ));
         setProjects(projectsRes.data || []);
 
         const tasksMap = {};

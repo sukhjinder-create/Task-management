@@ -4,6 +4,8 @@ import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 
+const TODAY = new Date().toISOString().slice(0, 10);
+
 export default function AdminAttendance() {
   const api = useApi();
   const { auth } = useAuth();
@@ -230,6 +232,7 @@ export default function AdminAttendance() {
           <input
             type="date"
             value={from}
+            max={to || TODAY}
             onChange={(e) => setFrom(e.target.value)}
             className="border rounded px-2 py-1 text-sm"
           />
@@ -242,6 +245,8 @@ export default function AdminAttendance() {
           <input
             type="date"
             value={to}
+            min={from || undefined}
+            max={TODAY}
             onChange={(e) => setTo(e.target.value)}
             className="border rounded px-2 py-1 text-sm"
           />

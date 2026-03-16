@@ -1,7 +1,7 @@
 // src/pages/ProjectTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles } from "lucide-react";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2 } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -65,6 +65,36 @@ const quillFormats = [
   "image",
 ];
 
+const TODAY = new Date().toISOString().slice(0, 10);
+
+const TASK_TYPES = [
+  { value: "task",        label: "Task",        color: "text-slate-500",  bg: "bg-slate-100"  },
+  { value: "bug",         label: "Bug",         color: "text-red-600",    bg: "bg-red-50"     },
+  { value: "feature",     label: "Feature",     color: "text-indigo-600", bg: "bg-indigo-50"  },
+  { value: "improvement", label: "Improvement", color: "text-emerald-600",bg: "bg-emerald-50" },
+  { value: "chore",       label: "Chore",       color: "text-amber-600",  bg: "bg-amber-50"   },
+];
+
+const STORY_POINTS = [1, 2, 3, 5, 8, 13, 21];
+
+function TaskTypeIcon({ type, className = "w-3 h-3" }) {
+  if (type === "bug")         return <Bug         className={className} />;
+  if (type === "feature")     return <Zap         className={className} />;
+  if (type === "improvement") return <Star        className={className} />;
+  if (type === "chore")       return <Wrench      className={className} />;
+  return                             <CheckCircle2 className={className} />;
+}
+
+function TaskTypeBadge({ type }) {
+  const t = TASK_TYPES.find(x => x.value === type) || TASK_TYPES[0];
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${t.bg} ${t.color}`}>
+      <TaskTypeIcon type={type} />
+      {t.label}
+    </span>
+  );
+}
+
 export default function ProjectTasks() {
   const { projectId } = useParams();
   const location = useLocation();
@@ -97,6 +127,9 @@ export default function ProjectTasks() {
     due_date: "",
     assigned_to: "",
     priority: "medium",
+    task_type: "task",
+    story_points: "",
+    is_blocked: false,
   });
 
   // Subtasks created at the time of creating the task
@@ -160,6 +193,21 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   // 🔹 Quick-add task per column
   const [quickNewTitles, setQuickNewTitles] = useState({}); // { [statusKey]: "title" }
   const [quickCreating, setQuickCreating] = useState({}); // { [statusKey]: boolean }
+
+  // ─── SPRINT STATE ────────────────────────────────────────
+  const [sprints, setSprints] = useState([]);
+  const [loadingSprints, setLoadingSprints] = useState(false);
+  const [activeSprint, setActiveSprint] = useState(null);
+  const [sprintView, setSprintView] = useState("board"); // "board" | "backlog"
+  const [taskViewMode, setTaskViewMode] = useState("board"); // "board" | "list"
+  const [listSort, setListSort] = useState({ col: "created_at", dir: "desc" });
+  const [showPlanningPanel, setShowPlanningPanel] = useState(false);
+  const [planningSprintId, setPlanningSprintId] = useState(null);
+  const [showSprintModal, setShowSprintModal] = useState(false);
+  const [editingSprint, setEditingSprint] = useState(null); // null = create
+  const [sprintForm, setSprintForm] = useState({ name: "", goal: "", start_date: "", end_date: "" });
+  const [savingSprint, setSavingSprint] = useState(false);
+  const [showSprintPanel, setShowSprintPanel] = useState(false);
 
   useEffect(() => {
     creatingFromNLRef.current = creatingFromNL;
@@ -231,6 +279,25 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     }
   }, [projectId, api]);
 
+  // ===== Load sprints for project =====
+  useEffect(() => {
+    if (!projectId) return;
+    async function loadSprints() {
+      setLoadingSprints(true);
+      try {
+        const res = await api.get(`/projects/${projectId}/sprints`);
+        const list = res.data || [];
+        setSprints(list);
+        setActiveSprint(list.find(s => s.status === "active") || null);
+      } catch (err) {
+        console.warn("Failed to load sprints:", err);
+      } finally {
+        setLoadingSprints(false);
+      }
+    }
+    loadSprints();
+  }, [projectId, api]);
+
   // ===== Load users for assignment (admin/manager only) =====
   useEffect(() => {
     if (!canEdit) return;
@@ -278,14 +345,21 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     return Array.from(map.values());
   }, [statusColumnsConfig, tasks]);
 
-  // Group tasks by status
+  // Tasks filtered by sprint/backlog view (must be before grouped)
+  const boardTasks = sprintView === "backlog"
+    ? tasks.filter(t => !t.sprint_id)
+    : activeSprint
+      ? tasks.filter(t => t.sprint_id === activeSprint.id)
+      : tasks;
+
+  // Group tasks by status (respects sprint/backlog view filter)
   const grouped = useMemo(() => {
     const result = {};
     statusColumns.forEach((col) => {
       result[col.key] = [];
     });
 
-    for (const t of tasks) {
+    for (const t of boardTasks) {
       const key = t.status;
       if (!key) continue;
       if (!result[key]) {
@@ -294,7 +368,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       result[key].push(t);
     }
     return result;
-  }, [tasks, statusColumns]);
+  }, [boardTasks, statusColumns]);
 
   const stats = useMemo(() => {
     if (!tasks || tasks.length === 0) {
@@ -387,7 +461,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
         due_date: newTask.due_date || null,
         assigned_to: newTask.assigned_to || null,
         priority: newTask.priority || "medium",
-        // status is left to backend default or can be added later
+        task_type: newTask.task_type || "task",
+        story_points: newTask.story_points ? parseInt(newTask.story_points) : null,
+        is_blocked: newTask.is_blocked || false,
       };
 
       // 1) Create main task
@@ -675,6 +751,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       due_date: task.due_date ? task.due_date.slice(0, 10) : "",
       description: task.description || "",
       priority: task.priority || "medium",
+      task_type: task.task_type || "task",
+      story_points: task.story_points != null ? String(task.story_points) : "",
+      is_blocked: task.is_blocked || false,
     });
     loadAttachmentsForTask(task.id);
     loadLogsForTask(task.id);
@@ -737,6 +816,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
         due_date: editTask.due_date || null,
         description: editTask.description,
         priority: editTask.priority || "medium",
+        task_type: editTask.task_type || "task",
+        story_points: editTask.story_points ? parseInt(editTask.story_points) : null,
+        is_blocked: editTask.is_blocked || false,
       };
       const res = await api.put(
         `/tasks/${selectedTaskDetails.id}`,
@@ -788,8 +870,27 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     if (!selectedTaskDetails) return;
     try {
       const url = `${window.location.origin}/projects/${projectId}?task=${selectedTaskDetails.id}`;
-      await navigator.clipboard.writeText(url);
-      toast.success("Link copied to clipboard");
+      const id = selectedTaskDetails.display_id;
+      const title = selectedTaskDetails.task;
+      const label = id ? `${id} ${title}` : title;
+
+      // HTML: only the ticket number is the hyperlink, title is plain text beside it
+      const htmlContent = id
+        ? `<a href="${url}">${id}</a> ${title}`
+        : `<a href="${url}">${title}</a>`;
+      const plainContent = `${label}\n${url}`;
+
+      if (navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([htmlContent], { type: "text/html" }),
+            "text/plain": new Blob([plainContent], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(plainContent);
+      }
+      toast.success("Link copied");
     } catch (err) {
       console.error("Failed to copy link:", err);
       toast.error("Failed to copy link");
@@ -1001,6 +1102,96 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   }
 };
 
+  // ─── SPRINT HANDLERS ──────────────────────────────────────
+  const handleOpenCreateSprint = () => {
+    setEditingSprint(null);
+    setSprintForm({ name: "", goal: "", start_date: "", end_date: "" });
+    setShowSprintModal(true);
+  };
+
+  const handleOpenEditSprint = (sprint) => {
+    setEditingSprint(sprint);
+    setSprintForm({
+      name: sprint.name,
+      goal: sprint.goal || "",
+      start_date: sprint.start_date ? sprint.start_date.slice(0, 10) : "",
+      end_date: sprint.end_date ? sprint.end_date.slice(0, 10) : "",
+    });
+    setShowSprintModal(true);
+  };
+
+  const handleSaveSprint = async (e) => {
+    e.preventDefault();
+    if (!sprintForm.name.trim()) { toast.error("Sprint name is required"); return; }
+    setSavingSprint(true);
+    try {
+      if (editingSprint) {
+        const res = await api.put(`/sprints/${editingSprint.id}`, sprintForm);
+        setSprints(prev => prev.map(s => s.id === editingSprint.id ? res.data : s));
+        toast.success("Sprint updated");
+      } else {
+        const res = await api.post(`/projects/${projectId}/sprints`, sprintForm);
+        setSprints(prev => [res.data, ...prev]);
+        toast.success("Sprint created");
+      }
+      setShowSprintModal(false);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to save sprint");
+    } finally {
+      setSavingSprint(false);
+    }
+  };
+
+  const handleStartSprint = async (sprint) => {
+    try {
+      const res = await api.post(`/sprints/${sprint.id}/start`);
+      setSprints(prev => prev.map(s => s.id === sprint.id ? res.data : s));
+      setActiveSprint(res.data);
+      toast.success(`Sprint "${sprint.name}" started!`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to start sprint");
+    }
+  };
+
+  const handleCompleteSprint = async (sprint) => {
+    if (!window.confirm(`Complete sprint "${sprint.name}"? Incomplete tasks will move to backlog.`)) return;
+    try {
+      const res = await api.post(`/sprints/${sprint.id}/complete`);
+      setSprints(prev => prev.map(s => s.id === sprint.id ? res.data.sprint : s));
+      setActiveSprint(null);
+      // Reload tasks since incomplete ones moved to backlog
+      const tasksRes = await api.get(`/tasks/${projectId}`);
+      setTasks(tasksRes.data || []);
+      toast.success(`Sprint completed. ${res.data.movedToBacklog} task(s) moved to backlog.`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to complete sprint");
+    }
+  };
+
+  const handleDeleteSprint = async (sprint) => {
+    if (!window.confirm(`Delete sprint "${sprint.name}"? Tasks will move to backlog.`)) return;
+    try {
+      await api.delete(`/sprints/${sprint.id}`);
+      setSprints(prev => prev.filter(s => s.id !== sprint.id));
+      if (activeSprint?.id === sprint.id) setActiveSprint(null);
+      const tasksRes = await api.get(`/tasks/${projectId}`);
+      setTasks(tasksRes.data || []);
+      toast.success("Sprint deleted");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to delete sprint");
+    }
+  };
+
+  const handleAssignTaskToSprint = async (taskId, sprintId) => {
+    try {
+      await api.patch(`/tasks/${taskId}/sprint`, { sprint_id: sprintId });
+      const tasksRes = await api.get(`/tasks/${projectId}`);
+      setTasks(tasksRes.data || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update sprint");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1054,15 +1245,369 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       </Card>
 
 
-      {/* Tasks Board */}
-      {/* ... rest of your component stays exactly the same ... */}
-      {/* I’ve left everything below unchanged from your version */}
-      {/* (status board, modal, comments, attachments, etc.) */}
+      {/* ─── SPRINT PANEL ─────────────────────────────────── */}
+      <section className="bg-white rounded-xl shadow p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-indigo-500" />
+            <h2 className="text-sm font-semibold">Sprints</h2>
+            {project?.project_code && (
+              <span className="text-[10px] bg-indigo-50 text-indigo-600 font-mono px-1.5 py-0.5 rounded border border-indigo-200">
+                {project.project_code}
+              </span>
+            )}
+            {activeSprint && (
+              <span className="text-[10px] bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">
+                Active: {activeSprint.name}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {/* View switcher */}
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+              <button
+                className={`px-2 py-1 ${sprintView === "board" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setSprintView("board")}
+              >
+                {activeSprint ? activeSprint.name : "All Tasks"}
+              </button>
+              <button
+                className={`px-2 py-1 ${sprintView === "backlog" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setSprintView("backlog")}
+              >
+                Backlog ({tasks.filter(t => !t.sprint_id).length})
+              </button>
+            </div>
+            {/* Board / List view toggle */}
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+              <button
+                className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "board" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setTaskViewMode("board")}
+                title="Board view"
+              >
+                <Layers className="w-3 h-3" /> Board
+              </button>
+              <button
+                className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "list" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setTaskViewMode("list")}
+                title="List view"
+              >
+                <Flag className="w-3 h-3" /> List
+              </button>
+            </div>
+            {canEdit && sprints.filter(s => s.status !== "completed").length > 0 && (
+              <button
+                className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 ${showPlanningPanel ? "bg-emerald-600 text-white border-emerald-600" : "text-emerald-700 border-emerald-300 hover:bg-emerald-50"}`}
+                onClick={() => {
+                  setShowPlanningPanel(v => !v);
+                  if (!planningSprintId && sprints.find(s => s.status !== "completed")) {
+                    setPlanningSprintId(sprints.find(s => s.status === "active")?.id || sprints.find(s => s.status !== "completed")?.id || null);
+                  }
+                }}
+              >
+                <Sparkles className="w-3 h-3" /> {showPlanningPanel ? "Close Planning" : "Plan Sprint"}
+              </button>
+            )}
+            <button
+              className="text-[11px] text-slate-600 border border-slate-200 rounded-lg px-2 py-1 hover:bg-slate-50"
+              onClick={() => setShowSprintPanel(v => !v)}
+            >
+              {showSprintPanel ? "Hide sprints" : "Manage sprints"}
+            </button>
+            {canEdit && (
+              <button
+                className="text-[11px] text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1 flex items-center gap-1"
+                onClick={handleOpenCreateSprint}
+              >
+                <Plus className="w-3 h-3" /> New Sprint
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sprint list */}
+        {showSprintPanel && (
+          <div className="space-y-2 mt-2">
+            {loadingSprints ? (
+              <p className="text-xs text-slate-400">Loading sprints…</p>
+            ) : sprints.length === 0 ? (
+              <p className="text-xs text-slate-400">No sprints yet. Create your first sprint to start planning.</p>
+            ) : (
+              sprints.map(sprint => {
+                const total = sprint.total_tasks || 0;
+                const done  = sprint.completed_tasks || 0;
+                const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+                const statusColor =
+                  sprint.status === "active"    ? "bg-green-100 text-green-700" :
+                  sprint.status === "completed" ? "bg-gray-100 text-gray-500"  :
+                  "bg-yellow-50 text-yellow-700";
+
+                return (
+                  <div key={sprint.id} className="border border-slate-200 rounded-lg p-3 flex items-start gap-3 hover:border-indigo-200 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-slate-800">{sprint.name}</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColor}`}>
+                          {sprint.status}
+                        </span>
+                        {sprint.start_date && (
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(sprint.start_date).toLocaleDateString()} – {sprint.end_date ? new Date(sprint.end_date).toLocaleDateString() : "no end"}
+                          </span>
+                        )}
+                      </div>
+                      {sprint.goal && <p className="text-xs text-slate-500 mt-0.5 truncate">{sprint.goal}</p>}
+                      <div className="mt-2 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                            <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-[10px] text-slate-500 shrink-0">{done}/{total} tasks</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {sprint.total_points > 0 && (
+                            <span className="text-[10px] flex items-center gap-1 text-indigo-600 font-semibold">
+                              <BarChart2 className="w-3 h-3" />
+                              {sprint.completed_points}/{sprint.total_points} pts
+                            </span>
+                          )}
+                          {sprint.blocked_tasks > 0 && (
+                            <span className="text-[10px] flex items-center gap-1 text-red-500 font-semibold">
+                              <ShieldAlert className="w-3 h-3" /> {sprint.blocked_tasks} blocked
+                            </span>
+                          )}
+                          {sprint.bug_count > 0 && (
+                            <span className="text-[10px] flex items-center gap-1 text-orange-500 font-semibold">
+                              <Bug className="w-3 h-3" /> {sprint.bug_count} bug{sprint.bug_count > 1 ? "s" : ""}
+                            </span>
+                          )}
+                          {sprint.overdue_tasks > 0 && (
+                            <span className="text-[10px] text-red-500 shrink-0">{sprint.overdue_tasks} overdue</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {sprint.status === "planning" && (
+                          <button
+                            title="Start sprint"
+                            className="text-[10px] bg-green-600 text-white rounded px-2 py-0.5 hover:bg-green-700 flex items-center gap-1"
+                            onClick={() => handleStartSprint(sprint)}
+                          >
+                            <Play className="w-3 h-3" /> Start
+                          </button>
+                        )}
+                        {sprint.status === "active" && (
+                          <button
+                            title="Complete sprint"
+                            className="text-[10px] bg-blue-600 text-white rounded px-2 py-0.5 hover:bg-blue-700 flex items-center gap-1"
+                            onClick={() => handleCompleteSprint(sprint)}
+                          >
+                            <Flag className="w-3 h-3" /> Complete
+                          </button>
+                        )}
+                        {sprint.status !== "completed" && (
+                          <button
+                            title="Edit sprint"
+                            className="p-1 text-slate-400 hover:text-indigo-600 rounded"
+                            onClick={() => handleOpenEditSprint(sprint)}
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        )}
+                        {role === "admin" && sprint.status !== "active" && (
+                          <button
+                            title="Delete sprint"
+                            className="p-1 text-slate-400 hover:text-red-500 rounded"
+                            onClick={() => handleDeleteSprint(sprint)}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Sprint create/edit modal */}
+      {showSprintModal && (
+        <Modal isOpen={showSprintModal} onClose={() => setShowSprintModal(false)}>
+          <Modal.Header>{editingSprint ? "Edit Sprint" : "New Sprint"}</Modal.Header>
+          <Modal.Body>
+            <form onSubmit={handleSaveSprint} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Sprint Name *</label>
+                <input
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                  value={sprintForm.name}
+                  onChange={e => setSprintForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Sprint 1"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Sprint Goal</label>
+                <textarea
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none resize-none"
+                  rows={2}
+                  value={sprintForm.goal}
+                  onChange={e => setSprintForm(f => ({ ...f, goal: e.target.value }))}
+                  placeholder="What do you want to achieve?"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                    value={sprintForm.start_date}
+                    max={sprintForm.end_date || undefined}
+                    onChange={e => setSprintForm(f => ({ ...f, start_date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                    value={sprintForm.end_date}
+                    min={sprintForm.start_date || undefined}
+                    onChange={e => setSprintForm(f => ({ ...f, end_date: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" className="text-sm text-slate-600 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50" onClick={() => setShowSprintModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={savingSprint} className="text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-1.5 disabled:opacity-50">
+                  {savingSprint ? "Saving…" : editingSprint ? "Save Changes" : "Create Sprint"}
+                </button>
+              </div>
+            </form>
+          </Modal.Body>
+        </Modal>
+      )}
+
+      {/* ── SPRINT PLANNING PANEL ── */}
+      {showPlanningPanel && canEdit && (
+        <section className="bg-white rounded-xl shadow p-4 border-2 border-emerald-200">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <h2 className="text-sm font-semibold text-emerald-800">Sprint Planning</h2>
+              <span className="text-[10px] text-slate-500">Click a task to move it between backlog and sprint</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-slate-600">Planning for:</label>
+              <select
+                className="text-[11px] border border-slate-200 rounded px-2 py-1"
+                value={planningSprintId || ""}
+                onChange={e => setPlanningSprintId(e.target.value || null)}
+              >
+                {sprints.filter(s => s.status !== "completed").map(s => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.status})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {planningSprintId && (() => {
+            const sprintTasks = tasks.filter(t => t.sprint_id === planningSprintId);
+            const backlogTasks = tasks.filter(t => !t.sprint_id);
+            const sprintPoints = sprintTasks.reduce((s, t) => s + (t.story_points || 0), 0);
+            const selectedSprint = sprints.find(s => s.id === planningSprintId);
+            return (
+              <div className="grid grid-cols-2 gap-4">
+                {/* Backlog column */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-semibold text-slate-700">Backlog <span className="text-slate-400 font-normal">({backlogTasks.length})</span></h3>
+                    <span className="text-[10px] text-slate-400">{backlogTasks.reduce((s,t) => s + (t.story_points||0), 0)} pts</span>
+                  </div>
+                  <div className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1">
+                    {backlogTasks.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 text-center py-4">All tasks are in sprints</p>
+                    ) : backlogTasks.map(t => (
+                      <div
+                        key={t.id}
+                        className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50 cursor-pointer group transition-colors"
+                        onClick={() => handleAssignTaskToSprint(t.id, planningSprintId)}
+                        title="Click to add to sprint"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-emerald-500 opacity-0 group-hover:opacity-100 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {t.display_id && <span className="font-mono text-[10px] text-indigo-400">{t.display_id}</span>}
+                            <TaskTypeBadge type={t.task_type || "task"} />
+                          </div>
+                          <p className="text-xs text-slate-700 truncate mt-0.5">{t.task}</p>
+                        </div>
+                        {t.story_points != null && (
+                          <span className="text-[10px] font-bold bg-white border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full shrink-0">{t.story_points}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Sprint column */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-semibold text-emerald-700">
+                      {selectedSprint?.name} <span className="text-slate-400 font-normal">({sprintTasks.length})</span>
+                    </h3>
+                    <span className="text-[10px] font-semibold text-emerald-600">{sprintPoints} pts</span>
+                  </div>
+                  <div className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1">
+                    {sprintTasks.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 text-center py-4">No tasks in this sprint yet</p>
+                    ) : sprintTasks.map(t => (
+                      <div
+                        key={t.id}
+                        className="flex items-center gap-2 p-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:border-red-300 hover:bg-red-50 cursor-pointer group transition-colors"
+                        onClick={() => handleAssignTaskToSprint(t.id, null)}
+                        title="Click to remove from sprint (back to backlog)"
+                      >
+                        <X className="w-3.5 h-3.5 text-red-400 opacity-0 group-hover:opacity-100 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {t.display_id && <span className="font-mono text-[10px] text-indigo-400">{t.display_id}</span>}
+                            <TaskTypeBadge type={t.task_type || "task"} />
+                            {t.is_blocked && <ShieldAlert className="w-3 h-3 text-red-500" />}
+                          </div>
+                          <p className="text-xs text-slate-700 truncate mt-0.5">{t.task}</p>
+                        </div>
+                        {t.story_points != null && (
+                          <span className="text-[10px] font-bold bg-white border border-emerald-300 text-emerald-700 px-1.5 py-0.5 rounded-full shrink-0">{t.story_points}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </section>
+      )}
 
       {/* Tasks Board */}
       <section className="bg-white rounded-xl shadow p-4">
         <div className="flex justify-between items-center mb-3">
-          <h2 className="text-sm font-semibold">Tasks</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Tasks</h2>
+            {sprintView === "backlog" ? (
+              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">Backlog</span>
+            ) : activeSprint ? (
+              <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{activeSprint.name}</span>
+            ) : null}
+            <span className="text-[10px] text-slate-400">{boardTasks.length} task{boardTasks.length !== 1 ? "s" : ""}</span>
+          </div>
           {canEdit && (
             <button
               type="button"
@@ -1208,17 +1753,92 @@ const [loadingLogs, setLoadingLogs] = useState(false);
         )}
 
         {loadingTasks ? (
-          <div className="text-sm text-slate-500">
-            Loading tasks...
-          </div>
+          <div className="text-sm text-slate-500">Loading tasks...</div>
+        ) : tasks.length === 0 ? (
+          <div className="text-sm text-slate-500">No tasks for this project yet.</div>
+        ) : taskViewMode === "list" ? (
+          /* ── LIST VIEW ── */
+          (() => {
+            const sortedList = [...boardTasks].sort((a, b) => {
+              const dir = listSort.dir === "asc" ? 1 : -1;
+              const va = a[listSort.col] ?? "";
+              const vb = b[listSort.col] ?? "";
+              if (listSort.col === "story_points") return dir * ((a.story_points ?? -1) - (b.story_points ?? -1));
+              return dir * String(va).localeCompare(String(vb));
+            });
+            const SortBtn = ({ col, label }) => (
+              <button
+                className="flex items-center gap-0.5 hover:text-indigo-600"
+                onClick={() => setListSort(s => ({ col, dir: s.col === col && s.dir === "asc" ? "desc" : "asc" }))}
+              >
+                {label}
+                {listSort.col === col ? (listSort.dir === "asc" ? " ↑" : " ↓") : ""}
+              </button>
+            );
+            return (
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wide">
+                    <tr>
+                      <th className="px-3 py-2 text-left w-24">ID</th>
+                      <th className="px-3 py-2 text-left"><SortBtn col="task" label="Title" /></th>
+                      <th className="px-3 py-2 text-left w-24"><SortBtn col="task_type" label="Type" /></th>
+                      <th className="px-3 py-2 text-left w-24"><SortBtn col="status" label="Status" /></th>
+                      <th className="px-3 py-2 text-left w-24"><SortBtn col="priority" label="Priority" /></th>
+                      <th className="px-3 py-2 text-left w-16"><SortBtn col="story_points" label="Pts" /></th>
+                      <th className="px-3 py-2 text-left w-32"><SortBtn col="due_date" label="Due" /></th>
+                      <th className="px-3 py-2 text-left w-32">Assignee</th>
+                      <th className="px-3 py-2 text-left w-16">Flags</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sortedList.map(t => (
+                      <tr
+                        key={t.id}
+                        className={`cursor-pointer hover:bg-slate-50 transition-colors ${isOverdue(t) ? "bg-red-50" : ""}`}
+                        onClick={() => handleCardClick(t)}
+                      >
+                        <td className="px-3 py-2 font-mono text-indigo-500 font-semibold text-[10px]">
+                          {t.display_id || "—"}
+                        </td>
+                        <td className="px-3 py-2 font-medium text-slate-800 max-w-xs truncate">
+                          {t.task}
+                          {t.subtasks_total > 0 && (
+                            <span className="ml-1.5 text-[10px] text-slate-400">{t.subtasks_completed}/{t.subtasks_total} st</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2"><TaskTypeBadge type={t.task_type || "task"} /></td>
+                        <td className="px-3 py-2 capitalize text-slate-600">{statusLabel(t.status)}</td>
+                        <td className="px-3 py-2">
+                          <Badge color={priorityBadgeColor(t.priority)} size="sm" variant="subtle">
+                            {priorityLabel(t.priority)}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold text-slate-600">
+                          {t.story_points != null ? t.story_points : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className={`px-3 py-2 ${isOverdue(t) ? "text-red-600 font-semibold" : "text-slate-500"}`}>
+                          {t.due_date ? new Date(t.due_date).toLocaleDateString() : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600 truncate max-w-[120px]">
+                          {t.assigned_to ? getAssigneeLabel(t.assigned_to) : <span className="text-slate-300">Unassigned</span>}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            {t.is_blocked && <ShieldAlert className="w-3.5 h-3.5 text-red-500" title="Blocked" />}
+                            {isOverdue(t) && <AlertCircle className="w-3.5 h-3.5 text-red-400" title="Overdue" />}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()
         ) : statusColumns.length === 0 ? (
           <div className="text-sm text-slate-500">
-            No status columns defined yet. Use &quot;Customize
-            columns&quot; to add some.
-          </div>
-        ) : tasks.length === 0 ? (
-          <div className="text-sm text-slate-500">
-            No tasks for this project yet.
+            No status columns defined yet. Use &quot;Customize columns&quot; to add some.
           </div>
         ) : (
           <div className="grid grid-flow-col auto-cols-[minmax(260px,1fr)] gap-3 overflow-x-auto pb-2">
@@ -1269,6 +1889,24 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       onClick={() => handleCardClick(t)}
                     >
                       <Card.Content className="p-3 space-y-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {t.display_id && (
+                            <span className="text-[10px] font-mono text-indigo-500 font-semibold flex items-center gap-0.5">
+                              <Hash className="w-3 h-3" />{t.display_id}
+                            </span>
+                          )}
+                          <TaskTypeBadge type={t.task_type || "task"} />
+                          {t.is_blocked && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                              <ShieldAlert className="w-3 h-3" /> Blocked
+                            </span>
+                          )}
+                          {t.story_points != null && (
+                            <span className="ml-auto text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+                              {t.story_points} pts
+                            </span>
+                          )}
+                        </div>
                         <div className="font-medium text-sm text-gray-900">
                           {t.task}
                         </div>
@@ -1294,7 +1932,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                           </div>
                         )}
 
-                        <div className="mt-2 flex items-center justify-between">
+                        <div className="mt-2 flex items-center justify-between flex-wrap gap-1">
                           <Badge
                             color={priorityBadgeColor(t.priority)}
                             size="sm"
@@ -1302,6 +1940,12 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                           >
                             {priorityLabel(t.priority)}
                           </Badge>
+                          {t.sprint_name && (
+                            <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                              <Layers className="w-2.5 h-2.5" />
+                              {t.sprint_name}
+                            </span>
+                          )}
                           {isOverdue(t) && (
                             <Badge color="danger" size="sm" variant="solid" className="gap-1">
                               <AlertCircle className="w-3 h-3" />
@@ -1309,6 +1953,22 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                             </Badge>
                           )}
                         </div>
+
+                        {/* Sprint assign (admin/manager only) */}
+                        {canEdit && sprints.filter(s => s.status !== "completed").length > 0 && (
+                          <div className="mt-1" onClick={e => e.stopPropagation()}>
+                            <select
+                              className="w-full border border-slate-200 rounded px-1.5 py-0.5 text-[11px] text-slate-600 bg-white focus:border-indigo-400 outline-none"
+                              value={t.sprint_id || ""}
+                              onChange={e => handleAssignTaskToSprint(t.id, e.target.value || null)}
+                            >
+                              <option value="">Backlog</option>
+                              {sprints.filter(s => s.status !== "completed").map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
 
                         <div className="flex justify-between items-center mt-3 pt-2 border-t border-gray-200">
                           {canEdit && (
@@ -1407,82 +2067,94 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             <section className="bg-white rounded-xl shadow-lg p-4">
               <div className="flex justify-between items-start mb-2">
                 <div>
+                  {/* Ticket ID + badges row */}
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    {selectedTaskDetails.display_id && (
+                      <span className="font-mono text-[11px] text-indigo-500 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
+                        {selectedTaskDetails.display_id}
+                      </span>
+                    )}
+                    <TaskTypeBadge type={selectedTaskDetails.task_type || "task"} />
+                    {selectedTaskDetails.is_blocked && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                        <ShieldAlert className="w-3 h-3" /> Blocked
+                      </span>
+                    )}
+                    {selectedTaskDetails.story_points != null && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+                        <BarChart2 className="w-3 h-3" /> {selectedTaskDetails.story_points} pts
+                      </span>
+                    )}
+                  </div>
                   <h2 className="text-sm font-semibold">
-                    Task Details: {selectedTaskDetails.task}{" "}
+                    {selectedTaskDetails.task}{" "}
                     {selectedTaskDetails.subtasks_total > 0 && (
                       <span className="ml-1 text-[11px] font-normal text-slate-500">
-                        (
-                        {
-                          selectedTaskDetails.subtasks_completed
-                        }
-                        /
-                        {
-                          selectedTaskDetails.subtasks_total
-                        }{" "}
-                        subtasks completed)
+                        ({selectedTaskDetails.subtasks_completed}/{selectedTaskDetails.subtasks_total} subtasks)
                       </span>
                     )}
                   </h2>
-                  <p className="text-[11px] text-slate-500">
-                    Status:{" "}
-                    {statusLabel(selectedTaskDetails.status)}{" "}
-                    {selectedTaskDetails.due_date &&
-                      ` • Due: ${new Date(
-                        selectedTaskDetails.due_date
-                      ).toLocaleDateString()}`}
-                  </p>
-                  {selectedTaskDetails.assigned_to && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                     <p className="text-[11px] text-slate-500">
-                      Assigned to:{" "}
-                      {getAssigneeLabel(
-                        selectedTaskDetails.assigned_to
-                      )}
+                      Status: <span className="font-medium text-slate-700">{statusLabel(selectedTaskDetails.status)}</span>
                     </p>
-                  )}
-                  <p className="text-[11px] text-slate-500">
-                    Priority:{" "}
-                    {priorityLabel(
-                      selectedTaskDetails.priority || "medium"
+                    <p className="text-[11px] text-slate-500">
+                      Priority: <span className="font-medium text-slate-700">{priorityLabel(selectedTaskDetails.priority || "medium")}</span>
+                    </p>
+                    {selectedTaskDetails.due_date && (
+                      <p className="text-[11px] text-slate-500">
+                        Due: <span className="font-medium text-slate-700">{new Date(selectedTaskDetails.due_date).toLocaleDateString()}</span>
+                      </p>
                     )}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  {canEdit && (
-                    <div className="flex gap-2">
-                      <button
-                        className="text-[11px] text-blue-600 underline"
-                        onClick={() =>
-                          setIsEditing((v) => !v)
-                        }
-                      >
-                        {isEditing ? "Cancel edit" : "Edit task"}
-                      </button>
-                      <button
-                        className="text-[11px] text-red-600 underline"
-                        onClick={handleDeleteTask}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      className="text-[11px] text-slate-600 underline"
-                      onClick={handleCopyTaskLink}
-                    >
-                      Copy link
-                    </button>
-                    <button
-                      className="text-[11px] text-slate-500 underline"
-                      onClick={() => {
-                        setSelectedTaskDetails(null);
-                        setAttachments([]);
-                        setIsEditing(false);
-                      }}
-                    >
-                      Close
-                    </button>
+                    {selectedTaskDetails.assigned_to && (
+                      <p className="text-[11px] text-slate-500">
+                        Assigned: <span className="font-medium text-slate-700">{getAssigneeLabel(selectedTaskDetails.assigned_to)}</span>
+                      </p>
+                    )}
+                    {selectedTaskDetails.sprint_name && (
+                      <p className="text-[11px] text-slate-500">
+                        Sprint: <span className="font-medium text-indigo-600">{selectedTaskDetails.sprint_name}</span>
+                      </p>
+                    )}
                   </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {canEdit && (
+                    <button
+                      title={isEditing ? "Cancel edit" : "Edit task"}
+                      onClick={() => setIsEditing((v) => !v)}
+                      className={`p-1.5 rounded hover:bg-slate-100 transition-colors ${isEditing ? "text-slate-500" : "text-blue-600"}`}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canEdit && (
+                    <button
+                      title="Delete task"
+                      onClick={handleDeleteTask}
+                      className="p-1.5 rounded hover:bg-red-50 text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    title="Copy link"
+                    onClick={handleCopyTaskLink}
+                    className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors"
+                  >
+                    <LinkIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    title="Close"
+                    onClick={() => {
+                      setSelectedTaskDetails(null);
+                      setAttachments([]);
+                      setIsEditing(false);
+                    }}
+                    className="p-1.5 rounded hover:bg-slate-100 text-slate-400 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
@@ -1559,9 +2231,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         <option value="low">Low</option>
                       </select>
 
-                      <label className="block mt-2">
-                        Due date
-                      </label>
+                      <label className="block mt-2">Due date</label>
                       <input
                         type="date"
                         name="due_date"
@@ -1569,6 +2239,45 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         onChange={handleEditFieldChange}
                         className="w-full border rounded px-2 py-1"
                       />
+
+                      <label className="block mt-2">Type</label>
+                      <select
+                        name="task_type"
+                        value={editTask.task_type || "task"}
+                        onChange={handleEditFieldChange}
+                        className="w-full border rounded px-2 py-1"
+                      >
+                        {TASK_TYPES.map(t => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+
+                      <label className="block mt-2">Story Points</label>
+                      <select
+                        name="story_points"
+                        value={editTask.story_points || ""}
+                        onChange={handleEditFieldChange}
+                        className="w-full border rounded px-2 py-1"
+                      >
+                        <option value="">No estimate</option>
+                        {STORY_POINTS.map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="checkbox"
+                          id="is_blocked_edit"
+                          name="is_blocked"
+                          checked={editTask.is_blocked || false}
+                          onChange={e => setEditTask(prev => ({ ...prev, is_blocked: e.target.checked }))}
+                          className="w-4 h-4 rounded border-gray-300 text-red-600"
+                        />
+                        <label htmlFor="is_blocked_edit" className="text-xs text-gray-700 flex items-center gap-1">
+                          <ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Mark as blocked
+                        </label>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -1863,6 +2572,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     type="date"
                     name="due_date"
                     value={newTask.due_date}
+                    min={TODAY}
                     onChange={handleNewTaskChange}
                   />
 
@@ -1903,6 +2613,53 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       <option value="medium">Medium</option>
                       <option value="low">Low</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Type
+                    </label>
+                    <select
+                      name="task_type"
+                      value={newTask.task_type}
+                      onChange={handleNewTaskChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                    >
+                      {TASK_TYPES.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Story Points
+                    </label>
+                    <select
+                      name="story_points"
+                      value={newTask.story_points}
+                      onChange={handleNewTaskChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                    >
+                      <option value="">No estimate</option>
+                      {STORY_POINTS.map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="is_blocked_create"
+                      name="is_blocked"
+                      checked={newTask.is_blocked}
+                      onChange={e => setNewTask(prev => ({ ...prev, is_blocked: e.target.checked }))}
+                      className="w-4 h-4 rounded border-gray-300 text-red-600"
+                    />
+                    <label htmlFor="is_blocked_create" className="text-sm text-gray-700 flex items-center gap-1">
+                      <ShieldAlert className="w-4 h-4 text-red-500" /> Mark as blocked
+                    </label>
                   </div>
                 </div>
 

@@ -268,7 +268,11 @@ const [reportContext, setReportContext] = useState(null);
     try {
       setLoadingUsers(true);
       const res = await api.get("/users");
-      setUsers(res.data || []);
+      // Strip system/AI users — they must never appear in the user list or mentions
+      const humanUsers = (res.data || []).filter(
+        (u) => u.role !== "system" && !u.is_system && !u.username?.startsWith("AI_System_")
+      );
+      setUsers(humanUsers);
     } catch (err) {
       console.error("Failed to load users for chat:", err);
     } finally {
@@ -2306,17 +2310,32 @@ useEffect(() => {
 
                         <div className="flex-1 min-w-0 pr-20">
                           {/* Sender name + timestamp */}
-                          {!isGrouped && (
-                            <div className="flex items-baseline gap-2 mb-0.5">
-                              <span className={`text-[13px] font-bold ${isOwn ? "text-blue-700" : "text-slate-800"}`}>
-                                {isOwn ? "You" : m.username || "User"}
-                              </span>
-                              <span className="text-[10px] text-slate-400 tabular-nums">{time}</span>
-                              {m.username === "AI Assistant" && (
-                                <span className="text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5 font-medium">AI</span>
-                              )}
-                            </div>
-                          )}
+                          {!isGrouped && (() => {
+                            // For standup channel: show project name as sender instead of system user
+                            const isStandup = activeChannelKey === "daily-standups";
+                            const standupProject = isStandup
+                              ? (m.textHtml || "").match(/📋\s*(.+?)\s*(?:—|-)\s*Daily Standup/)?.[1] || null
+                              : null;
+                            const displayName = isOwn
+                              ? "You"
+                              : standupProject
+                              ? standupProject
+                              : m.username || "User";
+                            return (
+                              <div className="flex items-baseline gap-2 mb-0.5">
+                                <span className={`text-[13px] font-bold ${isOwn ? "text-blue-700" : standupProject ? "text-indigo-700" : "text-slate-800"}`}>
+                                  {displayName}
+                                </span>
+                                <span className="text-[10px] text-slate-400 tabular-nums">{time}</span>
+                                {standupProject && (
+                                  <span className="text-[9px] bg-indigo-50 text-indigo-500 rounded-full px-1.5 py-0.5 font-medium">Standup</span>
+                                )}
+                                {!standupProject && m.username === "AI Assistant" && (
+                                  <span className="text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5 font-medium">AI</span>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {m.deletedAt ? (
                             <div className="text-[12px] text-slate-300 italic flex items-center gap-1.5">
@@ -2527,7 +2546,7 @@ useEffect(() => {
                 <div className="relative mb-1">
                   <div className="absolute bottom-0 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-56 max-h-44 overflow-y-auto">
                     {users
-                      .filter(u => u.id !== user.id && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
+                      .filter(u => u.id !== user.id && u.role !== "system" && !u.is_system && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
                       .slice(0, 8)
                       .map(u => (
                         <button
@@ -2553,7 +2572,7 @@ useEffect(() => {
                           <span className="text-[10px] text-slate-400 capitalize ml-auto">{u.role}</span>
                         </button>
                       ))}
-                    {users.filter(u => u.id !== user.id && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase())).length === 0 && (
+                    {users.filter(u => u.id !== user.id && u.role !== "system" && !u.is_system && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase())).length === 0 && (
                       <div className="px-3 py-2 text-[11px] text-slate-400">No matches</div>
                     )}
                   </div>
@@ -2698,7 +2717,9 @@ useEffect(() => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-1.5 mb-0.5">
-                        <span className="text-[11px] font-semibold text-slate-800">{isOwn ? "You" : m.username || "User"}</span>
+                        <span className="text-[11px] font-semibold text-slate-800">
+                          {isOwn ? "You" : m.username || "User"}
+                        </span>
                         <span className="text-[9px] text-slate-400">{time}</span>
                       </div>
                       {(m.textHtml || m.text) && (
