@@ -1,7 +1,7 @@
 // src/pages/MyTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Edit2, Trash2, Link as LinkIcon, Upload, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, Hash, Layers, Flag, Plus, X } from "lucide-react";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Edit2, Trash2, Link as LinkIcon, Upload, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, Hash, Layers, Flag, Plus, X, Filter } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -11,6 +11,10 @@ import Select from "react-select";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { Card, Badge, Button } from "../components/ui";
+import TagPicker from "../components/TagPicker.jsx";
+import IssueLinkPanel from "../components/IssueLinkPanel.jsx";
+import TimeTrackingPanel from "../components/TimeTrackingPanel.jsx";
+import WatchersVotesBar from "../components/WatchersVotesBar.jsx";
 
 function statusLabel(status) {
   if (status === "pending") return "Pending";
@@ -166,6 +170,11 @@ export default function MyTasks() {
 
   const canAdminEdit = role === "admin" || role === "manager";
 
+  // ─── NEW FEATURE STATE ────────────────────────────────────
+  const [filterType, setFilterType] = useState("");
+  const [filterProject, setFilterProject] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
   const editEditorRef = useRef(null);
 
   const [taskViewMode, setTaskViewMode] = useState("board"); // "board" | "list"
@@ -299,10 +308,14 @@ const cols = Array.from(colsMap.values());
 
   // ===== Apply project filter =====
   const filteredTasks = useMemo(() => {
-    if (!selectedProjects || selectedProjects.length === 0) return tasks;
-    const selectedSet = new Set(selectedProjects);
-    return tasks.filter((t) => selectedSet.has(String(t.project_id)));
-  }, [tasks, selectedProjects]);
+    let list = tasks;
+    if (selectedProjects && selectedProjects.length > 0) {
+      const selectedSet = new Set(selectedProjects);
+      list = list.filter((t) => selectedSet.has(String(t.project_id)));
+    }
+    if (filterType) list = list.filter(t => (t.task_type || "task") === filterType);
+    return list;
+  }, [tasks, selectedProjects, filterType]);
 
   // Project options for react-select
   const projectOptions = useMemo(
@@ -634,6 +647,19 @@ const cols = Array.from(colsMap.values());
     }
   };
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      if (["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)) return;
+      if (e.key === "Escape" && selectedTaskDetails) {
+        setSelectedTaskDetails(null); setAttachments([]); setIsEditing(false);
+      }
+      if (e.key === "f") { e.preventDefault(); setShowFilters(v => !v); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [selectedTaskDetails]);
+
   const handleDeleteTask = async () => {
     if (!selectedTaskDetails) return;
     if (!window.confirm("Are you sure you want to delete this task?")) return;
@@ -854,21 +880,48 @@ const cols = Array.from(colsMap.values());
       <section className="bg-white rounded-xl shadow p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold">Tasks</h2>
-          <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+          <div className="flex items-center gap-2">
             <button
-              className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "board" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-              onClick={() => setTaskViewMode("board")}
+              className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 ${showFilters || filterType || filterProject ? "bg-indigo-600 text-white border-indigo-600" : "text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+              onClick={() => setShowFilters(v => !v)}
+              title="Filter (f)"
             >
-              <Layers className="w-3 h-3" /> Board
+              <Filter className="w-3 h-3" /> Filter
             </button>
-            <button
-              className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "list" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-              onClick={() => setTaskViewMode("list")}
-            >
-              <Flag className="w-3 h-3" /> List
-            </button>
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+              <button
+                className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "board" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setTaskViewMode("board")}
+              >
+                <Layers className="w-3 h-3" /> Board
+              </button>
+              <button
+                className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "list" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setTaskViewMode("list")}
+              >
+                <Flag className="w-3 h-3" /> List
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Filter bar */}
+        {showFilters && (
+          <div className="mb-3 flex items-center flex-wrap gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <span className="text-[11px] font-semibold text-slate-600">Filters:</span>
+            <select
+              className="text-[11px] border rounded px-2 py-1"
+              value={filterType}
+              onChange={e => setFilterType(e.target.value)}
+            >
+              <option value="">All types</option>
+              {TASK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            {(filterType || filterProject) && (
+              <button className="text-[11px] text-red-500 hover:underline" onClick={() => { setFilterType(""); setFilterProject(""); }}>Clear</button>
+            )}
+          </div>
+        )}
         {loading ? (
           <div className="text-sm text-slate-500">Loading tasks...</div>
         ) : taskViewMode === "list" ? (
@@ -1375,10 +1428,32 @@ const cols = Array.from(colsMap.values());
                   </div>
                 )}
               </div>
+
+              {/* Tags */}
+              <div className="mt-3 border-t pt-3">
+                <h3 className="text-xs font-semibold mb-2">Tags</h3>
+                <TagPicker taskId={selectedTaskDetails.id} readOnly={!canAdminEdit} />
+              </div>
+
+              {/* Issue Links */}
+              <IssueLinkPanel taskId={selectedTaskDetails.id} canEdit={canAdminEdit} />
+
+              {/* Time Tracking */}
+              <TimeTrackingPanel taskId={selectedTaskDetails.id} canEdit={canAdminEdit} />
+
+              {/* Watchers + Votes */}
+              <WatchersVotesBar taskId={selectedTaskDetails.id} />
+
             </section>
           </div>
         </div>
       )}
+
+      {/* Keyboard shortcut hint */}
+      <div className="fixed bottom-4 right-4 z-10 text-[10px] text-slate-400 bg-white/80 backdrop-blur border border-slate-200 rounded-lg px-2 py-1 shadow hidden md:block">
+        <span className="mr-2"><kbd className="bg-slate-100 px-1 rounded">Esc</kbd> Close</span>
+        <span><kbd className="bg-slate-100 px-1 rounded">f</kbd> Filter</span>
+      </div>
     </div>
   );
 }

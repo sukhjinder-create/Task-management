@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 // ---- Normal user pages ----
 import Login from "./pages/Login";
+import AuthCallback from "./pages/AuthCallback";
 import Projects from "./pages/Projects";
 import ProjectTasks from "./pages/ProjectTasks";
 import UsersAdmin from "./pages/UsersAdmin";
@@ -57,6 +58,8 @@ export default function App() {
             PUBLIC
         ============================ */}
         <Route path="/login" element={<Login />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/auth/magic" element={<AuthCallback />} />
         <Route path="/superadmin/login" element={<SuperadminLogin />} />
 
         {/* ============================

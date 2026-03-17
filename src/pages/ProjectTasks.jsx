@@ -1,7 +1,7 @@
 // src/pages/ProjectTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2 } from "lucide-react";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, TrendingDown, Keyboard, Filter } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -10,6 +10,12 @@ import Subtasks from "../components/Subtasks.jsx";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { Card, Badge, Button, Modal, Input, Select as SelectUI, Avatar } from "../components/ui";
+import TagPicker from "../components/TagPicker.jsx";
+import IssueLinkPanel from "../components/IssueLinkPanel.jsx";
+import TimeTrackingPanel from "../components/TimeTrackingPanel.jsx";
+import WatchersVotesBar from "../components/WatchersVotesBar.jsx";
+import BurndownModal from "../components/BurndownModal.jsx";
+import SavedFiltersPanel from "../components/SavedFiltersPanel.jsx";
 
 function statusLabel(status) {
   if (status === "pending") return "Pending";
@@ -209,6 +215,17 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   const [savingSprint, setSavingSprint] = useState(false);
   const [showSprintPanel, setShowSprintPanel] = useState(false);
 
+  // ─── NEW FEATURE STATE ────────────────────────────────────
+  const [burndownSprint, setBurndownSprint] = useState(null); // sprint for burndown modal
+  const [swimlaneMode, setSwimlaneMode] = useState("none"); // "none" | "assignee" | "type"
+  const [wipLimits, setWipLimits] = useState({}); // { [statusKey]: number }
+  const [filterAssignee, setFilterAssignee] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterSprint, setFilterSprint] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [templateList, setTemplateList] = useState([]);
+  const [dupeSuggestions, setDupeSuggestions] = useState([]);
+
   useEffect(() => {
     creatingFromNLRef.current = creatingFromNL;
   }, [creatingFromNL]);
@@ -298,6 +315,17 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     loadSprints();
   }, [projectId, api]);
 
+  // Load WIP limits from project
+  useEffect(() => {
+    if (project?.wip_limits) setWipLimits(project.wip_limits || {});
+  }, [project]);
+
+  // Load issue templates
+  useEffect(() => {
+    if (!projectId) return;
+    api.get(`/issue-templates?project_id=${projectId}`).then(r => setTemplateList(r.data || [])).catch(() => {});
+  }, [projectId, api]);
+
   // ===== Load users for assignment (admin/manager only) =====
   useEffect(() => {
     if (!canEdit) return;
@@ -346,11 +374,17 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   }, [statusColumnsConfig, tasks]);
 
   // Tasks filtered by sprint/backlog view (must be before grouped)
-  const boardTasks = sprintView === "backlog"
-    ? tasks.filter(t => !t.sprint_id)
-    : activeSprint
-      ? tasks.filter(t => t.sprint_id === activeSprint.id)
-      : tasks;
+  const boardTasks = useMemo(() => {
+    let list = sprintView === "backlog"
+      ? tasks.filter(t => !t.sprint_id)
+      : activeSprint
+        ? tasks.filter(t => t.sprint_id === activeSprint.id)
+        : tasks;
+    if (filterAssignee) list = list.filter(t => t.assigned_to === filterAssignee);
+    if (filterType)     list = list.filter(t => (t.task_type || "task") === filterType);
+    if (filterSprint)   list = list.filter(t => t.sprint_id === filterSprint);
+    return list;
+  }, [tasks, sprintView, activeSprint, filterAssignee, filterType, filterSprint]);
 
   // Group tasks by status (respects sprint/backlog view filter)
   const grouped = useMemo(() => {
@@ -842,6 +876,15 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     }
   };
 
+  // Duplicate detection: check on task title input
+  const checkDuplicates = async (title) => {
+    if (title.length < 5) { setDupeSuggestions([]); return; }
+    try {
+      const res = await api.get(`/task-links/search/tasks?q=${encodeURIComponent(title)}&exclude=00000000-0000-0000-0000-000000000000`);
+      setDupeSuggestions(res.data.slice(0, 3));
+    } catch { setDupeSuggestions([]); }
+  };
+
   const handleDeleteTask = async () => {
     if (!selectedTaskDetails) return;
     if (
@@ -927,6 +970,41 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     handleCardClick(found);
     setInitialTaskOpened(true);
   }, [tasks, location.search, role, user?.id, initialTaskOpened]);
+
+  // ─── KEYBOARD SHORTCUTS ───────────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      // Don't fire if typing in an input/textarea/select
+      if (["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)) return;
+      if (e.key === "n" && !e.ctrlKey && !e.metaKey && canEdit) {
+        e.preventDefault();
+        setShowCreateModal(true);
+      }
+      if (e.key === "b") {
+        e.preventDefault();
+        setTaskViewMode("board");
+      }
+      if (e.key === "l") {
+        e.preventDefault();
+        setTaskViewMode("list");
+      }
+      if (e.key === "Escape") {
+        if (selectedTaskDetails) {
+          setSelectedTaskDetails(null);
+          setAttachments([]);
+          setIsEditing(false);
+        } else if (showCreateModal) {
+          setShowCreateModal(false);
+        }
+      }
+      if (e.key === "f") {
+        e.preventDefault();
+        setShowFilters(v => !v);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [canEdit, selectedTaskDetails, showCreateModal]);
 
   // ===== Column customization handlers (no redirect) =====
   const handleAddStatusColumn = async (e) => {
@@ -1295,6 +1373,46 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 <Flag className="w-3 h-3" /> List
               </button>
             </div>
+            {/* Swimlane toggle */}
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+              <button
+                className={`px-2 py-1 ${swimlaneMode === "none" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setSwimlaneMode("none")} title="No swimlanes"
+              >
+                Flat
+              </button>
+              <button
+                className={`px-2 py-1 ${swimlaneMode === "assignee" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setSwimlaneMode("assignee")} title="Group by assignee"
+              >
+                By Person
+              </button>
+              <button
+                className={`px-2 py-1 ${swimlaneMode === "type" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setSwimlaneMode("type")} title="Group by type"
+              >
+                By Type
+              </button>
+            </div>
+            {/* Filter button */}
+            <button
+              className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 ${showFilters || filterAssignee || filterType ? "bg-indigo-600 text-white border-indigo-600" : "text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+              onClick={() => setShowFilters(v => !v)}
+              title="Filter tasks (F)"
+            >
+              <Filter className="w-3 h-3" /> Filter
+              {(filterAssignee || filterType) && <span className="bg-white text-indigo-600 rounded-full w-3.5 h-3.5 text-[9px] flex items-center justify-center font-bold">{[filterAssignee, filterType].filter(Boolean).length}</span>}
+            </button>
+            {/* Saved filters */}
+            <SavedFiltersPanel
+              projectId={projectId}
+              currentFilters={{ assignee: filterAssignee, type: filterType, sprint: filterSprint }}
+              onApply={(cfg) => {
+                if (cfg.assignee !== undefined) setFilterAssignee(cfg.assignee);
+                if (cfg.type !== undefined) setFilterType(cfg.type);
+                if (cfg.sprint !== undefined) setFilterSprint(cfg.sprint);
+              }}
+            />
             {canEdit && sprints.filter(s => s.status !== "completed").length > 0 && (
               <button
                 className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 ${showPlanningPanel ? "bg-emerald-600 text-white border-emerald-600" : "text-emerald-700 border-emerald-300 hover:bg-emerald-50"}`}
@@ -1405,6 +1523,15 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                             onClick={() => handleCompleteSprint(sprint)}
                           >
                             <Flag className="w-3 h-3" /> Complete
+                          </button>
+                        )}
+                        {sprint.status !== "planning" && sprint.start_date && (
+                          <button
+                            title="View burndown chart"
+                            className="p-1 text-slate-400 hover:text-indigo-600 rounded"
+                            onClick={() => setBurndownSprint(sprint)}
+                          >
+                            <TrendingDown className="w-3 h-3" />
                           </button>
                         )}
                         {sprint.status !== "completed" && (
@@ -1620,6 +1747,46 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             </button>
           )}
         </div>
+
+        {/* Filter bar */}
+        {showFilters && (
+          <div className="mb-3 flex items-center flex-wrap gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <span className="text-[11px] font-semibold text-slate-600">Filters:</span>
+            <select
+              className="text-[11px] border rounded px-2 py-1"
+              value={filterAssignee}
+              onChange={e => setFilterAssignee(e.target.value)}
+            >
+              <option value="">All assignees</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+            </select>
+            <select
+              className="text-[11px] border rounded px-2 py-1"
+              value={filterType}
+              onChange={e => setFilterType(e.target.value)}
+            >
+              <option value="">All types</option>
+              {TASK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <select
+              className="text-[11px] border rounded px-2 py-1"
+              value={filterSprint}
+              onChange={e => setFilterSprint(e.target.value)}
+            >
+              <option value="">All sprints</option>
+              {sprints.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            {(filterAssignee || filterType || filterSprint) && (
+              <button
+                className="text-[11px] text-red-500 hover:underline"
+                onClick={() => { setFilterAssignee(""); setFilterType(""); setFilterSprint(""); }}
+              >
+                Clear
+              </button>
+            )}
+            <span className="text-[11px] text-slate-400 ml-auto">{boardTasks.length} tasks shown</span>
+          </div>
+        )}
 
         {/* Inline column customization panel */}
         {showStatusEditor && canEdit && (
@@ -1841,11 +2008,52 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             No status columns defined yet. Use &quot;Customize columns&quot; to add some.
           </div>
         ) : (
+          <>
+          {/* Swimlane label */}
+          {swimlaneMode !== "none" && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {swimlaneMode === "assignee" && (
+                [...new Set(boardTasks.map(t => t.assigned_to || "unassigned"))].map(assigneeId => {
+                  const u = users.find(u => u.id === assigneeId);
+                  const label = u ? u.username : "Unassigned";
+                  const count = boardTasks.filter(t => (t.assigned_to || "unassigned") === assigneeId).length;
+                  return (
+                    <button
+                      key={assigneeId}
+                      className={`text-[11px] px-2 py-1 rounded-full border ${filterAssignee === assigneeId ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}
+                      onClick={() => setFilterAssignee(filterAssignee === assigneeId ? "" : assigneeId)}
+                    >
+                      {label} ({count})
+                    </button>
+                  );
+                })
+              )}
+              {swimlaneMode === "type" && (
+                TASK_TYPES.map(tt => {
+                  const count = boardTasks.filter(t => (t.task_type || "task") === tt.value).length;
+                  if (count === 0) return null;
+                  return (
+                    <button
+                      key={tt.value}
+                      className={`text-[11px] px-2 py-1 rounded-full border ${filterType === tt.value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}
+                      onClick={() => setFilterType(filterType === tt.value ? "" : tt.value)}
+                    >
+                      {tt.label} ({count})
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
           <div className="grid grid-flow-col auto-cols-[minmax(260px,1fr)] gap-3 overflow-x-auto pb-2">
             {statusColumns.map((col) => (
               <div
                 key={col.key}
-                className="border border-slate-200 rounded-lg min-h-[200px] p-2 bg-slate-50"
+                className={`border rounded-lg min-h-[200px] p-2 transition-colors ${
+                  wipLimits[col.key] && (grouped[col.key]?.length || 0) >= wipLimits[col.key]
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-200 bg-slate-50"
+                }`}
               >
                 {/* Column header with + button */}
                 <div className="flex justify-between items-center mb-2">
@@ -1856,6 +2064,12 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     <span className="text-[10px] text-slate-500">
                       {grouped[col.key]?.length || 0} tasks
                     </span>
+                    {wipLimits[col.key] && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${(grouped[col.key]?.length || 0) >= wipLimits[col.key] ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"}`}
+                        title="WIP Limit">
+                        WIP {wipLimits[col.key]}
+                      </span>
+                    )}
                     {canEdit && (
                       <button
                         type="button"
@@ -2057,6 +2271,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               </div>
             ))}
           </div>
+          </>
         )}
       </section>
 
@@ -2449,10 +2664,42 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     </div>
   )}
 </div>
+              {/* Tags */}
+              <div className="mt-3 border-t pt-3">
+                <h3 className="text-xs font-semibold mb-2">Tags</h3>
+                <TagPicker taskId={selectedTaskDetails.id} readOnly={!canEdit} />
+              </div>
+
+              {/* Issue Links */}
+              <IssueLinkPanel taskId={selectedTaskDetails.id} canEdit={canEdit} />
+
+              {/* Time Tracking */}
+              <TimeTrackingPanel taskId={selectedTaskDetails.id} canEdit={canEdit} />
+
+              {/* Watchers + Votes */}
+              <WatchersVotesBar taskId={selectedTaskDetails.id} />
+
             </section>
           </div>
         </div>
       )}
+
+      {/* Burndown modal */}
+      {burndownSprint && (
+        <BurndownModal
+          sprintId={burndownSprint.id}
+          sprintName={burndownSprint.name}
+          onClose={() => setBurndownSprint(null)}
+        />
+      )}
+
+      {/* Keyboard shortcut hint */}
+      <div className="fixed bottom-4 right-4 z-10 text-[10px] text-slate-400 bg-white/80 backdrop-blur border border-slate-200 rounded-lg px-2 py-1 shadow hidden md:block">
+        <span className="mr-2"><kbd className="bg-slate-100 px-1 rounded">n</kbd> New</span>
+        <span className="mr-2"><kbd className="bg-slate-100 px-1 rounded">b</kbd> Board</span>
+        <span className="mr-2"><kbd className="bg-slate-100 px-1 rounded">l</kbd> List</span>
+        <span><kbd className="bg-slate-100 px-1 rounded">f</kbd> Filter</span>
+      </div>
 
       {/* Create Task Modal */}
       {showCreateModal && (
@@ -2553,19 +2800,48 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   Voice mode listens continuously and auto-creates after 2 seconds of silence.
                 </p>
               </div>
+              {/* Template picker */}
+              {templateList.length > 0 && (
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Use Template</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    onChange={e => {
+                      const tpl = templateList.find(t => t.id === e.target.value);
+                      if (tpl?.default_fields) setNewTask(prev => ({ ...prev, ...tpl.default_fields }));
+                    }}
+                  >
+                    <option value="">Select template…</option>
+                    {templateList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Left Column */}
                 <div className="space-y-4">
+                  <div>
                   <Input
                     label="Task Title"
                     type="text"
                     name="task"
                     value={newTask.task}
-                    onChange={handleNewTaskChange}
+                    onChange={e => { handleNewTaskChange(e); checkDuplicates(e.target.value); }}
                     placeholder="Enter task title"
                     required
                     autoFocus
                   />
+                  {dupeSuggestions.length > 0 && (
+                    <div className="mt-1 bg-amber-50 border border-amber-200 rounded p-2">
+                      <p className="text-[10px] text-amber-700 font-semibold mb-1">⚠ Similar tasks found:</p>
+                      {dupeSuggestions.map(d => (
+                        <p key={d.id} className="text-[11px] text-amber-600 truncate">
+                          {d.display_id && <span className="font-mono mr-1">{d.display_id}</span>}
+                          {d.task}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  </div>
 
                   <Input
                     label="Due Date"

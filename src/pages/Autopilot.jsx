@@ -21,6 +21,7 @@ import {
   History,
   Search,
   RefreshCw,
+  Calendar,
 } from "lucide-react";
 
 /**
@@ -29,6 +30,31 @@ import {
  */
 
 const TODAY = new Date().toISOString().slice(0, 10);
+
+function buildStatsParams(range, customFrom, customTo) {
+  if (range === "all") return {};
+  if (range === "custom") {
+    const p = {};
+    if (customFrom) p.fromDate = customFrom;
+    if (customTo) p.toDate = customTo;
+    return p;
+  }
+  const days = { today: 0, "7d": 7, "30d": 30, "90d": 90 }[range] ?? 7;
+  const from = new Date();
+  from.setDate(from.getDate() - days);
+  return { fromDate: from.toISOString().slice(0, 10) };
+}
+
+function rangeLabel(range, customFrom, customTo) {
+  if (range === "all") return "All time";
+  if (range === "custom") {
+    if (customFrom && customTo) return `${customFrom} → ${customTo}`;
+    if (customFrom) return `From ${customFrom}`;
+    if (customTo) return `Up to ${customTo}`;
+    return "Custom range";
+  }
+  return { today: "Today", "7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days" }[range] ?? "";
+}
 
 export default function Autopilot() {
   const { auth } = useAuth();
@@ -44,6 +70,12 @@ export default function Autopilot() {
 
   const [activeTab, setActiveTab] = useState("pending");
   const [actionFilter, setActionFilter] = useState("all");
+
+  // Stats time range
+  const [statsRange, setStatsRange] = useState("7d"); // "today"|"7d"|"30d"|"90d"|"all"|"custom"
+  const [statsCustomFrom, setStatsCustomFrom] = useState("");
+  const [statsCustomTo, setStatsCustomTo] = useState("");
+
   const [historyItems, setHistoryItems] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({
@@ -66,7 +98,7 @@ export default function Autopilot() {
     fetchData();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [statsRange, statsCustomFrom, statsCustomTo]);
 
   useEffect(() => {
     if (activeTab !== "history") return;
@@ -85,10 +117,11 @@ export default function Autopilot() {
 
   const fetchData = async () => {
     try {
+      const statsParams = buildStatsParams(statsRange, statsCustomFrom, statsCustomTo);
       const [settingsRes, actionsRes, statsRes] = await Promise.all([
         api.get("/autopilot/settings"),
         api.get("/autopilot/actions"),
-        api.get("/autopilot/stats"),
+        api.get("/autopilot/stats", { params: statsParams }),
       ]);
 
       setSettings(settingsRes.data.settings);
@@ -308,16 +341,67 @@ export default function Autopilot() {
 
         {stats && (
           <div>
-            <p className="text-xs text-gray-400 mb-2 text-right">
-              Executed / Rejected / Auto-Approved counts show last 7 days
-            </p>
+            {/* Time range picker */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <Calendar className="w-3.5 h-3.5 text-gray-500 ml-1" />
+                {[
+                  { key: "today", label: "Today" },
+                  { key: "7d",    label: "7d" },
+                  { key: "30d",   label: "30d" },
+                  { key: "90d",   label: "90d" },
+                  { key: "all",   label: "All time" },
+                  { key: "custom",label: "Custom" },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setStatsRange(key)}
+                    className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
+                      statsRange === key
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {statsRange === "custom" && (
+                <div className="flex items-center gap-2 ml-3">
+                  <input
+                    type="date"
+                    value={statsCustomFrom}
+                    max={statsCustomTo || TODAY}
+                    onChange={(e) => setStatsCustomFrom(e.target.value)}
+                    className="px-2 py-1 border border-gray-300 rounded text-xs"
+                    placeholder="From"
+                  />
+                  <span className="text-gray-400 text-xs">—</span>
+                  <input
+                    type="date"
+                    value={statsCustomTo}
+                    min={statsCustomFrom || undefined}
+                    max={TODAY}
+                    onChange={(e) => setStatsCustomTo(e.target.value)}
+                    className="px-2 py-1 border border-gray-300 rounded text-xs"
+                    placeholder="To"
+                  />
+                </div>
+              )}
+
+              <p className="text-xs text-gray-400 ml-auto">
+                {rangeLabel(statsRange, statsCustomFrom, statsCustomTo)}
+              </p>
+            </div>
+
             <div className="grid grid-cols-5 gap-4">
               <StatCard label="Pending" value={stats.pending} icon={Clock3} color="yellow" />
-              <StatCard label="Executed (7d)" value={stats.executed} icon={CheckCircle2} color="green" />
-              <StatCard label="Rejected (7d)" value={stats.rejected} icon={XCircle} color="red" />
-              <StatCard label="Auto-Approved (7d)" value={stats.autoApproved} icon={Zap} color="purple" />
+              <StatCard label="Executed" value={stats.executed} icon={CheckCircle2} color="green" />
+              <StatCard label="Rejected" value={stats.rejected} icon={XCircle} color="red" />
+              <StatCard label="Auto-Approved" value={stats.autoApproved} icon={Zap} color="purple" />
               <StatCard
-                label="Avg Confidence (7d)"
+                label="Avg Confidence"
                 value={`${Math.round((stats.avgConfidence || 0) * 100)}%`}
                 icon={Target}
                 color="blue"
@@ -667,6 +751,114 @@ function StatCard({ label, value, icon: Icon, color }) {
   );
 }
 
+/** Renders the structured standup markdown into clean, readable JSX — no external lib needed */
+function StandupMarkdown({ content }) {
+  if (!content) return null;
+
+  const lines = content.split("\n");
+  const elements = [];
+  let key = 0;
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+
+    // H1: # Title
+    if (/^# (.+)/.test(line)) {
+      const text = line.replace(/^# /, "");
+      elements.push(
+        <h1 key={key++} className="text-sm font-bold text-gray-900 mt-1 mb-1">
+          {renderInline(text)}
+        </h1>
+      );
+    }
+    // H2: ## Section
+    else if (/^## (.+)/.test(line)) {
+      const text = line.replace(/^## /, "");
+      elements.push(
+        <h2 key={key++} className="text-xs font-bold text-gray-800 mt-3 mb-1 border-b border-gray-200 pb-0.5">
+          {renderInline(text)}
+        </h2>
+      );
+    }
+    // Blockquote: > sprint info
+    else if (/^> (.+)/.test(line)) {
+      const text = line.replace(/^> /, "");
+      elements.push(
+        <div key={key++} className="text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 my-1 border-l-2 border-indigo-300">
+          {renderInline(text)}
+        </div>
+      );
+    }
+    // Horizontal rule
+    else if (/^---+$/.test(line)) {
+      elements.push(<hr key={key++} className="border-gray-200 my-2" />);
+    }
+    // Bullet: - item
+    else if (/^[\-•] (.+)/.test(line)) {
+      const text = line.replace(/^[\-•] /, "");
+      const isBlocked = text.includes("⚠") || text.toLowerCase().includes("overdue");
+      const isGood = text.includes("✅");
+      elements.push(
+        <div key={key++} className={`flex gap-2 text-xs py-0.5 pl-1 ${isBlocked ? "text-red-700" : isGood ? "text-green-700" : "text-gray-700"}`}>
+          <span className="text-gray-400 mt-0.5 shrink-0">•</span>
+          <span>{renderInline(text)}</span>
+        </div>
+      );
+    }
+    // Italic: *text* line (used for "no data" messages)
+    else if (/^\*[^*].+\*$/.test(line.trim())) {
+      elements.push(
+        <p key={key++} className="text-xs text-gray-400 italic pl-3 py-0.5">
+          {line.trim().replace(/^\*|\*$/g, "")}
+        </p>
+      );
+    }
+    // Bold line (standalone **text**)
+    else if (/^\*\*(.+)\*\*$/.test(line.trim())) {
+      elements.push(
+        <p key={key++} className="text-xs font-semibold text-gray-800 mt-1">
+          {line.trim().replace(/^\*\*|\*\*$/g, "")}
+        </p>
+      );
+    }
+    // Empty line → small spacer
+    else if (line.trim() === "") {
+      elements.push(<div key={key++} className="h-1" />);
+    }
+    // Plain text
+    else {
+      elements.push(
+        <p key={key++} className="text-xs text-gray-600 py-0.5">
+          {renderInline(line)}
+        </p>
+      );
+    }
+  }
+
+  return <div className="space-y-0">{elements}</div>;
+}
+
+/** Renders inline markdown: **bold**, *italic*, @mention, emoji passthrough */
+function renderInline(text) {
+  // Split on **bold**, preserve order
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (/^\*\*([^*]+)\*\*$/.test(part)) {
+      return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
+    }
+    // @mention highlight
+    if (/@\w+/.test(part)) {
+      const subParts = part.split(/(@\w+)/g);
+      return subParts.map((sp, j) =>
+        /@\w+/.test(sp)
+          ? <span key={j} className="text-blue-600 font-medium">{sp}</span>
+          : sp
+      );
+    }
+    return part;
+  });
+}
+
 function ActionCard({ action, onApprove, onReject, processing = false }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -716,6 +908,20 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
           </span>
         </div>
 
+        {/* Sprint badge */}
+        {cs.sprint_name && (
+          <div className="mb-3 flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-lg text-xs text-indigo-700 font-medium">
+            <Zap className="w-3 h-3" />
+            <span>Sprint: <strong>{cs.sprint_name}</strong></span>
+            {cs.sprint_days_remaining != null && (
+              <span className="text-indigo-400">· {cs.sprint_days_remaining}d remaining</span>
+            )}
+            {cs.sprint_points_total > 0 && (
+              <span className="text-indigo-400">· {cs.sprint_points_done}/{cs.sprint_points_total} pts</span>
+            )}
+          </div>
+        )}
+
         {/* Stats row */}
         <div className="flex gap-3 mb-4 flex-wrap">
           {cs.status_changes != null && (
@@ -757,10 +963,8 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
         </button>
 
         {expanded && pc.summary && (
-          <div className="mt-2 mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg max-h-72 overflow-y-auto">
-            <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
-              {pc.summary}
-            </pre>
+          <div className="mt-2 mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
+            <StandupMarkdown content={pc.summary} />
           </div>
         )}
 

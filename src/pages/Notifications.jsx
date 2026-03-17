@@ -7,33 +7,45 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { publishUnreadCount } from "../notificationBus";
 
+const TYPE_META = {
+  // Task
+  task_assigned:      { label: "Task assigned",          color: "bg-blue-50 text-blue-700",    icon: "📋" },
+  task_updated:       { label: "Task updated",           color: "bg-amber-50 text-amber-700",  icon: "✏️" },
+  task_deleted:       { label: "Task deleted",           color: "bg-red-50 text-red-700",      icon: "🗑️" },
+  // Project
+  project_assigned:   { label: "Project assigned",       color: "bg-indigo-50 text-indigo-700",icon: "📁" },
+  // Comments
+  comment_added:      { label: "New comment",            color: "bg-slate-100 text-slate-700", icon: "💬" },
+  comment_reply:      { label: "Comment reply",          color: "bg-teal-50 text-teal-700",    icon: "↩️" },
+  comment_mention:    { label: "Mentioned",              color: "bg-purple-50 text-purple-700",icon: "🏷️" },
+  // Workspace / admin
+  autopilot_summary:  { label: "Autopilot",              color: "bg-violet-50 text-violet-700",icon: "🤖" },
+  workspace_warning:  { label: "Workspace warning",      color: "bg-orange-50 text-orange-700",icon: "⚠️" },
+};
+
 function formatType(type) {
-  switch (type) {
-    case "project_assigned":
-      return "Project assigned";
-    case "task_assigned":
-      return "Task assigned";
-    case "task_updated":
-      return "Task updated";
-    case "task_deleted":
-      return "Task deleted";
-    case "comment_added":
-      return "New comment";
-    case "comment_mention":
-      return "Mention in comment";
-    default:
-      return type;
-  }
+  return TYPE_META[type]?.label ?? type;
+}
+
+function typeColor(type) {
+  return TYPE_META[type]?.color ?? "bg-slate-100 text-slate-700";
+}
+
+function typeIcon(type) {
+  return TYPE_META[type]?.icon ?? "🔔";
 }
 
 const TYPE_FILTER_OPTIONS = [
-  { value: "all", label: "All types" },
-  { value: "project_assigned", label: "Project assigned" },
-  { value: "task_assigned", label: "Task assigned" },
-  { value: "task_updated", label: "Task updated" },
-  { value: "task_deleted", label: "Task deleted" },
-  { value: "comment_added", label: "New comment" },
-  { value: "comment_mention", label: "Mention in comment" },
+  { value: "all",               label: "All types" },
+  { value: "task_assigned",     label: "Task assigned" },
+  { value: "task_updated",      label: "Task updated" },
+  { value: "task_deleted",      label: "Task deleted" },
+  { value: "project_assigned",  label: "Project assigned" },
+  { value: "comment_added",     label: "New comment" },
+  { value: "comment_reply",     label: "Comment reply" },
+  { value: "comment_mention",   label: "Mentioned" },
+  { value: "autopilot_summary", label: "Autopilot" },
+  { value: "workspace_warning", label: "Workspace warning" },
 ];
 
 export default function Notifications() {
@@ -80,17 +92,18 @@ export default function Notifications() {
 
   // Socket realtime updates
   useEffect(() => {
-    let socket = getSocket();
-    if (!socket && auth.token) {
-      socket = initSocket(auth.token);
-    }
+    if (!auth.token) return;
+
+    let socket = getSocket() || initSocket(auth.token);
     if (!socket) return;
 
-    socket.on("connect", () => setSocketConnected(true));
-    socket.on("disconnect", () => setSocketConnected(false));
+    const onConnect    = () => setSocketConnected(true);
+    const onDisconnect = () => setSocketConnected(false);
 
     const handler = (notif) => {
       setNotifications((prev) => {
+        // Deduplicate by id
+        if (prev.some((n) => n.id === notif.id)) return prev;
         const next = [notif, ...prev];
         updateUnreadCount(next);
         return next;
@@ -98,9 +111,16 @@ export default function Notifications() {
       toast(`🔔 ${notif.message}`, { duration: 4000 });
     };
 
+    socket.on("connect",      onConnect);
+    socket.on("disconnect",   onDisconnect);
     socket.on("notification", handler);
 
+    // Sync connected state immediately
+    setSocketConnected(socket.connected);
+
     return () => {
+      socket.off("connect",      onConnect);
+      socket.off("disconnect",   onDisconnect);
       socket.off("notification", handler);
     };
   }, [auth.token]);
@@ -145,24 +165,40 @@ export default function Notifications() {
       await handleMarkOneRead(notif.id);
     }
 
+    // ── Task-level notifications ──────────────────────────────────────────────
     if (notif.task_id) {
-      // deep-link: open project page and auto-open task modal (+ optional comment)
       if (notif.project_id) {
         const params = new URLSearchParams();
         params.set("task", notif.task_id);
-        if (notif.comment_id) {
-          params.set("comment", notif.comment_id);
-        }
+        if (notif.comment_id) params.set("comment", notif.comment_id);
         navigate(`/projects/${notif.project_id}?${params.toString()}`);
       } else {
-        // fallback if we ever have task without project
         navigate(`/my-tasks?task=${notif.task_id}`);
       }
-    } else if (notif.project_id) {
-      navigate(`/projects/${notif.project_id}`);
-    } else {
-      navigate("/");
+      return;
     }
+
+    // ── Project-level notifications ───────────────────────────────────────────
+    if (notif.project_id) {
+      navigate(`/projects/${notif.project_id}`);
+      return;
+    }
+
+    // ── Type-based routing for workspace-level notifications ──────────────────
+    const TYPE_ROUTES = {
+      autopilot_summary:  "/autopilot",
+      workspace_warning:  "/autopilot",
+      task_deleted:       "/my-tasks",
+    };
+
+    const dest = TYPE_ROUTES[notif.type];
+    if (dest) {
+      navigate(dest);
+      return;
+    }
+
+    // Absolute fallback — should rarely hit
+    navigate("/dashboard");
   };
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -299,10 +335,11 @@ export default function Notifications() {
                           : "bg-white border-slate-100 hover:bg-slate-50"
                       }`}
                     >
-                      {/* Unread dot */}
-                      <div className="pt-1">
+                      {/* Icon + unread indicator */}
+                      <div className="pt-0.5 flex flex-col items-center gap-1">
+                        <span className="text-base leading-none">{typeIcon(n.type)}</span>
                         {isUnread && (
-                          <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
                         )}
                       </div>
 
@@ -310,7 +347,7 @@ export default function Notifications() {
                       <div className="flex-1 min-w-0">
                         {/* Type + meta badges */}
                         <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-[2px] text-[10px] font-medium text-slate-700">
+                          <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium ${typeColor(n.type)}`}>
                             {formatType(n.type)}
                           </span>
 
