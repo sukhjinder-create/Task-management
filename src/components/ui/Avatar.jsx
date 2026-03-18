@@ -1,11 +1,61 @@
 import { cn } from '../../utils/cn';
+import { API_BASE_URL } from '../../api';
+import { useState, useEffect } from 'react';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 function resolveAvatarUrl(src) {
   if (!src) return null;
+  // On mobile, localhost refers to the device itself — remap to configured backend
+  if (src.startsWith('http://localhost') || src.startsWith('http://127.0.0.1')) {
+    const path = src.replace(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, '');
+    return `${BACKEND_URL}${path}`;
+  }
   if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('blob:') || src.startsWith('data:')) return src;
   return `${BACKEND_URL}${src}`;
+}
+
+// Fetches image via JS fetch (Capacitor-intercepted, same network stack as API calls).
+// Falls back to direct URL if fetch fails (e.g. web browser with CORS).
+function useFetchedImage(resolvedSrc) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!resolvedSrc) { setBlobUrl(null); setFailed(false); return; }
+    let active = true;
+    let objectUrl = null;
+
+    fetch(resolvedSrc)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+        setFailed(false);
+      })
+      .catch(() => {
+        if (active) { setBlobUrl(null); setFailed(true); }
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [resolvedSrc]);
+
+  return { blobUrl, failed };
+}
+
+// Drop-in <img> replacement that loads via fetch (works in Capacitor WebView).
+// Shows nothing while loading; caller is responsible for fallback UI.
+export function FetchImg({ src, alt, className }) {
+  const { blobUrl, failed } = useFetchedImage(src);
+  if (!blobUrl || failed) return null;
+  return <img src={blobUrl} alt={alt} className={className} />;
 }
 
 const avatarSizes = {
@@ -29,6 +79,9 @@ function getInitials(name) {
 export function Avatar({ name, src, alt, size = 'md', status, className, ...props }) {
   const initials = getInitials(name || alt);
   const resolvedSrc = resolveAvatarUrl(src);
+  const { blobUrl, failed } = useFetchedImage(resolvedSrc);
+
+  const showImage = blobUrl && !failed;
 
   return (
     <div className={cn('relative inline-block', className)} {...props}>
@@ -39,17 +92,17 @@ export function Avatar({ name, src, alt, size = 'md', status, className, ...prop
           avatarSizes[size]
         )}
       >
-        {resolvedSrc ? (
+        {showImage ? (
           <img
-            src={resolvedSrc}
+            src={blobUrl}
             alt={alt || name}
             className="w-full h-full object-cover"
-            onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
           />
-        ) : null}
-        <span style={{ display: resolvedSrc ? 'none' : 'flex' }} className="w-full h-full items-center justify-center">
-          {initials}
-        </span>
+        ) : (
+          <span className="w-full h-full flex items-center justify-center">
+            {initials}
+          </span>
+        )}
       </div>
 
       {/* Status indicator */}

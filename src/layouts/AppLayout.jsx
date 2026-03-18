@@ -10,10 +10,16 @@ import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow";
 import { Avatar, Badge, Button, Dropdown } from "../components/ui";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { cn } from "../utils/cn";
+import { useIsMobile } from "../hooks/useIsMobile";
+import MobileLayout from "./MobileLayout";
 
 const SIDEBAR_KEY = "sidebarCollapsed";
 
 export default function AppLayout({ children }) {
+  const isMobile = useIsMobile();
+  // On mobile, hand off entirely to MobileLayout
+  if (isMobile) return <MobileLayout />;
+
   const { logout, auth, updateUser } = useAuth();
   const navigate = useNavigate();
   const api = useApi();

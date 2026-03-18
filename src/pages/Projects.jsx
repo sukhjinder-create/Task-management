@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { FolderKanban, Plus, Edit2, Trash2, Users as UsersIcon, GitBranch } from "lucide-react";
+import { FolderKanban, Plus, Edit2, Trash2, Users as UsersIcon, GitBranch, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
-import { Card, Button, Modal, Input, Badge } from "../components/ui";
+import { Modal, Input, Button } from "../components/ui";
 import GitAutomationModal from "../components/GitAutomationModal";
 
 export default function Projects() {
@@ -23,6 +23,14 @@ export default function Projects() {
   const [showGitModal, setShowGitModal] = useState(false);
   const [selectedProjectForGit, setSelectedProjectForGit] = useState(null);
 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(null);
+
   const canManageProjects =
     auth.user.role === "admin" || auth.user.role === "manager";
 
@@ -32,7 +40,6 @@ export default function Projects() {
         const res = await api.get("/projects");
         setProjects(res.data || []);
       } catch (err) {
-        console.error(err);
         const msg = err.response?.data?.error || "Failed to load projects";
         setError(msg);
         toast.error(msg);
@@ -40,250 +47,291 @@ export default function Projects() {
         setLoading(false);
       }
     }
-
     fetchProjects();
   }, []);
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
-    if (!newProject.trim()) {
-      toast.error("Project name is required");
-      return;
-    }
-
+    if (!newProject.trim()) { toast.error("Project name is required"); return; }
     setCreating(true);
     try {
-      const res = await api.post("/projects", {
-        name: newProject,
-        added_by: auth.user.username,
-      });
+      const res = await api.post("/projects", { name: newProject, added_by: auth.user.username });
       setProjects((prev) => [res.data, ...prev]);
       setNewProject("");
       setShowCreateModal(false);
-      toast.success("Project created successfully");
+      toast.success("Project created");
     } catch (err) {
-      console.error(err);
-      const msg =
-        err.response?.data?.error ||
-        "Failed to create project (maybe not admin/manager?)";
-      setError(msg);
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Failed to create project");
     } finally {
       setCreating(false);
     }
   };
 
-  const handleRenameProject = async (project) => {
-    const name = window.prompt("New project name:", project.name);
-    if (!name || !name.trim()) return;
+  const openEditModal = (project) => {
+    setEditingProject(project);
+    setEditName(project.name);
+    setShowEditModal(true);
+  };
 
+  const handleRenameProject = async (e) => {
+    e.preventDefault();
+    if (!editName.trim()) { toast.error("Project name is required"); return; }
+    setRenaming(true);
     try {
-      const res = await api.put(`/projects/${project.id}`, { name: name.trim() });
-      setProjects((prev) =>
-        prev.map((p) => (p.id === project.id ? res.data : p))
-      );
+      const res = await api.put(`/projects/${editingProject.id}`, { name: editName.trim() });
+      setProjects((prev) => prev.map((p) => (p.id === editingProject.id ? res.data : p)));
+      setShowEditModal(false);
       toast.success("Project renamed");
     } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Failed to rename project";
-      setError(msg);
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Failed to rename project");
+    } finally {
+      setRenaming(false);
     }
   };
 
-  const handleDeleteProject = async (project) => {
-    if (!window.confirm(`Delete project "${project.name}"?`)) return;
+  const openDeleteModal = (project) => {
+    setDeletingProject(project);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteProject = async () => {
     try {
-      await api.delete(`/projects/${project.id}`);
-      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      await api.delete(`/projects/${deletingProject.id}`);
+      setProjects((prev) => prev.filter((p) => p.id !== deletingProject.id));
+      setShowDeleteModal(false);
       toast.success("Project deleted");
     } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Failed to delete project";
-      setError(msg);
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Failed to delete project");
     }
   };
 
-  const totalProjects = projects.length;
-
   return (
-    <div className="space-y-6">
-      <Card>
-        <Card.Content className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary-50 rounded-lg">
-                <FolderKanban className="w-6 h-6 text-primary-600" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Projects</h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  Manage your projects and collaborate with your team
-                </p>
-              </div>
+    <div className="flex flex-col h-full">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-primary-50 rounded-lg">
+              <FolderKanban className="w-5 h-5 text-primary-600" />
             </div>
-            <div className="flex items-center gap-3">
-              <Badge color="neutral" size="lg" variant="subtle">
-                {totalProjects} {totalProjects === 1 ? "Project" : "Projects"}
-              </Badge>
-              {canManageProjects && (
-                <Button
-                  onClick={() => setShowCreateModal(true)}
-                  variant="primary"
-                  size="md"
-                  className="gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  New Project
-                </Button>
-              )}
-              {auth.user.role === "admin" && (
-                <Button
-                  onClick={() => navigate("/admin/users")}
-                  variant="secondary"
-                  size="md"
-                  className="gap-2"
-                >
-                  <UsersIcon className="w-4 h-4" />
-                  Admin Panel
-                </Button>
-              )}
+            <div>
+              <h1 className="text-lg font-bold theme-text leading-tight">Projects</h1>
+              <p className="text-xs theme-text-muted">
+                {loading ? "Loading…" : `${projects.length} ${projects.length === 1 ? "project" : "projects"}`}
+              </p>
             </div>
           </div>
-        </Card.Content>
-      </Card>
 
-      {error && (
-        <Card className="border-danger-200 bg-danger-50">
-          <Card.Content className="p-4">
-            <p className="text-sm text-danger-700">{error}</p>
-          </Card.Content>
-        </Card>
-      )}
+          <div className="flex items-center gap-2">
+            {auth.user.role === "admin" && (
+              <button
+                onClick={() => navigate("/admin/users")}
+                className="p-2.5 rounded-xl theme-surface border theme-border theme-text active:opacity-70 transition-opacity"
+                title="Admin panel"
+              >
+                <UsersIcon className="w-4 h-4" />
+              </button>
+            )}
+            {canManageProjects && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold active:bg-primary-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Project</span>
+                <span className="sm:hidden">New</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
+      {/* ── Permission notice ──────────────────────────────────────────────── */}
       {!canManageProjects && (
-        <Card className="border-warning-200 bg-warning-50">
-          <Card.Content className="p-4">
-            <p className="text-sm text-warning-700">
-              You don't have permission to create or manage projects. Contact an admin or manager if you need changes.
-            </p>
-          </Card.Content>
-        </Card>
-      )}
-
-      {loading && (
-        <div className="text-center py-12">
-          <p className="text-sm text-gray-500">Loading projects...</p>
+        <div className="mx-4 mt-3 px-3 py-2.5 rounded-xl bg-yellow-50 border border-yellow-200">
+          <p className="text-xs text-yellow-700">
+            View-only — contact an admin or manager to make changes.
+          </p>
         </div>
       )}
 
-      {!loading && projects.length === 0 && (
-        <Card>
-          <Card.Content className="p-12 text-center">
-            <div className="flex flex-col items-center gap-4">
-              <div className="p-4 bg-gray-50 rounded-full">
-                <FolderKanban className="w-12 h-12 text-gray-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No projects yet</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  {canManageProjects
-                    ? "Get started by creating your first project"
-                    : "Projects will appear here once they are created"}
-                </p>
-                {canManageProjects && (
-                  <Button
-                    onClick={() => setShowCreateModal(true)}
-                    variant="primary"
-                    size="md"
-                    className="gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create First Project
-                  </Button>
-                )}
-              </div>
-            </div>
-          </Card.Content>
-        </Card>
+      {/* ── Error ─────────────────────────────────────────────────────────── */}
+      {error && (
+        <div className="mx-4 mt-3 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200">
+          <p className="text-xs text-red-700">{error}</p>
+        </div>
       )}
 
-      {!loading && projects.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((p) => (
-            <Card
-              key={p.id}
-              className="hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-              onClick={() => navigate(`/projects/${p.id}`)}
-            >
-              <Card.Content className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="p-2 bg-primary-50 rounded-lg">
+      {/* ── Content ───────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 rounded-2xl theme-surface border theme-border animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && projects.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="p-5 rounded-full bg-[var(--surface-soft)]">
+              <FolderKanban className="w-10 h-10 theme-text-muted" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold theme-text mb-1">No projects yet</p>
+              <p className="text-sm theme-text-muted">
+                {canManageProjects
+                  ? 'Tap "New" to create your first project'
+                  : "Projects will appear here once created"}
+              </p>
+            </div>
+            {canManageProjects && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold active:bg-primary-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Create First Project
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Project list */}
+        {!loading && projects.length > 0 && (
+          <div className="flex flex-col gap-3 md:grid md:grid-cols-2 lg:grid-cols-3">
+            {projects.map((p) => (
+              <div
+                key={p.id}
+                className="theme-surface border theme-border rounded-2xl overflow-hidden active:opacity-80 transition-opacity cursor-pointer"
+                onClick={() => navigate(`/projects/${p.id}`)}
+              >
+                <div className="flex items-center gap-3 p-4">
+                  {/* Icon */}
+                  <div className="shrink-0 p-2.5 rounded-xl bg-primary-50">
                     <FolderKanban className="w-5 h-5 text-primary-600" />
                   </div>
-                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+
+                  {/* Name + meta */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold theme-text truncate">{p.name}</p>
+                    <p className="text-xs theme-text-muted mt-0.5">
+                      {p.added_by}
+                      {p.created_at ? ` · ${new Date(p.created_at).toLocaleDateString()}` : ""}
+                    </p>
+                  </div>
+
+                  {/* Chevron (tap area) */}
+                  <ChevronRight className="w-4 h-4 theme-text-muted shrink-0" />
+                </div>
+
+                {/* Action row — only shown when user can manage */}
+                {(canManageProjects || auth.user.role === "admin") && (
+                  <div
+                    className="flex items-center border-t theme-border px-3 py-2 gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {canManageProjects && (
-                      <Button
-                        onClick={() => {
-                          setSelectedProjectForGit(p);
-                          setShowGitModal(true);
-                        }}
-                        variant="ghost"
-                        size="xs"
-                        className="text-gray-600 hover:text-primary-600"
-                        title="Git automation settings"
+                      <button
+                        onClick={() => { setSelectedProjectForGit(p); setShowGitModal(true); }}
+                        className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg theme-text-muted hover:bg-[var(--surface-soft)] active:bg-[var(--surface-soft)] transition-colors text-xs"
+                        title="Git automation"
                       >
-                        <GitBranch className="w-4 h-4" />
-                      </Button>
+                        <GitBranch className="w-3.5 h-3.5" />
+                        <span>Git</span>
+                      </button>
                     )}
                     {canManageProjects && (
-                      <Button
-                        onClick={() => handleRenameProject(p)}
-                        variant="ghost"
-                        size="xs"
-                        className="text-gray-600 hover:text-primary-600"
-                        title="Rename project"
+                      <button
+                        onClick={() => openEditModal(p)}
+                        className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg theme-text-muted hover:bg-[var(--surface-soft)] active:bg-[var(--surface-soft)] transition-colors text-xs"
+                        title="Rename"
                       >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Rename</span>
+                      </button>
                     )}
                     {auth.user.role === "admin" && (
-                      <Button
-                        onClick={() => handleDeleteProject(p)}
-                        variant="ghost"
-                        size="xs"
-                        className="text-gray-600 hover:text-danger-600"
-                        title="Delete project"
+                      <button
+                        onClick={() => openDeleteModal(p)}
+                        className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-red-500 hover:bg-red-50 active:bg-red-50 transition-colors text-xs"
+                        title="Delete"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
                     )}
                   </div>
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2">{p.name}</h3>
-                <p className="text-xs text-gray-500">Created by {p.added_by}</p>
-                <p className="text-xs text-gray-400">
-                  {p.created_at
-                    ? new Date(p.created_at).toLocaleDateString()
-                    : "No date"}
-                </p>
-              </Card.Content>
-            </Card>
-          ))}
-        </div>
-      )}
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
 
       {showGitModal && selectedProjectForGit && (
         <GitAutomationModal
           isOpen={showGitModal}
-          onClose={() => {
-            setShowGitModal(false);
-            setSelectedProjectForGit(null);
-          }}
+          onClose={() => { setShowGitModal(false); setSelectedProjectForGit(null); }}
           project={selectedProjectForGit}
           canManage={canManageProjects}
         />
+      )}
+
+      {showEditModal && editingProject && (
+        <Modal isOpen={true} onClose={() => !renaming && setShowEditModal(false)}>
+          <form onSubmit={handleRenameProject}>
+            <Modal.Header>
+              <Modal.Title>Rename Project</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <Input
+                label="Project Name"
+                type="text"
+                placeholder="Enter project name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                autoFocus
+                required
+              />
+            </Modal.Body>
+            <Modal.Footer>
+              <Button type="button" onClick={() => setShowEditModal(false)} variant="secondary" disabled={renaming}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={renaming} disabled={renaming}>
+                Save
+              </Button>
+            </Modal.Footer>
+          </form>
+        </Modal>
+      )}
+
+      {showDeleteModal && deletingProject && (
+        <Modal isOpen={true} onClose={() => setShowDeleteModal(false)}>
+          <Modal.Header>
+            <Modal.Title>Delete Project</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p className="text-sm theme-text">
+              Delete <strong>{deletingProject.name}</strong>? This cannot be undone.
+            </p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button type="button" onClick={() => setShowDeleteModal(false)} variant="secondary">
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleDeleteProject} variant="danger">
+              Delete
+            </Button>
+          </Modal.Footer>
+        </Modal>
       )}
 
       {showCreateModal && (
@@ -302,28 +350,14 @@ export default function Projects() {
                 autoFocus
                 required
               />
-              <p className="text-xs text-gray-500 mt-2">
-                Choose a descriptive name for your project
-              </p>
             </Modal.Body>
             <Modal.Footer>
-              <Button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                variant="secondary"
-                disabled={creating}
-              >
+              <Button type="button" onClick={() => setShowCreateModal(false)} variant="secondary" disabled={creating}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                loading={creating}
-                disabled={creating}
-                className="gap-2"
-              >
+              <Button type="submit" variant="primary" loading={creating} disabled={creating} className="gap-2">
                 <Plus className="w-4 h-4" />
-                Create Project
+                Create
               </Button>
             </Modal.Footer>
           </form>

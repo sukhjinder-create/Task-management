@@ -3,8 +3,18 @@ import { useEffect, useState, useMemo } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
+import { ClipboardList, RefreshCw, Download, Filter, X, ChevronDown, ChevronUp } from "lucide-react";
 
 const TODAY = new Date().toISOString().slice(0, 10);
+
+function fmt(mins) {
+  if (!mins) return "0m";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
 
 export default function AdminAttendance() {
   const api = useApi();
@@ -14,32 +24,20 @@ export default function AdminAttendance() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Optional filters
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [userId, setUserId] = useState("");
 
-  /* --------------------------------------------------
-     🔐 HARD UI GUARD
-     Backend already enforces this, but UI should not
-     even try to render for non-admins
-  -------------------------------------------------- */
   if (!auth?.user || auth.user.role !== "admin") {
     return (
-      <div className="p-6 text-red-600 text-sm">
-        Admin access required.
-      </div>
+      <div className="p-6 text-red-600 text-sm">Admin access required.</div>
     );
   }
 
-  /* --------------------------------------------------
-     Load users (workspace-scoped automatically)
-     No workspace param needed — middleware handles it
-  -------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
-
     async function loadUsers() {
       try {
         const res = await api.get("/users");
@@ -48,320 +46,285 @@ export default function AdminAttendance() {
         console.error("Failed to load users:", err);
       }
     }
-
     loadUsers();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [api]);
 
-  /* --------------------------------------------------
-     Load attendance rows
-     All filters OPTIONAL
-  -------------------------------------------------- */
   const loadAttendance = async () => {
     try {
       setLoading(true);
-
       const params = {};
       if (from) params.from = from;
       if (to) params.to = to;
       if (userId) params.userId = userId;
-
       const res = await api.get("/admin/attendance", { params });
       setRows(res.data || []);
     } catch (err) {
-      console.error("Attendance load error:", err);
-      toast.error(
-        err.response?.data?.error ||
-          "Failed to load attendance reports"
-      );
+      toast.error(err.response?.data?.error || "Failed to load attendance reports");
     } finally {
       setLoading(false);
     }
   };
 
-  // Initial load (no filters)
-  useEffect(() => {
-    loadAttendance();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { loadAttendance(); }, []);
 
   const clearFilters = () => {
-    setFrom("");
-    setTo("");
-    setUserId("");
+    setFrom(""); setTo(""); setUserId("");
     loadAttendance();
   };
 
-  /* --------------------------------------------------
-     Recalculate Attendance (INSERT into attendance_daily)
-  -------------------------------------------------- */
   const handleRecalculate = async () => {
-    if (!window.confirm("Recalculate attendance data? This will update the attendance_daily table.")) {
-      return;
-    }
-
+    if (!window.confirm("Recalculate attendance data? This will update the attendance_daily table.")) return;
     try {
       setRecalculating(true);
-
       const payload = {};
       if (from) payload.from = from;
       if (to) payload.to = to;
       if (userId) payload.userId = userId;
-
       await api.post("/admin/attendance/recalculate", payload);
-
-      toast.success("Attendance recalculated successfully!");
-
-      // Reload the attendance data to show updated values
+      toast.success("Attendance recalculated!");
       await loadAttendance();
     } catch (err) {
-      console.error("Recalculation error:", err);
-      const errorMsg =
-        err.response?.data?.error ||
-        err.response?.data?.details ||
-        err.message ||
-        "Recalculation failed";
-      toast.error(`Recalculation failed: ${errorMsg}`);
+      toast.error(err.response?.data?.error || err.message || "Recalculation failed");
     } finally {
       setRecalculating(false);
     }
   };
 
-  /* --------------------------------------------------
-     Fast lookup: userId → username
-  -------------------------------------------------- */
-  const userMap = useMemo(() => {
-    const map = {};
-    users.forEach((u) => {
-      map[String(u.id)] = u.username;
-    });
-    return map;
-  }, [users]);
-
-  /* --------------------------------------------------
-     CSV EXPORT (FIXED POSITION)
-  -------------------------------------------------- */
   const exportCsv = async () => {
     try {
-      if (!from) {
-        toast.error("Select a month first");
-        return;
-      }
-
+      if (!from) { toast.error("Select a month first"); return; }
       const month = from.slice(0, 7);
-
-      const res = await api.get(
-        `/admin/attendance/export`,
-        {
-          params: { month },
-          responseType: "blob",
-        }
-      );
-
+      const res = await api.get("/admin/attendance/export", { params: { month }, responseType: "blob" });
       const blob = new Blob([res.data], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
-
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `attendance_${month}.csv`;
-      document.body.appendChild(a);
-      a.click();
-
-      a.remove();
+      a.href = url; a.download = `attendance_${month}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch {
       toast.error("CSV export failed");
     }
   };
 
+  const userMap = useMemo(() => {
+    const map = {};
+    users.forEach((u) => { map[String(u.id)] = u.username; });
+    return map;
+  }, [users]);
+
+  const hasFilters = from || to || userId;
+
   return (
-    <div className="p-6 space-y-6">
-      {/* HEADER */}
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">
-          Attendance Reports
-        </h1>
-        <p className="text-sm text-slate-500">
-          Workspace-wide attendance analytics. All filters are optional.
-        </p>
-      </div>
+    <div className="flex flex-col h-full">
 
-      {/* ACTION BUTTONS */}
-      <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-700 mb-1">Actions</h3>
-          <p className="text-xs text-slate-500">
-            Recalculate attendance data from raw logs or export filtered results
-          </p>
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-primary-50 rounded-lg">
+              <ClipboardList className="w-5 h-5 text-primary-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold theme-text leading-tight">Attendance</h1>
+              <p className="text-xs theme-text-muted">
+                {loading ? "Loading…" : `${rows.length} record${rows.length === 1 ? "" : "s"}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={`p-2.5 rounded-xl border theme-border transition-colors ${showFilters ? "bg-primary-600 text-white border-primary-600" : "theme-surface theme-text"}`}
+            >
+              <Filter className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleRecalculate}
+              disabled={recalculating}
+              className="p-2.5 rounded-xl theme-surface border theme-border theme-text active:opacity-70 transition-opacity disabled:opacity-40"
+              title="Recalculate"
+            >
+              <RefreshCw className={`w-4 h-4 ${recalculating ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              onClick={exportCsv}
+              disabled={!from}
+              className="p-2.5 rounded-xl theme-surface border theme-border theme-text active:opacity-70 transition-opacity disabled:opacity-40"
+              title="Export CSV"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex gap-3 flex-wrap">
-          <button
-            onClick={handleRecalculate}
-            disabled={recalculating}
-            className="border px-4 py-2 rounded text-sm bg-amber-50 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
-          >
-            {recalculating ? "Recalculating..." : "🔄 Recalculate Attendance"}
-          </button>
-
-          <button
-            onClick={exportCsv}
-            disabled={!from}
-            className="border px-4 py-2 rounded text-sm bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
-            title={!from ? "Select a 'From' date first" : "Export attendance data as CSV"}
-          >
-            📊 Export CSV (Payroll)
-          </button>
-        </div>
-
-        {!from && (
-          <p className="text-xs text-amber-600">
-            💡 Tip: Set a date range in the filters below to recalculate or export specific periods
-          </p>
+        {/* Filter panel */}
+        {showFilters && (
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">From</label>
+                <input
+                  type="date"
+                  value={from}
+                  max={to || TODAY}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className="w-full border theme-border rounded-lg px-2 py-2 text-sm theme-surface theme-text"
+                />
+              </div>
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">To</label>
+                <input
+                  type="date"
+                  value={to}
+                  min={from || undefined}
+                  max={TODAY}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="w-full border theme-border rounded-lg px-2 py-2 text-sm theme-surface theme-text"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs theme-text-muted mb-1">User</label>
+              <select
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                className="w-full border theme-border rounded-lg px-2 py-2 text-sm theme-surface theme-text"
+              >
+                <option value="">All users</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.username}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={loadAttendance}
+                disabled={loading}
+                className="flex-1 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold active:bg-primary-700 disabled:opacity-50"
+              >
+                {loading ? "Loading…" : "Apply Filters"}
+              </button>
+              {hasFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="px-4 py-2.5 rounded-xl theme-surface border theme-border theme-text-muted text-sm active:opacity-70"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {!from && (
+              <p className="text-xs text-amber-600 px-1">
+                Set a From date to enable CSV export
+              </p>
+            )}
+          </div>
         )}
       </div>
 
-      {/* FILTERS */}
-      <div className="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end">
-        <div className="flex flex-col text-sm">
-          <label className="text-xs text-slate-500 mb-1">
-            From date
-          </label>
-          <input
-            type="date"
-            value={from}
-            max={to || TODAY}
-            onChange={(e) => setFrom(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          />
-        </div>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
 
-        <div className="flex flex-col text-sm">
-          <label className="text-xs text-slate-500 mb-1">
-            To date
-          </label>
-          <input
-            type="date"
-            value={to}
-            min={from || undefined}
-            max={TODAY}
-            onChange={(e) => setTo(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          />
-        </div>
-
-        <div className="flex flex-col text-sm min-w-[200px]">
-          <label className="text-xs text-slate-500 mb-1">
-            User
-          </label>
-          <select
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value="">All users</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.username}
-              </option>
+        {/* Loading skeletons */}
+        {loading && (
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 rounded-2xl theme-surface border theme-border animate-pulse" />
             ))}
-          </select>
-        </div>
+          </div>
+        )}
 
-        <div className="flex gap-2">
-          <button
-            onClick={loadAttendance}
-            disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? "Loading..." : "Apply"}
-          </button>
+        {/* Empty state */}
+        {!loading && rows.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="p-5 rounded-full bg-[var(--surface-soft)]">
+              <ClipboardList className="w-10 h-10 theme-text-muted" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold theme-text mb-1">No records found</p>
+              <p className="text-sm theme-text-muted">Try adjusting filters or recalculate attendance</p>
+            </div>
+            <button
+              onClick={handleRecalculate}
+              disabled={recalculating}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold active:bg-amber-600 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${recalculating ? "animate-spin" : ""}`} />
+              Recalculate Attendance
+            </button>
+          </div>
+        )}
 
-          <button
-            onClick={clearFilters}
-            className="border px-4 py-2 rounded text-sm hover:bg-slate-50"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-
-      {/* TABLE */}
-      <div className="bg-white rounded-xl shadow overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-100 text-slate-600">
-            <tr>
-              <th className="px-4 py-2 text-left">User</th>
-              <th className="px-4 py-2 text-left">Date</th>
-              <th className="px-4 py-2 text-right">Signed In (min)</th>
-              <th className="px-4 py-2 text-right">AWS</th>
-              <th className="px-4 py-2 text-right">Lunch</th>
-              <th className="px-4 py-2 text-right">Available</th>
-              <th className="px-4 py-2 text-right">Screen ON</th>
-              <th className="px-4 py-2 text-right">Screen OFF</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {loading && (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-4 py-6 text-center text-slate-400"
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                    Loading attendance data...
-                  </div>
-                </td>
-              </tr>
-            )}
-
-            {rows.length === 0 && !loading && (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-4 py-6 text-center text-slate-400"
-                >
-                  No attendance data found. Try adjusting your filters or click "Recalculate Attendance" to process raw logs.
-                </td>
-              </tr>
-            )}
-
+        {/* Records — card list */}
+        {!loading && rows.length > 0 && (
+          <div className="flex flex-col gap-3">
             {rows.map((r, idx) => (
-              <tr
+              <AttendanceCard
                 key={`${r.user_id}-${r.date}-${idx}`}
-                className="border-t hover:bg-slate-50"
-              >
-                <td className="px-4 py-2">
-                  {userMap[String(r.user_id)] || "—"}
-                </td>
-                <td className="px-4 py-2">{r.date}</td>
-                <td className="px-4 py-2 text-right">
-                  {r.total_signed_in_minutes ?? 0}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {r.aws_minutes ?? 0}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {r.lunch_minutes ?? 0}
-                </td>
-                <td className="px-4 py-2 text-right font-semibold">
-                  {r.available_minutes ?? 0}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {r.screen_on_minutes ?? 0}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {r.screen_off_minutes ?? 0}
-                </td>
-              </tr>
+                row={r}
+                username={userMap[String(r.user_id)] || "Unknown"}
+              />
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function AttendanceCard({ row, username }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const available = row.available_minutes ?? 0;
+  const signedIn = row.total_signed_in_minutes ?? 0;
+  const pct = signedIn > 0 ? Math.min(100, Math.round((available / signedIn) * 100)) : 0;
+
+  return (
+    <div className="theme-surface border theme-border rounded-2xl overflow-hidden">
+      <div
+        className="flex items-center gap-3 p-4 active:opacity-70 transition-opacity cursor-pointer"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {/* Avatar */}
+        <div className="shrink-0 w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
+          <span className="text-primary-600 font-bold text-sm">{username.slice(0, 2).toUpperCase()}</span>
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold theme-text truncate">{username}</p>
+          <p className="text-xs theme-text-muted">{row.date}</p>
+        </div>
+
+        {/* Available badge + chevron */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`text-xs font-semibold px-2 py-1 rounded-lg ${available >= 420 ? "bg-green-100 text-green-700" : available >= 240 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>
+            {fmt(available)}
+          </span>
+          {expanded ? <ChevronUp className="w-4 h-4 theme-text-muted" /> : <ChevronDown className="w-4 h-4 theme-text-muted" />}
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t theme-border px-4 py-3 grid grid-cols-2 gap-3">
+          <Metric label="Signed In" value={fmt(row.total_signed_in_minutes)} />
+          <Metric label="Available" value={fmt(row.available_minutes)} highlight />
+          <Metric label="AWS" value={fmt(row.aws_minutes)} />
+          <Metric label="Lunch" value={fmt(row.lunch_minutes)} />
+          <Metric label="Screen ON" value={fmt(row.screen_on_minutes)} />
+          <Metric label="Screen OFF" value={fmt(row.screen_off_minutes)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value, highlight }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs theme-text-muted">{label}</span>
+      <span className={`text-sm font-semibold ${highlight ? "text-primary-600" : "theme-text"}`}>{value}</span>
     </div>
   );
 }

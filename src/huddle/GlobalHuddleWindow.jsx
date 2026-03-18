@@ -22,26 +22,52 @@ function useCallTimer(startedAt) {
   return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
 }
 
-// ── Attach a stream to a <video> ref safely ─────────────────────────────────
-function useVideoRef(stream, muted = false) {
+// ── Build a video ref that forces the muted HTML attribute ───────────────────
+// React has a known bug: <video muted={true}> sets video.muted = true (JS
+// property) but does NOT add the `muted` HTML attribute to the DOM. Android
+// WebView checks the HTML attribute specifically when deciding whether to allow
+// autoplay — without it the video is treated as unmuted → autoplay blocked.
+function useMutedVideoRef(stream, shouldMute) {
   const ref = useRef(null);
+  const streamRef = useRef(stream);
+  streamRef.current = stream;
+
+  // Callback ref: fires whenever the element mounts / changes
+  const setRef = useCallback((el) => {
+    ref.current = el;
+    if (!el) return;
+
+    if (shouldMute) {
+      el.setAttribute("muted", "");   // HTML attribute — required for Android autoplay
+      el.muted = true;                // JS property — belt-and-suspenders
+    }
+    el.setAttribute("playsinline", "");
+    el.setAttribute("autoplay", "");
+
+    const s = streamRef.current;
+    if (s && el.srcObject !== s) el.srcObject = s;
+    el.play().catch(() => {});
+  }, [shouldMute]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-apply srcObject when stream changes
   useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    if (!stream) { video.srcObject = null; return; }
-    if (video.srcObject !== stream) video.srcObject = stream;
-    video.muted = muted;
-    const play = () => video.play().catch(() => {});
-    if (video.readyState >= 2) play();
-    else video.onloadedmetadata = play;
-  }, [stream, muted]);
-  return ref;
+    const el = ref.current;
+    if (!el) return;
+    if (!stream) { el.srcObject = null; return; }
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
+      el.play().catch(() => {});
+    }
+  }, [stream]);
+
+  return { setRef, ref };
 }
 
 // ── Single video tile ────────────────────────────────────────────────────────
 function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false }) {
-  const videoRef = useVideoRef(stream, isLocal);
+  const { setRef } = useMutedVideoRef(stream, isLocal);
   const initials = (name || "?")[0].toUpperCase();
+  const showAvatar = !stream || isCameraOff;
 
   return (
     <div
@@ -49,10 +75,15 @@ function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal
         isActiveSpeaker ? "ring-2 ring-green-400 ring-offset-1 ring-offset-[#0f111a]" : ""
       }`}
     >
-      {stream && !isCameraOff ? (
-        <video ref={videoRef} playsInline className="w-full h-full object-cover" />
-      ) : (
-        <div className="flex flex-col items-center gap-2 select-none">
+      <video
+        ref={setRef}
+        onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+
+      {/* Avatar overlay — covers the video when camera is off or no stream */}
+      {showAvatar && (
+        <div className="absolute inset-0 bg-[#1a1d27] flex flex-col items-center justify-center gap-2 select-none z-10">
           <div className="w-16 h-16 rounded-full bg-slate-600 flex items-center justify-center text-2xl font-semibold text-white">
             {initials}
           </div>
@@ -60,8 +91,8 @@ function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal
         </div>
       )}
 
-      {/* Bottom name bar */}
-      <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/60 rounded px-2 py-0.5 text-[11px] text-white pointer-events-none">
+      {/* Bottom name bar — always on top */}
+      <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1 bg-black/60 rounded px-2 py-0.5 text-[11px] text-white pointer-events-none">
         {isMuted
           ? <MicOff size={10} className="text-red-400 shrink-0" />
           : <Mic size={10} className="text-green-400 shrink-0" />
@@ -74,12 +105,13 @@ function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal
 
 // ── Control button ────────────────────────────────────────────────────────────
 function CtrlBtn({ onClick, title, active = false, danger = false, wide = false, children }) {
+  const isMob = typeof window !== "undefined" && window.innerWidth < 768;
   let cls = "flex items-center justify-center rounded-full transition-colors font-medium ";
-  if (wide) cls += "gap-2 px-4 h-11 text-sm ";
-  else cls += "w-11 h-11 ";
-  if (danger) cls += "bg-red-600 hover:bg-red-500 text-white";
-  else if (active) cls += "bg-blue-600 hover:bg-blue-500 text-white";
-  else cls += "bg-slate-700 hover:bg-slate-600 text-white";
+  if (wide) cls += `gap-2 px-5 ${isMob ? "h-14 text-base" : "h-11 text-sm"} `;
+  else cls += isMob ? "w-14 h-14 " : "w-11 h-11 ";
+  if (danger) cls += "bg-red-600 active:bg-red-500 text-white";
+  else if (active) cls += "bg-blue-600 active:bg-blue-500 text-white";
+  else cls += "bg-slate-700 active:bg-slate-600 text-white";
 
   return (
     <button type="button" onClick={onClick} title={title} className={cls}>
@@ -100,9 +132,22 @@ export default function GlobalHuddleWindow() {
   const activeSpeakerId = rtc?.activeSpeakerId;
   const networkQuality = rtc?.networkQuality || "good";
 
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [pos, setPos] = useState({ x: 200, y: 120 });
-  const [size, setSize] = useState({ w: 620, h: 440 });
+  // On mobile, always start full-screen
+  const isMobileDevice = typeof window !== "undefined" && window.innerWidth < 768;
+  const [isMaximized, setIsMaximized] = useState(isMobileDevice);
+  const [pos, setPos] = useState(isMobileDevice ? { x: 0, y: 0 } : { x: 200, y: 120 });
+  const [size, setSize] = useState(
+    isMobileDevice
+      ? { w: window.innerWidth, h: window.innerHeight }
+      : { w: 620, h: 440 }
+  );
+  // On mobile, keep size in sync with window (handles keyboard open/close)
+  useEffect(() => {
+    if (!isMobileDevice) return;
+    const sync = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, [isMobileDevice]);
 
   const windowRef = useRef(null);
   const dragging = useRef(false);
@@ -284,8 +329,13 @@ export default function GlobalHuddleWindow() {
 
       {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
       <div
-        className="w-full bg-[#1b1e27] py-3 px-6 flex justify-center items-center gap-3 shrink-0"
-        style={{ borderRadius: isMaximized ? 0 : "0 0 0.75rem 0.75rem" }}
+        className="w-full bg-[#1b1e27] py-4 px-6 flex justify-center items-center gap-4 shrink-0"
+        style={{
+          borderRadius: isMaximized ? 0 : "0 0 0.75rem 0.75rem",
+          paddingBottom: isMobileDevice
+            ? "calc(1rem + env(safe-area-inset-bottom))"
+            : undefined,
+        }}
       >
         {/* Mic */}
         <CtrlBtn
@@ -298,25 +348,27 @@ export default function GlobalHuddleWindow() {
 
         {/* Camera */}
         <CtrlBtn
-          onClick={() => rtc.toggleCamera?.()}
-          title={rtc.isCameraOff ? "Turn on camera" : "Turn off camera"}
-          danger={rtc.isCameraOff}
+          onClick={() => rtc?.toggleCamera?.()}
+          title={rtc?.isCameraOff ? "Turn on camera" : "Turn off camera"}
+          danger={rtc?.isCameraOff}
         >
           {rtc.isCameraOff ? <VideoOff size={18} /> : <Video size={18} />}
         </CtrlBtn>
 
-        {/* Screen share */}
-        <CtrlBtn
-          onClick={() =>
-            rtc.isScreenSharing
-              ? rtc.stopScreenShare?.()
-              : rtc.startScreenShare?.()
-          }
-          title={rtc.isScreenSharing ? "Stop sharing screen" : "Share your screen"}
-          active={rtc.isScreenSharing}
-        >
-          {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
-        </CtrlBtn>
+        {/* Screen share — desktop only */}
+        {!isMobileDevice && (
+          <CtrlBtn
+            onClick={() =>
+              rtc.isScreenSharing
+                ? rtc.stopScreenShare?.()
+                : rtc.startScreenShare?.()
+            }
+            title={rtc.isScreenSharing ? "Stop sharing screen" : "Share your screen"}
+            active={rtc.isScreenSharing}
+          >
+            {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
+          </CtrlBtn>
+        )}
 
         {/* Mute all — host only */}
         {isHost && (

@@ -403,7 +403,7 @@ const autonomousInsight = useMemo(() => {
   return { label: "High Risk", color: "text-red-600" };
 }
   return (
-  <div className="space-y-6">
+  <div className="space-y-6 px-4 py-4 md:px-0 md:py-0">
 
 {/* ======================================
    AUTONOMOUS AI INSIGHT CARD

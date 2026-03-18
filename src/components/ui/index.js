@@ -1,7 +1,7 @@
 // UI Component Library
 // This barrel file exports all reusable UI components for easy importing
 
-export { Avatar, AvatarGroup } from './Avatar';
+export { Avatar, AvatarGroup, FetchImg } from './Avatar';
 export { Badge } from './Badge';
 export { Button } from './Button';
 export {

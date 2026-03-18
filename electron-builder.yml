@@ -1,0 +1,77 @@
+# electron-builder.yml
+# Build config for Mac (.dmg) and Windows (.exe installer)
+
+appId: com.taskmanager.app
+productName: Task Manager
+copyright: Copyright © 2026 Task Manager
+
+# Entry point — the Electron main process
+main: electron/main.cjs
+
+# Built web assets
+directories:
+  output: release
+  buildResources: public
+
+# Files to include in the packaged app
+files:
+  - dist/**/*
+  - electron/**/*.cjs
+  - package.json
+
+# ─── macOS ───────────────────────────────────────────────────────────────────
+mac:
+  category: public.app-category.productivity
+  icon: public/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch: [x64, arm64]   # Intel + Apple Silicon
+    - target: zip
+      arch: [x64, arm64]
+
+dmg:
+  title: Task Manager
+  icon: public/icon.icns
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# ─── Windows ─────────────────────────────────────────────────────────────────
+win:
+  icon: public/icon.ico
+  target:
+    - target: nsis       # Full installer (.exe)
+      arch: [x64]
+    - target: portable   # Portable .exe (no install needed)
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Task Manager
+
+# ─── Linux ───────────────────────────────────────────────────────────────────
+linux:
+  icon: public/icon.png
+  category: Office
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+
+# ─── Auto-update (configure when you have a release server) ──────────────────
+# publish:
+#   provider: github
+#   owner: your-github-username
+#   repo: task-manager

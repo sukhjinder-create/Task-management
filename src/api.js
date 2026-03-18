@@ -1,6 +1,10 @@
 import axios from "axios";
 
-export const API_BASE_URL = "http://localhost:3000";
+// VITE_API_URL can be set per-build via .env files:
+//   Web/Electron: defaults to localhost:3000
+//   Mobile (Android emulator): set to http://10.0.2.2:3000
+//   Mobile (real device): set to your PC's local network IP e.g. http://192.168.x.x:3000
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,

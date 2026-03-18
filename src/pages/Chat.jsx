@@ -7,7 +7,7 @@ import {
   encryptForRecipients,
   decryptEnvelopeIfNeeded,
 } from "../crypto/chatCrypto";
-import { useApi } from "../api";
+import { useApi, API_BASE_URL } from "../api";
 import {
   getSocket,
   initSocket,
@@ -23,13 +23,27 @@ import {
 import { useHuddle } from "../context/HuddleContext";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
-import { MessageSquare, Send, Hash, Lock, Users, Settings, Plus, Smile } from "lucide-react";
-import { Avatar, Button, Badge, Card } from "../components/ui";
+import { MessageSquare, Send, Hash, Lock, Users, Settings, Plus, Smile, Menu, X as XIcon, Phone, ChevronLeft, Paperclip } from "lucide-react";
+import { Avatar, FetchImg, Button, Badge, Card } from "../components/ui";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
 import ReportsModal from "../components/ReportsModal";
 
+
+// ----- URL RESOLVER -----
+// Remaps localhost/127.0.0.1 absolute URLs to the configured backend.
+// Critical on mobile where "localhost" means the device, not the PC.
+const _BACKEND = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+function resolveUrl(src) {
+  if (!src) return null;
+  if (src.startsWith("http://localhost") || src.startsWith("http://127.0.0.1")) {
+    return _BACKEND + src.replace(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, "");
+  }
+  if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("blob:") || src.startsWith("data:")) return src;
+  return `${_BACKEND}${src}`;
+}
 
 // ----- CONFIG -----
 const GENERAL_CHANNEL_KEY = "team-general";
@@ -153,6 +167,14 @@ export default function Chat() {
   const { auth } = useAuth();
   const api = useApi();
   const user = auth.user;
+
+  // Mobile: two-screen nav ("list" = channel picker, "chat" = active conversation)
+  const isMobile = useIsMobile();
+  const [mobileView, setMobileView] = useState("list"); // "list" | "chat"
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileText, setMobileText] = useState(""); // kept for legacy, mobile now uses editorHtml
+  const mobileTextareaRef = useRef(null);
+  const mobileQuillRef = useRef(null); // ref to ReactQuill instance for mobile
 
   // AI preference (per-user, per-workspace)
 const [aiReplyEnabled, setAiReplyEnabled] = useState(true);
@@ -470,14 +492,12 @@ useEffect(() => {
       ? topLevelMessages[topLevelMessages.length - 1].id
       : null;
 
-  // Build userId → full avatar URL map from users list
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+  // Build userId → full avatar URL map (uses module-level resolveUrl)
+  const BACKEND_URL = _BACKEND;
   const userAvatarMap = useMemo(() => {
     const map = {};
     for (const u of users) {
-      if (u.avatar_url) {
-        map[u.id] = u.avatar_url.startsWith("http") ? u.avatar_url : `${BACKEND_URL}${u.avatar_url}`;
-      }
+      if (u.avatar_url) map[u.id] = resolveUrl(u.avatar_url);
     }
     return map;
   }, [users]);
@@ -1411,6 +1431,63 @@ useEffect(() => {
     setSending(false);
   };
 
+  // ----- MOBILE SEND (uses mobileText instead of ReactQuill editorHtml) -----
+  const handleMobileSend = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const html = mobileText.trim();
+    if (activeChannelKey === AVAILABILITY_CHANNEL_KEY) {
+      toast.error("This channel is read-only.");
+      return;
+    }
+    if (!html && pendingAttachments.length === 0) return;
+    if (!connected) return;
+
+    const tempId = createUniqueId("temp");
+    setSending(true);
+    const plainWithEmoji = convertEmojiShortcodes(html);
+    const attachmentsToSend = [...pendingAttachments];
+
+    setMessagesByChannel((prev) => {
+      const existing = prev[activeChannelKey] || [];
+      if (existing.some((m) => m.id === tempId)) return prev;
+      return {
+        ...prev,
+        [activeChannelKey]: [...existing, {
+          id: tempId,
+          channelId: activeChannelKey,
+          textHtml: plainWithEmoji,
+          userId: user.id,
+          username: user.username,
+          createdAt: new Date().toISOString(),
+          parentId: null,
+          reactions: {},
+          attachments: attachmentsToSend,
+        }],
+      };
+    });
+
+    const textToEncrypt = html || (attachmentsToSend.length > 0 ? "\u200b" : "");
+    let encryptedHtml = textToEncrypt;
+    try {
+      const recipientIds = getRecipientIdsForChannelKey(activeChannelKey);
+      encryptedHtml = await encryptForRecipients(textToEncrypt, user.id, recipientIds, usersWithKeys);
+    } catch (err) {
+      console.error("E2E encrypt failed, sending plaintext:", err);
+    }
+
+    sendChatMessage({
+      channelId: activeChannelKey,
+      text: encryptedHtml,
+      tempId,
+      parentId: null,
+      attachments: attachmentsToSend,
+    });
+
+    setMobileText("");
+    setPendingAttachments([]);
+    setSending(false);
+  };
+
   // ----- SEND MESSAGE IN THREAD -----
   const handleThreadEditorChange = (value) => {
     setThreadEditorHtml(value);
@@ -1486,6 +1563,8 @@ useEffect(() => {
     setThreadRootMessage(null);
     setThreadEditorHtml("");
     setUnreadByChannel((prev) => ({ ...prev, [key]: 0 }));
+    setMobileSidebarOpen(false);
+    setMobileView("chat");
   };
 
   const handleSelectGeneral = () => {
@@ -1495,6 +1574,8 @@ useEffect(() => {
     setThreadRootMessage(null);
     setThreadEditorHtml("");
     setUnreadByChannel((prev) => ({ ...prev, [GENERAL_CHANNEL_KEY]: 0 }));
+    setMobileSidebarOpen(false);
+    setMobileView("chat");
   };
 
   const handleSelectChannel = (channelKey) => {
@@ -1504,6 +1585,8 @@ useEffect(() => {
     setThreadRootMessage(null);
     setThreadEditorHtml("");
     setUnreadByChannel((prev) => ({ ...prev, [channelKey]: 0 }));
+    setMobileSidebarOpen(false);
+    setMobileView("chat");
   };
 
   const handleAttachmentClick = () => {
@@ -1837,16 +1920,954 @@ useEffect(() => {
   }
 }
 
+  // ========================================================
+  // MOBILE LAYOUT — two-screen Slack-style navigation
+  // ========================================================
+  if (isMobile) {
+    const totalUnread = Object.values(unreadByChannel).reduce((s, n) => s + n, 0);
+
+    return (
+      <div className="h-full flex flex-col overflow-hidden">
+
+        {/* ── SCREEN 1: Channel / DM list ── */}
+        {mobileView === "list" && (
+          <div className="flex-1 flex flex-col bg-slate-900 overflow-hidden">
+
+            {/* Header */}
+            <div className="px-4 py-4 border-b border-slate-700/60 shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <h1 className="text-white font-bold text-xl tracking-tight">Messages</h1>
+                <div className="flex items-center gap-2.5">
+                  <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
+                  <button
+                    type="button"
+                    onClick={() => setOpenCreate(true)}
+                    className="w-8 h-8 rounded-xl bg-slate-700 flex items-center justify-center text-slate-300 active:bg-slate-600"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* AI Toggle row */}
+              <div className="flex items-center justify-between bg-slate-800/60 rounded-xl px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🤖</span>
+                  <div>
+                    <div className="text-[12px] text-slate-200 font-medium">AI Auto-reply</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={loadingAiPref}
+                  onClick={async () => {
+                    const next = !aiReplyEnabled;
+                    setAiReplyEnabled(next);
+                    try {
+                      setLoadingAiPref(true);
+                      await api.put(`/users/${user.id}/ai-preference`, { aiReplyEnabled: next });
+                    } catch {
+                      toast.error("Failed to update AI preference");
+                      setAiReplyEnabled(!next);
+                    } finally {
+                      setLoadingAiPref(false);
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${aiReplyEnabled ? "bg-blue-500" : "bg-slate-600"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${aiReplyEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="mt-3">
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search channels & people..."
+                  className="w-full bg-slate-800 text-slate-200 placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+              </div>
+            </div>
+
+            {/* Scrollable channel + DM list */}
+            <nav className="flex-1 overflow-y-auto py-2">
+
+              {/* CHANNELS */}
+              <div className="px-4 pt-3 pb-1.5 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Channels</span>
+              </div>
+
+              {/* Pinned system channels */}
+              {[
+                { key: GENERAL_CHANNEL_KEY, label: "team-general" },
+                { key: AVAILABILITY_CHANNEL_KEY, label: "availability-updates" },
+                { key: PROJECT_MANAGER_CHANNEL_KEY, label: "project-manager" },
+              ].map(({ key, label }) => {
+                const unread = unreadByChannel[key] || 0;
+                const isActive = activeChannelKey === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => key === GENERAL_CHANNEL_KEY ? handleSelectGeneral() : handleSelectChannel(key)}
+                    className={`w-full flex items-center justify-between px-4 py-3 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                  >
+                    <span className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center shrink-0">
+                        <Hash size={14} className="text-slate-400" />
+                      </div>
+                      <span className={`text-[14px] font-medium truncate ${isActive ? "text-white" : unread > 0 ? "text-white font-semibold" : "text-slate-400"}`}>{label}</span>
+                    </span>
+                    {unread > 0 && (
+                      <span className="ml-2 bg-blue-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Public channels */}
+              {publicChannels
+                .filter(ch => !searchQuery || ch.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((ch) => {
+                  const unread = unreadByChannel[ch.key] || 0;
+                  const isActive = activeChannelKey === ch.key;
+                  return (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      onClick={() => handleSelectChannel(ch.key)}
+                      className={`w-full flex items-center justify-between px-4 py-3 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center shrink-0">
+                          <Hash size={14} className="text-slate-400" />
+                        </div>
+                        <span className={`text-[14px] truncate ${isActive ? "text-white" : unread > 0 ? "text-white font-semibold" : "text-slate-400"}`}>{ch.name}</span>
+                      </span>
+                      {unread > 0 && (
+                        <span className="ml-2 bg-blue-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
+                      )}
+                    </button>
+                  );
+                })}
+
+              {/* Slack imported channels */}
+              {slackChannelGroups.length > 0 && (
+                <>
+                  <div className="px-4 pt-4 pb-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Slack</span>
+                  </div>
+                  {slackChannelGroups.map(([prefix, chs]) => (
+                    chs
+                      .filter(ch => !searchQuery || ch.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map((ch) => {
+                        const unread = unreadByChannel[ch.key] || 0;
+                        const isActive = activeChannelKey === ch.key;
+                        return (
+                          <button
+                            key={ch.id}
+                            type="button"
+                            onClick={() => handleSelectChannel(ch.key)}
+                            className={`w-full flex items-center justify-between pl-7 pr-4 py-2.5 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                          >
+                            <span className="flex items-center gap-2.5 min-w-0">
+                              <Hash size={13} className="text-slate-500 shrink-0" />
+                              <span className={`text-[13px] truncate ${isActive ? "text-white" : unread > 0 ? "text-white font-semibold" : "text-slate-400"}`}>{ch.name}</span>
+                            </span>
+                            {unread > 0 && (
+                              <span className="ml-2 bg-blue-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center shrink-0">{unread}</span>
+                            )}
+                          </button>
+                        );
+                      })
+                  ))}
+                </>
+              )}
+
+              {/* Private channels */}
+              {privateChannels.length > 0 && (
+                <>
+                  <div className="px-4 pt-4 pb-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Lock size={9} /> Private</span>
+                  </div>
+                  {privateChannels.map((ch) => {
+                    const isActive = activeChannelKey === ch.key;
+                    return (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        onClick={() => handleSelectChannel(ch.key)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center shrink-0">
+                          <Lock size={13} className="text-slate-400" />
+                        </div>
+                        <span className={`text-[14px] truncate ${isActive ? "text-white" : "text-slate-400"}`}>{ch.name}</span>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* DIRECT MESSAGES */}
+              <div className="px-4 pt-5 pb-1.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Direct Messages</span>
+              </div>
+
+              {loadingUsers ? (
+                <div className="px-4 py-2 text-[12px] text-slate-500">Loading...</div>
+              ) : (
+                sortedTeammates
+                  .filter(u => !searchQuery || u.username.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((u) => {
+                    const presence = presenceMap[u.id]?.status || "offline";
+                    const color = presenceColor(presence);
+                    const dmKey = dmKeyFor(user.id, u.id);
+                    const isActive = activeChannelKey === dmKey;
+                    const unread = unreadByChannel[dmKey] || 0;
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => handleSelectDm(u)}
+                        className={`w-full flex items-center justify-between px-4 py-2.5 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="relative shrink-0">
+                            {u.avatar_url ? (
+                              <FetchImg src={resolveUrl(u.avatar_url)} alt={u.username} className="w-9 h-9 rounded-full object-cover" />
+                            ) : null}
+                            {!u.avatar_url && (
+                              <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-[13px] font-bold text-slate-200">
+                                {u.username?.[0]?.toUpperCase() || "?"}
+                              </div>
+                            )}
+                            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-slate-900 ${color}`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-[14px] font-medium truncate ${isActive ? "text-white" : unread > 0 ? "text-white font-semibold" : "text-slate-300"}`}>{u.username}</div>
+                            <div className="text-[11px] text-slate-500 truncate">{presenceLabel(presence)}</div>
+                          </div>
+                        </div>
+                        {unread > 0 && (
+                          <span className="ml-2 bg-blue-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
+                        )}
+                      </button>
+                    );
+                  })
+              )}
+
+              <div className="h-4" />
+            </nav>
+
+            {/* Your profile footer */}
+            <div className="px-4 py-3 border-t border-slate-700/60 shrink-0 bg-slate-800/40">
+              <div className="flex items-center gap-3">
+                <div className="relative shrink-0">
+                  {user.avatar_url ? (
+                    <FetchImg src={resolveUrl(user.avatar_url)} alt={user.username} className="w-9 h-9 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-[13px] font-bold">
+                      {user.username?.[0]?.toUpperCase() || "?"}
+                    </div>
+                  )}
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold text-slate-200 truncate">{user.username}</div>
+                  <div className="text-[11px] text-slate-500 capitalize">{user.role || "member"}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── SCREEN 2: Active chat ── */}
+        {mobileView === "chat" && (
+          <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+
+            {/* Header */}
+            <header className="px-3 py-3 border-b border-slate-100 flex items-center gap-2 bg-white shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobileView("list")}
+                className="p-2 -ml-1 text-slate-500 active:text-slate-800 rounded-lg"
+              >
+                <ChevronLeft size={22} />
+              </button>
+
+              {isDmChannel && activeDmUser ? (
+                <div className="relative shrink-0">
+                  <Avatar name={activeDmUser.username} src={userAvatarMap[activeDmUser.id]} size="sm" />
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${dmPresenceClass}`} />
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                  <Hash size={15} className="text-slate-500" />
+                </div>
+              )}
+
+              <div className="flex-1 min-w-0">
+                <h2 className="font-semibold text-slate-800 text-[15px] truncate leading-tight">{activeChannelTitle}</h2>
+                <p className="text-[11px] text-slate-400 truncate leading-tight">
+                  {isDmChannel ? dmPresenceText : activeChannel?.description || "Team channel"}
+                </p>
+              </div>
+
+              {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
+                <button
+                  type="button"
+                  onClick={handleToggleHuddle}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-colors shrink-0 ${
+                    isHuddleActiveHere ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500 active:bg-slate-200"
+                  }`}
+                  title={huddleButtonLabel}
+                >
+                  🔊
+                </button>
+              )}
+            </header>
+
+            {/* Disconnect banner */}
+            {!connected && !joining && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-[11px] font-medium shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-200 animate-pulse" />
+                <span>Disconnected — trying to reconnect…</span>
+              </div>
+            )}
+
+            {/* Huddle banner */}
+            {isHuddleActiveHere && (
+              <div className="mx-3 mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] flex items-center justify-between shrink-0">
+                <span>🔊 Huddle · <span className="font-semibold">{activeHuddle.startedBy?.username}</span></span>
+                <div className="flex items-center gap-2">
+                  {!huddleJoined && !huddleConnecting && (
+                    <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-amber-300 rounded-lg px-2 py-1 bg-white active:bg-amber-50">Join</button>
+                  )}
+                  {huddleJoined && <span className="text-amber-700 font-medium">You&apos;re in</span>}
+                </div>
+              </div>
+            )}
+
+            {/* Editing banner */}
+            {editingMessageId && (
+              <div className="mx-3 mt-2 px-3 py-1.5 bg-amber-50 border-l-2 border-amber-400 rounded text-[11px] flex items-center justify-between shrink-0">
+                <span className="text-amber-700 font-medium">Editing message</span>
+                <button type="button" onClick={handleCancelEdit} className="text-amber-600 text-[10px] underline">Cancel</button>
+              </div>
+            )}
+
+            {/* Messages */}
+            <div
+              ref={listRef}
+              onScroll={handleScrollMessages}
+              className="flex-1 overflow-y-auto px-3 py-3"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {loadingHistory && activeMessages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-[12px] text-slate-400">Loading...</div>
+                </div>
+              ) : messagesToRender.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+                  <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
+                    <MessageSquare size={24} className="text-slate-400" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-slate-600">No messages yet</div>
+                    <div className="text-[12px] text-slate-400 mt-1">Say hi 👋</div>
+                  </div>
+                </div>
+              ) : (
+                messagesToRender.map((m, idx) => {
+                  const isSystem = m.system;
+                  const isOwn = !m.system && String(m.userId || m.user_id) === String(user.id);
+                  const time = m.createdAt
+                    ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    : "";
+
+                  const prev = messagesToRender[idx - 1];
+                  const prevDate = prev?.createdAt ? new Date(prev.createdAt).toDateString() : null;
+                  const thisDate = m.createdAt ? new Date(m.createdAt).toDateString() : null;
+                  const showDateDivider = thisDate && thisDate !== prevDate;
+                  const dateDividerLabel = thisDate ? formatDateLabel(m.createdAt) : null;
+
+                  const FIVE_MIN = 5 * 60 * 1000;
+                  const prevNonSystem = messagesToRender.slice(0, idx).filter(x => !x.system).at(-1);
+                  const isGrouped =
+                    !isSystem &&
+                    prevNonSystem &&
+                    (prevNonSystem.userId || prevNonSystem.user_id) === (m.userId || m.user_id) &&
+                    m.createdAt && prevNonSystem.createdAt &&
+                    (new Date(m.createdAt) - new Date(prevNonSystem.createdAt)) < FIVE_MIN;
+
+                  const reactions = m.reactions || {};
+                  const reactionEntries = Object.entries(reactions);
+
+                  return (
+                    <div key={m.id}>
+                      {showDateDivider && (
+                        <div className="flex items-center gap-3 my-4">
+                          <div className="flex-1 h-px bg-slate-100" />
+                          <span className="text-[10px] text-slate-400 font-medium">{dateDividerLabel}</span>
+                          <div className="flex-1 h-px bg-slate-100" />
+                        </div>
+                      )}
+
+                      {isSystem ? (
+                        <div className="flex items-center justify-center my-1.5">
+                          <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 rounded-full px-3 py-0.5">
+                            {m.textHtml || m.text}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className={`flex gap-2.5 ${isGrouped ? "pt-0.5" : "pt-3"}`}>
+                          {isGrouped ? (
+                            <div className="w-8 shrink-0" />
+                          ) : (
+                            <div className="w-8 shrink-0 mt-0.5">
+                              <Avatar name={m.username || "User"} src={userAvatarMap[m.userId || m.user_id]} size="sm" />
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0">
+                            {!isGrouped && (
+                              <div className="flex items-baseline gap-2 mb-0.5">
+                                <span className={`text-[13px] font-bold ${isOwn ? "text-blue-700" : "text-slate-800"}`}>
+                                  {isOwn ? "You" : m.username || "User"}
+                                </span>
+                                <span className="text-[10px] text-slate-400 tabular-nums">{time}</span>
+                                {m.username === "AI Assistant" && (
+                                  <span className="text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5 font-medium">AI</span>
+                                )}
+                              </div>
+                            )}
+
+                            {m.deletedAt ? (
+                              <div className="text-[12px] text-slate-300 italic flex items-center gap-1.5">
+                                <span>🚫</span> <span>Deleted</span>
+                              </div>
+                            ) : (
+                              <>
+                                {(m.textHtml || m.text) && (
+                                  <div
+                                    className="text-[14px] text-slate-700 leading-relaxed break-words chat-prose"
+                                    style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+                                    dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
+                                  />
+                                )}
+
+                                {/* Attachments */}
+                                {(m.attachments || []).length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {(m.attachments || []).map((att, ai) => {
+                                      const fullUrl = resolveUrl(att.url) || att.url;
+                                      const isImage = att.type?.startsWith("image/");
+                                      const isVideo = att.type?.startsWith("video/");
+                                      return (
+                                        <div key={ai}>
+                                          {isImage && (
+                                            <a href={fullUrl} target="_blank" rel="noreferrer">
+                                              <img src={fullUrl} alt={att.name} className="max-h-48 max-w-full rounded-2xl object-contain border border-slate-200 shadow-sm" />
+                                            </a>
+                                          )}
+                                          {isVideo && <video src={fullUrl} controls className="max-h-48 max-w-full rounded-2xl shadow-sm" />}
+                                          {!isImage && !isVideo && (
+                                            <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer"
+                                              className="inline-flex items-center gap-2 text-[12px] text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                                              <span>📄</span>
+                                              <div>
+                                                <div className="font-medium truncate max-w-[160px]">{att.name}</div>
+                                                {att.size && <div className="text-[10px] text-slate-400">{(att.size / 1024).toFixed(0)} KB</div>}
+                                              </div>
+                                            </a>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Reactions */}
+                                {reactionEntries.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {reactionEntries.map(([emoji, info]) => {
+                                      const userIds = info.userIds || [];
+                                      const count = typeof info.count === "number" ? info.count : userIds.length;
+                                      const hasReacted = userIds.includes(user.id);
+                                      return (
+                                        <button
+                                          key={emoji}
+                                          type="button"
+                                          onClick={() => handleToggleReaction(m.id, emoji)}
+                                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[13px] border transition-all ${
+                                            hasReacted
+                                              ? "bg-blue-50 border-blue-300 text-blue-700 font-semibold"
+                                              : "bg-white border-slate-200 text-slate-600"
+                                          }`}
+                                        >
+                                          <span>{emoji}</span>
+                                          <span className="text-[11px]">{count}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Inline reaction picker (tap emoji button in toolbar) */}
+                                {openReactionFor === m.id && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5 p-3 bg-white border border-slate-200 rounded-2xl shadow-xl z-30">
+                                    {QUICK_REACTIONS.map((emoji) => (
+                                      <button
+                                        key={emoji}
+                                        type="button"
+                                        onClick={() => handleAddReactionFromPicker(m.id, emoji)}
+                                        className="text-xl px-1.5 py-1 hover:bg-slate-100 rounded-xl transition-colors"
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Thread replies */}
+                                {replyCountById[m.id] > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenThread(m)}
+                                    className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-blue-600 bg-blue-50 rounded-full px-3 py-1.5"
+                                  >
+                                    <MessageSquare size={12} />
+                                    {replyCountById[m.id]} repl{replyCountById[m.id] === 1 ? "y" : "ies"}
+                                  </button>
+                                )}
+                              </>
+                            )}
+
+                            {/* Per-message action row (always visible on mobile) */}
+                            {!m.deletedAt && activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
+                              <div className="mt-1.5 flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenReactionPicker(m.id)}
+                                  className="p-1.5 rounded-lg bg-slate-50 text-slate-400 active:bg-slate-100 text-[15px]"
+                                >
+                                  <Smile size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenThread(m)}
+                                  className="p-1.5 rounded-lg bg-slate-50 text-slate-400 active:bg-slate-100"
+                                >
+                                  <MessageSquare size={14} />
+                                </button>
+                                {isOwn && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleStartEditMessage(m);
+                                      // For mobile, pre-fill the textarea with current text
+                                      const plain = m.textHtml
+                                        ? m.textHtml.replace(/<[^>]+>/g, "")
+                                        : m.text || "";
+                                      setMobileText(plain);
+                                    }}
+                                    className="p-1.5 rounded-lg bg-slate-50 text-slate-400 active:bg-slate-100 text-sm"
+                                  >
+                                    ✏️
+                                  </button>
+                                )}
+                                {isOwn && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteMessage(m.id)}
+                                    className="p-1.5 rounded-lg bg-slate-50 text-red-300 active:bg-red-50 text-sm"
+                                  >
+                                    🗑️
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Typing indicator */}
+            {typingUsernames.length > 0 && (
+              <div className="px-4 py-1.5 text-[11px] text-slate-400 flex items-center gap-2 shrink-0">
+                <div className="flex gap-0.5">
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+                <span>
+                  {typingUsernames.length === 1
+                    ? `${typingUsernames[0]} is typing…`
+                    : `${typingUsernames.join(", ")} are typing…`}
+                </span>
+              </div>
+            )}
+
+            {/* Pending attachment previews */}
+            {pendingAttachments.length > 0 && (
+              <div className="px-3 pt-2 pb-0 flex flex-wrap gap-2 shrink-0">
+                {pendingAttachments.map((att, i) => (
+                  <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px]">
+                    {att.type?.startsWith("image/") ? (
+                      <img src={`${BACKEND_URL}${att.url}`} alt={att.name} className="h-8 w-8 object-cover rounded" />
+                    ) : (
+                      <span>📎</span>
+                    )}
+                    <span className="max-w-[100px] truncate text-slate-600">{att.name}</span>
+                    <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="text-slate-300 hover:text-red-400">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── Slack-style rich text composer ── */}
+            <div className="px-3 pt-2 pb-3 bg-white border-t border-slate-100 shrink-0">
+              {activeChannelKey !== AVAILABILITY_CHANNEL_KEY ? (
+                <form onSubmit={handleSend}>
+                  {/* Composer box: editor + formatting bar */}
+                  <div
+                    className="border border-slate-200 rounded-2xl overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-400/40 focus-within:border-blue-300 transition-all shadow-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" && editingMessageId) handleCancelEdit();
+                    }}
+                  >
+                    {/* Editing banner inside composer */}
+                    {editingMessageId && (
+                      <div className="px-3 py-1 bg-amber-50 border-b border-amber-100 flex items-center justify-between text-[11px]">
+                        <span className="text-amber-700 font-medium">Editing message</span>
+                        <button type="button" onClick={handleCancelEdit} className="text-amber-500 underline">Cancel</button>
+                      </div>
+                    )}
+
+                    {/* ReactQuill rich text editor (no built-in toolbar) */}
+                    <ReactQuill
+                      ref={mobileQuillRef}
+                      theme="snow"
+                      value={editorHtml}
+                      onChange={(val) => {
+                        handleEditorChange(val);
+                        // Typing indicator
+                        const now = Date.now();
+                        if (now - lastTypingSentRef.current > 2000 && val.replace(/<[^>]*>/g, "").trim().length > 0) {
+                          lastTypingSentRef.current = now;
+                          sendTyping(activeChannelKey);
+                        }
+                      }}
+                      modules={{ toolbar: false }}
+                      formats={quillFormats}
+                      placeholder={connected ? `Message ${isDmChannel && activeDmUser ? activeDmUser.username : activeChannelTitle}…` : "Connecting..."}
+                      className="mobile-quill"
+                    />
+
+                    {/* Formatting + action bar — Slack style */}
+                    <div className="flex items-center px-2 py-1.5 border-t border-slate-100 bg-slate-50/70 gap-0.5">
+                      {/* Bold */}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const q = mobileQuillRef.current?.getEditor();
+                          if (q) q.format("bold", !q.getFormat().bold);
+                        }}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl text-[14px] font-bold text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        title="Bold"
+                      >B</button>
+                      {/* Italic */}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const q = mobileQuillRef.current?.getEditor();
+                          if (q) q.format("italic", !q.getFormat().italic);
+                        }}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl text-[14px] italic text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        title="Italic"
+                      >I</button>
+                      {/* Strikethrough */}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const q = mobileQuillRef.current?.getEditor();
+                          if (q) q.format("strike", !q.getFormat().strike);
+                        }}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        title="Strikethrough"
+                      ><span className="text-[13px] line-through font-medium">S</span></button>
+                      {/* Inline code */}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const q = mobileQuillRef.current?.getEditor();
+                          if (q) q.format("code", !q.getFormat().code);
+                        }}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl font-mono text-[13px] text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        title="Inline code"
+                      >{"`"}</button>
+                      {/* Bullet list */}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const q = mobileQuillRef.current?.getEditor();
+                          if (q) {
+                            const cur = q.getFormat().list;
+                            q.format("list", cur === "bullet" ? false : "bullet");
+                          }
+                        }}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        title="Bullet list"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                          <circle cx="2.5" cy="4" r="1" fill="currentColor" stroke="none"/>
+                          <circle cx="2.5" cy="8" r="1" fill="currentColor" stroke="none"/>
+                          <circle cx="2.5" cy="12" r="1" fill="currentColor" stroke="none"/>
+                          <line x1="5.5" y1="4" x2="14" y2="4"/>
+                          <line x1="5.5" y1="8" x2="14" y2="8"/>
+                          <line x1="5.5" y1="12" x2="14" y2="12"/>
+                        </svg>
+                      </button>
+
+                      <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
+
+                      {/* Attach */}
+                      <button
+                        type="button"
+                        onClick={handleAttachmentClick}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        title="Attach file"
+                      >
+                        <Paperclip size={16} />
+                      </button>
+
+                      {/* Send button */}
+                      <button
+                        type="submit"
+                        disabled={!connected || (!editorHtml.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment}
+                        className="ml-auto w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 disabled:opacity-30 disabled:cursor-not-allowed active:bg-blue-700 shadow-sm transition-colors"
+                      >
+                        {sending ? (
+                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Send size={15} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={handleAttachmentChange} />
+                </form>
+              ) : (
+                <div className="text-center py-3 text-[12px] text-slate-400 italic bg-slate-50 rounded-xl border border-slate-100">
+                  Read-only channel
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── THREAD OVERLAY (full-screen, slides over chat) ── */}
+        {mobileView === "chat" && activeThreadKey && threadRootMessage && (
+          <div
+            className="absolute inset-0 bg-white flex flex-col z-20"
+            style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}
+          >
+            {/* Thread header */}
+            <header className="px-4 py-3.5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={handleCloseThread}
+                className="p-1.5 -ml-1.5 text-slate-500 active:text-slate-800"
+              >
+                <ChevronLeft size={22} />
+              </button>
+              <div>
+                <div className="text-[15px] font-semibold text-slate-800">Thread</div>
+                <div className="text-[11px] text-slate-400">
+                  in {threadParentChannel ? `#${threadParentChannel.name}` : "this channel"}
+                </div>
+              </div>
+            </header>
+
+            {/* Root message */}
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2 mb-2">
+                <Avatar name={threadRootMessage.username || "User"} src={userAvatarMap[threadRootMessage.userId || threadRootMessage.user_id]} size="sm" />
+                <span className="text-[13px] font-semibold text-slate-700">
+                  {threadRootMessage.username === user.username ? "You" : threadRootMessage.username || "User"}
+                </span>
+              </div>
+              <div
+                className="text-[13px] text-slate-600 leading-relaxed break-words line-clamp-4 chat-prose"
+                dangerouslySetInnerHTML={{ __html: threadRootMessage.textHtml || threadRootMessage.text || "" }}
+              />
+            </div>
+
+            {/* Thread replies */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+              {threadMessages.length === 0 ? (
+                <div className="text-[12px] text-slate-400 text-center mt-10">
+                  No replies yet — start the conversation
+                </div>
+              ) : (
+                threadMessages.map((m) => {
+                  const isOwn = String(m.userId || m.user_id) === String(user.id);
+                  const time = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+                  return (
+                    <div key={m.id} className="flex gap-2.5">
+                      <div className="w-8 shrink-0 mt-0.5">
+                        <Avatar name={m.username || "User"} src={userAvatarMap[m.userId || m.user_id]} size="sm" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 mb-0.5">
+                          <span className={`text-[13px] font-bold ${isOwn ? "text-blue-700" : "text-slate-800"}`}>
+                            {isOwn ? "You" : m.username || "User"}
+                          </span>
+                          <span className="text-[10px] text-slate-400 tabular-nums">{time}</span>
+                        </div>
+                        {(m.textHtml || m.text) && (
+                          <div
+                            className="text-[14px] text-slate-700 leading-relaxed break-words chat-prose"
+                            style={{ wordBreak: "break-word" }}
+                            dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
+                          />
+                        )}
+                        {(m.attachments || []).length > 0 && (
+                          <div className="mt-2 flex flex-col gap-1">
+                            {(m.attachments || []).map((att, ai) => {
+                              const fullUrl = resolveUrl(att.url) || att.url;
+                              const isImage = att.type?.startsWith("image/");
+                              return (
+                                <div key={ai}>
+                                  {isImage && <a href={fullUrl} target="_blank" rel="noreferrer"><img src={fullUrl} alt={att.name} className="max-h-40 max-w-full rounded-xl border border-slate-200" /></a>}
+                                  {!isImage && (
+                                    <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-blue-600">
+                                      <span>📎</span><span className="truncate max-w-[180px]">{att.name}</span>
+                                    </a>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Thread composer — rich text */}
+            <form onSubmit={handleSendThread} className="border-t border-slate-100 px-3 pt-2 pb-3 shrink-0 bg-white">
+              <div className="border border-slate-200 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400/40 focus-within:border-blue-300 transition-all">
+                <ReactQuill
+                  theme="snow"
+                  value={threadEditorHtml}
+                  onChange={handleThreadEditorChange}
+                  modules={{ toolbar: false }}
+                  formats={quillFormats}
+                  placeholder="Reply in thread…"
+                  className="mobile-quill"
+                />
+                <div className="flex items-center px-2 py-1.5 border-t border-slate-100 bg-slate-50/70">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); }}
+                    className="text-[11px] text-slate-400 px-2"
+                  >
+                    <span className="italic">Aa</span>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!connected || !(threadEditorHtml || "").replace(/<[^>]*>/g, "").trim()}
+                    className="ml-auto w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white disabled:opacity-30 active:bg-blue-700 shadow-sm"
+                  >
+                    <Send size={15} />
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Modals (shared between list/chat views) */}
+        <CreateChannelModal
+          open={openCreate}
+          onClose={() => setOpenCreate(false)}
+          onCreated={(channel) => {
+            setChannels((prev) => [...prev, channel]);
+            setActiveChannelKey(channel.key);
+          }}
+        />
+        <ChannelSettingsModal
+          open={openSettings}
+          channel={settingsChannel}
+          currentUser={user}
+          onClose={() => setOpenSettings(false)}
+          onUpdate={() => loadChannels()}
+          onLeave={(channelKey) => {
+            setOpenSettings(false);
+            if (activeChannelKey === channelKey) setActiveChannelKey(GENERAL_CHANNEL_KEY);
+            loadChannels();
+          }}
+          onDelete={(channelKey) => {
+            setOpenSettings(false);
+            if (activeChannelKey === channelKey) setActiveChannelKey(GENERAL_CHANNEL_KEY);
+            loadChannels();
+          }}
+        />
+        <ReportsModal open={reportsOpen} onClose={() => setReportsOpen(false)} context={reportsContext} />
+      </div>
+    );
+  }
+  // ========================================================
+  // END MOBILE LAYOUT — desktop continues below
+  // ========================================================
+
   return (
     <div className="h-full flex overflow-hidden rounded-xl shadow-lg">
 
+      {/* Mobile sidebar backdrop */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* ===== LEFT SIDEBAR — dark ===== */}
-      <aside className="w-60 bg-slate-900 flex flex-col shrink-0">
+      <aside className={`
+        bg-slate-900 flex flex-col shrink-0 z-50
+        fixed inset-y-0 left-0 w-72 transition-transform duration-300 ease-out
+        md:relative md:w-60 md:translate-x-0
+        ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+      `}>
         {/* App header */}
         <div className="px-4 py-3.5 border-b border-slate-700/60 shrink-0">
           <div className="flex items-center justify-between">
             <span className="text-slate-100 font-bold text-sm tracking-tight">Workspace</span>
-            <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(false)}
+                className="md:hidden text-slate-400 hover:text-slate-200 p-1 -mr-1"
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
           </div>
           <div className="text-[11px] text-slate-400 mt-0.5 truncate">{user.username}</div>
         </div>
@@ -2082,11 +3103,7 @@ useEffect(() => {
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div className="relative shrink-0">
                       {u.avatar_url ? (
-                        <img
-                          src={u.avatar_url.startsWith("http") ? u.avatar_url : `${BACKEND_URL}${u.avatar_url}`}
-                          alt={u.username}
-                          className="w-6 h-6 rounded-full object-cover"
-                        />
+                        <FetchImg src={resolveUrl(u.avatar_url)} alt={u.username} className="w-6 h-6 rounded-full object-cover" />
                       ) : (
                         <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-semibold text-slate-200">
                           {u.username?.[0]?.toUpperCase() || "?"}
@@ -2116,11 +3133,7 @@ useEffect(() => {
           <div className="flex items-center gap-2.5">
             <div className="relative shrink-0">
               {user.avatar_url ? (
-                <img
-                  src={user.avatar_url.startsWith("http") ? user.avatar_url : `${BACKEND_URL}${user.avatar_url}`}
-                  alt={user.username}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
+                <FetchImg src={resolveUrl(user.avatar_url)} alt={user.username} className="w-8 h-8 rounded-full object-cover" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-[12px] font-bold">
                   {user.username?.[0]?.toUpperCase() || "?"}
@@ -2149,8 +3162,16 @@ useEffect(() => {
         )}
 
         {/* Channel header */}
-        <header className="px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="px-3 md:px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+            {/* Hamburger — mobile only */}
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden shrink-0 text-slate-500 hover:text-slate-700 p-1 -ml-1"
+            >
+              <Menu size={20} />
+            </button>
             {isDmChannel && activeDmUser ? (
               <div className="relative shrink-0">
                 <Avatar name={activeDmUser.username} src={userAvatarMap[activeDmUser.id]} size="sm" />
@@ -2178,24 +3199,24 @@ useEffect(() => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search..."
-              className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 w-32 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-slate-50"
+              className="hidden md:block text-xs border border-slate-200 rounded-lg px-3 py-1.5 w-32 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-slate-50"
             />
             {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
               <button
                 type="button"
                 onClick={handleToggleHuddle}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 md:px-3 py-1.5 text-[11px] font-medium transition-colors ${
                   isHuddleActiveHere
                     ? "bg-amber-50 border-amber-200 text-amber-700"
                     : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 <span>🔊</span>
-                <span>{huddleButtonLabel}</span>
+                <span className="hidden md:inline">{huddleButtonLabel}</span>
               </button>
             )}
             {!isDmChannel && (
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <div className="hidden md:flex items-center gap-1.5 text-[11px] text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5">
                 <Users size={12} className="text-slate-400" />
                 <span>{Object.values(presenceMap).filter(p => p.status === "online" || p.status === "available").length} online</span>
               </div>
@@ -2355,7 +3376,7 @@ useEffect(() => {
                               {(m.attachments || []).length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-2">
                                   {(m.attachments || []).map((att, ai) => {
-                                    const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+                                    const BACKEND = _BACKEND;
                                     const fullUrl = att.url?.startsWith("http") ? att.url : `${BACKEND}${att.url}`;
                                     const isImage = att.type?.startsWith("image/");
                                     const isVideo = att.type?.startsWith("video/");
@@ -2564,7 +3585,7 @@ useEffect(() => {
                           }}
                         >
                           {u.avatar_url ? (
-                            <img src={u.avatar_url.startsWith("http") ? u.avatar_url : `${BACKEND_URL}${u.avatar_url}`} alt={u.username} className="w-6 h-6 rounded-full object-cover" />
+                            <FetchImg src={resolveUrl(u.avatar_url)} alt={u.username} className="w-6 h-6 rounded-full object-cover" />
                           ) : (
                             <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-semibold">{u.username?.[0]?.toUpperCase()}</div>
                           )}
@@ -2731,7 +3752,7 @@ useEffect(() => {
                       {(m.attachments || []).length > 0 && (
                         <div className="mt-1 flex flex-col gap-1">
                           {(m.attachments || []).map((att, ai) => {
-                            const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+                            const BACKEND = _BACKEND;
                             const fullUrl = att.url?.startsWith("http") ? att.url : `${BACKEND}${att.url}`;
                             const isImage = att.type?.startsWith("image/");
                             const isVideo = att.type?.startsWith("video/");

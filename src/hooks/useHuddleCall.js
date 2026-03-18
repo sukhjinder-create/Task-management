@@ -28,6 +28,10 @@ export function useHuddleCall({ currentUser }) {
   const cameraVideoTrackRef = useRef(null);
   const screenTrackRef = useRef(null);
   const mediaRecorderRef = useRef(null);
+  // Holds { track, canvas } for the black-frame canvas track used when camera is "off".
+  // Using a canvas instead of track.enabled=false ensures the video element always
+  // receives frames and never enters the paused state on Android WebView.
+  const blackTrackRef = useRef(null);
 
   const channelIdRef = useRef(null);
   const huddleIdRef = useRef(null);
@@ -196,6 +200,10 @@ export function useHuddleCall({ currentUser }) {
     remoteStreamsRef.current = {};
     setRemotePeers([]);
 
+    if (blackTrackRef.current) {
+      blackTrackRef.current.track.stop();
+      blackTrackRef.current = null;
+    }
     if (localStreamRef.current) localStreamRef.current.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     setLocalStream(null);
@@ -220,12 +228,99 @@ export function useHuddleCall({ currentUser }) {
   }, [micEnabled]);
 
   // ---- Toggle camera ----
-  const toggleCamera = useCallback(() => {
+  //
+  // Strategy: instead of track.enabled = false (which causes Android WebView to
+  // pause the <video> element when frames stop), we swap the camera track for a
+  // tiny black canvas track that continuously emits frames.  The video element
+  // therefore NEVER pauses → no play-button overlay → no gesture-window issues.
+  const toggleCamera = useCallback(async () => {
     const local = localStreamRef.current;
     if (!local) return;
-    const newValue = !camEnabled;
-    local.getVideoTracks().forEach((track) => { track.enabled = newValue; });
-    setCamEnabled(newValue);
+    const turningOn = !camEnabled;
+
+    if (!turningOn) {
+      // ── Camera OFF: replace camera track with black canvas track ────────────
+      const cameraTrack = cameraVideoTrackRef.current || local.getVideoTracks()[0];
+
+      // Build a 2×2 black canvas that emits 10 fps — just enough to keep the
+      // video element in "playing" state without consuming real resources.
+      const canvas = document.createElement("canvas");
+      canvas.width = 2;
+      canvas.height = 2;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, 2, 2);
+      const blackStream = canvas.captureStream ? canvas.captureStream(10) : null;
+      const blackTrack = blackStream ? blackStream.getVideoTracks()[0] : null;
+
+      if (blackTrack) {
+        local.addTrack(blackTrack);            // add black FIRST (stream never lacks a video track)
+        if (cameraTrack) local.removeTrack(cameraTrack);
+        blackTrackRef.current = { track: blackTrack, canvas };
+
+        // Tell peers to receive black frames (camera is off)
+        Object.values(peerConnectionsRef.current).forEach((pc) => {
+          const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+          if (sender) sender.replaceTrack(blackTrack);
+        });
+      } else {
+        // Fallback: canvas.captureStream not available — use track.enabled
+        if (cameraTrack) cameraTrack.enabled = false;
+      }
+
+      if (cameraTrack) cameraTrack.enabled = false;      // mute for peers even if kept in stream
+      if (cameraTrack) cameraVideoTrackRef.current = cameraTrack; // preserve for re-enable
+      setCamEnabled(false);
+      return;
+    }
+
+    // ── Camera ON: swap black canvas track back to real camera track ──────────
+    const cameraTrack = cameraVideoTrackRef.current;
+    const blackInfo = blackTrackRef.current;
+
+    if (cameraTrack && cameraTrack.readyState === "live") {
+      cameraTrack.enabled = true;
+      local.addTrack(cameraTrack);           // add camera FIRST
+
+      if (blackInfo) {
+        local.removeTrack(blackInfo.track);
+        blackInfo.track.stop();
+        blackTrackRef.current = null;
+      }
+
+      // Restore camera feed to peers
+      Object.values(peerConnectionsRef.current).forEach((pc) => {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) sender.replaceTrack(cameraTrack);
+      });
+
+      setCamEnabled(true);
+      return;
+    }
+
+    // Camera track ended (some Android browsers stop it) — re-acquire
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const newTrack = newStream.getVideoTracks()[0];
+      if (!newTrack) return;
+
+      local.addTrack(newTrack);
+      if (blackInfo) {
+        local.removeTrack(blackInfo.track);
+        blackInfo.track.stop();
+        blackTrackRef.current = null;
+      }
+      cameraVideoTrackRef.current = newTrack;
+
+      Object.values(peerConnectionsRef.current).forEach((pc) => {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) sender.replaceTrack(newTrack);
+      });
+
+      setCamEnabled(true);
+    } catch (err) {
+      console.error("toggleCamera re-acquire failed:", err);
+    }
   }, [camEnabled]);
 
   // ---- Screen share ----
@@ -430,6 +525,7 @@ export function useHuddleCall({ currentUser }) {
       Object.values(peerConnectionsRef.current).forEach((pc) => pc.close());
       peerConnectionsRef.current = {};
       remoteStreamsRef.current = {};
+      if (blackTrackRef.current) { blackTrackRef.current.track.stop(); blackTrackRef.current = null; }
       if (localStreamRef.current) localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
       cameraVideoTrackRef.current = null;

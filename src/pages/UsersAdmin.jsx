@@ -4,817 +4,451 @@ import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import Select from "react-select";
+import { Users, Plus, Edit2, Trash2, Bot, ChevronDown, ChevronUp, X } from "lucide-react";
 
 const ROLES = ["admin", "manager", "user"];
-const ENTRIES_OPTIONS = [10, 25, 50, 100];
 
 export default function UsersAdmin() {
   const api = useApi();
   const { auth } = useAuth();
   const currentUser = auth.user;
-const [aiEnabled, setAiEnabled] = useState(false);
-const [aiName, setAiName] = useState("");
-const [savingAISettings, setSavingAISettings] = useState(false);
+
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiName, setAiName] = useState("");
+  const [savingAISettings, setSavingAISettings] = useState(false);
+
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [tasksByProject, setTasksByProject] = useState({}); // { projectId: [tasks...] }
-
+  const [tasksByProject, setTasksByProject] = useState({});
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  // pagination
-  const [pageSize, setPageSize] = useState(10); // min 10, max 100
-  const [currentPage, setCurrentPage] = useState(1);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showAISettings, setShowAISettings] = useState(false);
 
-  // Create user form
-  const [newUser, setNewUser] = useState({
-    username: "",
-    email: "",
-    password: "",
-    role: "user",
-  });
-  const [selectedProjectsCreate, setSelectedProjectsCreate] = useState([]); // project IDs
-  const [selectedTasksCreate, setSelectedTasksCreate] = useState([]); // task IDs
+  const [newUser, setNewUser] = useState({ username: "", email: "", password: "", role: "user" });
+  const [selectedProjectsCreate, setSelectedProjectsCreate] = useState([]);
+  const [selectedTasksCreate, setSelectedTasksCreate] = useState([]);
 
-  // Edit user form
   const [editingUserId, setEditingUserId] = useState(null);
-  const [editUser, setEditUser] = useState({
-    username: "",
-    email: "",
-    role: "user",
-  });
-  const [selectedProjectsEdit, setSelectedProjectsEdit] = useState([]); // project IDs
+  const [editUser, setEditUser] = useState({ username: "", email: "", role: "user", aiReplyEnabled: false });
+  const [selectedProjectsEdit, setSelectedProjectsEdit] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   if (currentUser?.role !== "admin") {
     return (
-      <div className="bg-white rounded-xl shadow p-4 text-sm text-red-600">
-        Only admin can manage users.
-      </div>
+      <div className="p-6 text-sm text-red-600 theme-surface">Only admin can manage users.</div>
     );
   }
 
-  // Load users + projects + tasks
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const [usersRes, projectsRes] = await Promise.all([
-          api.get("/users"),
-          api.get("/projects"),
-        ]);
-const aiRes = await api.get("/workspaces/ai-settings");
-setAiEnabled(!!aiRes.data?.aiEnabled);
-setAiName(aiRes.data?.aiName || "AI Assistant");
+        const [usersRes, projectsRes] = await Promise.all([api.get("/users"), api.get("/projects")]);
+        const aiRes = await api.get("/workspaces/ai-settings");
+        setAiEnabled(!!aiRes.data?.aiEnabled);
+        setAiName(aiRes.data?.aiName || "AI Assistant");
         setUsers((usersRes.data || []).filter(
           (u) => u.role !== "system" && !u.is_system && !u.username?.startsWith("AI_System_")
         ));
         setProjects(projectsRes.data || []);
-
         const tasksMap = {};
         for (const p of projectsRes.data || []) {
           try {
             const res = await api.get(`/tasks/${p.id}`);
             tasksMap[p.id] = res.data || [];
-          } catch (err) {
-            console.error("Failed to load tasks for project", p.id, err);
-          }
+          } catch {}
         }
         setTasksByProject(tasksMap);
       } catch (err) {
-        console.error("Failed to load users/projects", err);
-        const msg =
-          err.response?.data?.error || "Failed to load users and projects";
-        toast.error(msg);
+        toast.error(err.response?.data?.error || "Failed to load users and projects");
       } finally {
         setLoading(false);
       }
     }
-
     load();
   }, [api]);
 
-  // keep currentPage in range when users or pageSize change
-  useEffect(() => {
-    const total = users.length;
-    const totalPagesNow = total === 0 ? 1 : Math.ceil(total / pageSize);
-    if (currentPage > totalPagesNow) {
-      setCurrentPage(totalPagesNow);
-    }
-  }, [users, pageSize, currentPage]);
-
-  // ---------- Helpers / options ----------
-
-  const handleCreateFieldChange = (e) => {
-    const { name, value } = e.target;
-    setNewUser((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  // All projects as react-select options
   const projectOptions = useMemo(
-    () =>
-      (projects || []).map((p) => ({
-        value: p.id,
-        label: p.name,
-      })),
+    () => (projects || []).map((p) => ({ value: p.id, label: p.name })),
     [projects]
   );
 
-  // Tasks derived from selected projects (for create)
   const tasksForProjectsCreate = useMemo(() => {
     const list = [];
     for (const projectId of selectedProjectsCreate) {
       const project = projects.find((p) => p.id === projectId);
-      const tasks = tasksByProject[projectId] || [];
-      for (const t of tasks) {
-        list.push({
-          ...t,
-          project_name: project?.name || "Unknown project",
-        });
+      for (const t of tasksByProject[projectId] || []) {
+        list.push({ ...t, project_name: project?.name || "Unknown" });
       }
     }
     return list;
   }, [selectedProjectsCreate, tasksByProject, projects]);
 
-  // react-select options for tasks
   const taskOptionsCreate = useMemo(
-    () =>
-      tasksForProjectsCreate.map((t) => ({
-        value: t.id,
-        label: `[${t.project_name}] ${t.task}`,
-      })),
+    () => tasksForProjectsCreate.map((t) => ({ value: t.id, label: `[${t.project_name}] ${t.task}` })),
     [tasksForProjectsCreate]
   );
 
-  // When project multi-select changes in CREATE
   const handleCreateProjectsChange = (selected) => {
     const ids = (selected || []).map((opt) => opt.value);
     setSelectedProjectsCreate(ids);
-
-    // prune selected tasks that are no longer under selected projects
-    setSelectedTasksCreate((prevSelected) => {
-      const allowedTaskIds = new Set();
-      ids.forEach((pid) => {
-        (tasksByProject[pid] || []).forEach((t) => allowedTaskIds.add(t.id));
-      });
-      return prevSelected.filter((taskId) => allowedTaskIds.has(taskId));
+    setSelectedTasksCreate((prev) => {
+      const allowed = new Set();
+      ids.forEach((pid) => (tasksByProject[pid] || []).forEach((t) => allowed.add(t.id)));
+      return prev.filter((id) => allowed.has(id));
     });
-  };
-
-  const handleCreateTasksChange = (selected) => {
-    const ids = (selected || []).map((opt) => opt.value);
-    setSelectedTasksCreate(ids);
   };
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
-
-    if (!newUser.username.trim()) {
-      toast.error("Username is required");
-      return;
-    }
-    if (!newUser.email.trim()) {
-      toast.error("Email is required");
-      return;
-    }
-    if (!newUser.password.trim()) {
-      toast.error("Password is required");
-      return;
-    }
-
+    if (!newUser.username.trim()) { toast.error("Username is required"); return; }
+    if (!newUser.email.trim()) { toast.error("Email is required"); return; }
+    if (!newUser.password.trim()) { toast.error("Password is required"); return; }
     setCreating(true);
     try {
-      const payload = {
-        username: newUser.username.trim(),
-        email: newUser.email.trim(),
-        password: newUser.password,
-        role: newUser.role,
-        projects: selectedProjectsCreate, // uuid[]
-      };
-
-      // 1. Create the user
-      const res = await api.post("/users", payload);
-      const createdUser = res.data;
-
-      // 2. Assign selected tasks (optional)
-      if (selectedTasksCreate.length > 0) {
-        for (const taskId of selectedTasksCreate) {
-          try {
-            await api.put(`/tasks/${taskId}`, {
-              assigned_to: createdUser.id,
-            });
-          } catch (err) {
-            console.error("Failed to assign task", taskId, err);
-          }
-        }
+      const res = await api.post("/users", { ...newUser, username: newUser.username.trim(), email: newUser.email.trim(), projects: selectedProjectsCreate });
+      const created = res.data;
+      for (const taskId of selectedTasksCreate) {
+        try { await api.put(`/tasks/${taskId}`, { assigned_to: created.id }); } catch {}
       }
-
-      setUsers((prev) => [createdUser, ...prev]);
-
-      // reset create form
-      setNewUser({
-        username: "",
-        email: "",
-        password: "",
-        role: "user",
-      });
+      setUsers((prev) => [created, ...prev]);
+      setNewUser({ username: "", email: "", password: "", role: "user" });
       setSelectedProjectsCreate([]);
       setSelectedTasksCreate([]);
-
-      toast.success("User created successfully");
+      setShowCreateForm(false);
+      toast.success("User created");
     } catch (err) {
-      console.error("Create user error:", err);
-      const msg = err.response?.data?.error || "Failed to create user";
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Failed to create user");
     } finally {
       setCreating(false);
     }
   };
 
-  // ---------- Helpers for edit ----------
-
   const startEditUser = async (user) => {
-  setEditingUserId(user.id);
+    setEditingUserId(user.id);
+    setEditUser({ username: user.username || "", email: user.email || "", role: user.role || "user", aiReplyEnabled: false });
+    setSelectedProjectsEdit(Array.isArray(user.projects) ? user.projects : []);
+    setIsEditModalOpen(true);
+    try {
+      const pref = await api.get(`/users/${user.id}/ai-preference`);
+      setEditUser((prev) => ({ ...prev, aiReplyEnabled: pref.data?.aiReplyEnabled === true }));
+    } catch {}
+  };
 
-  // Base user fields
-  setEditUser({
-    username: user.username || "",
-    email: user.email || "",
-    role: user.role || "user",
-    aiReplyEnabled: false, // default (safe)
-  });
-
-  if (Array.isArray(user.projects)) {
-    setSelectedProjectsEdit(user.projects);
-  } else {
+  const cancelEdit = () => {
+    setEditingUserId(null);
+    setEditUser({ username: "", email: "", role: "user", aiReplyEnabled: false });
     setSelectedProjectsEdit([]);
-  }
+    setIsEditModalOpen(false);
+  };
 
-  setIsEditModalOpen(true);
-
-  // 🔐 Load AI preference (NON-BLOCKING, SAFE)
-  try {
-    const pref = await api.get(`/users/${user.id}/ai-preference`);
-    setEditUser((prev) => ({
-      ...prev,
-      aiReplyEnabled: pref.data?.aiReplyEnabled === true,
-    }));
-  } catch (err) {
-    console.warn("Failed to load AI preference", err);
-    // silently ignore → default false
-  }
-};
-
-const cancelEdit = () => {
-  setEditingUserId(null);
-  setEditUser({
-    username: "",
-    email: "",
-    role: "user",
-    aiReplyEnabled: false,
-  });
-  setSelectedProjectsEdit([]);
-  setIsEditModalOpen(false);
-};
-
-const handleEditFieldChange = (e) => {
-  const { name, value } = e.target;
-  setEditUser((prev) => ({
-    ...prev,
-    [name]: value,
-  }));
-};
-
-const handleEditProjectsChange = (selected) => {
-  const ids = (selected || []).map((opt) => opt.value);
-  setSelectedProjectsEdit(ids);
-};
-
-const handleUpdateUser = async (e) => {
-  e.preventDefault();
-  if (!editingUserId) return;
-
-  if (!editUser.username.trim()) {
-    toast.error("Username is required");
-    return;
-  }
-  if (!editUser.email.trim()) {
-    toast.error("Email is required");
-    return;
-  }
-
-  setUpdating(true);
-  try {
-    // 1️⃣ Update AI preference first (independent, safe)
-    await api.put(`/users/${editingUserId}/ai-preference`, {
-      aiReplyEnabled: editUser.aiReplyEnabled === true,
-    });
-
-    // 2️⃣ Update core user fields
-    const payload = {
-      username: editUser.username.trim(),
-      email: editUser.email.trim(),
-      role: editUser.role,
-      projects: selectedProjectsEdit,
-    };
-
-    const res = await api.put(`/users/${editingUserId}`, payload);
-    const updated = res.data;
-
-    setUsers((prev) =>
-      prev.map((u) => (u.id === editingUserId ? updated : u))
-    );
-
-    toast.success("User updated");
-    cancelEdit();
-  } catch (err) {
-    console.error("Update user error:", err);
-    const msg = err.response?.data?.error || "Failed to update user";
-    toast.error(msg);
-  } finally {
-    setUpdating(false);
-  }
-};
-
-  // ---------- Delete ----------
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    if (!editingUserId) return;
+    if (!editUser.username.trim()) { toast.error("Username is required"); return; }
+    if (!editUser.email.trim()) { toast.error("Email is required"); return; }
+    setUpdating(true);
+    try {
+      await api.put(`/users/${editingUserId}/ai-preference`, { aiReplyEnabled: editUser.aiReplyEnabled === true });
+      const res = await api.put(`/users/${editingUserId}`, {
+        username: editUser.username.trim(), email: editUser.email.trim(), role: editUser.role, projects: selectedProjectsEdit,
+      });
+      setUsers((prev) => prev.map((u) => (u.id === editingUserId ? res.data : u)));
+      toast.success("User updated");
+      cancelEdit();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update user");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm("Are you sure you want to delete this user?")) return;
-
+    if (!window.confirm("Delete this user?")) return;
     setDeletingId(userId);
     try {
       await api.delete(`/users/${userId}`);
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       toast.success("User deleted");
-      if (editingUserId === userId) {
-        cancelEdit();
-      }
+      if (editingUserId === userId) cancelEdit();
     } catch (err) {
-      console.error("Delete user error:", err);
-      const msg = err.response?.data?.error || "Failed to delete user";
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Failed to delete user");
     } finally {
       setDeletingId(null);
     }
   };
 
-  // ---------- Pagination derived values ----------
-
-  const totalUsers = users.length;
-  const totalPages = totalUsers === 0 ? 1 : Math.ceil(totalUsers / pageSize);
-
-  const paginatedUsers = useMemo(() => {
-    if (totalUsers === 0) return [];
-    const start = (currentPage - 1) * pageSize;
-    return users.slice(start, start + pageSize);
-  }, [users, currentPage, pageSize, totalUsers]);
-
-  const showingFrom =
-    totalUsers === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const showingTo =
-    totalUsers === 0 ? 0 : Math.min(currentPage * pageSize, totalUsers);
-
-  const handlePageSizeChange = (e) => {
-    const value = parseInt(e.target.value, 10);
-    if (Number.isNaN(value)) return;
-    const clamped = Math.min(100, Math.max(10, value));
-    setPageSize(clamped);
-    setCurrentPage(1);
-  };
-
-  // ---------- RENDER ----------
-
-  // Values for react-select (create)
-  const selectedProjectOptionsCreate = projectOptions.filter((opt) =>
-    selectedProjectsCreate.includes(opt.value)
-  );
-  const selectedTaskOptionsCreate = taskOptionsCreate.filter((opt) =>
-    selectedTasksCreate.includes(opt.value)
-  );
-
-  // Values for react-select (edit)
-  const selectedProjectOptionsEdit = projectOptions.filter((opt) =>
-    selectedProjectsEdit.includes(opt.value)
-  );
+  const selectedProjectOptionsCreate = projectOptions.filter((o) => selectedProjectsCreate.includes(o.value));
+  const selectedTaskOptionsCreate = taskOptionsCreate.filter((o) => selectedTasksCreate.includes(o.value));
+  const selectedProjectOptionsEdit = projectOptions.filter((o) => selectedProjectsEdit.includes(o.value));
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full">
+
       {/* Header */}
-      <section className="bg-white rounded-xl shadow p-4 flex justify-between items-center">
-        <div>
-          <h1 className="text-lg font-semibold">User Management</h1>
-          <p className="text-xs text-slate-500">
-            Admin can create, edit, delete users, assign projects and optionally
-            tasks.
-          </p>
-        </div>
-      </section>
-
-      <section className="bg-white rounded-xl shadow p-4 space-y-3">
-  <h2 className="text-sm font-semibold">Workspace AI Settings</h2>
-
-  <div className="flex items-center justify-between">
-    <span className="text-xs text-slate-600">Enable AI in this workspace</span>
-    <input
-      type="checkbox"
-      checked={aiEnabled}
-      onChange={(e) => setAiEnabled(e.target.checked)}
-    />
-  </div>
-
-  <div>
-    <label className="block text-xs mb-1">AI Display Name</label>
-    <input
-      type="text"
-      value={aiName}
-      onChange={(e) => setAiName(e.target.value)}
-      className="w-full border rounded-lg px-3 py-2 text-sm"
-      placeholder="e.g. Project AI"
-    />
-  </div>
-
-  <button
-    disabled={savingAISettings}
-    onClick={async () => {
-      try {
-        setSavingAISettings(true);
-        await api.put("/workspaces/ai-settings", {
-          aiEnabled,
-          aiName,
-        });
-        toast.success("AI settings updated");
-      } catch {
-        toast.error("Failed to update AI settings");
-      } finally {
-        setSavingAISettings(false);
-      }
-    }}
-    className="bg-indigo-600 text-white text-xs px-4 py-2 rounded-lg"
-  >
-    Save AI Settings
-  </button>
-</section>
-
-      {/* Create section */}
-      <section className="bg-white rounded-xl shadow p-4 space-y-6">
-        {/* CREATE USER */}
-        <div>
-          <h2 className="text-sm font-semibold mb-2">Create New User</h2>
-
-          <form
-            onSubmit={handleCreateUser}
-            className="grid md:grid-cols-2 gap-4 text-sm"
-          >
-            <div className="space-y-2">
-              <label className="block text-xs">Username</label>
-              <input
-                type="text"
-                name="username"
-                value={newUser.username}
-                onChange={handleCreateFieldChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="Enter username"
-              />
-
-              <label className="block text-xs mt-3">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={newUser.email}
-                onChange={handleCreateFieldChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="Enter email"
-              />
-
-              <label className="block text-xs mt-3">Password</label>
-              <input
-                type="password"
-                name="password"
-                value={newUser.password}
-                onChange={handleCreateFieldChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="Set a password"
-              />
-
-              <label className="block text-xs mt-3">Role</label>
-              <select
-                name="role"
-                value={newUser.role}
-                onChange={handleCreateFieldChange}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-primary-50 rounded-lg">
+              <Users className="w-5 h-5 text-primary-600" />
             </div>
-
-            <div className="space-y-3">
-              {/* Projects multi-select (dropdown) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs">
-                    Projects (multi-select)
-                  </label>
-                </div>
-                <Select
-                  isMulti
-                  options={projectOptions}
-                  value={selectedProjectOptionsCreate}
-                  onChange={handleCreateProjectsChange}
-                  className="text-xs"
-                  classNamePrefix="react-select"
-                  placeholder="Select projects..."
-                  noOptionsMessage={() => "No projects available"}
-                />
-              </div>
-
-              {/* Tasks multi-select (dropdown) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs">
-                    Tasks (optional, from selected projects)
-                  </label>
-                  <span className="text-[10px] text-slate-400">
-                    You can assign tasks now or later.
-                  </span>
-                </div>
-                <Select
-                  isMulti
-                  options={taskOptionsCreate}
-                  value={selectedTaskOptionsCreate}
-                  onChange={handleCreateTasksChange}
-                  className="text-xs"
-                  classNamePrefix="react-select"
-                  placeholder={
-                    selectedProjectsCreate.length === 0
-                      ? "Select project(s) first"
-                      : "Select tasks..."
-                  }
-                  noOptionsMessage={() =>
-                    selectedProjectsCreate.length === 0
-                      ? "Select at least one project"
-                      : "No tasks found for selected projects"
-                  }
-                  isDisabled={selectedProjectsCreate.length === 0}
-                />
-              </div>
+            <div>
+              <h1 className="text-lg font-bold theme-text leading-tight">Admin Panel</h1>
+              <p className="text-xs theme-text-muted">
+                {loading ? "Loading…" : `${users.length} user${users.length === 1 ? "" : "s"}`}
+              </p>
             </div>
-
-            <div className="md:col-span-2 flex justify-end">
-              <button
-                type="submit"
-                disabled={creating}
-                className="bg-blue-600 text-white text-xs rounded-lg px-4 py-2 hover:bg-blue-700 disabled:opacity-50"
-              >
-                {creating ? "Creating..." : "Create User"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </section>
-
-      {/* Users list */}
-      <section className="bg-white rounded-xl shadow p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">Existing Users</h2>
-          <div className="flex items-center gap-2 text-xs">
-            <span>Show</span>
-            <select
-              value={pageSize}
-              onChange={handlePageSizeChange}
-              className="border rounded px-2 py-1 text-xs"
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAISettings((v) => !v)}
+              className={`p-2.5 rounded-xl border theme-border transition-colors ${showAISettings ? "bg-indigo-600 text-white border-indigo-600" : "theme-surface theme-text"}`}
+              title="AI Settings"
             >
-              {ENTRIES_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-            <span>entries</span>
+              <Bot className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowCreateForm((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold active:bg-primary-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">New User</span>
+              <span className="sm:hidden">New</span>
+            </button>
           </div>
         </div>
 
-        {loading ? (
-          <div className="text-sm text-slate-500">Loading users...</div>
-        ) : totalUsers === 0 ? (
-          <div className="text-sm text-slate-500">No users yet.</div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead>
-                  <tr className="text-left text-slate-500 border-b">
-                    <th className="py-2 pr-3">Username</th>
-                    <th className="py-2 pr-3">Email</th>
-                    <th className="py-2 pr-3">Role</th>
-                    <th className="py-2 pr-3">Projects</th>
-                    <th className="py-2 pr-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedUsers.map((u) => (
-                    <tr key={u.id} className="border-b last:border-b-0">
-                      <td className="py-2 pr-3">{u.username}</td>
-                      <td className="py-2 pr-3">{u.email}</td>
-                      <td className="py-2 pr-3 uppercase">{u.role}</td>
-                      <td className="py-2 pr-3">
-                        {Array.isArray(u.projects)
-                          ? `${u.projects.length} project(s)`
-                          : "—"}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="flex gap-2">
-                          <button
-                            className="text-[11px] px-2 py-1 rounded border border-slate-300"
-                            onClick={() => startEditUser(u)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="text-[11px] px-2 py-1 rounded border border-red-300 text-red-600"
-                            onClick={() => handleDeleteUser(u.id)}
-                            disabled={deletingId === u.id}
-                          >
-                            {deletingId === u.id ? "Deleting..." : "Delete"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* AI Settings Inline Panel */}
+        {showAISettings && (
+          <div className="mt-3 p-3 rounded-xl border theme-border bg-indigo-50 space-y-3">
+            <p className="text-xs font-semibold text-indigo-700">Workspace AI Settings</p>
+            <div className="flex items-center justify-between">
+              <span className="text-xs theme-text">Enable AI in workspace</span>
+              <input type="checkbox" checked={aiEnabled} onChange={(e) => setAiEnabled(e.target.checked)} className="w-4 h-4" />
             </div>
-
-            {/* Pagination footer */}
-            <div className="flex items-center justify-between mt-3 text-xs">
-              <span className="text-slate-500">
-                Showing {showingFrom} to {showingTo} of {totalUsers} entries
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  className="px-2 py-1 border rounded disabled:opacity-40"
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                >
-                  « First
-                </button>
-                <button
-                  className="px-2 py-1 border rounded disabled:opacity-40"
-                  onClick={() =>
-                    setCurrentPage((p) => (p > 1 ? p - 1 : p))
-                  }
-                  disabled={currentPage === 1}
-                >
-                  ‹ Prev
-                </button>
-                <span className="px-2">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  className="px-2 py-1 border rounded disabled:opacity-40"
-                  onClick={() =>
-                    setCurrentPage((p) =>
-                      p < totalPages ? p + 1 : p
-                    )
-                  }
-                  disabled={currentPage === totalPages}
-                >
-                  Next ›
-                </button>
-                <button
-                  className="px-2 py-1 border rounded disabled:opacity-40"
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages}
-                >
-                  Last »
-                </button>
-              </div>
+            <div>
+              <label className="block text-xs theme-text-muted mb-1">AI Display Name</label>
+              <input
+                type="text"
+                value={aiName}
+                onChange={(e) => setAiName(e.target.value)}
+                className="w-full border theme-border rounded-lg px-3 py-2 text-sm theme-surface theme-text"
+                placeholder="e.g. Project AI"
+              />
             </div>
-          </>
+            <button
+              disabled={savingAISettings}
+              onClick={async () => {
+                try {
+                  setSavingAISettings(true);
+                  await api.put("/workspaces/ai-settings", { aiEnabled, aiName });
+                  toast.success("AI settings updated");
+                } catch {
+                  toast.error("Failed to update AI settings");
+                } finally {
+                  setSavingAISettings(false);
+                }
+              }}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold active:bg-indigo-700 disabled:opacity-50"
+            >
+              {savingAISettings ? "Saving…" : "Save AI Settings"}
+            </button>
+          </div>
         )}
-      </section>
+      </div>
 
-      {/* EDIT USER MODAL */}
+      {/* Create User Form — collapsible */}
+      {showCreateForm && (
+        <div className="mx-4 mt-4 p-4 theme-surface border theme-border rounded-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold theme-text">Create New User</p>
+            <button onClick={() => setShowCreateForm(false)} className="p-1 theme-text-muted active:opacity-70">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <form onSubmit={handleCreateUser} className="space-y-3">
+            <div>
+              <label className="block text-xs theme-text-muted mb-1">Username</label>
+              <input type="text" value={newUser.username} onChange={(e) => setNewUser((p) => ({ ...p, username: e.target.value }))}
+                className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text" placeholder="Enter username" />
+            </div>
+            <div>
+              <label className="block text-xs theme-text-muted mb-1">Email</label>
+              <input type="email" value={newUser.email} onChange={(e) => setNewUser((p) => ({ ...p, email: e.target.value }))}
+                className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text" placeholder="Enter email" />
+            </div>
+            <div>
+              <label className="block text-xs theme-text-muted mb-1">Password</label>
+              <input type="password" value={newUser.password} onChange={(e) => setNewUser((p) => ({ ...p, password: e.target.value }))}
+                className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text" placeholder="Set a password" />
+            </div>
+            <div>
+              <label className="block text-xs theme-text-muted mb-1">Role</label>
+              <select value={newUser.role} onChange={(e) => setNewUser((p) => ({ ...p, role: e.target.value }))}
+                className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text">
+                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs theme-text-muted mb-1">Projects</label>
+              <Select isMulti options={projectOptions} value={selectedProjectOptionsCreate}
+                onChange={handleCreateProjectsChange} className="text-xs" classNamePrefix="react-select"
+                placeholder="Select projects…" noOptionsMessage={() => "No projects"} />
+            </div>
+            {selectedProjectsCreate.length > 0 && (
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">Tasks (optional)</label>
+                <Select isMulti options={taskOptionsCreate} value={selectedTaskOptionsCreate}
+                  onChange={(sel) => setSelectedTasksCreate((sel || []).map((o) => o.value))}
+                  className="text-xs" classNamePrefix="react-select" placeholder="Select tasks…" />
+              </div>
+            )}
+            <button type="submit" disabled={creating}
+              className="w-full py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold active:bg-primary-700 disabled:opacity-50">
+              {creating ? "Creating…" : "Create User"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* User list */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {loading && (
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 rounded-2xl theme-surface border theme-border animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {!loading && users.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="p-5 rounded-full bg-[var(--surface-soft)]">
+              <Users className="w-10 h-10 theme-text-muted" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold theme-text mb-1">No users yet</p>
+              <p className="text-sm theme-text-muted">Tap "New" to create the first user</p>
+            </div>
+          </div>
+        )}
+
+        {!loading && users.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {users.map((u) => (
+              <UserCard
+                key={u.id}
+                user={u}
+                deletingId={deletingId}
+                onEdit={() => startEditUser(u)}
+                onDelete={() => handleDeleteUser(u.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Edit User Modal */}
       {isEditModalOpen && editingUserId && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold">
-                Edit User ({editUser.username || editingUserId})
-              </h2>
-              <button
-                className="text-xs px-2 py-1 rounded border"
-                onClick={cancelEdit}
-              >
-                ✕
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/50">
+          <div className="flex-1" onClick={cancelEdit} />
+          <div className="theme-surface rounded-t-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b theme-border">
+              <p className="font-semibold theme-text">Edit User</p>
+              <button onClick={cancelEdit} className="p-2 rounded-full theme-text-muted active:opacity-70">
+                <X className="w-5 h-5" />
               </button>
             </div>
-
-            <form
-              onSubmit={handleUpdateUser}
-              className="grid md:grid-cols-2 gap-4 text-sm"
-            >
-              <div className="space-y-2">
-                <label className="block text-xs">Username</label>
-                <input
-                  type="text"
-                  name="username"
-                  value={editUser.username}
-                  onChange={handleEditFieldChange}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-
-                <label className="block text-xs mt-3">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={editUser.email}
-                  onChange={handleEditFieldChange}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-
-                <label className="block text-xs mt-3">Role</label>
-                <select
-                  name="role"
-                  value={editUser.role}
-                  onChange={handleEditFieldChange}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
+            <form onSubmit={handleUpdateUser} className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">Username</label>
+                <input type="text" name="username" value={editUser.username}
+                  onChange={(e) => setEditUser((p) => ({ ...p, username: e.target.value }))}
+                  className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text" />
+              </div>
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">Email</label>
+                <input type="email" name="email" value={editUser.email}
+                  onChange={(e) => setEditUser((p) => ({ ...p, email: e.target.value }))}
+                  className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text" />
+              </div>
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">Role</label>
+                <select name="role" value={editUser.role}
+                  onChange={(e) => setEditUser((p) => ({ ...p, role: e.target.value }))}
+                  className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text">
+                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
-
-<div className="flex items-center justify-between mt-3">
-  <label className="text-xs">
-    Allow AI to reply on behalf of this user
-  </label>
-  <input
-    type="checkbox"
-    checked={editUser.aiReplyEnabled || false}
-    onChange={(e) =>
-      setEditUser((prev) => ({
-        ...prev,
-        aiReplyEnabled: e.target.checked,
-      }))
-    }
-  />
-</div>
-
-              <div className="space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs">
-                      Projects (multi-select)
-                    </label>
-                    <span className="text-[10px] text-slate-400">
-                      Adjust assigned projects
-                    </span>
-                  </div>
-                  <Select
-                    isMulti
-                    options={projectOptions}
-                    value={selectedProjectOptionsEdit}
-                    onChange={handleEditProjectsChange}
-                    className="text-xs"
-                    classNamePrefix="react-select"
-                    placeholder="Select projects..."
-                    noOptionsMessage={() => "No projects available"}
-                  />
-                </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-sm theme-text">AI replies on behalf of user</span>
+                <input type="checkbox" checked={editUser.aiReplyEnabled || false}
+                  onChange={(e) => setEditUser((p) => ({ ...p, aiReplyEnabled: e.target.checked }))}
+                  className="w-4 h-4" />
               </div>
-
-              <div className="md:col-span-2 flex justify-between gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  className="text-xs border rounded-lg px-4 py-2"
-                >
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">Projects</label>
+                <Select isMulti options={projectOptions} value={selectedProjectOptionsEdit}
+                  onChange={(sel) => setSelectedProjectsEdit((sel || []).map((o) => o.value))}
+                  className="text-xs" classNamePrefix="react-select" placeholder="Select projects…" />
+              </div>
+              <div className="flex gap-3 pt-2 pb-4">
+                <button type="button" onClick={cancelEdit}
+                  className="flex-1 py-2.5 rounded-xl border theme-border theme-text text-sm font-semibold active:opacity-70">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="bg-emerald-600 text-white text-xs rounded-lg px-4 py-2 hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {updating ? "Updating..." : "Update User"}
+                <button type="submit" disabled={updating}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold active:bg-emerald-700 disabled:opacity-50">
+                  {updating ? "Saving…" : "Save Changes"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function UserCard({ user, deletingId, onEdit, onDelete }) {
+  const roleColors = { admin: "bg-red-100 text-red-700", manager: "bg-blue-100 text-blue-700", user: "bg-slate-100 text-slate-600" };
+  const initials = (user.username || "?").slice(0, 2).toUpperCase();
+
+  return (
+    <div className="theme-surface border theme-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-3 p-4">
+        <div className="shrink-0 w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
+          <span className="text-primary-600 font-bold text-sm">{initials}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold theme-text truncate">{user.username}</p>
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${roleColors[user.role] || roleColors.user}`}>
+              {user.role}
+            </span>
+          </div>
+          <p className="text-xs theme-text-muted truncate">{user.email}</p>
+          {Array.isArray(user.projects) && user.projects.length > 0 && (
+            <p className="text-xs theme-text-muted mt-0.5">{user.projects.length} project{user.projects.length === 1 ? "" : "s"}</p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center border-t theme-border px-3 py-2 gap-1" >
+        <button onClick={onEdit}
+          className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg theme-text-muted hover:bg-[var(--surface-soft)] active:bg-[var(--surface-soft)] transition-colors text-xs">
+          <Edit2 className="w-3.5 h-3.5" />
+          <span>Edit</span>
+        </button>
+        <button onClick={onDelete} disabled={deletingId === user.id}
+          className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-red-500 hover:bg-red-50 active:bg-red-50 transition-colors text-xs disabled:opacity-40">
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>{deletingId === user.id ? "Deleting…" : "Delete"}</span>
+        </button>
+      </div>
     </div>
   );
 }

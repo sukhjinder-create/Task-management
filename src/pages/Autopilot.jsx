@@ -1,33 +1,12 @@
-﻿import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api";
 import toast from "react-hot-toast";
 import {
-  Bot,
-  Clock3,
-  CheckCircle2,
-  XCircle,
-  Zap,
-  Target,
-  UserCheck,
-  CalendarClock,
-  AlertTriangle,
-  FileText,
-  Play,
-  Check,
-  X,
-  ChevronDown,
-  ChevronRight,
-  History,
-  Search,
-  RefreshCw,
-  Calendar,
+  Bot, Clock3, CheckCircle2, XCircle, Zap, Target, UserCheck,
+  CalendarClock, AlertTriangle, FileText, Play, Check, X,
+  ChevronDown, ChevronRight, History, Search, RefreshCw, Calendar,
 } from "lucide-react";
-
-/**
- * AI AUTOPILOT MODE
- * Approval queue for AI-generated actions
- */
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -56,6 +35,61 @@ function rangeLabel(range, customFrom, customTo) {
   return { today: "Today", "7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days" }[range] ?? "";
 }
 
+function formatDateTime(value) {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleString();
+}
+
+function humanizeActionType(type) {
+  return { reassign: "Auto Assignment", adjust_deadline: "Deadline Adjust", escalate: "Escalation", create_standup: "Standup" }[type] || type || "Unknown";
+}
+
+function StatusPill({ status }) {
+  const cls = { executed: "bg-green-100 text-green-700", rejected: "bg-red-100 text-red-700", auto_approved: "bg-purple-100 text-purple-700", approved: "bg-blue-100 text-blue-700", pending: "bg-yellow-100 text-yellow-700" };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls[status] || "bg-slate-100 text-slate-600"}`}>
+      {status === "auto_approved" ? "auto-approved" : status}
+    </span>
+  );
+}
+
+/** Renders inline markdown: **bold**, @mention */
+function renderInline(text) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (/^\*\*([^*]+)\*\*$/.test(part)) return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
+    if (/@\w+/.test(part)) {
+      const subs = part.split(/(@\w+)/g);
+      return subs.map((sp, j) => /@\w+/.test(sp) ? <span key={j} className="text-blue-600 font-medium">{sp}</span> : sp);
+    }
+    return part;
+  });
+}
+
+function StandupMarkdown({ content }) {
+  if (!content) return null;
+  const lines = content.split("\n");
+  const elements = [];
+  let key = 0;
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (/^# (.+)/.test(line)) elements.push(<h1 key={key++} className="text-sm font-bold theme-text mt-1 mb-1">{renderInline(line.replace(/^# /, ""))}</h1>);
+    else if (/^## (.+)/.test(line)) elements.push(<h2 key={key++} className="text-xs font-bold theme-text mt-3 mb-1 border-b theme-border pb-0.5">{renderInline(line.replace(/^## /, ""))}</h2>);
+    else if (/^> (.+)/.test(line)) elements.push(<div key={key++} className="text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 my-1 border-l-2 border-indigo-300">{renderInline(line.replace(/^> /, ""))}</div>);
+    else if (/^---+$/.test(line)) elements.push(<hr key={key++} className="border-[var(--border)] my-2" />);
+    else if (/^[\-•] (.+)/.test(line)) {
+      const text = line.replace(/^[\-•] /, "");
+      const isBlocked = text.includes("⚠") || text.toLowerCase().includes("overdue");
+      const isGood = text.includes("✅");
+      elements.push(<div key={key++} className={`flex gap-2 text-xs py-0.5 pl-1 ${isBlocked ? "text-red-700" : isGood ? "text-green-700" : "theme-text"}`}><span className="theme-text-muted mt-0.5 shrink-0">•</span><span>{renderInline(text)}</span></div>);
+    } else if (line.trim() === "") elements.push(<div key={key++} className="h-1" />);
+    else elements.push(<p key={key++} className="text-xs theme-text py-0.5">{renderInline(line)}</p>);
+  }
+  return <div className="space-y-0">{elements}</div>;
+}
+
 export default function Autopilot() {
   const { auth } = useAuth();
   const user = auth?.user;
@@ -71,28 +105,14 @@ export default function Autopilot() {
   const [activeTab, setActiveTab] = useState("pending");
   const [actionFilter, setActionFilter] = useState("all");
 
-  // Stats time range
-  const [statsRange, setStatsRange] = useState("7d"); // "today"|"7d"|"30d"|"90d"|"all"|"custom"
+  const [statsRange, setStatsRange] = useState("7d");
   const [statsCustomFrom, setStatsCustomFrom] = useState("");
   const [statsCustomTo, setStatsCustomTo] = useState("");
 
   const [historyItems, setHistoryItems] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyFilters, setHistoryFilters] = useState({
-    search: "",
-    status: "all",
-    fromDate: "",
-    toDate: "",
-    limit: 10,
-  });
-  const [historyPagination, setHistoryPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 1,
-    hasNext: false,
-    hasPrev: false,
-  });
+  const [historyFilters, setHistoryFilters] = useState({ search: "", status: "all", fromDate: "", toDate: "", limit: 10 });
+  const [historyPagination, setHistoryPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false });
 
   useEffect(() => {
     fetchData();
@@ -102,18 +122,9 @@ export default function Autopilot() {
 
   useEffect(() => {
     if (activeTab !== "history") return;
-    const timer = setTimeout(() => {
-      fetchHistory(1);
-    }, 350);
+    const timer = setTimeout(() => fetchHistory(1), 350);
     return () => clearTimeout(timer);
-  }, [
-    activeTab,
-    historyFilters.search,
-    historyFilters.status,
-    historyFilters.fromDate,
-    historyFilters.toDate,
-    historyFilters.limit,
-  ]);
+  }, [activeTab, historyFilters.search, historyFilters.status, historyFilters.fromDate, historyFilters.toDate, historyFilters.limit]);
 
   const fetchData = async () => {
     try {
@@ -123,7 +134,6 @@ export default function Autopilot() {
         api.get("/autopilot/actions"),
         api.get("/autopilot/stats", { params: statsParams }),
       ]);
-
       setSettings(settingsRes.data.settings);
       setActions(actionsRes.data.actions || []);
       setStats(statsRes.data.stats);
@@ -138,22 +148,17 @@ export default function Autopilot() {
     setHistoryLoading(true);
     try {
       const params = {
-        page,
-        limit: historyFilters.limit,
+        page, limit: historyFilters.limit,
         search: historyFilters.search || undefined,
         status: historyFilters.status !== "all" ? historyFilters.status : undefined,
         fromDate: historyFilters.fromDate || undefined,
-        toDate: historyFilters.toDate
-          ? `${historyFilters.toDate}T23:59:59.999`
-          : undefined,
+        toDate: historyFilters.toDate ? `${historyFilters.toDate}T23:59:59.999` : undefined,
       };
-
       const res = await api.get("/autopilot/history", { params });
       setHistoryItems(res.data.items || []);
       setHistoryPagination(res.data.pagination || historyPagination);
-    } catch (err) {
+    } catch {
       toast.error("Failed to fetch autopilot history");
-      console.error(err);
     } finally {
       setHistoryLoading(false);
     }
@@ -162,26 +167,17 @@ export default function Autopilot() {
   const toggleAutopilot = async (enabled) => {
     try {
       const res = await api.post("/autopilot/settings", {
-        enabled,
-        mode: settings?.mode || "assisted",
-        autoAssign: settings?.auto_assign ?? true,
-        autoDeadlineAdjust: settings?.auto_deadline_adjust ?? true,
-        autoEscalateBlockers: settings?.auto_escalate_blockers ?? true,
-        autoGenerateStandup: settings?.auto_generate_standup ?? true,
-        maxTasksPerUser: settings?.max_tasks_per_user || 10,
-        blockerThresholdHours: settings?.blocker_threshold_hours || 48,
-        velocityDropThreshold: settings?.velocity_drop_threshold || 0.2,
-        requireApproval: settings?.require_approval ?? true,
+        enabled, mode: settings?.mode || "assisted",
+        autoAssign: settings?.auto_assign ?? true, autoDeadlineAdjust: settings?.auto_deadline_adjust ?? true,
+        autoEscalateBlockers: settings?.auto_escalate_blockers ?? true, autoGenerateStandup: settings?.auto_generate_standup ?? true,
+        maxTasksPerUser: settings?.max_tasks_per_user || 10, blockerThresholdHours: settings?.blocker_threshold_hours || 48,
+        velocityDropThreshold: settings?.velocity_drop_threshold || 0.2, requireApproval: settings?.require_approval ?? true,
         autoApproveAfterHours: settings?.auto_approve_after_hours || 24,
       });
-
       setSettings(res.data.settings);
       toast.success(res.data.message);
       await fetchData();
-    } catch (err) {
-      toast.error("Failed to update settings");
-      console.error(err);
-    }
+    } catch { toast.error("Failed to update settings"); }
   };
 
   const runAnalysis = async () => {
@@ -192,10 +188,7 @@ export default function Autopilot() {
       await fetchData();
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to run analysis");
-      console.error(err);
-    } finally {
-      setRunningAnalysis(false);
-    }
+    } finally { setRunningAnalysis(false); }
   };
 
   const approveAction = async (actionId) => {
@@ -206,13 +199,8 @@ export default function Autopilot() {
       await fetchData();
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to approve action");
-      console.error(err);
     } finally {
-      setProcessingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(actionId);
-        return next;
-      });
+      setProcessingIds((prev) => { const n = new Set(prev); n.delete(actionId); return n; });
     }
   };
 
@@ -222,850 +210,375 @@ export default function Autopilot() {
       await api.post(`/autopilot/actions/${actionId}/reject`, { reason });
       toast.success("Action rejected");
       await fetchData();
-    } catch (err) {
-      toast.error("Failed to reject action");
-      console.error(err);
-    } finally {
-      setProcessingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(actionId);
-        return next;
-      });
+    } catch { toast.error("Failed to reject action"); } finally {
+      setProcessingIds((prev) => { const n = new Set(prev); n.delete(actionId); return n; });
     }
   };
 
-  const actionTypeCounts = useMemo(() => {
-    return {
-      all: actions.length,
-      reassign: actions.filter((a) => a.action_type === "reassign").length,
-      adjust_deadline: actions.filter((a) => a.action_type === "adjust_deadline").length,
-      escalate: actions.filter((a) => a.action_type === "escalate").length,
-      create_standup: actions.filter((a) => a.action_type === "create_standup").length,
-    };
-  }, [actions]);
+  const actionTypeCounts = useMemo(() => ({
+    all: actions.length,
+    reassign: actions.filter((a) => a.action_type === "reassign").length,
+    adjust_deadline: actions.filter((a) => a.action_type === "adjust_deadline").length,
+    escalate: actions.filter((a) => a.action_type === "escalate").length,
+    create_standup: actions.filter((a) => a.action_type === "create_standup").length,
+  }), [actions]);
 
-  const filteredActions = useMemo(() => {
-    if (actionFilter === "all") return actions;
-    return actions.filter((a) => a.action_type === actionFilter);
-  }, [actions, actionFilter]);
+  const filteredActions = useMemo(() => actionFilter === "all" ? actions : actions.filter((a) => a.action_type === actionFilter), [actions, actionFilter]);
 
   const approveVisibleActions = async () => {
     if (filteredActions.length === 0) return;
-    const confirmed = window.confirm(
-      `Approve and execute ${filteredActions.length} visible actions?`
-    );
-    if (!confirmed) return;
-
+    if (!window.confirm(`Approve and execute ${filteredActions.length} visible actions?`)) return;
     setBulkApproving(true);
     try {
-      let success = 0;
-      let failed = 0;
-      let firstError = null;
-
+      let success = 0; let failed = 0; let firstError = null;
       for (const action of filteredActions) {
-        try {
-          await api.post(`/autopilot/actions/${action.id}/approve`);
-          success += 1;
-        } catch (err) {
-          failed += 1;
-          if (!firstError) {
-            firstError =
-              err.response?.data?.details ||
-              err.response?.data?.error ||
-              err.message ||
-              "Unknown approval error";
-          }
-        }
+        try { await api.post(`/autopilot/actions/${action.id}/approve`); success++; }
+        catch (err) { failed++; if (!firstError) firstError = err.response?.data?.details || err.response?.data?.error || err.message; }
       }
-
-      if (failed > 0) {
-        toast.error(`Approved ${success}, failed ${failed}. ${firstError}`);
-      } else {
-        toast.success(`Approved ${success} actions`);
-      }
-
+      failed > 0 ? toast.error(`Approved ${success}, failed ${failed}. ${firstError}`) : toast.success(`Approved ${success} actions`);
       await fetchData();
-    } catch (err) {
-      toast.error("Bulk approval failed");
-      console.error(err);
-    } finally {
-      setBulkApproving(false);
-    }
+    } catch { toast.error("Bulk approval failed"); } finally { setBulkApproving(false); }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
       </div>
     );
   }
 
+  const RANGE_OPTIONS = [
+    { key: "today", label: "Today" }, { key: "7d", label: "7d" }, { key: "30d", label: "30d" },
+    { key: "90d", label: "90d" }, { key: "all", label: "All" }, { key: "custom", label: "Custom" },
+  ];
+
+  const TABS = [
+    { key: "pending", label: `Pending (${actions.length})` },
+    { key: "history", label: "History" },
+    { key: "settings", label: "Settings" },
+  ];
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl flex items-center justify-center">
-              <Bot className="w-7 h-7 text-white" />
+    <div className="flex flex-col h-full">
+
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-blue-600">
+              <Bot className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold theme-text">AI Autopilot</h1>
-              <p className="theme-text-muted">
-                Autonomous task management powered by AI
-                {user?.username ? ` · ${user.username}` : ""}
-              </p>
+              <h1 className="text-lg font-bold theme-text leading-tight">AI Autopilot</h1>
+              <p className="text-xs theme-text-muted">{user?.username ? `· ${user.username}` : "Autonomous task management"}</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <div
-              className={`px-4 py-2 rounded-lg font-semibold ${
-                settings?.enabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
-              }`}
-            >
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${settings?.enabled ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
               {settings?.enabled ? "Active" : "Disabled"}
-            </div>
+            </span>
             <button
               onClick={() => toggleAutopilot(!settings?.enabled)}
-              className={`px-4 py-2 rounded-lg font-semibold transition ${
-                settings?.enabled
-                  ? "bg-red-100 text-red-700 hover:bg-red-200"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${settings?.enabled ? "bg-red-100 text-red-700 active:bg-red-200" : "bg-primary-600 text-white active:bg-primary-700"}`}
             >
-              {settings?.enabled ? "Disable Autopilot" : "Enable Autopilot"}
+              {settings?.enabled ? "Disable" : "Enable"}
             </button>
           </div>
         </div>
 
+        {/* Stats */}
         {stats && (
-          <div>
-            {/* Time range picker */}
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-                <Calendar className="w-3.5 h-3.5 text-gray-500 ml-1" />
+          <div className="mt-3">
+            {/* Range pills - scrollable */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+              {RANGE_OPTIONS.map(({ key, label }) => (
+                <button key={key} onClick={() => setStatsRange(key)}
+                  className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${statsRange === key ? "bg-primary-600 text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {statsRange === "custom" && (
+              <div className="flex gap-2 mt-2">
+                <input type="date" value={statsCustomFrom} max={statsCustomTo || TODAY} onChange={(e) => setStatsCustomFrom(e.target.value)}
+                  className="flex-1 border theme-border rounded-lg px-2 py-1.5 text-xs theme-surface theme-text" />
+                <input type="date" value={statsCustomTo} min={statsCustomFrom || undefined} max={TODAY} onChange={(e) => setStatsCustomTo(e.target.value)}
+                  className="flex-1 border theme-border rounded-lg px-2 py-1.5 text-xs theme-surface theme-text" />
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              <MiniStat label="Pending" value={stats.pending} color="yellow" icon={Clock3} />
+              <MiniStat label="Executed" value={stats.executed} color="green" icon={CheckCircle2} />
+              <MiniStat label="Rejected" value={stats.rejected} color="red" icon={XCircle} />
+              <MiniStat label="Auto-OK" value={stats.autoApproved} color="purple" icon={Zap} />
+              <MiniStat label="Confidence" value={`${Math.round((stats.avgConfidence || 0) * 100)}%`} color="blue" icon={Target} />
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex gap-1 mt-3">
+          {TABS.map(({ key, label }) => (
+            <button key={key} onClick={() => setActiveTab(key)}
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === key ? "bg-primary-600 text-white" : "theme-text-muted bg-[var(--surface-soft)]"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+
+        {/* PENDING TAB */}
+        {activeTab === "pending" && (
+          <div className="flex flex-col gap-3">
+            {/* Filter chips + actions */}
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
                 {[
-                  { key: "today", label: "Today" },
-                  { key: "7d",    label: "7d" },
-                  { key: "30d",   label: "30d" },
-                  { key: "90d",   label: "90d" },
-                  { key: "all",   label: "All time" },
-                  { key: "custom",label: "Custom" },
+                  { key: "all", label: `All (${actionTypeCounts.all})` },
+                  { key: "reassign", label: `Assign (${actionTypeCounts.reassign})` },
+                  { key: "adjust_deadline", label: `Deadline (${actionTypeCounts.adjust_deadline})` },
+                  { key: "escalate", label: `Escalate (${actionTypeCounts.escalate})` },
+                  { key: "create_standup", label: `Standup (${actionTypeCounts.create_standup})` },
                 ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => setStatsRange(key)}
-                    className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
-                      statsRange === key
-                        ? "bg-white text-blue-600 shadow-sm"
-                        : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
+                  <button key={key} onClick={() => setActionFilter(key)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${actionFilter === key ? "bg-primary-600 text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
                     {label}
                   </button>
                 ))}
               </div>
+              <div className="flex gap-2">
+                <button onClick={approveVisibleActions} disabled={bulkApproving || filteredActions.length === 0}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold active:bg-emerald-700 disabled:opacity-50">
+                  {bulkApproving ? "Approving…" : `Approve All (${filteredActions.length})`}
+                </button>
+                <button onClick={runAnalysis} disabled={runningAnalysis || !settings?.enabled}
+                  className="flex-1 py-2.5 rounded-xl bg-primary-600 text-white text-xs font-semibold active:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                  {runningAnalysis ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Running…</> : <><Play className="w-3.5 h-3.5" />Run Analysis</>}
+                </button>
+              </div>
+            </div>
 
-              {statsRange === "custom" && (
-                <div className="flex items-center gap-2 ml-3">
-                  <input
-                    type="date"
-                    value={statsCustomFrom}
-                    max={statsCustomTo || TODAY}
-                    onChange={(e) => setStatsCustomFrom(e.target.value)}
-                    className="px-2 py-1 border border-gray-300 rounded text-xs"
-                    placeholder="From"
-                  />
-                  <span className="text-gray-400 text-xs">—</span>
-                  <input
-                    type="date"
-                    value={statsCustomTo}
-                    min={statsCustomFrom || undefined}
-                    max={TODAY}
-                    onChange={(e) => setStatsCustomTo(e.target.value)}
-                    className="px-2 py-1 border border-gray-300 rounded text-xs"
-                    placeholder="To"
-                  />
+            {filteredActions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="p-5 rounded-full bg-[var(--surface-soft)]">
+                  <Bot className="w-10 h-10 theme-text-muted" />
                 </div>
-              )}
-
-              <p className="text-xs text-gray-400 ml-auto">
-                {rangeLabel(statsRange, statsCustomFrom, statsCustomTo)}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-5 gap-4">
-              <StatCard label="Pending" value={stats.pending} icon={Clock3} color="yellow" />
-              <StatCard label="Executed" value={stats.executed} icon={CheckCircle2} color="green" />
-              <StatCard label="Rejected" value={stats.rejected} icon={XCircle} color="red" />
-              <StatCard label="Auto-Approved" value={stats.autoApproved} icon={Zap} color="purple" />
-              <StatCard
-                label="Avg Confidence"
-                value={`${Math.round((stats.avgConfidence || 0) * 100)}%`}
-                icon={Target}
-                color="blue"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="border-b theme-border mb-6">
-        <div className="flex gap-4">
-          <button
-            onClick={() => setActiveTab("pending")}
-            className={`pb-2 px-4 font-semibold transition ${
-              activeTab === "pending"
-                ? "border-b-2 border-blue-600 text-blue-600"
-                : "theme-text-muted hover:text-[var(--text)]"
-            }`}
-          >
-            Pending Actions ({actions.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`pb-2 px-4 font-semibold transition inline-flex items-center gap-2 ${
-              activeTab === "history"
-                ? "border-b-2 border-blue-600 text-blue-600"
-                : "theme-text-muted hover:text-[var(--text)]"
-            }`}
-          >
-            <History className="w-4 h-4" />
-            History
-          </button>
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`pb-2 px-4 font-semibold transition ${
-              activeTab === "settings"
-                ? "border-b-2 border-blue-600 text-blue-600"
-                : "theme-text-muted hover:text-[var(--text)]"
-            }`}
-          >
-            Settings
-          </button>
-        </div>
-      </div>
-
-      {activeTab === "pending" && (
-        <div>
-          <div className="mb-6 flex justify-end">
-            <div className="flex items-center gap-3">
-              <select
-                value={actionFilter}
-                onChange={(e) => setActionFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              >
-                <option value="all">All ({actionTypeCounts.all})</option>
-                <option value="reassign">Reassign ({actionTypeCounts.reassign})</option>
-                <option value="adjust_deadline">Deadline ({actionTypeCounts.adjust_deadline})</option>
-                <option value="escalate">Escalate ({actionTypeCounts.escalate})</option>
-                <option value="create_standup">Standup ({actionTypeCounts.create_standup})</option>
-              </select>
-
-              <button
-                onClick={approveVisibleActions}
-                disabled={bulkApproving || filteredActions.length === 0}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {bulkApproving ? "Approving..." : `Approve Visible (${filteredActions.length})`}
-              </button>
-
-              <button
-                onClick={runAnalysis}
-                disabled={runningAnalysis || !settings?.enabled}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {runningAnalysis ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Running...
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4" />
-                    Run Analysis Now
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {filteredActions.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No pending actions</h3>
-              <p className="text-gray-600">
-                {settings?.enabled
-                  ? "Autopilot is monitoring your workspace. New actions will appear here."
-                  : "Enable autopilot to start receiving intelligent suggestions."}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredActions.map((action) => (
-                <ActionCard
-                  key={action.id}
-                  action={action}
+                <p className="font-semibold theme-text">No pending actions</p>
+                <p className="text-sm theme-text-muted text-center px-4">
+                  {settings?.enabled ? "Autopilot is monitoring your workspace." : "Enable autopilot to start receiving suggestions."}
+                </p>
+              </div>
+            ) : (
+              filteredActions.map((action) => (
+                <ActionCard key={action.id} action={action}
                   onApprove={() => approveAction(action.id)}
                   onReject={(reason) => rejectAction(action.id, reason)}
-                  processing={processingIds.has(action.id)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                  processing={processingIds.has(action.id)} />
+              ))
+            )}
+          </div>
+        )}
 
-      {activeTab === "settings" && (
-        <SettingsPanel settings={settings} onSave={setSettings} apiClient={api} />
-      )}
-
-      {activeTab === "history" && (
-        <div className="space-y-4">
-          <div className="theme-surface border theme-border rounded-lg p-4">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-              <div className="md:col-span-2">
-                <label className="text-xs theme-text-muted mb-1 block">Search</label>
-                <div className="relative">
-                  <Search className="w-4 h-4 theme-text-soft absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    value={historyFilters.search}
-                    onChange={(e) =>
-                      setHistoryFilters((prev) => ({ ...prev, search: e.target.value }))
-                    }
-                    placeholder="Task, reason, action type, approver..."
-                    className="w-full pl-9 pr-3 py-2 border theme-border theme-input rounded-lg text-sm"
-                  />
-                </div>
+        {/* HISTORY TAB */}
+        {activeTab === "history" && (
+          <div className="flex flex-col gap-3">
+            {/* Filters */}
+            <div className="theme-surface border theme-border rounded-2xl p-3 space-y-2">
+              <div className="relative">
+                <Search className="w-4 h-4 theme-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                <input value={historyFilters.search}
+                  onChange={(e) => setHistoryFilters((p) => ({ ...p, search: e.target.value }))}
+                  placeholder="Search task, reason, type…"
+                  className="w-full pl-9 pr-3 py-2 border theme-border rounded-xl text-sm theme-surface theme-text" />
               </div>
-              <div>
-                <label className="text-xs theme-text-muted mb-1 block">Status</label>
-                <select
-                  value={historyFilters.status}
-                  onChange={(e) =>
-                    setHistoryFilters((prev) => ({ ...prev, status: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 border theme-border theme-input rounded-lg text-sm"
-                >
-                  <option value="all">All</option>
+              <div className="grid grid-cols-2 gap-2">
+                <select value={historyFilters.status}
+                  onChange={(e) => setHistoryFilters((p) => ({ ...p, status: e.target.value }))}
+                  className="border theme-border rounded-xl px-3 py-2 text-sm theme-surface theme-text">
+                  <option value="all">All statuses</option>
                   <option value="executed">Executed</option>
                   <option value="rejected">Rejected</option>
                   <option value="auto_approved">Auto Approved</option>
                   <option value="approved">Approved</option>
                 </select>
-              </div>
-              <div>
-                <label className="text-xs theme-text-muted mb-1 block">From date</label>
-                <input
-                  type="date"
-                  value={historyFilters.fromDate}
-                  max={historyFilters.toDate || TODAY}
-                  onChange={(e) =>
-                    setHistoryFilters((prev) => ({ ...prev, fromDate: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 border theme-border theme-input rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs theme-text-muted mb-1 block">To date</label>
-                <input
-                  type="date"
-                  value={historyFilters.toDate}
-                  min={historyFilters.fromDate || undefined}
-                  max={TODAY}
-                  onChange={(e) =>
-                    setHistoryFilters((prev) => ({ ...prev, toDate: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 border theme-border theme-input rounded-lg text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between mt-3">
-              <div className="text-sm theme-text-muted">
-                {historyPagination.total} records
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={historyFilters.limit}
-                  onChange={(e) =>
-                    setHistoryFilters((prev) => ({
-                      ...prev,
-                      limit: parseInt(e.target.value, 10),
-                    }))
-                  }
-                  className="px-3 py-2 border theme-border rounded-lg text-sm theme-input"
-                >
+                <select value={historyFilters.limit}
+                  onChange={(e) => setHistoryFilters((p) => ({ ...p, limit: parseInt(e.target.value, 10) }))}
+                  className="border theme-border rounded-xl px-3 py-2 text-sm theme-surface theme-text">
                   <option value={10}>10 / page</option>
                   <option value={20}>20 / page</option>
                   <option value={50}>50 / page</option>
                 </select>
-                <button
-                  onClick={() => fetchHistory(historyPagination.page)}
-                  className="px-3 py-2 border theme-border rounded-lg text-sm hover:bg-[var(--surface-soft)] inline-flex items-center gap-1 theme-surface-soft theme-text"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Refresh
+                <input type="date" value={historyFilters.fromDate} max={historyFilters.toDate || TODAY}
+                  onChange={(e) => setHistoryFilters((p) => ({ ...p, fromDate: e.target.value }))}
+                  className="border theme-border rounded-xl px-3 py-2 text-sm theme-surface theme-text" />
+                <input type="date" value={historyFilters.toDate} min={historyFilters.fromDate || undefined} max={TODAY}
+                  onChange={(e) => setHistoryFilters((p) => ({ ...p, toDate: e.target.value }))}
+                  className="border theme-border rounded-xl px-3 py-2 text-sm theme-surface theme-text" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs theme-text-muted">{historyPagination.total} records</span>
+                <button onClick={() => fetchHistory(historyPagination.page)}
+                  className="flex items-center gap-1 text-xs theme-text-muted active:opacity-70">
+                  <RefreshCw className="w-3.5 h-3.5" />Refresh
                 </button>
               </div>
             </div>
-          </div>
 
-          <div className="theme-surface border theme-border rounded-lg overflow-hidden">
             {historyLoading ? (
-              <div className="p-8 text-center theme-text-muted">Loading history...</div>
+              <div className="flex flex-col gap-3">{[1,2,3].map((i) => <div key={i} className="h-20 rounded-2xl theme-surface border theme-border animate-pulse" />)}</div>
             ) : historyItems.length === 0 ? (
-              <div className="p-8 text-center theme-text-muted">
-                No historical actions found for the selected filters.
-              </div>
+              <div className="text-center py-12 theme-text-muted text-sm">No historical actions found.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="theme-surface-soft theme-text-muted">
-                    <tr>
-                      <th className="text-left px-4 py-3 font-semibold">Date</th>
-                      <th className="text-left px-4 py-3 font-semibold">Action</th>
-                      <th className="text-left px-4 py-3 font-semibold">Task</th>
-                      <th className="text-left px-4 py-3 font-semibold">Status</th>
-                      <th className="text-left px-4 py-3 font-semibold">By</th>
-                      <th className="text-left px-4 py-3 font-semibold">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyItems.map((row) => (
-                      <tr key={row.id} className="border-t theme-border">
-                        <td className="px-4 py-3 theme-text whitespace-nowrap">
-                          {formatDateTime(row.executed_at || row.approved_at || row.created_at)}
-                        </td>
-                        <td className="px-4 py-3 theme-text whitespace-nowrap">
-                          {humanizeActionType(row.action_type)}
-                        </td>
-                        <td className="px-4 py-3 theme-text">
-                          <div>{row.task_title || "N/A"}</div>
-                          {row.project_name && (
-                            <div className="text-xs theme-text-muted">{row.project_name}</div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <StatusPill status={row.status} />
-                        </td>
-                        <td className="px-4 py-3 theme-text whitespace-nowrap">
-                          {row.approved_by_username ||
-                            row.decision_by_username ||
-                            "system"}
-                        </td>
-                        <td className="px-4 py-3 theme-text-muted max-w-xl">
-                          <div className="truncate" title={row.reason}>
-                            {row.reason}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex flex-col gap-2">
+                {historyItems.map((row) => (
+                  <div key={row.id} className="theme-surface border theme-border rounded-2xl p-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold theme-text truncate">{row.task_title || "N/A"}</p>
+                        {row.project_name && <p className="text-xs theme-text-muted">{row.project_name}</p>}
+                      </div>
+                      <StatusPill status={row.status} />
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                      <span className="text-xs theme-text-muted">{humanizeActionType(row.action_type)}</span>
+                      <span className="text-xs theme-text-muted">·</span>
+                      <span className="text-xs theme-text-muted">{row.approved_by_username || row.decision_by_username || "system"}</span>
+                      <span className="text-xs theme-text-muted">·</span>
+                      <span className="text-xs theme-text-muted">{formatDateTime(row.executed_at || row.approved_at || row.created_at)}</span>
+                    </div>
+                    {row.reason && <p className="text-xs theme-text-muted mt-1 line-clamp-2">{row.reason}</p>}
+                  </div>
+                ))}
               </div>
             )}
-          </div>
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              Page {historyPagination.page} of {historyPagination.totalPages}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => fetchHistory(Math.max(historyPagination.page - 1, 1))}
-                disabled={!historyPagination.hasPrev}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => fetchHistory(historyPagination.page + 1)}
-                disabled={!historyPagination.hasNext}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
+            {/* Pagination */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs theme-text-muted">Page {historyPagination.page} of {historyPagination.totalPages}</span>
+              <div className="flex gap-2">
+                <button onClick={() => fetchHistory(Math.max(historyPagination.page - 1, 1))} disabled={!historyPagination.hasPrev}
+                  className="px-3 py-2 border theme-border rounded-xl text-xs theme-text disabled:opacity-40 active:opacity-70">Prev</button>
+                <button onClick={() => fetchHistory(historyPagination.page + 1)} disabled={!historyPagination.hasNext}
+                  className="px-3 py-2 border theme-border rounded-xl text-xs theme-text disabled:opacity-40 active:opacity-70">Next</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
+        )}
 
-function formatDateTime(value) {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "N/A";
-  return date.toLocaleString();
-}
-
-function humanizeActionType(type) {
-  const map = {
-    reassign: "Auto Assignment",
-    adjust_deadline: "Deadline Adjustment",
-    escalate: "Escalation",
-    create_standup: "Standup Summary",
-  };
-  return map[type] || type || "Unknown";
-}
-
-function StatusPill({ status }) {
-  const classes = {
-    executed: "bg-green-100 text-green-700",
-    rejected: "bg-red-100 text-red-700",
-    auto_approved: "bg-purple-100 text-purple-700",
-    approved: "bg-blue-100 text-blue-700",
-    pending: "bg-yellow-100 text-yellow-700",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
-        classes[status] || "bg-gray-100 text-gray-700"
-      }`}
-    >
-      {status === "auto_approved" ? "auto approved" : status}
-    </span>
-  );
-}
-
-function StatCard({ label, value, icon: Icon, color }) {
-  const colorClasses = {
-    yellow: "bg-yellow-50 text-yellow-700",
-    green: "bg-green-50 text-green-700",
-    red: "bg-red-50 text-red-700",
-    purple: "bg-purple-50 text-purple-700",
-    blue: "bg-blue-50 text-blue-700",
-  };
-
-  return (
-    <div className={`p-4 rounded-lg ${colorClasses[color]}`}>
-      <div className="flex items-center justify-between mb-2">
-        <Icon className="w-6 h-6" />
-        <span className="text-2xl font-bold">{value}</span>
+        {/* SETTINGS TAB */}
+        {activeTab === "settings" && (
+          <SettingsPanel settings={settings} onSave={setSettings} apiClient={api} />
+        )}
       </div>
-      <div className="text-sm font-semibold">{label}</div>
     </div>
   );
 }
 
-/** Renders the structured standup markdown into clean, readable JSX — no external lib needed */
-function StandupMarkdown({ content }) {
-  if (!content) return null;
-
-  const lines = content.split("\n");
-  const elements = [];
-  let key = 0;
-
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-
-    // H1: # Title
-    if (/^# (.+)/.test(line)) {
-      const text = line.replace(/^# /, "");
-      elements.push(
-        <h1 key={key++} className="text-sm font-bold text-gray-900 mt-1 mb-1">
-          {renderInline(text)}
-        </h1>
-      );
-    }
-    // H2: ## Section
-    else if (/^## (.+)/.test(line)) {
-      const text = line.replace(/^## /, "");
-      elements.push(
-        <h2 key={key++} className="text-xs font-bold text-gray-800 mt-3 mb-1 border-b border-gray-200 pb-0.5">
-          {renderInline(text)}
-        </h2>
-      );
-    }
-    // Blockquote: > sprint info
-    else if (/^> (.+)/.test(line)) {
-      const text = line.replace(/^> /, "");
-      elements.push(
-        <div key={key++} className="text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 my-1 border-l-2 border-indigo-300">
-          {renderInline(text)}
-        </div>
-      );
-    }
-    // Horizontal rule
-    else if (/^---+$/.test(line)) {
-      elements.push(<hr key={key++} className="border-gray-200 my-2" />);
-    }
-    // Bullet: - item
-    else if (/^[\-•] (.+)/.test(line)) {
-      const text = line.replace(/^[\-•] /, "");
-      const isBlocked = text.includes("⚠") || text.toLowerCase().includes("overdue");
-      const isGood = text.includes("✅");
-      elements.push(
-        <div key={key++} className={`flex gap-2 text-xs py-0.5 pl-1 ${isBlocked ? "text-red-700" : isGood ? "text-green-700" : "text-gray-700"}`}>
-          <span className="text-gray-400 mt-0.5 shrink-0">•</span>
-          <span>{renderInline(text)}</span>
-        </div>
-      );
-    }
-    // Italic: *text* line (used for "no data" messages)
-    else if (/^\*[^*].+\*$/.test(line.trim())) {
-      elements.push(
-        <p key={key++} className="text-xs text-gray-400 italic pl-3 py-0.5">
-          {line.trim().replace(/^\*|\*$/g, "")}
-        </p>
-      );
-    }
-    // Bold line (standalone **text**)
-    else if (/^\*\*(.+)\*\*$/.test(line.trim())) {
-      elements.push(
-        <p key={key++} className="text-xs font-semibold text-gray-800 mt-1">
-          {line.trim().replace(/^\*\*|\*\*$/g, "")}
-        </p>
-      );
-    }
-    // Empty line → small spacer
-    else if (line.trim() === "") {
-      elements.push(<div key={key++} className="h-1" />);
-    }
-    // Plain text
-    else {
-      elements.push(
-        <p key={key++} className="text-xs text-gray-600 py-0.5">
-          {renderInline(line)}
-        </p>
-      );
-    }
-  }
-
-  return <div className="space-y-0">{elements}</div>;
-}
-
-/** Renders inline markdown: **bold**, *italic*, @mention, emoji passthrough */
-function renderInline(text) {
-  // Split on **bold**, preserve order
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
-    if (/^\*\*([^*]+)\*\*$/.test(part)) {
-      return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
-    }
-    // @mention highlight
-    if (/@\w+/.test(part)) {
-      const subParts = part.split(/(@\w+)/g);
-      return subParts.map((sp, j) =>
-        /@\w+/.test(sp)
-          ? <span key={j} className="text-blue-600 font-medium">{sp}</span>
-          : sp
-      );
-    }
-    return part;
-  });
+function MiniStat({ label, value, color, icon: Icon }) {
+  const cls = { yellow: "bg-yellow-50 text-yellow-700", green: "bg-green-50 text-green-700", red: "bg-red-50 text-red-700", purple: "bg-purple-50 text-purple-700", blue: "bg-blue-50 text-blue-700" };
+  return (
+    <div className={`rounded-xl p-2.5 flex items-center gap-2 ${cls[color]}`}>
+      <Icon className="w-4 h-4 shrink-0" />
+      <div>
+        <p className="text-base font-bold leading-tight">{value}</p>
+        <p className="text-[10px] font-medium leading-tight">{label}</p>
+      </div>
+    </div>
+  );
 }
 
 function ActionCard({ action, onApprove, onReject, processing = false }) {
   const [expanded, setExpanded] = useState(false);
 
-  const actionIcons = {
-    reassign: UserCheck,
-    adjust_deadline: CalendarClock,
-    escalate: AlertTriangle,
-    create_standup: FileText,
-  };
-
-  const actionLabels = {
-    reassign: "Auto-Assignment",
-    adjust_deadline: "Deadline Adjustment",
-    escalate: "Escalation",
-    create_standup: "Daily Standup",
-  };
-
-  const confidenceColor = (score) => {
-    if (score >= 0.8) return "text-green-600";
-    if (score >= 0.6) return "text-yellow-600";
-    return "text-red-600";
-  };
-
+  const actionIcons = { reassign: UserCheck, adjust_deadline: CalendarClock, escalate: AlertTriangle, create_standup: FileText };
+  const actionLabels = { reassign: "Auto-Assignment", adjust_deadline: "Deadline Adjustment", escalate: "Escalation", create_standup: "Daily Standup" };
+  const confidenceColor = (s) => s >= 0.8 ? "text-green-600" : s >= 0.6 ? "text-yellow-600" : "text-red-600";
   const Icon = actionIcons[action.action_type] || Bot;
   const isStandup = action.action_type === "create_standup";
   const cs = action.current_state || {};
   const pc = action.proposed_changes || {};
 
-  if (isStandup) {
-    return (
-      <div className="bg-white border border-blue-200 rounded-lg p-6 hover:shadow-md transition">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
-            <FileText className="w-5 h-5 text-blue-600" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-base font-bold text-gray-900">
-              Daily Standup — {pc.project_name || cs.project_name || "Project"}
-            </h3>
-            <p className="text-xs text-gray-500">
-              Ready to post to <span className="font-semibold text-blue-600">#daily-standups</span>
-            </p>
-          </div>
-          <span className={`text-sm font-semibold ${confidenceColor(action.confidence_score)}`}>
-            {Math.round(action.confidence_score * 100)}% confidence
-          </span>
-        </div>
-
-        {/* Sprint badge */}
-        {cs.sprint_name && (
-          <div className="mb-3 flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-lg text-xs text-indigo-700 font-medium">
-            <Zap className="w-3 h-3" />
-            <span>Sprint: <strong>{cs.sprint_name}</strong></span>
-            {cs.sprint_days_remaining != null && (
-              <span className="text-indigo-400">· {cs.sprint_days_remaining}d remaining</span>
-            )}
-            {cs.sprint_points_total > 0 && (
-              <span className="text-indigo-400">· {cs.sprint_points_done}/{cs.sprint_points_total} pts</span>
-            )}
-          </div>
-        )}
-
-        {/* Stats row */}
-        <div className="flex gap-3 mb-4 flex-wrap">
-          {cs.status_changes != null && (
-            <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full">
-              {cs.status_changes} task movements
-            </span>
-          )}
-          {cs.stuck_tasks > 0 && (
-            <span className="px-2 py-1 bg-orange-50 text-orange-700 text-xs font-semibold rounded-full">
-              {cs.stuck_tasks} stuck task{cs.stuck_tasks !== 1 ? "s" : ""}
-            </span>
-          )}
-          {cs.new_tasks > 0 && (
-            <span className="px-2 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full">
-              {cs.new_tasks} new task{cs.new_tasks !== 1 ? "s" : ""}
-            </span>
-          )}
-          {cs.overdue_count > 0 && (
-            <span className="px-2 py-1 bg-red-50 text-red-700 text-xs font-semibold rounded-full">
-              {cs.overdue_count} overdue
-            </span>
-          )}
-          {cs.active_count != null && (
-            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
-              {cs.active_count} active tasks
-            </span>
-          )}
-        </div>
-
-        {/* Preview / Expand */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-blue-600 hover:text-blue-700 text-sm font-semibold mb-3"
-        >
-          <span className="inline-flex items-center gap-1">
-            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            {expanded ? "Hide" : "Preview"} standup content
-          </span>
-        </button>
-
-        {expanded && pc.summary && (
-          <div className="mt-2 mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
-            <StandupMarkdown content={pc.summary} />
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-3 pt-4 border-t border-gray-200">
-          <button
-            onClick={onApprove}
-            disabled={processing}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="inline-flex items-center justify-center gap-1">
-              <Check className="w-4 h-4" />
-              {processing ? "Posting..." : "Post to #daily-standups"}
-            </span>
-          </button>
-          <button
-            onClick={() => onReject(null)}
-            disabled={processing}
-            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-semibold hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="inline-flex items-center gap-1">
-              <X className="w-4 h-4" />
-              Dismiss
-            </span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Default card for reassign / adjust_deadline / escalate / handle_overdue
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-3">
-            <Icon className="w-8 h-8 text-slate-700" />
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">{actionLabels[action.action_type] || action.action_type}</h3>
-              {action.task_title && <p className="text-sm text-gray-600">Task: {action.task_title}</p>}
-            </div>
-            <div className={`ml-auto text-sm font-semibold ${confidenceColor(action.confidence_score)}`}>
-              {Math.round(action.confidence_score * 100)}% confidence
-            </div>
-          </div>
-
-          <p className="text-gray-700 mb-4">{action.reason}</p>
-
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-blue-600 hover:text-blue-700 text-sm font-semibold mb-2"
-          >
-            <span className="inline-flex items-center gap-1">
-              {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              {expanded ? "Hide" : "Show"} Details
-            </span>
-          </button>
-
-          {expanded && (
-            <div className="mt-4 grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">Current State</h4>
-                <pre className="text-xs text-gray-600 whitespace-pre-wrap">
-                  {JSON.stringify(action.current_state, null, 2)}
-                </pre>
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">Proposed Changes</h4>
-                <pre className="text-xs text-gray-600 whitespace-pre-wrap">
-                  {JSON.stringify(action.proposed_changes, null, 2)}
-                </pre>
-              </div>
-            </div>
-          )}
+    <div className={`theme-surface border rounded-2xl overflow-hidden ${isStandup ? "border-blue-200" : "theme-border"}`}>
+      {/* Header */}
+      <div className="flex items-center gap-3 p-4">
+        <div className={`shrink-0 p-2 rounded-xl ${isStandup ? "bg-blue-100" : "bg-[var(--surface-soft)]"}`}>
+          <Icon className={`w-5 h-5 ${isStandup ? "text-blue-600" : "theme-text"}`} />
         </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold theme-text text-sm leading-tight">
+            {isStandup ? `Standup — ${pc.project_name || cs.project_name || "Project"}` : (actionLabels[action.action_type] || action.action_type)}
+          </p>
+          {action.task_title && <p className="text-xs theme-text-muted truncate">{action.task_title}</p>}
+          {isStandup && <p className="text-xs text-blue-600">→ #daily-standups</p>}
+        </div>
+        <span className={`shrink-0 text-xs font-semibold ${confidenceColor(action.confidence_score)}`}>
+          {Math.round(action.confidence_score * 100)}%
+        </span>
       </div>
 
-      <div className="flex gap-3 mt-4 pt-4 border-t border-gray-200">
-        <button
-          onClick={onApprove}
-          disabled={processing}
-          className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <span className="inline-flex items-center gap-1">
-            <Check className="w-4 h-4" />
-            {processing ? "Processing..." : "Approve & Execute"}
-          </span>
+      {/* Standup stats */}
+      {isStandup && (
+        <div className="px-4 pb-2 flex gap-2 flex-wrap">
+          {cs.sprint_name && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Sprint: {cs.sprint_name}</span>}
+          {cs.status_changes != null && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{cs.status_changes} moves</span>}
+          {cs.stuck_tasks > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">{cs.stuck_tasks} stuck</span>}
+          {cs.overdue_count > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{cs.overdue_count} overdue</span>}
+        </div>
+      )}
+
+      {/* Reason */}
+      {!isStandup && action.reason && (
+        <p className="px-4 pb-3 text-xs theme-text-muted">{action.reason}</p>
+      )}
+
+      {/* Expand toggle */}
+      <div className="px-4 pb-3">
+        <button onClick={() => setExpanded(!expanded)}
+          className="inline-flex items-center gap-1 text-xs text-primary-600 font-semibold active:opacity-70">
+          {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          {isStandup ? (expanded ? "Hide" : "Preview") + " content" : (expanded ? "Hide" : "Show") + " details"}
         </button>
-        <button
-          onClick={() => {
-            const reason = window.prompt("Optional rejection reason:", "");
-            if (reason === null) return;
-            onReject(reason || null);
-          }}
-          disabled={processing}
-          className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <span className="inline-flex items-center gap-1">
-            <X className="w-4 h-4" />
-            Reject
-          </span>
+      </div>
+
+      {expanded && (
+        <div className="mx-4 mb-3 p-3 bg-[var(--surface-soft)] rounded-xl max-h-64 overflow-y-auto">
+          {isStandup && pc.summary
+            ? <StandupMarkdown content={pc.summary} />
+            : <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <p className="text-xs font-semibold theme-text mb-1">Current State</p>
+                  <pre className="text-xs theme-text-muted whitespace-pre-wrap">{JSON.stringify(action.current_state, null, 2)}</pre>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold theme-text mb-1">Proposed Changes</p>
+                  <pre className="text-xs theme-text-muted whitespace-pre-wrap">{JSON.stringify(action.proposed_changes, null, 2)}</pre>
+                </div>
+              </div>
+          }
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex items-center border-t theme-border px-3 py-2 gap-1">
+        <button onClick={onApprove} disabled={processing}
+          className={`flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-white text-xs font-semibold active:opacity-80 disabled:opacity-50 ${isStandup ? "bg-blue-600" : "bg-emerald-600"}`}>
+          <Check className="w-3.5 h-3.5" />
+          {processing ? (isStandup ? "Posting…" : "Processing…") : (isStandup ? "Post" : "Approve")}
+        </button>
+        <button onClick={() => {
+          if (isStandup) { onReject(null); return; }
+          const reason = window.prompt("Optional rejection reason:", "");
+          if (reason === null) return;
+          onReject(reason || null);
+        }} disabled={processing}
+          className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg theme-text-muted bg-[var(--surface-soft)] text-xs font-semibold active:opacity-70 disabled:opacity-40">
+          <X className="w-3.5 h-3.5" />
+          {isStandup ? "Dismiss" : "Reject"}
         </button>
       </div>
     </div>
@@ -1073,156 +586,88 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
 }
 
 function SettingsPanel({ settings, onSave, apiClient }) {
-  const [localSettings, setLocalSettings] = useState(settings || {});
+  const [local, setLocal] = useState(settings || {});
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    setLocalSettings(settings || {});
-  }, [settings]);
+  useEffect(() => { setLocal(settings || {}); }, [settings]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       const res = await apiClient.post("/autopilot/settings", {
-        enabled: localSettings.enabled,
-        mode: localSettings.mode,
-        autoAssign: localSettings.auto_assign,
-        autoDeadlineAdjust: localSettings.auto_deadline_adjust,
-        autoEscalateBlockers: localSettings.auto_escalate_blockers,
-        autoGenerateStandup: localSettings.auto_generate_standup,
-        maxTasksPerUser: parseInt(localSettings.max_tasks_per_user, 10) || 10,
-        blockerThresholdHours: parseInt(localSettings.blocker_threshold_hours, 10) || 48,
-        velocityDropThreshold: parseFloat(localSettings.velocity_drop_threshold) || 0.2,
-        requireApproval: localSettings.require_approval,
-        autoApproveAfterHours: parseInt(localSettings.auto_approve_after_hours, 10) || 24,
+        enabled: local.enabled, mode: local.mode,
+        autoAssign: local.auto_assign, autoDeadlineAdjust: local.auto_deadline_adjust,
+        autoEscalateBlockers: local.auto_escalate_blockers, autoGenerateStandup: local.auto_generate_standup,
+        maxTasksPerUser: parseInt(local.max_tasks_per_user, 10) || 10,
+        blockerThresholdHours: parseInt(local.blocker_threshold_hours, 10) || 48,
+        velocityDropThreshold: parseFloat(local.velocity_drop_threshold) || 0.2,
+        requireApproval: local.require_approval,
+        autoApproveAfterHours: parseInt(local.auto_approve_after_hours, 10) || 24,
       });
-
       onSave(res.data.settings);
       toast.success("Settings saved");
-    } catch (err) {
-      toast.error("Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
+    } catch { toast.error("Failed to save settings"); } finally { setSaving(false); }
   };
 
+  const set = (key, val) => setLocal((p) => ({ ...p, [key]: val }));
+
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6 max-w-2xl">
-      <h2 className="text-2xl font-bold mb-6">Autopilot Configuration</h2>
-
-      <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Operation Mode</label>
-          <select
-            value={localSettings.mode || "assisted"}
-            onChange={(e) => setLocalSettings({ ...localSettings, mode: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="monitoring">Monitoring Only (No actions)</option>
-            <option value="assisted">Assisted (Require approval)</option>
-            <option value="autonomous">Autonomous (Auto-execute)</option>
-          </select>
-        </div>
-
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Enabled Features</h3>
-          <div className="space-y-2">
-            <ToggleOption
-              label="Auto-assign unassigned tasks"
-              checked={localSettings.auto_assign ?? true}
-              onChange={(checked) => setLocalSettings({ ...localSettings, auto_assign: checked })}
-            />
-            <ToggleOption
-              label="Auto-adjust deadlines based on velocity"
-              checked={localSettings.auto_deadline_adjust ?? true}
-              onChange={(checked) => setLocalSettings({ ...localSettings, auto_deadline_adjust: checked })}
-            />
-            <ToggleOption
-              label="Auto-escalate blocked tasks"
-              checked={localSettings.auto_escalate_blockers ?? true}
-              onChange={(checked) => setLocalSettings({ ...localSettings, auto_escalate_blockers: checked })}
-            />
-            <ToggleOption
-              label="Auto-generate daily standup"
-              checked={localSettings.auto_generate_standup ?? true}
-              onChange={(checked) => setLocalSettings({ ...localSettings, auto_generate_standup: checked })}
-            />
-          </div>
-        </div>
-
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Thresholds</h3>
-          <div className="space-y-3">
-            <InputField
-              label="Max tasks per user"
-              type="number"
-              value={localSettings.max_tasks_per_user || 10}
-              onChange={(value) => setLocalSettings({ ...localSettings, max_tasks_per_user: value })}
-            />
-            <InputField
-              label="Blocker threshold (hours)"
-              type="number"
-              value={localSettings.blocker_threshold_hours || 48}
-              onChange={(value) => setLocalSettings({ ...localSettings, blocker_threshold_hours: value })}
-            />
-          </div>
-        </div>
-
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Approval Settings</h3>
-          <div className="space-y-3">
-            <ToggleOption
-              label="Require approval for actions"
-              checked={localSettings.require_approval ?? true}
-              onChange={(checked) => setLocalSettings({ ...localSettings, require_approval: checked })}
-            />
-            {localSettings.require_approval && (
-              <InputField
-                label="Auto-approve after (hours)"
-                type="number"
-                value={localSettings.auto_approve_after_hours || 24}
-                onChange={(value) => setLocalSettings({ ...localSettings, auto_approve_after_hours: value })}
-              />
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {saving ? "Saving..." : "Save Settings"}
-        </button>
+    <div className="flex flex-col gap-4">
+      <div className="theme-surface border theme-border rounded-2xl p-4 space-y-4">
+        <p className="font-semibold theme-text">Operation Mode</p>
+        <select value={local.mode || "assisted"} onChange={(e) => set("mode", e.target.value)}
+          className="w-full border theme-border rounded-xl px-3 py-2.5 text-sm theme-surface theme-text">
+          <option value="monitoring">Monitoring Only</option>
+          <option value="assisted">Assisted (Require approval)</option>
+          <option value="autonomous">Autonomous (Auto-execute)</option>
+        </select>
       </div>
+
+      <div className="theme-surface border theme-border rounded-2xl p-4 space-y-2">
+        <p className="font-semibold theme-text mb-2">Features</p>
+        <Toggle label="Auto-assign unassigned tasks" checked={local.auto_assign ?? true} onChange={(v) => set("auto_assign", v)} />
+        <Toggle label="Auto-adjust deadlines" checked={local.auto_deadline_adjust ?? true} onChange={(v) => set("auto_deadline_adjust", v)} />
+        <Toggle label="Auto-escalate blocked tasks" checked={local.auto_escalate_blockers ?? true} onChange={(v) => set("auto_escalate_blockers", v)} />
+        <Toggle label="Auto-generate daily standup" checked={local.auto_generate_standup ?? true} onChange={(v) => set("auto_generate_standup", v)} />
+      </div>
+
+      <div className="theme-surface border theme-border rounded-2xl p-4 space-y-3">
+        <p className="font-semibold theme-text">Thresholds</p>
+        <SettingInput label="Max tasks per user" type="number" value={local.max_tasks_per_user || 10} onChange={(v) => set("max_tasks_per_user", v)} />
+        <SettingInput label="Blocker threshold (hours)" type="number" value={local.blocker_threshold_hours || 48} onChange={(v) => set("blocker_threshold_hours", v)} />
+      </div>
+
+      <div className="theme-surface border theme-border rounded-2xl p-4 space-y-3">
+        <p className="font-semibold theme-text">Approval Settings</p>
+        <Toggle label="Require approval for actions" checked={local.require_approval ?? true} onChange={(v) => set("require_approval", v)} />
+        {local.require_approval && (
+          <SettingInput label="Auto-approve after (hours)" type="number" value={local.auto_approve_after_hours || 24} onChange={(v) => set("auto_approve_after_hours", v)} />
+        )}
+      </div>
+
+      <button onClick={handleSave} disabled={saving}
+        className="w-full py-3 rounded-2xl bg-primary-600 text-white font-semibold text-sm active:bg-primary-700 disabled:opacity-50">
+        {saving ? "Saving…" : "Save Settings"}
+      </button>
     </div>
   );
 }
 
-function ToggleOption({ label, checked, onChange }) {
+function Toggle({ label, checked, onChange }) {
   return (
-    <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-      <span className="text-sm text-gray-700">{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-      />
+    <label className="flex items-center justify-between py-2 cursor-pointer">
+      <span className="text-sm theme-text">{label}</span>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="w-4 h-4" />
     </label>
   );
 }
 
-function InputField({ label, type, value, onChange }) {
+function SettingInput({ label, type, value, onChange }) {
   return (
     <div>
-      <label className="block text-sm text-gray-600 mb-1">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-      />
+      <label className="block text-xs theme-text-muted mb-1">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full border theme-border rounded-xl px-3 py-2.5 text-sm theme-surface theme-text" />
     </div>
   );
 }

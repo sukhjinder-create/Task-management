@@ -6,46 +6,45 @@ import { getSocket, initSocket } from "../socket";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { publishUnreadCount } from "../notificationBus";
+import { Bell, CheckCheck } from "lucide-react";
 
 const TYPE_META = {
-  // Task
-  task_assigned:      { label: "Task assigned",          color: "bg-blue-50 text-blue-700",    icon: "📋" },
-  task_updated:       { label: "Task updated",           color: "bg-amber-50 text-amber-700",  icon: "✏️" },
-  task_deleted:       { label: "Task deleted",           color: "bg-red-50 text-red-700",      icon: "🗑️" },
-  // Project
-  project_assigned:   { label: "Project assigned",       color: "bg-indigo-50 text-indigo-700",icon: "📁" },
-  // Comments
-  comment_added:      { label: "New comment",            color: "bg-slate-100 text-slate-700", icon: "💬" },
-  comment_reply:      { label: "Comment reply",          color: "bg-teal-50 text-teal-700",    icon: "↩️" },
-  comment_mention:    { label: "Mentioned",              color: "bg-purple-50 text-purple-700",icon: "🏷️" },
-  // Workspace / admin
-  autopilot_summary:  { label: "Autopilot",              color: "bg-violet-50 text-violet-700",icon: "🤖" },
-  workspace_warning:  { label: "Workspace warning",      color: "bg-orange-50 text-orange-700",icon: "⚠️" },
+  task_assigned:      { label: "Task assigned",     icon: "📋" },
+  task_updated:       { label: "Task updated",       icon: "✏️" },
+  task_deleted:       { label: "Task deleted",       icon: "🗑️" },
+  project_assigned:   { label: "Project assigned",   icon: "📁" },
+  comment_added:      { label: "New comment",        icon: "💬" },
+  comment_reply:      { label: "Comment reply",      icon: "↩️" },
+  comment_mention:    { label: "Mentioned",          icon: "🏷️" },
+  autopilot_summary:  { label: "Autopilot",          icon: "🤖" },
+  workspace_warning:  { label: "Warning",            icon: "⚠️" },
 };
 
-function formatType(type) {
-  return TYPE_META[type]?.label ?? type;
+function typeIcon(type) { return TYPE_META[type]?.icon ?? "🔔"; }
+function typeLabel(type) { return TYPE_META[type]?.label ?? type; }
+
+function relativeTime(iso) {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
-function typeColor(type) {
-  return TYPE_META[type]?.color ?? "bg-slate-100 text-slate-700";
-}
-
-function typeIcon(type) {
-  return TYPE_META[type]?.icon ?? "🔔";
-}
-
-const TYPE_FILTER_OPTIONS = [
-  { value: "all",               label: "All types" },
-  { value: "task_assigned",     label: "Task assigned" },
-  { value: "task_updated",      label: "Task updated" },
-  { value: "task_deleted",      label: "Task deleted" },
-  { value: "project_assigned",  label: "Project assigned" },
-  { value: "comment_added",     label: "New comment" },
-  { value: "comment_reply",     label: "Comment reply" },
-  { value: "comment_mention",   label: "Mentioned" },
-  { value: "autopilot_summary", label: "Autopilot" },
-  { value: "workspace_warning", label: "Workspace warning" },
+const TYPE_FILTERS = [
+  { value: "all",              label: "All" },
+  { value: "task_assigned",    label: "Assigned" },
+  { value: "task_updated",     label: "Updated" },
+  { value: "comment_added",    label: "Comments" },
+  { value: "comment_mention",  label: "Mentions" },
+  { value: "project_assigned", label: "Projects" },
+  { value: "autopilot_summary",label: "Autopilot" },
+  { value: "workspace_warning",label: "Warnings" },
 ];
 
 export default function Notifications() {
@@ -57,52 +56,32 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
-
-  // UI filters
-  const [tab, setTab] = useState("all"); // "all" | "unread"
+  const [tab, setTab] = useState("all");        // "all" | "unread"
   const [typeFilter, setTypeFilter] = useState("all");
 
-  // Helper: compute unread and broadcast to sidebar
   const updateUnreadCount = (list) => {
-    const unread = (list || []).filter((n) => !n.is_read).length;
-    publishUnreadCount(unread);
+    publishUnreadCount((list || []).filter((n) => !n.is_read).length);
   };
 
-  // Initial load
   useEffect(() => {
-    async function loadNotifications() {
-      setLoading(true);
-      try {
-        const res = await api.get("/notifications");
-        const list = res.data || [];
-        setNotifications(list);
-        updateUnreadCount(list);
-      } catch (err) {
-        console.error(err);
-        const msg =
-          err.response?.data?.error || "Failed to load notifications";
-        toast.error(msg);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadNotifications();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    api.get("/notifications").then((res) => {
+      const list = res.data || [];
+      setNotifications(list);
+      updateUnreadCount(list);
+    }).catch((err) => {
+      toast.error(err.response?.data?.error || "Failed to load notifications");
+    }).finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Socket realtime updates
   useEffect(() => {
     if (!auth.token) return;
-
-    let socket = getSocket() || initSocket(auth.token);
+    const socket = getSocket() || initSocket(auth.token);
     if (!socket) return;
 
     const onConnect    = () => setSocketConnected(true);
     const onDisconnect = () => setSocketConnected(false);
-
     const handler = (notif) => {
       setNotifications((prev) => {
-        // Deduplicate by id
         if (prev.some((n) => n.id === notif.id)) return prev;
         const next = [notif, ...prev];
         updateUnreadCount(next);
@@ -111,22 +90,20 @@ export default function Notifications() {
       toast(`🔔 ${notif.message}`, { duration: 4000 });
     };
 
-    socket.on("connect",      onConnect);
-    socket.on("disconnect",   onDisconnect);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
     socket.on("notification", handler);
-
-    // Sync connected state immediately
     setSocketConnected(socket.connected);
 
     return () => {
-      socket.off("connect",      onConnect);
-      socket.off("disconnect",   onDisconnect);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
       socket.off("notification", handler);
     };
   }, [auth.token]);
 
   const handleMarkAllRead = async () => {
-    if (notifications.length === 0) return;
+    if (!notifications.length) return;
     setMarking(true);
     try {
       await api.post("/notifications/mark-all-read");
@@ -135,12 +112,9 @@ export default function Notifications() {
         updateUnreadCount(next);
         return next;
       });
-      toast.success("All notifications marked as read");
+      toast.success("All marked as read");
     } catch (err) {
-      console.error(err);
-      const msg =
-        err.response?.data?.error || "Failed to mark notifications as read";
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Failed");
     } finally {
       setMarking(false);
     }
@@ -149,248 +123,185 @@ export default function Notifications() {
   const handleMarkOneRead = async (id) => {
     try {
       const res = await api.post(`/notifications/${id}/read`);
-      const updated = res.data;
       setNotifications((prev) => {
-        const next = prev.map((n) => (n.id === updated.id ? updated : n));
+        const next = prev.map((n) => (n.id === res.data.id ? res.data : n));
         updateUnreadCount(next);
         return next;
       });
-    } catch (err) {
-      console.error(err);
-    }
+    } catch { /* silent */ }
   };
 
   const handleOpen = async (notif) => {
-    if (!notif.is_read) {
-      await handleMarkOneRead(notif.id);
-    }
+    if (!notif.is_read) await handleMarkOneRead(notif.id);
 
-    // ── Task-level notifications ──────────────────────────────────────────────
     if (notif.task_id) {
       if (notif.project_id) {
-        const params = new URLSearchParams();
-        params.set("task", notif.task_id);
-        if (notif.comment_id) params.set("comment", notif.comment_id);
-        navigate(`/projects/${notif.project_id}?${params.toString()}`);
+        const p = new URLSearchParams({ task: notif.task_id });
+        if (notif.comment_id) p.set("comment", notif.comment_id);
+        navigate(`/projects/${notif.project_id}?${p.toString()}`);
       } else {
         navigate(`/my-tasks?task=${notif.task_id}`);
       }
       return;
     }
-
-    // ── Project-level notifications ───────────────────────────────────────────
-    if (notif.project_id) {
-      navigate(`/projects/${notif.project_id}`);
-      return;
-    }
-
-    // ── Type-based routing for workspace-level notifications ──────────────────
-    const TYPE_ROUTES = {
-      autopilot_summary:  "/autopilot",
-      workspace_warning:  "/autopilot",
-      task_deleted:       "/my-tasks",
-    };
-
-    const dest = TYPE_ROUTES[notif.type];
-    if (dest) {
-      navigate(dest);
-      return;
-    }
-
-    // Absolute fallback — should rarely hit
-    navigate("/dashboard");
+    if (notif.project_id) { navigate(`/projects/${notif.project_id}`); return; }
+    const TYPE_ROUTES = { autopilot_summary: "/autopilot", workspace_warning: "/autopilot", task_deleted: "/my-tasks" };
+    navigate(TYPE_ROUTES[notif.type] || "/dashboard");
   };
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
-  // === Derived: filtered list for UI ===
-  const filteredNotifications = notifications.filter((n) => {
+  const filtered = notifications.filter((n) => {
     if (tab === "unread" && n.is_read) return false;
     if (typeFilter !== "all" && n.type !== typeFilter) return false;
     return true;
   });
 
   return (
-    <div className="space-y-6">
-      {/* HEADER */}
-      <section className="bg-white rounded-xl shadow p-4 flex justify-between items-center">
-        <div className="space-y-1">
-          <h1 className="text-lg font-semibold flex items-center gap-2">
-            Notifications
-            {unreadCount > 0 && (
-              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-[2px] text-[10px] font-medium text-blue-700 border border-blue-100">
-                {unreadCount} unread
-              </span>
-            )}
-          </h1>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span>
-              Stay in sync with project and task changes in real time.
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[10px] font-medium border">
-              <span
-                className={
-                  socketConnected ? "text-green-600" : "text-red-600"
-                }
-              >
-                ●
-              </span>
-              <span>
-                {socketConnected ? "Realtime: connected" : "Realtime: offline"}
-              </span>
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={handleMarkAllRead}
-          disabled={marking || unreadCount === 0}
-          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {marking ? "Marking..." : "Mark all as read"}
-        </button>
-      </section>
+    <div className="flex flex-col h-full">
 
-      {/* FILTER BAR + LIST */}
-      <section className="bg-white rounded-xl shadow p-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
-          <h2 className="text-sm font-semibold">Recent notifications</h2>
-
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* Tab buttons: All / Unread */}
-            <div className="inline-flex rounded-full bg-slate-100 p-1">
-              <button
-                type="button"
-                onClick={() => setTab("all")}
-                className={`px-3 py-[3px] rounded-full ${
-                  tab === "all"
-                    ? "bg-white shadow text-slate-900"
-                    : "text-slate-500"
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("unread")}
-                className={`px-3 py-[3px] rounded-full ${
-                  tab === "unread"
-                    ? "bg-white shadow text-slate-900"
-                    : "text-slate-500"
-                }`}
-              >
-                Unread
-              </button>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Bell className="w-5 h-5 theme-text" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </div>
-
-            {/* Type filter */}
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] text-slate-500">Type:</span>
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="border border-slate-200 rounded-lg px-2 py-[3px] text-[11px] bg-white"
-              >
-                {TYPE_FILTER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <h1 className="text-lg font-bold theme-text">Notifications</h1>
+            <span className={`w-2 h-2 rounded-full ${socketConnected ? "bg-green-500" : "bg-gray-400"}`} title={socketConnected ? "Live" : "Offline"} />
           </div>
+
+          <button
+            onClick={handleMarkAllRead}
+            disabled={marking || unreadCount === 0}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white disabled:opacity-40 active:bg-blue-700 transition-colors"
+          >
+            <CheckCheck className="w-3.5 h-3.5" />
+            <span>Mark all read</span>
+          </button>
         </div>
 
+        {/* ── Tab pills ───────────────────────────── */}
+        <div className="flex items-center gap-2 mt-3">
+          {["all", "unread"].map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                tab === t
+                  ? "bg-blue-600 text-white"
+                  : "theme-surface border theme-border theme-text-muted"
+              }`}
+            >
+              {t === "all" ? `All (${notifications.length})` : `Unread (${unreadCount})`}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Type filter chips (horizontal scroll) ── */}
+        <div className="flex gap-2 mt-2 overflow-x-auto pb-1 -mx-4 px-4">
+          {TYPE_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setTypeFilter(f.value)}
+              className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                typeFilter === f.value
+                  ? "bg-[var(--primary)] text-white"
+                  : "bg-[var(--surface-soft)] theme-text-muted"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── List ───────────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
+
+        {/* Loading skeletons */}
         {loading && (
-          <div className="text-sm text-slate-500">Loading...</div>
-        )}
-
-        {!loading && notifications.length === 0 && (
-          <div className="text-sm text-slate-500">
-            You’re all caught up. No notifications yet.
+          <div className="flex flex-col divide-y theme-border">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-start gap-3 px-4 py-4 animate-pulse">
+                <div className="w-9 h-9 rounded-xl bg-[var(--surface-soft)] shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 bg-[var(--surface-soft)] rounded w-1/3" />
+                  <div className="h-3 bg-[var(--surface-soft)] rounded w-3/4" />
+                  <div className="h-2 bg-[var(--surface-soft)] rounded w-1/4" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
-        {!loading && notifications.length > 0 && (
-          <>
-            {filteredNotifications.length === 0 ? (
-              <div className="text-[11px] text-slate-500">
-                No notifications match your current filters.
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                {filteredNotifications.map((n) => {
-                  const isUnread = !n.is_read;
-                  const createdAt = n.created_at
-                    ? new Date(n.created_at).toLocaleString()
-                    : "";
-
-                  return (
-                    <button
-                      key={n.id}
-                      onClick={() => handleOpen(n)}
-                      className={`w-full text-left rounded-lg px-3 py-2 text-xs flex gap-3 items-stretch border transition hover:shadow-sm ${
-                        isUnread
-                          ? "bg-blue-50 border-blue-100 hover:bg-blue-100/70"
-                          : "bg-white border-slate-100 hover:bg-slate-50"
-                      }`}
-                    >
-                      {/* Icon + unread indicator */}
-                      <div className="pt-0.5 flex flex-col items-center gap-1">
-                        <span className="text-base leading-none">{typeIcon(n.type)}</span>
-                        {isUnread && (
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
-                        )}
-                      </div>
-
-                      {/* Main content */}
-                      <div className="flex-1 min-w-0">
-                        {/* Type + meta badges */}
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium ${typeColor(n.type)}`}>
-                            {formatType(n.type)}
-                          </span>
-
-                          {n.project_id && (
-                            <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-[1px] text-[10px] text-slate-600 border border-slate-200">
-                              Project
-                            </span>
-                          )}
-
-                          {n.task_id && (
-                            <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-[1px] text-[10px] text-slate-600 border border-slate-200">
-                              Task
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Message */}
-                        <div className="text-[11px] text-slate-800 break-words">
-                          {n.message}
-                        </div>
-
-                        {/* Footer row: time */}
-                        <div className="mt-1 text-[10px] text-slate-500">
-                          {createdAt}
-                        </div>
-                      </div>
-
-                      {/* "New" pill on the right */}
-                      {isUnread && (
-                        <div className="flex items-start">
-                          <span className="text-[9px] text-blue-700 border border-blue-300 bg-white/80 rounded px-1.5 py-[1px]">
-                            New
-                          </span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </>
+        {/* Empty state */}
+        {!loading && notifications.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <div className="p-4 rounded-full bg-[var(--surface-soft)]">
+              <Bell className="w-8 h-8 theme-text-muted" />
+            </div>
+            <p className="font-semibold theme-text">All caught up</p>
+            <p className="text-sm theme-text-muted">No notifications yet</p>
+          </div>
         )}
-      </section>
+
+        {/* No results for filter */}
+        {!loading && notifications.length > 0 && filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-2">
+            <p className="text-sm theme-text-muted">No notifications match your filters</p>
+            <button onClick={() => { setTab("all"); setTypeFilter("all"); }} className="text-sm text-blue-600 font-medium">
+              Clear filters
+            </button>
+          </div>
+        )}
+
+        {/* Notification rows */}
+        {!loading && filtered.length > 0 && (
+          <div className="divide-y theme-border">
+            {filtered.map((n) => {
+              const isUnread = !n.is_read;
+              return (
+                <button
+                  key={n.id}
+                  onClick={() => handleOpen(n)}
+                  className={`w-full text-left flex items-start gap-3 py-4 active:bg-[var(--surface-soft)] transition-colors relative ${
+                    isUnread ? "bg-blue-50/60" : ""
+                  }`}
+                  style={{ paddingLeft: isUnread ? "calc(1rem + 3px)" : "1rem", paddingRight: "1rem" }}
+                >
+                  {/* Unread indicator bar */}
+                  {isUnread && (
+                    <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-blue-500" />
+                  )}
+
+                  {/* Icon badge */}
+                  <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--surface-soft)] flex items-center justify-center text-lg leading-none">
+                    {typeIcon(n.type)}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[11px] font-semibold theme-text-muted">{typeLabel(n.type)}</span>
+                      {isUnread && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-sm theme-text leading-snug line-clamp-2">{n.message}</p>
+                    <p className="text-[11px] theme-text-muted mt-1">{relativeTime(n.created_at)}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
