@@ -17,6 +17,11 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // MFA second step
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaToken, setMfaToken] = useState("");      // mfa_session_token from server
+  const [mfaCode, setMfaCode] = useState("");
+
   // Show error passed back from Google SSO redirect
   useEffect(() => {
     const err = searchParams.get("error");
@@ -45,44 +50,57 @@ export default function Login() {
     }
   };
 
+  const completeLogin = (token, user) => {
+    safePersistAuth(user, token);
+    try { login(user, token); } catch (err) { console.warn("AuthContext.login threw:", err); }
+    toast.success(`Logged in as ${user.username}`);
+    navigate("/projects", { replace: true });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!email || !password) {
-      toast.error("Email and password are required");
-      return;
-    }
+    if (!email || !password) { toast.error("Email and password are required"); return; }
 
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/login`, {
-        email,
-        password,
-      });
+      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password });
 
-      // Backend returns: { token, user }
-      const { token, user } = res.data;
-
-      // Persist auth locally (safe duplicate if AuthContext also persists)
-      safePersistAuth(user, token);
-
-      // ✅ Pass correct arguments to AuthContext (keep behaviour)
-      // AuthContext.login may set app-level state
-      try {
-        login(user, token);
-      } catch (err) {
-        // If AuthContext.login unexpectedly throws, don't block the flow.
-        console.warn("AuthContext.login call threw:", err);
+      // MFA required — show TOTP step
+      if (res.data.mfa_required) {
+        setMfaToken(res.data.mfa_session_token);
+        setMfaRequired(true);
+        return;
       }
 
-      toast.success(`Logged in as ${user.username}`);
-
-      // navigate to main projects page
-      navigate("/projects", { replace: true });
+      completeLogin(res.data.token, res.data.user);
     } catch (err) {
-      console.error("Login error:", err);
       const msg = err.response?.data?.error || "Login failed";
       toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (e) => {
+    e.preventDefault();
+    if (!mfaCode) { toast.error("Enter your 6-digit code"); return; }
+
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/auth/mfa/verify`, {
+        mfa_session_token: mfaToken,
+        code: mfaCode,
+      });
+      completeLogin(res.data.token, res.data.user);
+    } catch (err) {
+      const msg = err.response?.data?.error || "Invalid code";
+      toast.error(msg);
+      if (msg.includes("expired")) {
+        // Session expired — go back to password step
+        setMfaRequired(false);
+        setMfaToken("");
+        setMfaCode("");
+      }
     } finally {
       setLoading(false);
     }
@@ -98,6 +116,42 @@ export default function Login() {
           Task Management Login
         </h1>
 
+        {/* ── MFA step ── */}
+        {mfaRequired ? (
+          <form className="space-y-3" onSubmit={handleMfaSubmit}>
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-800">
+              🔐 Two-factor authentication is enabled. Enter the 6-digit code from your authenticator app.
+            </div>
+            <div>
+              <label className="block text-xs font-medium theme-text-muted mb-1">Authenticator Code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={8}
+                autoFocus
+                className="w-full border theme-border theme-surface theme-text rounded-lg px-3 py-2 text-sm text-center tracking-widest text-lg font-mono"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full theme-primary rounded-lg py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {loading ? "Verifying…" : "Verify & Login"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMfaRequired(false); setMfaToken(""); setMfaCode(""); }}
+              className="w-full text-center text-xs theme-text-muted hover:theme-text"
+            >
+              ← Back to login
+            </button>
+          </form>
+        ) : (
         <form className="space-y-3" onSubmit={handleSubmit}>
           <div>
             <label className="block text-xs font-medium theme-text-muted mb-1">
@@ -135,7 +189,10 @@ export default function Login() {
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
+        )} {/* end mfaRequired conditional */}
 
+        {/* ── Divider + Google SSO shown only on password step ── */}
+        {!mfaRequired && (<>
         {/* ── Divider ── */}
         <div className="flex items-center gap-3 my-4">
           <div className="flex-1 h-px theme-border border-t" />
@@ -161,6 +218,7 @@ export default function Login() {
           Imported via Slack or another tool?{" "}
           <span className="text-indigo-500">Check your email for your access link.</span>
         </p>
+        </>)} {/* end !mfaRequired */}
       </div>
     </div>
   );

@@ -41,6 +41,14 @@ import { SuperadminAuthProvider } from "./context/SuperadminAuthContext";
 // ---- Extra legacy / preserved ----
 import CreateWorkspace from "./pages/CreateWorkspace";
 
+// ---- Enterprise Phase 1-4 pages ----
+import Enterprise from "./pages/Enterprise.jsx";
+import Wiki       from "./pages/Wiki.jsx";
+import Leave      from "./pages/Leave.jsx";
+import OKR        from "./pages/OKR.jsx";
+import Reviews    from "./pages/Reviews.jsx";
+import AIFeatures from "./pages/AIFeatures.jsx";
+
 /**
  * ======================================================
  * APP ROOT
@@ -86,6 +94,21 @@ export default function App() {
           <Route path="chat" element={<Chat />} />
           <Route path="reports" element={<Reports />} />
           <Route path="intelligence" element={<StrategicIntelligence />} />
+
+          {/* ---- Enterprise Phase 1-4 routes ---- */}
+          <Route path="wiki"        element={<Wiki />} />
+          <Route path="leave"       element={<Leave />} />
+          <Route path="okr"         element={<OKR />} />
+          <Route path="reviews"     element={<Reviews />} />
+          <Route path="ai-features" element={<AIFeatures />} />
+          <Route
+            path="enterprise"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Enterprise />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ---- NEW: AI Autopilot ---- */}
           <Route

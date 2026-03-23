@@ -17,6 +17,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Hash,
+  BookOpen,
+  CalendarDays,
+  Target,
+  Star,
+  Sparkles,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../api";
@@ -82,18 +88,24 @@ export default function Sidebar({ collapsed, onToggle }) {
     { to: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard, show: true },
     { to: "/projects",      label: "Projects",      icon: FolderKanban,    show: true },
     { to: "/my-tasks",      label: tasksLabel,       icon: CheckSquare,     show: true },
+    { to: "/wiki",          label: "Wiki / Docs",    icon: BookOpen,        show: true },
+    { to: "/leave",         label: "Leave",          icon: CalendarDays,    show: true },
+    { to: "/okr",           label: "Goals & OKR",    icon: Target,          show: true },
+    { to: "/reviews",       label: "Reviews",        icon: Star,            show: true },
     { to: "/reports",       label: "Reports",        icon: FileText,        show: true },
     { to: "/intelligence",  label: "Intelligence",   icon: Brain,           show: true },
+    { to: "/ai-features",   label: "AI Features",    icon: Sparkles,        show: true },
     { to: "/chat",          label: "Team Chat",      icon: MessageSquare,   show: true },
     { to: "/notifications", label: "Notifications",  icon: Bell,            show: true, badge: unreadCount },
   ];
 
   const adminItems = [
-    { to: "/autopilot",       label: "AI Autopilot",  icon: Bot,          show: isAdmin || isManager },
-    { to: "/testing-agent",   label: "Testing Agent", icon: FlaskConical, show: isAdmin || isManager },
-    { to: "/admin/attendance",      label: "Attendance",      icon: Clock,        show: isAdmin },
-    { to: "/admin/users",          label: "Admin Panel",     icon: Users,        show: isAdmin },
-    { to: "/admin/migrations",      label: "Migrations",      icon: Hash,         show: isAdmin },
+    { to: "/autopilot",            label: "AI Autopilot",       icon: Bot,          show: isAdmin || isManager },
+    { to: "/testing-agent",        label: "Testing Agent",      icon: FlaskConical, show: isAdmin || isManager },
+    { to: "/admin/attendance",     label: "Attendance",         icon: Clock,        show: isAdmin },
+    { to: "/admin/users",          label: "Admin Panel",        icon: Users,        show: isAdmin },
+    { to: "/enterprise",           label: "Enterprise",         icon: Shield,       show: isAdmin },
+    { to: "/admin/migrations",     label: "Migrations",         icon: Hash,         show: isAdmin },
   ];
 
   // Shared NavLink class builder

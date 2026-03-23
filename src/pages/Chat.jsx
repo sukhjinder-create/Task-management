@@ -177,7 +177,7 @@ export default function Chat() {
   const mobileQuillRef = useRef(null); // ref to ReactQuill instance for mobile
 
   // AI preference (per-user, per-workspace)
-const [aiReplyEnabled, setAiReplyEnabled] = useState(true);
+const [aiReplyEnabled, setAiReplyEnabled] = useState(false);
 const [loadingAiPref, setLoadingAiPref] = useState(false);
 
   const huddleCtx = useHuddle();
@@ -416,8 +416,8 @@ const [reportContext, setReportContext] = useState(null);
 
       setAiReplyEnabled(res.data?.aiReplyEnabled === true);
     } catch (err) {
-      console.warn("Failed to load AI preference, defaulting ON");
-      setAiReplyEnabled(true); // backward compatible
+      console.warn("Failed to load AI preference, defaulting OFF");
+      setAiReplyEnabled(false);
     }
   }
 
@@ -1931,18 +1931,18 @@ useEffect(() => {
 
         {/* ── SCREEN 1: Channel / DM list ── */}
         {mobileView === "list" && (
-          <div className="flex-1 flex flex-col bg-slate-900 overflow-hidden">
+          <div className="flex-1 flex flex-col chat-sidebar overflow-hidden">
 
             {/* Header */}
-            <div className="px-4 py-4 border-b border-slate-700/60 shrink-0">
+            <div className="px-4 py-4 border-b chat-sidebar-divider shrink-0">
               <div className="flex items-center justify-between mb-3">
-                <h1 className="text-white font-bold text-xl tracking-tight">Messages</h1>
+                <h1 className="font-bold text-xl tracking-tight chat-sidebar-item is-active" style={{background:"none"}}>Messages</h1>
                 <div className="flex items-center gap-2.5">
                   <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
                   <button
                     type="button"
                     onClick={() => setOpenCreate(true)}
-                    className="w-8 h-8 rounded-xl bg-slate-700 flex items-center justify-center text-slate-300 active:bg-slate-600"
+                    className="w-8 h-8 rounded-xl flex items-center justify-center chat-sidebar-icon-wrap"
                   >
                     <Plus size={16} />
                   </button>
@@ -1950,11 +1950,11 @@ useEffect(() => {
               </div>
 
               {/* AI Toggle row */}
-              <div className="flex items-center justify-between bg-slate-800/60 rounded-xl px-3 py-2">
+              <div className="flex items-center justify-between rounded-xl px-3 py-2 chat-sidebar-footer">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🤖</span>
                   <div>
-                    <div className="text-[12px] text-slate-200 font-medium">AI Auto-reply</div>
+                    <div className="text-[12px] font-medium chat-sidebar-item is-active" style={{background:"none"}}>AI Auto-reply</div>
                   </div>
                 </div>
                 <button
@@ -1973,7 +1973,7 @@ useEffect(() => {
                       setLoadingAiPref(false);
                     }
                   }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${aiReplyEnabled ? "bg-blue-500" : "bg-slate-600"}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${aiReplyEnabled ? "chat-sidebar-toggle-on" : "chat-sidebar-toggle-off"}`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${aiReplyEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
                 </button>
@@ -1986,7 +1986,7 @@ useEffect(() => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search channels & people..."
-                  className="w-full bg-slate-800 text-slate-200 placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  className="w-full chat-sidebar-input rounded-xl px-4 py-2.5 text-sm"
                 />
               </div>
             </div>
@@ -1996,7 +1996,7 @@ useEffect(() => {
 
               {/* CHANNELS */}
               <div className="px-4 pt-3 pb-1.5 flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Channels</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest chat-sidebar-label">Channels</span>
               </div>
 
               {/* Pinned system channels */}
@@ -2012,16 +2012,16 @@ useEffect(() => {
                     key={key}
                     type="button"
                     onClick={() => key === GENERAL_CHANNEL_KEY ? handleSelectGeneral() : handleSelectChannel(key)}
-                    className={`w-full flex items-center justify-between px-4 py-3 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                    className={`chat-sidebar-item w-full flex items-center justify-between px-4 py-3 text-left ${isActive ? "is-active" : ""}`}
                   >
                     <span className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center shrink-0">
-                        <Hash size={14} className="text-slate-400" />
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 chat-sidebar-icon-wrap ${isActive ? "is-active" : ""}`}>
+                        <Hash size={14} className="opacity-70" />
                       </div>
-                      <span className={`text-[14px] font-medium truncate ${isActive ? "text-white" : unread > 0 ? "text-white font-semibold" : "text-slate-400"}`}>{label}</span>
+                      <span className="text-[14px] font-medium truncate">{label}</span>
                     </span>
                     {unread > 0 && (
-                      <span className="ml-2 bg-blue-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
+                      <span className="chat-sidebar-badge ml-2 text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
                     )}
                   </button>
                 );
@@ -2038,16 +2038,16 @@ useEffect(() => {
                       key={ch.id}
                       type="button"
                       onClick={() => handleSelectChannel(ch.key)}
-                      className={`w-full flex items-center justify-between px-4 py-3 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                      className={`chat-sidebar-item w-full flex items-center justify-between px-4 py-3 text-left ${isActive ? "is-active" : ""}`}
                     >
                       <span className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center shrink-0">
-                          <Hash size={14} className="text-slate-400" />
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 chat-sidebar-icon-wrap ${isActive ? "is-active" : ""}`}>
+                          <Hash size={14} className="opacity-70" />
                         </div>
-                        <span className={`text-[14px] truncate ${isActive ? "text-white" : unread > 0 ? "text-white font-semibold" : "text-slate-400"}`}>{ch.name}</span>
+                        <span className="text-[14px] truncate">{ch.name}</span>
                       </span>
                       {unread > 0 && (
-                        <span className="ml-2 bg-blue-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
+                        <span className="chat-sidebar-badge ml-2 text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
                       )}
                     </button>
                   );
@@ -2057,7 +2057,7 @@ useEffect(() => {
               {slackChannelGroups.length > 0 && (
                 <>
                   <div className="px-4 pt-4 pb-1.5">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Slack</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest chat-sidebar-label">Slack</span>
                   </div>
                   {slackChannelGroups.map(([prefix, chs]) => (
                     chs
@@ -2070,14 +2070,14 @@ useEffect(() => {
                             key={ch.id}
                             type="button"
                             onClick={() => handleSelectChannel(ch.key)}
-                            className={`w-full flex items-center justify-between pl-7 pr-4 py-2.5 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                            className={`chat-sidebar-item w-full flex items-center justify-between pl-7 pr-4 py-2.5 text-left ${isActive ? "is-active" : ""}`}
                           >
                             <span className="flex items-center gap-2.5 min-w-0">
-                              <Hash size={13} className="text-slate-500 shrink-0" />
-                              <span className={`text-[13px] truncate ${isActive ? "text-white" : unread > 0 ? "text-white font-semibold" : "text-slate-400"}`}>{ch.name}</span>
+                              <Hash size={13} className="shrink-0 opacity-60" />
+                              <span className="text-[13px] truncate">{ch.name}</span>
                             </span>
                             {unread > 0 && (
-                              <span className="ml-2 bg-blue-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center shrink-0">{unread}</span>
+                              <span className="chat-sidebar-badge ml-2 text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center shrink-0">{unread}</span>
                             )}
                           </button>
                         );
@@ -2090,7 +2090,7 @@ useEffect(() => {
               {privateChannels.length > 0 && (
                 <>
                   <div className="px-4 pt-4 pb-1.5">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Lock size={9} /> Private</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 chat-sidebar-label"><Lock size={9} /> Private</span>
                   </div>
                   {privateChannels.map((ch) => {
                     const isActive = activeChannelKey === ch.key;
@@ -2099,12 +2099,12 @@ useEffect(() => {
                         key={ch.id}
                         type="button"
                         onClick={() => handleSelectChannel(ch.key)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                        className={`chat-sidebar-item w-full flex items-center gap-3 px-4 py-3 text-left ${isActive ? "is-active" : ""}`}
                       >
-                        <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center shrink-0">
-                          <Lock size={13} className="text-slate-400" />
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 chat-sidebar-icon-wrap ${isActive ? "is-active" : ""}`}>
+                          <Lock size={13} className="opacity-70" />
                         </div>
-                        <span className={`text-[14px] truncate ${isActive ? "text-white" : "text-slate-400"}`}>{ch.name}</span>
+                        <span className="text-[14px] truncate">{ch.name}</span>
                       </button>
                     );
                   })}
@@ -2113,11 +2113,11 @@ useEffect(() => {
 
               {/* DIRECT MESSAGES */}
               <div className="px-4 pt-5 pb-1.5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Direct Messages</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest chat-sidebar-label">Direct Messages</span>
               </div>
 
               {loadingUsers ? (
-                <div className="px-4 py-2 text-[12px] text-slate-500">Loading...</div>
+                <div className="px-4 py-2 text-[12px] chat-sidebar-label">Loading...</div>
               ) : (
                 sortedTeammates
                   .filter(u => !searchQuery || u.username.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -2132,7 +2132,7 @@ useEffect(() => {
                         key={u.id}
                         type="button"
                         onClick={() => handleSelectDm(u)}
-                        className={`w-full flex items-center justify-between px-4 py-2.5 text-left active:bg-slate-700/50 ${isActive ? "bg-slate-700" : ""}`}
+                        className={`chat-sidebar-item w-full flex items-center justify-between px-4 py-2.5 text-left ${isActive ? "is-active" : ""}`}
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="relative shrink-0">
@@ -2140,19 +2140,19 @@ useEffect(() => {
                               <FetchImg src={resolveUrl(u.avatar_url)} alt={u.username} className="w-9 h-9 rounded-full object-cover" />
                             ) : null}
                             {!u.avatar_url && (
-                              <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-[13px] font-bold text-slate-200">
+                              <div className="w-9 h-9 rounded-full chat-sidebar-avatar-fallback flex items-center justify-center text-[13px] font-bold">
                                 {u.username?.[0]?.toUpperCase() || "?"}
                               </div>
                             )}
-                            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-slate-900 ${color}`} />
+                            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[var(--sidebar-bg)] ${color}`} />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className={`text-[14px] font-medium truncate ${isActive ? "text-white" : unread > 0 ? "text-white font-semibold" : "text-slate-300"}`}>{u.username}</div>
-                            <div className="text-[11px] text-slate-500 truncate">{presenceLabel(presence)}</div>
+                            <div className="text-[14px] font-medium truncate">{u.username}</div>
+                            <div className="text-[11px] truncate chat-sidebar-label">{presenceLabel(presence)}</div>
                           </div>
                         </div>
                         {unread > 0 && (
-                          <span className="ml-2 bg-blue-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
+                          <span className="chat-sidebar-badge ml-2 text-[11px] font-bold rounded-full px-2 py-0.5 min-w-[22px] text-center shrink-0">{unread}</span>
                         )}
                       </button>
                     );
@@ -2163,21 +2163,21 @@ useEffect(() => {
             </nav>
 
             {/* Your profile footer */}
-            <div className="px-4 py-3 border-t border-slate-700/60 shrink-0 bg-slate-800/40">
+            <div className="px-4 py-3 border-t chat-sidebar-divider chat-sidebar-footer shrink-0">
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
                   {user.avatar_url ? (
                     <FetchImg src={resolveUrl(user.avatar_url)} alt={user.username} className="w-9 h-9 rounded-full object-cover" />
                   ) : (
-                    <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-[13px] font-bold">
+                    <div className="w-9 h-9 rounded-full chat-sidebar-avatar-fallback flex items-center justify-center text-[13px] font-bold">
                       {user.username?.[0]?.toUpperCase() || "?"}
                     </div>
                   )}
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[var(--sidebar-bg)]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold text-slate-200 truncate">{user.username}</div>
-                  <div className="text-[11px] text-slate-500 capitalize">{user.role || "member"}</div>
+                  <div className="text-[13px] font-semibold truncate chat-sidebar-item is-active" style={{background:"none"}}>{user.username}</div>
+                  <div className="text-[11px] capitalize chat-sidebar-label">{user.role || "member"}</div>
                 </div>
               </div>
             </div>
@@ -2847,39 +2847,39 @@ useEffect(() => {
         />
       )}
 
-      {/* ===== LEFT SIDEBAR — dark ===== */}
+      {/* ===== LEFT SIDEBAR ===== */}
       <aside className={`
-        bg-slate-900 flex flex-col shrink-0 z-50
+        chat-sidebar flex flex-col shrink-0 z-50
         fixed inset-y-0 left-0 w-72 transition-transform duration-300 ease-out
         md:relative md:w-60 md:translate-x-0
         ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
         {/* App header */}
-        <div className="px-4 py-3.5 border-b border-slate-700/60 shrink-0">
+        <div className="px-4 py-3.5 border-b chat-sidebar-divider shrink-0">
           <div className="flex items-center justify-between">
-            <span className="text-slate-100 font-bold text-sm tracking-tight">Workspace</span>
+            <span className="text-[13px] font-bold tracking-tight chat-sidebar-item is-active" style={{background:"none"}}>Workspace</span>
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen(false)}
-                className="md:hidden text-slate-400 hover:text-slate-200 p-1 -mr-1"
+                className="md:hidden p-1 -mr-1 transition-colors chat-sidebar-label hover:opacity-100"
               >
                 <XIcon size={16} />
               </button>
             </div>
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5 truncate">{user.username}</div>
+          <div className="text-[11px] mt-0.5 truncate chat-sidebar-label">{user.username}</div>
         </div>
 
         {/* AI Toggle */}
-        <div className="px-4 py-2.5 border-b border-slate-700/60 shrink-0">
+        <div className="px-4 py-2.5 border-b chat-sidebar-divider shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-sm">🤖</span>
               <div>
-                <div className="text-[11px] text-slate-200 font-medium">AI Assistant</div>
-                <div className="text-[10px] text-slate-500">Auto-reply</div>
+                <div className="text-[11px] font-medium chat-sidebar-item is-active" style={{background:"none"}}>AI Assistant</div>
+                <div className="text-[10px] chat-sidebar-label">Auto-reply</div>
               </div>
             </div>
             <button
@@ -2898,7 +2898,7 @@ useEffect(() => {
                   setLoadingAiPref(false);
                 }
               }}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${aiReplyEnabled ? "bg-blue-500" : "bg-slate-600"}`}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${aiReplyEnabled ? "chat-sidebar-toggle-on" : "chat-sidebar-toggle-off"}`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${aiReplyEnabled ? "translate-x-4" : "translate-x-1"}`} />
             </button>
@@ -2906,15 +2906,15 @@ useEffect(() => {
         </div>
 
         {/* Scrollable nav */}
-        <nav className="flex-1 overflow-y-auto py-3">
+        <nav className="flex-1 overflow-y-auto py-3 chat-sidebar-nav">
 
           {/* CHANNELS section header */}
           <div className="px-4 pt-1 pb-1.5 flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Channels</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest chat-sidebar-label">Channels</span>
             <button
               type="button"
               onClick={() => setOpenCreate(true)}
-              className="text-slate-400 hover:text-slate-200 transition-colors"
+              className="transition-colors chat-sidebar-label hover:opacity-100"
               title="Create channel"
             >
               <Plus size={13} />
@@ -2931,18 +2931,14 @@ useEffect(() => {
               key={key}
               type="button"
               onClick={() => key === GENERAL_CHANNEL_KEY ? handleSelectGeneral() : handleSelectChannel(key)}
-              className={`w-full flex items-center justify-between px-4 py-1.5 text-left transition-colors ${
-                activeChannelKey === key
-                  ? "bg-slate-700 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-              }`}
+              className={`chat-sidebar-item w-full flex items-center justify-between px-4 py-1.5 text-left rounded-sm mx-1 w-[calc(100%-8px)] ${activeChannelKey === key ? "is-active" : ""}`}
             >
               <span className="flex items-center gap-2 text-[12px] min-w-0">
-                <Hash size={12} className="shrink-0 text-slate-500" />
+                <Hash size={12} className="shrink-0 opacity-60" />
                 <span className="truncate">{label}</span>
               </span>
               {(unreadByChannel[key] || 0) > 0 && (
-                <span className="ml-1 text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                <span className="chat-sidebar-badge ml-1 text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
                   {unreadByChannel[key]}
                 </span>
               )}
@@ -2957,15 +2953,13 @@ useEffect(() => {
                 key={ch.id}
                 type="button"
                 onClick={() => handleSelectChannel(ch.key)}
-                className={`group/ch w-full flex items-center justify-between px-4 py-1.5 text-left transition-colors ${
-                  isActive ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                }`}
+                className={`group/ch chat-sidebar-item w-full flex items-center justify-between px-4 py-1.5 text-left rounded-sm mx-1 w-[calc(100%-8px)] ${isActive ? "is-active" : ""}`}
               >
                 <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
-                  <Hash size={12} className="shrink-0 text-slate-500" />
+                  <Hash size={12} className="shrink-0 opacity-60" />
                   <span className="truncate">{ch.name}</span>
                   {(unreadByChannel[ch.key] || 0) > 0 && (
-                    <span className="ml-1 text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                    <span className="chat-sidebar-badge ml-1 text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
                       {unreadByChannel[ch.key]}
                     </span>
                   )}
@@ -2975,7 +2969,7 @@ useEffect(() => {
                   tabIndex={0}
                   onClick={(e) => { e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); }}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); } }}
-                  className="opacity-0 group-hover/ch:opacity-100 text-slate-500 hover:text-slate-200 transition-opacity shrink-0 ml-1"
+                  className="opacity-0 group-hover/ch:opacity-100 transition-opacity shrink-0 ml-1 chat-sidebar-label"
                   title={`Settings for ${ch.name}`}
                 >
                   <Settings size={11} />
@@ -2988,7 +2982,7 @@ useEffect(() => {
           {slackChannelGroups.length > 0 && (
             <>
               <div className="px-4 pt-4 pb-1">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Slack</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest chat-sidebar-label">Slack</span>
               </div>
               {slackChannelGroups.map(([prefix, chs]) => {
                 const isCollapsed = collapsedSlackGroups[prefix];
@@ -2998,12 +2992,12 @@ useEffect(() => {
                     <button
                       type="button"
                       onClick={() => setCollapsedSlackGroups((prev) => ({ ...prev, [prefix]: !prev[prefix] }))}
-                      className="w-full flex items-center gap-1.5 px-4 py-1 text-slate-500 hover:text-slate-300 transition-colors"
+                      className="chat-sidebar-item w-full flex items-center gap-1.5 px-4 py-1 transition-colors"
                     >
                       <span className="text-[9px]">{isCollapsed ? "▶" : "▼"}</span>
                       <span className="text-[11px] font-medium capitalize flex-1 text-left">{prefix}</span>
                       {groupUnread > 0 && (
-                        <span className="text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                        <span className="chat-sidebar-badge text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
                           {groupUnread}
                         </span>
                       )}
@@ -3015,15 +3009,13 @@ useEffect(() => {
                           key={ch.id}
                           type="button"
                           onClick={() => handleSelectChannel(ch.key)}
-                          className={`group/ch w-full flex items-center justify-between pl-7 pr-4 py-1.5 text-left transition-colors ${
-                            isActive ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                          }`}
+                          className={`chat-sidebar-item group/ch w-full flex items-center justify-between pl-7 pr-4 py-1.5 text-left rounded-sm mx-1 w-[calc(100%-8px)] ${isActive ? "is-active" : ""}`}
                         >
                           <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
-                            <Hash size={11} className="shrink-0 text-slate-500" />
+                            <Hash size={11} className="shrink-0 opacity-60" />
                             <span className="truncate">{ch.name}</span>
                             {(unreadByChannel[ch.key] || 0) > 0 && (
-                              <span className="ml-1 text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                              <span className="chat-sidebar-badge ml-1 text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
                                 {unreadByChannel[ch.key]}
                               </span>
                             )}
@@ -3041,7 +3033,7 @@ useEffect(() => {
           {privateChannels.length > 0 && (
             <>
               <div className="px-4 pt-4 pb-1.5">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 chat-sidebar-label">
                   <Lock size={9} /> Private
                 </span>
               </div>
@@ -3052,12 +3044,10 @@ useEffect(() => {
                     key={ch.id}
                     type="button"
                     onClick={() => handleSelectChannel(ch.key)}
-                    className={`group/ch w-full flex items-center justify-between px-4 py-1.5 text-left transition-colors ${
-                      isActive ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                    }`}
+                    className={`group/ch chat-sidebar-item w-full flex items-center justify-between px-4 py-1.5 text-left rounded-sm mx-1 w-[calc(100%-8px)] ${isActive ? "is-active" : ""}`}
                   >
                     <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
-                      <Lock size={11} className="shrink-0 text-slate-500" />
+                      <Lock size={11} className="shrink-0 opacity-60" />
                       <span className="truncate">{ch.name}</span>
                     </span>
                     <span
@@ -3065,7 +3055,7 @@ useEffect(() => {
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); }}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); } }}
-                      className="opacity-0 group-hover/ch:opacity-100 text-slate-500 hover:text-slate-200 transition-opacity shrink-0 ml-1"
+                      className="opacity-0 group-hover/ch:opacity-100 transition-opacity shrink-0 ml-1 chat-sidebar-label"
                     >
                       <Settings size={11} />
                     </span>
@@ -3077,13 +3067,13 @@ useEffect(() => {
 
           {/* DMs section */}
           <div className="px-4 pt-4 pb-1.5">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Direct Messages</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest chat-sidebar-label">Direct Messages</span>
           </div>
 
           {loadingUsers ? (
-            <div className="px-4 text-[11px] text-slate-500">Loading...</div>
+            <div className="px-4 text-[11px] chat-sidebar-label">Loading...</div>
           ) : sortedTeammates.length === 0 ? (
-            <div className="px-4 text-[11px] text-slate-500">No teammates yet.</div>
+            <div className="px-4 text-[11px] chat-sidebar-label">No teammates yet.</div>
           ) : (
             sortedTeammates.map((u) => {
               const presence = presenceMap[u.id]?.status || "offline";
@@ -3096,25 +3086,23 @@ useEffect(() => {
                   key={u.id}
                   type="button"
                   onClick={() => handleSelectDm(u)}
-                  className={`w-full flex items-center justify-between px-4 py-1.5 text-left transition-colors ${
-                    isActive ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                  }`}
+                  className={`chat-sidebar-item w-full flex items-center justify-between px-4 py-1.5 text-left rounded-sm mx-1 w-[calc(100%-8px)] ${isActive ? "is-active" : ""}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div className="relative shrink-0">
                       {u.avatar_url ? (
                         <FetchImg src={resolveUrl(u.avatar_url)} alt={u.username} className="w-6 h-6 rounded-full object-cover" />
                       ) : (
-                        <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-semibold text-slate-200">
+                        <div className="w-6 h-6 rounded-full chat-sidebar-avatar-fallback flex items-center justify-center text-[10px] font-semibold">
                           {u.username?.[0]?.toUpperCase() || "?"}
                         </div>
                       )}
-                      <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-slate-900 ${color}`} />
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border-2 border-[var(--sidebar-bg)] ${color}`} />
                     </div>
                     <span className="text-[12px] font-medium truncate">{u.username}</span>
                   </div>
                   {unread > 0 ? (
-                    <span className="text-[9px] bg-blue-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                    <span className="chat-sidebar-badge text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
                       {unread}
                     </span>
                   ) : (
@@ -3129,21 +3117,21 @@ useEffect(() => {
         </nav>
 
         {/* ── Your profile footer ── */}
-        <div className="px-4 py-3 border-t border-slate-700/60 shrink-0">
+        <div className="px-4 py-3 border-t chat-sidebar-divider chat-sidebar-footer shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="relative shrink-0">
               {user.avatar_url ? (
                 <FetchImg src={resolveUrl(user.avatar_url)} alt={user.username} className="w-8 h-8 rounded-full object-cover" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-[12px] font-bold">
+                <div className="w-8 h-8 rounded-full chat-sidebar-avatar-fallback flex items-center justify-center text-[12px] font-bold">
                   {user.username?.[0]?.toUpperCase() || "?"}
                 </div>
               )}
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[var(--sidebar-bg)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-semibold text-slate-200 truncate">{user.username}</div>
-              <div className="text-[10px] text-slate-500 capitalize truncate">{user.role || "member"}</div>
+              <div className="text-[12px] font-semibold truncate chat-sidebar-item is-active" style={{background:"none"}}>{user.username}</div>
+              <div className="text-[10px] capitalize truncate chat-sidebar-label">{user.role || "member"}</div>
             </div>
             <div className={`w-2 h-2 rounded-full shrink-0 ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
           </div>

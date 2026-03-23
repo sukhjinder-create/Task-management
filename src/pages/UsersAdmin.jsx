@@ -14,7 +14,7 @@ export default function UsersAdmin() {
   const currentUser = auth.user;
 
   const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiName, setAiName] = useState("");
+  const [aiName, setAiName] = useState("AI Assistant");
   const [savingAISettings, setSavingAISettings] = useState(false);
 
   const [users, setUsers] = useState([]);
@@ -33,7 +33,7 @@ export default function UsersAdmin() {
   const [selectedTasksCreate, setSelectedTasksCreate] = useState([]);
 
   const [editingUserId, setEditingUserId] = useState(null);
-  const [editUser, setEditUser] = useState({ username: "", email: "", role: "user", aiReplyEnabled: false });
+  const [editUser, setEditUser] = useState({ username: "", email: "", role: "user" });
   const [selectedProjectsEdit, setSelectedProjectsEdit] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -49,8 +49,8 @@ export default function UsersAdmin() {
       try {
         const [usersRes, projectsRes] = await Promise.all([api.get("/users"), api.get("/projects")]);
         const aiRes = await api.get("/workspaces/ai-settings");
-        setAiEnabled(!!aiRes.data?.aiEnabled);
-        setAiName(aiRes.data?.aiName || "AI Assistant");
+        setAiEnabled(!!aiRes.data?.ai_enabled);
+        setAiName(aiRes.data?.ai_name || "AI Assistant");
         setUsers((usersRes.data || []).filter(
           (u) => u.role !== "system" && !u.is_system && !u.username?.startsWith("AI_System_")
         ));
@@ -128,20 +128,16 @@ export default function UsersAdmin() {
     }
   };
 
-  const startEditUser = async (user) => {
+  const startEditUser = (user) => {
     setEditingUserId(user.id);
-    setEditUser({ username: user.username || "", email: user.email || "", role: user.role || "user", aiReplyEnabled: false });
+    setEditUser({ username: user.username || "", email: user.email || "", role: user.role || "user" });
     setSelectedProjectsEdit(Array.isArray(user.projects) ? user.projects : []);
     setIsEditModalOpen(true);
-    try {
-      const pref = await api.get(`/users/${user.id}/ai-preference`);
-      setEditUser((prev) => ({ ...prev, aiReplyEnabled: pref.data?.aiReplyEnabled === true }));
-    } catch {}
   };
 
   const cancelEdit = () => {
     setEditingUserId(null);
-    setEditUser({ username: "", email: "", role: "user", aiReplyEnabled: false });
+    setEditUser({ username: "", email: "", role: "user" });
     setSelectedProjectsEdit([]);
     setIsEditModalOpen(false);
   };
@@ -153,7 +149,6 @@ export default function UsersAdmin() {
     if (!editUser.email.trim()) { toast.error("Email is required"); return; }
     setUpdating(true);
     try {
-      await api.put(`/users/${editingUserId}/ai-preference`, { aiReplyEnabled: editUser.aiReplyEnabled === true });
       const res = await api.put(`/users/${editingUserId}`, {
         username: editUser.username.trim(), email: editUser.email.trim(), role: editUser.role, projects: selectedProjectsEdit,
       });
@@ -245,7 +240,10 @@ export default function UsersAdmin() {
               onClick={async () => {
                 try {
                   setSavingAISettings(true);
-                  await api.put("/workspaces/ai-settings", { aiEnabled, aiName });
+                  await api.put("/workspaces/ai-settings", {
+                    ai_enabled: aiEnabled,
+                    ai_name: aiName,
+                  });
                   toast.success("AI settings updated");
                 } catch {
                   toast.error("Failed to update AI settings");
@@ -383,12 +381,6 @@ export default function UsersAdmin() {
                   className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text">
                   {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
-              </div>
-              <div className="flex items-center justify-between py-1">
-                <span className="text-sm theme-text">AI replies on behalf of user</span>
-                <input type="checkbox" checked={editUser.aiReplyEnabled || false}
-                  onChange={(e) => setEditUser((p) => ({ ...p, aiReplyEnabled: e.target.checked }))}
-                  className="w-4 h-4" />
               </div>
               <div>
                 <label className="block text-xs theme-text-muted mb-1">Projects</label>
