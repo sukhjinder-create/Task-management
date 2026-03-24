@@ -1,6 +1,6 @@
 // src/layout/AppLayout.jsx
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, Outlet } from "react-router-dom";
+import { useNavigate, Outlet, useLocation } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
@@ -22,6 +22,7 @@ export default function AppLayout({ children }) {
 
   const { logout, auth, updateUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const api = useApi();
 
   const user = auth?.user;
@@ -93,6 +94,8 @@ export default function AppLayout({ children }) {
   const [availableLoading, setAvailableLoading] = useState(false);
   const [lunchLoading, setLunchLoading] = useState(false);
   const [toggleLoading, setToggleLoading] = useState(false);
+
+  const isChatRoute = location.pathname.startsWith("/chat");
 
   // 🖥️ Screen / system activity tracking
   const [lastActivityAt, setLastActivityAt] = useState(Date.now());
@@ -382,8 +385,19 @@ export default function AppLayout({ children }) {
         </header>
 
         {/* Main Content */}
-        <main className="px-6 py-6 relative flex-1 overflow-y-auto">
-          <Outlet />
+        <main
+          className={cn(
+            "p-4 relative flex-1",
+            isChatRoute ? "overflow-hidden" : "overflow-y-auto"
+          )}
+        >
+          {isChatRoute ? (
+            <Outlet />
+          ) : (
+            <div className="min-h-full rounded-2xl border theme-border theme-surface shadow-lg p-3 md:p-4">
+              <Outlet />
+            </div>
+          )}
           <GlobalHuddleWindow />
         </main>
       </div>

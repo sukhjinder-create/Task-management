@@ -225,8 +225,8 @@ export default function MobileLayout() {
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                 attendanceStatus === "offline"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-red-100 text-red-700"
+                  ? "bg-green-500/15 text-green-600"
+                  : "bg-red-500/15 text-red-500"
               )}
             >
               {attendanceStatus === "offline" ? "Sign in" : "Sign off"}
@@ -245,8 +245,8 @@ export default function MobileLayout() {
                       className={cn(
                         "w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors",
                         attendanceStatus === "offline"
-                          ? "text-green-700 hover:bg-green-50"
-                          : "text-red-700 hover:bg-red-50"
+                          ? "text-green-600 hover:bg-green-500/10"
+                          : "text-red-500 hover:bg-red-500/10"
                       )}
                     >
                       {attendanceStatus === "offline" ? "Sign in" : "Sign off"}
@@ -282,7 +282,7 @@ export default function MobileLayout() {
                         <div className="h-px theme-border mx-2 my-1" />
                         <button
                           onClick={handleAvailable}
-                          className="w-full text-left px-4 py-2.5 rounded-lg text-sm text-blue-700 hover:bg-blue-50 transition-colors"
+                          className="w-full text-left px-4 py-2.5 rounded-lg text-sm text-blue-500 hover:bg-blue-500/10 transition-colors"
                         >
                           Mark Available
                         </button>

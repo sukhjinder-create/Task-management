@@ -11,9 +11,6 @@ import {
   User,
   Clock,
   Users,
-  Brain,
-  Bot,
-  FlaskConical,
   ChevronLeft,
   ChevronRight,
   Hash,
@@ -40,7 +37,6 @@ export default function Sidebar({ collapsed, onToggle }) {
 
   const tasksLabel = role === "user" ? "My Tasks" : "Tasks";
   const isAdmin = role === "admin";
-  const isManager = role === "manager";
 
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -90,18 +86,15 @@ export default function Sidebar({ collapsed, onToggle }) {
     { to: "/my-tasks",      label: tasksLabel,       icon: CheckSquare,     show: true },
     { to: "/wiki",          label: "Wiki / Docs",    icon: BookOpen,        show: true },
     { to: "/leave",         label: "Leave",          icon: CalendarDays,    show: true },
-    { to: "/okr",           label: "Goals & OKR",    icon: Target,          show: true },
+    { to: "/okr",           label: "Goals",          icon: Target,          show: true },
     { to: "/reviews",       label: "Reviews",        icon: Star,            show: true },
     { to: "/reports",       label: "Reports",        icon: FileText,        show: true },
-    { to: "/intelligence",  label: "Intelligence",   icon: Brain,           show: true },
-    { to: "/ai-features",   label: "AI Features",    icon: Sparkles,        show: true },
+    { to: "/ai",            label: "AI Hub",         icon: Sparkles,        show: true },
     { to: "/chat",          label: "Team Chat",      icon: MessageSquare,   show: true },
     { to: "/notifications", label: "Notifications",  icon: Bell,            show: true, badge: unreadCount },
   ];
 
   const adminItems = [
-    { to: "/autopilot",            label: "AI Autopilot",       icon: Bot,          show: isAdmin || isManager },
-    { to: "/testing-agent",        label: "Testing Agent",      icon: FlaskConical, show: isAdmin || isManager },
     { to: "/admin/attendance",     label: "Attendance",         icon: Clock,        show: isAdmin },
     { to: "/admin/users",          label: "Admin Panel",        icon: Users,        show: isAdmin },
     { to: "/enterprise",           label: "Enterprise",         icon: Shield,       show: isAdmin },
@@ -123,15 +116,15 @@ export default function Sidebar({ collapsed, onToggle }) {
   return (
     <div
       className={cn(
-        "theme-surface border-r theme-border h-screen fixed left-0 top-0 flex flex-col z-40",
+        "theme-surface border-r theme-border fixed inset-y-0 left-0 flex flex-col overflow-hidden z-40",
         "transition-[width] duration-200 ease-in-out",
         collapsed ? "w-16" : "w-60"
       )}
     >
       {/* ── Brand + toggle ──────────────────────────────── */}
       <div className={cn(
-        "border-b theme-border flex items-center shrink-0",
-        collapsed ? "justify-center py-5 px-2" : "px-4 py-5 justify-between"
+        "h-16 border-b theme-border flex items-center shrink-0",
+        collapsed ? "justify-center px-2" : "px-4 justify-between"
       )}>
         {!collapsed && (
           <h1 className="text-xl font-bold theme-text truncate">TaskManager</h1>
@@ -150,7 +143,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       </div>
 
       {/* ── Main nav ────────────────────────────────────── */}
-      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 px-2 py-4 pr-1 space-y-0.5 overflow-y-auto overflow-x-hidden sidebar-scroll">
         {navItems.filter((i) => i.show).map(({ to, label, icon: Icon, badge }) => (
           <NavLink key={to} to={to} title={collapsed ? label : undefined} className={linkClass}>
             <div className="relative shrink-0">

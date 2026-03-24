@@ -28,7 +28,7 @@ export default function BurndownModal({ sprintId, sprintName, onClose }) {
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-5">
+      <div className="theme-dialog-panel w-full max-w-2xl p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <TrendingDown className="w-4 h-4 text-indigo-500" />

@@ -40,8 +40,8 @@ export default function ChannelCreateModal({ open, onClose, onCreated }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[999]">
-      <div className="bg-white rounded-lg shadow-xl w-96 p-5 text-sm">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[999] p-4">
+      <div className="theme-dialog-panel w-full max-w-md p-5 text-sm">
         <h2 className="text-base font-semibold mb-3">Create new channel</h2>
 
         <form onSubmit={handleCreate} className="space-y-4">

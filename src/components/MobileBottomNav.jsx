@@ -13,14 +13,17 @@ import {
   MoreHorizontal,
   X,
   FileText,
-  Brain,
   User,
   Clock,
   Users,
-  Bot,
-  FlaskConical,
   Hash,
   LogOut,
+  Sparkles,
+  Target,
+  BookOpen,
+  CalendarDays,
+  Star,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { cn } from "../utils/cn";
@@ -31,7 +34,6 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
   const navigate = useNavigate();
   const role = auth?.user?.role;
   const isAdmin = role === "admin";
-  const isManager = role === "manager";
 
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -49,11 +51,14 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
   ];
 
   const moreItems = [
+    { to: "/okr",          icon: Target,       label: "Goals",            show: true },
+    { to: "/wiki",         icon: BookOpen,     label: "Wiki / Docs",      show: true },
+    { to: "/leave",        icon: CalendarDays, label: "Leave",            show: true },
+    { to: "/reviews",      icon: Star,         label: "Reviews",          show: true },
     { to: "/reports",      icon: FileText,     label: "Reports",          show: true },
-    { to: "/intelligence", icon: Brain,        label: "Intelligence",     show: true },
+    { to: "/ai",           icon: Sparkles,     label: "AI Hub",           show: true },
     { to: "/profile",      icon: User,         label: "Profile",          show: true },
-    { to: "/autopilot",    icon: Bot,          label: "AI Autopilot",     show: isAdmin || isManager },
-    { to: "/testing-agent",icon: FlaskConical, label: "Testing Agent",    show: isAdmin || isManager },
+    { to: "/enterprise",   icon: Shield,       label: "Enterprise",       show: isAdmin },
     { to: "/admin/attendance", icon: Clock,    label: "Attendance",       show: isAdmin },
     { to: "/admin/users",  icon: Users,        label: "Admin Panel",      show: isAdmin },
     { to: "/admin/migrations", icon: Hash,     label: "Migrations",       show: isAdmin },
@@ -136,8 +141,8 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
           <button
             onClick={() => { setMoreOpen(false); logout(); navigate("/login"); }}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl
-                       bg-red-50 text-red-600 font-medium text-sm
-                       hover:bg-red-100 transition-colors"
+                       bg-red-500/10 text-red-500 font-medium text-sm
+                       hover:bg-red-500/15 transition-colors"
           >
             <LogOut size={18} />
             Sign out

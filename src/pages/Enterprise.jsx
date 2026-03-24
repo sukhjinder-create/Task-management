@@ -1,6 +1,6 @@
 // src/pages/Enterprise.jsx
 // Enterprise Settings: MFA, SSO, Audit Logs, API Keys, Webhooks
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -242,14 +242,19 @@ function AuditTab() {
   const api = useApi();
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
-  const [filters, setFilters] = useState({ action: "", entityType: "", limit: 50, offset: 0 });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [filters, setFilters] = useState({ action: "", entityType: "" });
   const [loading, setLoading] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
       const r = await api.get(`/audit?${params}`);
       setLogs(r.data.logs || []);
       setTotal(r.data.total || 0);
@@ -257,12 +262,20 @@ function AuditTab() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [filters.offset]);
+  useEffect(() => { load(); }, [page, pageSize, filters.action, filters.entityType]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endRow = Math.min(page * pageSize, total);
 
   const ACTION_COLORS = {
     "user.login": "bg-blue-100 text-blue-700",
     "user.mfa.enabled": "bg-green-100 text-green-700",
     "task.create": "bg-indigo-100 text-indigo-700",
+    "request.get": "bg-slate-100 text-slate-700",
+    "request.post": "bg-emerald-100 text-emerald-700",
+    "request.put": "bg-amber-100 text-amber-700",
+    "request.delete": "bg-rose-100 text-rose-700",
     "gdpr.erasure_request": "bg-red-100 text-red-700",
     default: "bg-gray-100 text-gray-700",
   };
@@ -271,17 +284,26 @@ function AuditTab() {
     <div className="space-y-4">
       <div className="flex gap-3 flex-wrap">
         <input
-          value={filters.action} onChange={e => setFilters(f => ({ ...f, action: e.target.value, offset: 0 }))}
+          value={filters.action} onChange={e => { setPage(1); setFilters(f => ({ ...f, action: e.target.value })); }}
           placeholder="Filter by action…"
           className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text w-48"
         />
         <select
-          value={filters.entityType} onChange={e => setFilters(f => ({ ...f, entityType: e.target.value, offset: 0 }))}
+          value={filters.entityType} onChange={e => { setPage(1); setFilters(f => ({ ...f, entityType: e.target.value })); }}
           className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text"
         >
           <option value="">All entities</option>
-          {["user","task","project","wiki_page","leave_request","review","api_key","webhook"].map(e => (
+          {["user","task","project","wiki_page","leave_request","review","api_key","webhook","comments","chat","notifications","attendance","reports","workspace","goals"].map(e => (
             <option key={e} value={e}>{e}</option>
+          ))}
+        </select>
+        <select
+          value={pageSize}
+          onChange={e => { setPage(1); setPageSize(Number(e.target.value)); }}
+          className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text"
+        >
+          {[10, 25, 50, 100].map(size => (
+            <option key={size} value={size}>{size} / page</option>
           ))}
         </select>
         <button onClick={load} className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm flex items-center gap-1">
@@ -293,46 +315,89 @@ function AuditTab() {
       <div className="theme-surface-card rounded-xl border theme-border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-soft)] border-b theme-border">
-            <tr>
-              {["Time","User","Action","Entity","IP"].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold theme-text-muted uppercase">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5} className="text-center py-8 theme-text-muted">Loading…</td></tr>
-            ) : logs.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-8 theme-text-muted">No audit logs found</td></tr>
-            ) : logs.map(log => (
-              <tr key={log.id} className="border-b theme-border hover:bg-[var(--surface-soft)]">
-                <td className="px-4 py-3 text-xs theme-text-muted whitespace-nowrap">
-                  {new Date(log.created_at).toLocaleString()}
-                </td>
-                <td className="px-4 py-3 text-xs theme-text">{log.username || log.user_id?.slice(0,8) || "—"}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ACTION_COLORS[log.action] || ACTION_COLORS.default}`}>
-                    {log.action}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs theme-text-muted">{log.entity_type && `${log.entity_type}:${log.entity_id?.slice(0,8)}`}</td>
-                <td className="px-4 py-3 text-xs theme-text-muted">{log.ip_address || "—"}</td>
+              <tr>
+                {["Time","User","Action","Entity","IP","Details"].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold theme-text-muted uppercase">{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={6} className="text-center py-8 theme-text-muted">Loading…</td></tr>
+              ) : logs.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-8 theme-text-muted">No audit logs found</td></tr>
+              ) : logs.map(log => (
+                <Fragment key={log.id}>
+                  <tr key={log.id} className="border-b theme-border hover:bg-[var(--surface-soft)]">
+                    <td className="px-4 py-3 text-xs theme-text-muted whitespace-nowrap">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-xs theme-text">
+                      <div>{log.username || log.user_id?.slice(0,8) || "—"}</div>
+                      {log.email && <div className="theme-text-muted">{log.email}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ACTION_COLORS[log.action] || ACTION_COLORS.default}`}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs theme-text-muted">{log.entity_type ? `${log.entity_type}${log.entity_id ? `:${String(log.entity_id).slice(0,8)}` : ""}` : "—"}</td>
+                    <td className="px-4 py-3 text-xs theme-text-muted">{log.ip_address || "—"}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border theme-border theme-text-muted hover:theme-text"
+                      >
+                        {expandedId === log.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedId === log.id && (
+                    <tr className="border-b theme-border bg-[var(--surface-soft)]/40">
+                      <td colSpan={6} className="px-4 py-4">
+                        <div className="grid gap-3 md:grid-cols-3 text-xs">
+                          <div>
+                            <p className="font-semibold theme-text mb-1">Metadata</p>
+                            <pre className="whitespace-pre-wrap break-words theme-text-muted text-[11px]">
+                              {JSON.stringify(log.metadata || {}, null, 2)}
+                            </pre>
+                          </div>
+                          <div>
+                            <p className="font-semibold theme-text mb-1">Old Value</p>
+                            <pre className="whitespace-pre-wrap break-words theme-text-muted text-[11px]">
+                              {JSON.stringify(log.old_value ?? null, null, 2)}
+                            </pre>
+                          </div>
+                          <div>
+                            <p className="font-semibold theme-text mb-1">New Value</p>
+                            <pre className="whitespace-pre-wrap break-words theme-text-muted text-[11px]">
+                              {JSON.stringify(log.new_value ?? null, null, 2)}
+                            </pre>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
 
-        {total > filters.limit && (
+          {total > 0 && (
           <div className="flex items-center justify-between px-4 py-3 border-t theme-border">
             <button
-              onClick={() => setFilters(f => ({ ...f, offset: Math.max(0, f.offset - f.limit) }))}
-              disabled={filters.offset === 0}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
               className="px-3 py-1.5 text-sm border theme-border rounded-lg disabled:opacity-40"
             >← Prev</button>
-            <span className="text-sm theme-text-muted">{filters.offset + 1}–{Math.min(filters.offset + filters.limit, total)} of {total}</span>
+            <span className="text-sm theme-text-muted">
+              {startRow}–{endRow} of {total} · Page {page} of {totalPages}
+            </span>
             <button
-              onClick={() => setFilters(f => ({ ...f, offset: f.offset + f.limit }))}
-              disabled={filters.offset + filters.limit >= total}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
               className="px-3 py-1.5 text-sm border theme-border rounded-lg disabled:opacity-40"
             >Next →</button>
           </div>

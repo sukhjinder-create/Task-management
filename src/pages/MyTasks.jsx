@@ -135,11 +135,22 @@ export default function MyTasks() {
 
   const canDrag = role === "admin" || role === "manager" || role === "user";
 
+  const isAdminOrManager = role === "admin" || role === "manager";
   const title = role === "user" ? "My Tasks" : "Tasks";
   const subtitle =
     role === "user"
       ? "You only see tasks assigned to you. Drag cards between columns to update status."
       : "You can see tasks across your visible projects. Drag cards between columns to update status.";
+
+  // Tab: "all" | "mine" (admin/manager only) | "overdue" (all roles)
+  const searchParams = new URLSearchParams(location.search);
+  const initialTab = (() => {
+    const t = searchParams.get("tab");
+    if (t === "overdue") return "overdue";
+    if (t === "mine" && isAdminOrManager) return "mine";
+    return "all";
+  })();
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -198,83 +209,68 @@ export default function MyTasks() {
     return u ? `${u.username} (${u.email})` : id;
   };
 
-  // ===== Load all tasks + global statuses =====
+  // ===== Load all tasks + projects + global statuses in parallel =====
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        // 1) Load projects
-        const projectsRes = await api.get("/projects");
-        const projectsData = projectsRes.data || [];
-        setProjects(projectsData);
+        // All three requests fire simultaneously
+        const [tasksRes, projectsRes, statusesRes] = await Promise.allSettled([
+          api.get("/tasks/all"),
+          api.get("/projects"),
+          api.get("/project-statuses/global"),
+        ]);
 
-        // 2) Load tasks per project
-        const allTasks = [];
-        for (const p of projectsData) {
-          try {
-            const tasksRes = await api.get(`/tasks/${p.id}`);
-            const projectTasks = (tasksRes.data || []).map((t) => ({
-              ...t,
-              project_name: p.name,
-              project_id: p.id,
-            }));
-            allTasks.push(...projectTasks);
-          } catch (err) {
-            console.error("Failed to load tasks for project", p.id, err);
-          }
+        // 1) Tasks — single bulk query replaces N sequential requests
+        if (tasksRes.status === "fulfilled") {
+          setTasks(tasksRes.value.data || []);
+        } else {
+          console.error("Failed to load tasks:", tasksRes.reason);
+          toast.error("Failed to load tasks");
         }
-        setTasks(allTasks);
 
-        // 3) Load global statuses (union across all projects)
-        try {
-          const res = await api.get("/project-statuses/global");
-          const rows = res.data || [];
+        // 2) Projects (for filter dropdown)
+        if (projectsRes.status === "fulfilled") {
+          setProjects(projectsRes.value.data || []);
+        }
 
+        // 3) Global statuses
+        if (statusesRes.status === "fulfilled") {
+          const rows = statusesRes.value.data || [];
           if (rows.length > 0) {
             const colsMap = new Map();
-
-for (const s of rows) {
-  const key = s.status_key || s.key;
-  if (!key) continue;
-
-  if (!colsMap.has(key)) {
-    colsMap.set(key, {
-      key,
-      label: s.label || statusLabel(key),
-    });
-  }
-}
-
-const cols = Array.from(colsMap.values());
-
+            for (const s of rows) {
+              const key = s.status_key || s.key;
+              if (!key) continue;
+              if (!colsMap.has(key)) {
+                colsMap.set(key, { key, label: s.label || statusLabel(key) });
+              }
+            }
+            const cols = Array.from(colsMap.values());
             cols.sort((a, b) => {
               const ia = statusSortIndex(a.key, a.label);
               const ib = statusSortIndex(b.key, b.label);
               if (ia !== ib) return ia - ib;
               return (a.label || a.key).localeCompare(b.label || b.key);
             });
-
             setStatusColumns(cols);
           } else {
-            // fallback defaults in sensible order
             setStatusColumns([
-              { key: "pending", label: "Pending" },
+              { key: "pending",     label: "Pending"     },
               { key: "in-progress", label: "In Progress" },
-              { key: "completed", label: "Completed" },
+              { key: "completed",   label: "Completed"   },
             ]);
           }
-        } catch (err) {
-          console.error("Failed to load global statuses", err);
+        } else {
           setStatusColumns([
-            { key: "pending", label: "Pending" },
+            { key: "pending",     label: "Pending"     },
             { key: "in-progress", label: "In Progress" },
-            { key: "completed", label: "Completed" },
+            { key: "completed",   label: "Completed"   },
           ]);
         }
       } catch (err) {
         console.error(err);
-        const msg = err.response?.data?.error || "Failed to load tasks";
-        toast.error(msg);
+        toast.error(err.response?.data?.error || "Failed to load tasks");
       } finally {
         setLoading(false);
       }
@@ -306,16 +302,27 @@ const cols = Array.from(colsMap.values());
     }
   }, [user, api]);
 
-  // ===== Apply project filter =====
+  // ===== Apply tab + project + type filters =====
   const filteredTasks = useMemo(() => {
     let list = tasks;
+
+    // "My Tasks" tab: show only tasks assigned to the current user (admin/manager)
+    if (isAdminOrManager && activeTab === "mine") {
+      list = list.filter((t) => t.assigned_to === user.id);
+    }
+
+    // "Overdue" tab: show only non-completed past-due tasks
+    if (activeTab === "overdue") {
+      list = list.filter((t) => isOverdue(t));
+    }
+
     if (selectedProjects && selectedProjects.length > 0) {
       const selectedSet = new Set(selectedProjects);
       list = list.filter((t) => selectedSet.has(String(t.project_id)));
     }
     if (filterType) list = list.filter(t => (t.task_type || "task") === filterType);
     return list;
-  }, [tasks, selectedProjects, filterType]);
+  }, [tasks, selectedProjects, filterType, activeTab, isAdminOrManager, user.id]);
 
   // Project options for react-select
   const projectOptions = useMemo(
@@ -799,6 +806,56 @@ const cols = Array.from(colsMap.values());
         <div>
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-xs text-slate-500">{subtitle}</p>
+
+          {/* Tab switcher */}
+          <div className="flex gap-1 mt-3 p-1 bg-slate-100 rounded-lg w-fit">
+            {/* All Tasks — admin/manager only */}
+            {isAdminOrManager && (
+              <button
+                onClick={() => setActiveTab("all")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  activeTab === "all"
+                    ? "bg-white text-slate-800 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                All Tasks
+              </button>
+            )}
+
+            {/* My Tasks — admin/manager only */}
+            {isAdminOrManager && (
+              <button
+                onClick={() => setActiveTab("mine")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  activeTab === "mine"
+                    ? "bg-white text-slate-800 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                My Tasks
+              </button>
+            )}
+
+            {/* Overdue — all roles */}
+            <button
+              onClick={() => setActiveTab("overdue")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                activeTab === "overdue"
+                  ? "bg-red-500 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Overdue
+              {tasks.filter(t => isOverdue(t)).length > 0 && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  activeTab === "overdue" ? "bg-red-400 text-white" : "bg-red-100 text-red-600"
+                }`}>
+                  {tasks.filter(t => isOverdue(t)).length}
+                </span>
+              )}
+            </button>
+          </div>
           {filteredTasks.length > 0 && (
             <p className="mt-1 text-[11px] text-slate-600">
               Total: <b>{stats.total}</b>

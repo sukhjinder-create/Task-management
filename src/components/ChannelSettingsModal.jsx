@@ -159,8 +159,8 @@ export default function ChannelSettingsModal({
   const availableUsers = allUsers.filter((u) => !memberIds.has(u.id));
 
   return (
-    <div className="fixed inset-0 z-[999] bg-black/40 flex items-center justify-center">
-      <div className="bg-white rounded-lg shadow-xl w-[440px] p-5 text-sm">
+    <div className="fixed inset-0 z-[999] bg-black/40 flex items-center justify-center p-4">
+      <div className="theme-dialog-panel w-full max-w-[440px] p-5 text-sm">
         <h2 className="text-base font-semibold mb-2 flex justify-between items-center">
           Channel Settings
           <button onClick={onClose} className="text-xs px-2 py-1">

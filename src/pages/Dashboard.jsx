@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import { getAdminInsights } from "../services/intelligence.api";
 import { getSocket } from "../socket";
 import { Card, Badge, Button, Skeleton } from "../components/ui";
+import {
+  CheckSquare, AlertTriangle, Clock, FolderKanban,
+  Users, Shield, ArrowRight, ChevronRight,
+  TrendingUp, TrendingDown, Award, BarChart2,
+  Trophy, Medal,
+} from "lucide-react";
 
 function isTaskOverdue(task) {
   if (!task.due_date) return false;
@@ -319,7 +326,7 @@ const autonomousInsight = useMemo(() => {
       stats: [
         { label: "Overdue", value: overdue, color: "text-red-600" },
         { label: "In Progress", value: inProgress, color: "text-orange-500" },
-        { label: "Completion Rate", value: `${completionRate}%`, color: "text-gray-600" },
+        { label: "Completion Rate", value: `${completionRate}%`, color: "theme-text-muted" },
       ],
     };
   }
@@ -333,7 +340,7 @@ const autonomousInsight = useMemo(() => {
       stats: [
         { label: "Overdue", value: overdue, color: "text-amber-600" },
         { label: "In Progress", value: inProgress, color: "text-blue-600" },
-        { label: "Completion Rate", value: `${completionRate}%`, color: "text-gray-600" },
+        { label: "Completion Rate", value: `${completionRate}%`, color: "theme-text-muted" },
       ],
     };
   }
@@ -372,7 +379,7 @@ const autonomousInsight = useMemo(() => {
     headline: "Workspace Status Normal",
     message: `${total} total task${total !== 1 ? "s" : ""} across ${totalProjects} project${totalProjects !== 1 ? "s" : ""}. ${inProgress} in progress, ${completed} completed, ${overdue} overdue.`,
     stats: [
-      { label: "Total Tasks", value: total, color: "text-gray-700" },
+      { label: "Total Tasks", value: total, color: "theme-text" },
       { label: "In Progress", value: inProgress, color: "text-blue-600" },
       { label: "Completed", value: completed, color: "text-green-600" },
     ],
@@ -411,10 +418,10 @@ const autonomousInsight = useMemo(() => {
 
 {autonomousInsight && (
   <div className={`rounded-xl border p-4 ${
-    autonomousInsight.type === "critical" ? "bg-red-50 border-red-200" :
-    autonomousInsight.type === "warning"  ? "bg-amber-50 border-amber-200" :
-    autonomousInsight.type === "positive" ? "bg-emerald-50 border-emerald-200" :
-    "bg-blue-50 border-blue-100"
+    autonomousInsight.type === "critical" ? "bg-red-500/10 border-red-500/30" :
+    autonomousInsight.type === "warning"  ? "bg-amber-500/10 border-amber-500/30" :
+    autonomousInsight.type === "positive" ? "bg-emerald-500/10 border-emerald-500/30" :
+    "bg-blue-500/10 border-blue-500/20"
   }`}>
     <div className="flex items-start gap-3">
       <div className="text-xl mt-0.5">
@@ -426,20 +433,20 @@ const autonomousInsight = useMemo(() => {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className={`text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-            autonomousInsight.type === "critical" ? "bg-red-100 text-red-700" :
-            autonomousInsight.type === "warning"  ? "bg-amber-100 text-amber-700" :
-            autonomousInsight.type === "positive" ? "bg-emerald-100 text-emerald-700" :
-            "bg-blue-100 text-blue-700"
+            autonomousInsight.type === "critical" ? "bg-red-500/15 text-red-600" :
+            autonomousInsight.type === "warning"  ? "bg-amber-500/15 text-amber-600" :
+            autonomousInsight.type === "positive" ? "bg-emerald-500/15 text-emerald-600" :
+            "bg-blue-500/15 text-blue-600"
           }`}>AI Insight</span>
           <span className="text-sm font-semibold theme-text">{autonomousInsight.headline}</span>
         </div>
-        <p className="text-sm text-gray-600 leading-relaxed mb-3">{autonomousInsight.message}</p>
+        <p className="text-sm theme-text-muted leading-relaxed mb-3">{autonomousInsight.message}</p>
         {autonomousInsight.stats && (
           <div className="flex gap-4 flex-wrap">
             {autonomousInsight.stats.map((s) => (
               <div key={s.label} className="flex flex-col">
                 <span className={`text-lg font-bold ${s.color}`}>{s.value}</span>
-                <span className="text-xs text-gray-500">{s.label}</span>
+                <span className="text-xs theme-text-muted">{s.label}</span>
               </div>
             ))}
           </div>
@@ -454,17 +461,17 @@ const autonomousInsight = useMemo(() => {
 ====================================== */}
 
 {(isAdmin || isManager || isUser) && (
-  <Card className="theme-surface-strong theme-text border theme-border">
+  <Card className="theme-surface theme-text border theme-border">
     <Card.Content>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold">Workspace Overview</h2>
-        <span className="text-xs text-gray-400">Live</span>
+        <span className="text-xs theme-text-muted">Live</span>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Overdue */}
-        <div className={`rounded-lg p-4 border ${overdueCount > 5 ? "bg-red-50 border-red-200" : overdueCount > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-100"}`}>
-          <div className="text-xs font-medium text-gray-500 mb-1">Overdue Tasks</div>
+        <div className={`rounded-lg p-4 border ${overdueCount > 5 ? "bg-red-500/10 border-red-500/30" : overdueCount > 0 ? "bg-amber-500/10 border-amber-500/30" : "bg-emerald-500/10 border-emerald-500/20"}`}>
+          <div className="text-xs font-medium theme-text-muted mb-1">Overdue Tasks</div>
           <div className={`text-2xl font-bold ${overdueCount > 5 ? "text-red-600" : overdueCount > 0 ? "text-amber-600" : "text-emerald-600"}`}>
             {overdueCount}
           </div>
@@ -474,8 +481,8 @@ const autonomousInsight = useMemo(() => {
         </div>
 
         {/* In Progress */}
-        <div className="rounded-lg p-4 border bg-blue-50 border-blue-100">
-          <div className="text-xs font-medium text-gray-500 mb-1">In Progress</div>
+        <div className="rounded-lg p-4 border bg-blue-500/10 border-blue-500/20">
+          <div className="text-xs font-medium theme-text-muted mb-1">In Progress</div>
           <div className="text-2xl font-bold text-blue-600">{inProgressCount}</div>
           <div className="text-xs mt-1 text-blue-500 font-semibold">
             of {totalTasks} total tasks
@@ -483,8 +490,8 @@ const autonomousInsight = useMemo(() => {
         </div>
 
         {/* Completed */}
-        <div className="rounded-lg p-4 border bg-emerald-50 border-emerald-100">
-          <div className="text-xs font-medium text-gray-500 mb-1">Completed</div>
+        <div className="rounded-lg p-4 border bg-emerald-500/10 border-emerald-500/20">
+          <div className="text-xs font-medium theme-text-muted mb-1">Completed</div>
           <div className="text-2xl font-bold text-emerald-600">{completedCount}</div>
           <div className="text-xs mt-1 text-emerald-500 font-semibold">
             {totalTasks > 0 ? `${Math.round((completedCount / totalTasks) * 100)}% completion rate` : "No tasks yet"}
@@ -493,19 +500,19 @@ const autonomousInsight = useMemo(() => {
 
         {/* Risk / Trend */}
         <div className={`rounded-lg p-4 border ${
-          myPerformance?.intelligence?.risk?.level === "High" ? "bg-red-50 border-red-200" :
-          myPerformance?.intelligence?.risk?.level === "Medium" ? "bg-amber-50 border-amber-200" :
-          "bg-gray-50 border-gray-200"
+          myPerformance?.intelligence?.risk?.level === "High" ? "bg-red-500/10 border-red-500/30" :
+          myPerformance?.intelligence?.risk?.level === "Medium" ? "bg-amber-500/10 border-amber-500/30" :
+          "bg-[var(--surface-soft)] border-[var(--border)]"
         }`}>
-          <div className="text-xs font-medium text-gray-500 mb-1">Risk Level</div>
+          <div className="text-xs font-medium theme-text-muted mb-1">Risk Level</div>
           <div className={`text-2xl font-bold ${
             myPerformance?.intelligence?.risk?.level === "High" ? "text-red-600" :
             myPerformance?.intelligence?.risk?.level === "Medium" ? "text-amber-600" :
-            "text-gray-600"
+            "theme-text-muted"
           }`}>
             {myPerformance?.intelligence?.risk?.level || "—"}
           </div>
-          <div className="text-xs mt-1 text-gray-500 font-semibold capitalize">
+          <div className="text-xs mt-1 theme-text-muted font-semibold capitalize">
             {intelligence?.forecast?.trend ? `Trend: ${intelligence.forecast.trend}` : `${totalProjects} project${totalProjects !== 1 ? "s" : ""} active`}
           </div>
         </div>
@@ -552,37 +559,55 @@ const autonomousInsight = useMemo(() => {
 )}
 
 {isAdmin && dashboardOverview?.executiveSummary && (
-  <Card className="bg-gradient-to-r from-primary-600 to-primary-700 text-white border-primary-500">
-    <Card.Content>
-      <h2 className="text-lg font-semibold mb-3">
-        Executive Intelligence Insight
-      </h2>
-      <div className="text-sm font-semibold opacity-95">
-        {dashboardOverview.executiveSummary.headline}
+  <div className="theme-surface border theme-border rounded-xl overflow-hidden shadow-sm">
+    {/* Accent header bar */}
+    <div
+      className="h-1 w-full"
+      style={{
+        background:
+          "linear-gradient(90deg, color-mix(in srgb, var(--primary) 72%, white), var(--primary), color-mix(in srgb, var(--primary) 72%, black))",
+      }}
+    />
+    <div className="p-5">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-[color:var(--primary)]/15 flex items-center justify-center">
+            <span className="text-sm">🧠</span>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold theme-text">Executive Intelligence</h2>
+            <p className="text-[10px] theme-text-muted">AI-generated org analysis</p>
+          </div>
+        </div>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[color:var(--primary)]/10 text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20 shrink-0">
+          Live
+        </span>
       </div>
-      <div className="text-sm leading-relaxed whitespace-pre-wrap mt-2 line-clamp-3">
+      {dashboardOverview.executiveSummary.headline && (
+        <p className="text-sm font-semibold theme-text mb-1.5">
+          {dashboardOverview.executiveSummary.headline}
+        </p>
+      )}
+      <p className="text-xs theme-text-muted leading-relaxed line-clamp-3">
         {dashboardOverview.executiveSummary.narrative}
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-[var(--border)]">
+        <button
           onClick={() => openExecutiveDetail("summary")}
-          size="sm"
-          variant="ghost"
-          className="text-white hover:bg-white/10"
+          className="text-xs font-medium text-[color:var(--primary)] hover:opacity-80 transition-opacity"
         >
-          Read Full Summary
-        </Button>
-        <Button
+          Read full summary →
+        </button>
+        <span className="theme-text-muted text-xs">·</span>
+        <button
           onClick={() => openExecutiveDetail("reasoning")}
-          size="sm"
-          variant="ghost"
-          className="text-white hover:bg-white/10"
+          className="text-xs font-medium theme-text-muted hover:theme-text transition-colors"
         >
-          View Reasoning
-        </Button>
+          View reasoning
+        </button>
       </div>
-    </Card.Content>
-  </Card>
+    </div>
+  </div>
 )}
 
 {/* ================================
@@ -609,11 +634,12 @@ const autonomousInsight = useMemo(() => {
 
   // Dimension meta
   const dimMeta = {
-    executionDiscipline: { label: "Execution Discipline", good: "high", icon: "⚡" },
-    timelinessIndex:     { label: "Timeliness",           good: "high", icon: "⏱" },
-    workloadStress:      { label: "Workload Stress",       good: "low",  icon: "🔥" },
-    velocityScore:       { label: "Task Velocity",         good: "high", icon: "🚀" },
+    executionDiscipline: { label: "Execution Discipline", good: "high", icon: "⚡", tip: "% of assigned tasks completed" },
+    timelinessIndex:     { label: "Timeliness",           good: "high", icon: "⏱", tip: "On-time completions / all deadline-tracked tasks (overdue count against this)" },
+    workloadStress:      { label: "Workload Stress",       good: "low",  icon: "🔥", tip: "% of tasks currently overdue" },
+    velocityScore:       { label: "Task Velocity",         good: "high", icon: "🚀", tip: "Speed of completion (50 = 7-day avg, 100 = instant)" },
   };
+  const breakdown = myPerformance.breakdown;
 
   const getDimColor = (key, value) => {
     const isGoodHigh = dimMeta[key]?.good === "high";
@@ -635,26 +661,26 @@ const autonomousInsight = useMemo(() => {
       {/* HEADER ROW */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">My Performance</div>
+          <div className="text-xs theme-text-muted font-medium uppercase tracking-wide mb-0.5">My Performance</div>
           <div className="text-lg font-bold theme-text">{monthLabel}</div>
           {myPerformance.explanation && (
-            <p className="text-xs text-gray-500 mt-1 max-w-sm leading-relaxed">{myPerformance.explanation}</p>
+            <p className="text-xs theme-text-muted mt-1 max-w-sm leading-relaxed">{myPerformance.explanation}</p>
           )}
         </div>
         <div className="text-right shrink-0">
-          <div className={`text-4xl font-bold ${score >= 75 ? "text-emerald-600" : score >= 50 ? "text-amber-500" : "text-red-500"}`}>
+          <div className={`text-4xl font-bold ${score >= 75 ? "text-emerald-500" : score >= 50 ? "text-amber-500" : "text-red-500"}`}>
             {score}
-            <span className="text-base font-normal text-gray-400">/100</span>
+            <span className="text-base font-normal theme-text-muted">/100</span>
           </div>
           {delta != null && (
-            <div className={`text-xs font-semibold mt-0.5 ${delta >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+            <div className={`text-xs font-semibold mt-0.5 ${delta >= 0 ? "text-emerald-500" : "text-red-500"}`}>
               {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} vs last month
             </div>
           )}
           <div className={`text-xs font-bold mt-1 px-2 py-0.5 rounded-full inline-block ${
-            risk?.level === "High" ? "bg-red-100 text-red-700" :
-            risk?.level === "Medium" ? "bg-amber-100 text-amber-700" :
-            "bg-emerald-100 text-emerald-700"
+            risk?.level === "High" ? "bg-red-500/15 text-red-500" :
+            risk?.level === "Medium" ? "bg-amber-500/15 text-amber-500" :
+            "bg-emerald-500/15 text-emerald-500"
           }`}>
             {risk?.level || "—"} Risk
           </div>
@@ -662,32 +688,65 @@ const autonomousInsight = useMemo(() => {
       </div>
 
       {/* SCORE BAR */}
-      <div className="w-full bg-gray-100 rounded-full h-2.5">
+      <div className="w-full bg-[var(--surface-soft)] rounded-full h-2.5">
         <div
           className={`h-2.5 rounded-full transition-all duration-700 ${score >= 75 ? "bg-emerald-500" : score >= 50 ? "bg-amber-400" : "bg-red-400"}`}
           style={{ width: `${Math.min(score, 100)}%` }}
         />
       </div>
 
+      {/* SCORE COMPOSITION — explains what goes into the score */}
+      {breakdown && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-2">
+          <div className="text-[10px] font-semibold theme-text-muted uppercase tracking-wide mb-1.5">Score Composition</div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex justify-between text-[10px] mb-0.5">
+                <span className="theme-text-muted">Attendance <span className="font-semibold theme-text">{breakdown.attendanceScore ?? "—"}</span>/100</span>
+                <span className="theme-text-muted">30%</span>
+              </div>
+              <div className="w-full bg-[var(--surface-strong)] rounded-full h-1.5">
+                <div className={`h-1.5 rounded-full ${(breakdown.attendanceScore ?? 0) >= 70 ? "bg-emerald-500" : (breakdown.attendanceScore ?? 0) >= 40 ? "bg-amber-400" : "bg-red-400"}`}
+                  style={{ width: `${breakdown.attendanceScore ?? 0}%` }} />
+              </div>
+              {breakdown.hasAttendanceTracking === false && (
+                <div className="text-[9px] text-amber-500 mt-0.5">Attendance not tracked — neutral score applied</div>
+              )}
+            </div>
+            <div className="text-[10px] theme-text-muted shrink-0">+</div>
+            <div className="flex-1">
+              <div className="flex justify-between text-[10px] mb-0.5">
+                <span className="theme-text-muted">Productivity <span className="font-semibold theme-text">{breakdown.productivityScore ?? "—"}</span>/100</span>
+                <span className="theme-text-muted">70%</span>
+              </div>
+              <div className="w-full bg-[var(--surface-strong)] rounded-full h-1.5">
+                <div className={`h-1.5 rounded-full ${(breakdown.productivityScore ?? 0) >= 70 ? "bg-emerald-500" : (breakdown.productivityScore ?? 0) >= 40 ? "bg-amber-400" : "bg-red-400"}`}
+                  style={{ width: `${breakdown.productivityScore ?? 0}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MY TASK STATS */}
       <div className="grid grid-cols-4 gap-2">
         {[
-          { label: "My Tasks", value: myTotal, color: "text-gray-700", bg: "bg-gray-50 border-gray-200" },
-          { label: "Completed", value: myCompleted, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-          { label: "In Progress", value: myInProgress, color: "text-blue-600", bg: "bg-blue-50 border-blue-200" },
-          { label: "Overdue", value: myOverdue, color: myOverdue > 0 ? "text-red-600" : "text-gray-400", bg: myOverdue > 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200" },
+          { label: "My Tasks", value: myTotal, color: "theme-text", bg: "bg-[var(--surface-soft)] border-[var(--border)]" },
+          { label: "Completed", value: myCompleted, color: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/30" },
+          { label: "In Progress", value: myInProgress, color: "text-blue-500", bg: "bg-blue-500/10 border-blue-500/20" },
+          { label: "Overdue", value: myOverdue, color: myOverdue > 0 ? "text-red-500" : "theme-text-muted", bg: myOverdue > 0 ? "bg-red-500/10 border-red-500/30" : "bg-[var(--surface-soft)] border-[var(--border)]" },
         ].map(s => (
           <div key={s.label} className={`rounded-lg border p-3 text-center ${s.bg}`}>
             <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-            <div className="text-[10px] text-gray-500 mt-0.5 font-medium">{s.label}</div>
+            <div className="text-[10px] theme-text-muted mt-0.5 font-medium">{s.label}</div>
           </div>
         ))}
       </div>
 
       {/* COMPLETION RATE BAR */}
       <div className="flex items-center gap-3">
-        <span className="text-xs text-gray-500 w-28 shrink-0">Completion rate</span>
-        <div className="flex-1 bg-gray-100 rounded-full h-2">
+        <span className="text-xs theme-text-muted w-28 shrink-0">Completion rate</span>
+        <div className="flex-1 bg-[var(--surface-soft)] rounded-full h-2">
           <div className="bg-emerald-500 h-2 rounded-full transition-all duration-700" style={{ width: `${myCompletionRate}%` }} />
         </div>
         <span className="text-xs font-bold text-emerald-600 w-8 text-right">{myCompletionRate}%</span>
@@ -696,22 +755,22 @@ const autonomousInsight = useMemo(() => {
       {/* BEHAVIORAL DIMENSIONS */}
       {Object.keys(dims).length > 0 && (
         <div>
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Behavioral Profile</div>
+          <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-3">Behavioral Profile</div>
           <div className="grid grid-cols-2 gap-3">
             {Object.entries(dims).map(([key, value]) => {
               const meta = dimMeta[key] || { label: key.replace(/([A-Z])/g, " $1"), icon: "•" };
               const barColor = getDimColor(key, value);
               const textColor = getDimTextColor(key, value);
               return (
-                <div key={key} className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                <div key={key} className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
                       <span className="text-base">{meta.icon}</span>
-                      <span className="text-xs text-gray-600 font-medium">{meta.label}</span>
+                      <span className="text-xs theme-text-muted font-medium">{meta.label}</span>
                     </div>
                     <span className={`text-sm font-bold ${textColor}`}>{Math.round(value)}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div className="w-full bg-[var(--surface-strong)] rounded-full h-1.5">
                     <div className={`${barColor} h-1.5 rounded-full transition-all duration-700`} style={{ width: `${Math.min(value, 100)}%` }} />
                   </div>
                 </div>
@@ -724,24 +783,24 @@ const autonomousInsight = useMemo(() => {
       {/* RISK + SIGNALS */}
       {risk && (
         <div className={`rounded-lg border p-3 flex items-start justify-between gap-3 ${
-          risk.level === "High" ? "bg-red-50 border-red-200" :
-          risk.level === "Medium" ? "bg-amber-50 border-amber-200" :
-          "bg-emerald-50 border-emerald-200"
+          risk.level === "High" ? "bg-red-500/10 border-red-500/30" :
+          risk.level === "Medium" ? "bg-amber-500/10 border-amber-500/30" :
+          "bg-emerald-500/10 border-emerald-500/30"
         }`}>
           <div>
-            <div className="text-xs font-semibold text-gray-600 mb-1">Performance Risk</div>
-            <div className={`text-2xl font-bold ${risk.level === "High" ? "text-red-600" : risk.level === "Medium" ? "text-amber-600" : "text-emerald-600"}`}>
+            <div className="text-xs font-semibold theme-text-muted mb-1">Performance Risk</div>
+            <div className={`text-2xl font-bold ${risk.level === "High" ? "text-red-500" : risk.level === "Medium" ? "text-amber-500" : "text-emerald-500"}`}>
               {Math.round(risk.probability)}%
             </div>
-            <div className="text-xs text-gray-500 mt-0.5">probability of underperformance</div>
+            <div className="text-xs theme-text-muted mt-0.5">probability of underperformance</div>
           </div>
           {signals.length > 0 && (
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-gray-500 mb-1.5">Active Signals</div>
+              <div className="text-xs font-semibold theme-text-muted mb-1.5">Active Signals</div>
               <div className="flex flex-wrap gap-1.5">
                 {signals.map((s, i) => (
                   <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                    risk.level === "High" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                    risk.level === "High" ? "bg-red-500/15 text-red-500" : "bg-amber-500/15 text-amber-500"
                   }`}>{s}</span>
                 ))}
               </div>
@@ -753,19 +812,19 @@ const autonomousInsight = useMemo(() => {
       {/* TREND */}
       {performanceTrend.length > 0 && (
         <div>
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Score Trend</div>
+          <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-2">Score Trend</div>
           <div className="flex items-end gap-2">
             {performanceTrend.map((item, idx) => {
               const h = Math.max(8, Math.round((item.score / 100) * 48));
               const isLatest = idx === performanceTrend.length - 1;
               return (
                 <div key={idx} className="flex flex-col items-center gap-1 flex-1">
-                  <span className="text-[10px] font-bold text-gray-600">{item.score}</span>
+                  <span className="text-[10px] font-bold theme-text-muted">{item.score}</span>
                   <div
-                    className={`w-full rounded-t-sm transition-all ${isLatest ? "bg-indigo-500" : "bg-gray-200"}`}
+                    className={`w-full rounded-t-sm transition-all ${isLatest ? "bg-indigo-500" : "bg-[var(--surface-strong)]"}`}
                     style={{ height: `${h}px` }}
                   />
-                  <span className="text-[10px] text-gray-400">{item.month?.slice(5)}</span>
+                  <span className="text-[10px] theme-text-muted">{item.month?.slice(5)}</span>
                 </div>
               );
             })}
@@ -776,12 +835,12 @@ const autonomousInsight = useMemo(() => {
       {/* PROJECT BREAKDOWN */}
       {projectPerformance.length > 0 && (
         <div>
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Project</div>
+          <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-2">By Project</div>
           <div className="space-y-2">
             {projectPerformance.map((proj) => (
               <div key={proj.project_id} className="flex items-center gap-3">
-                <span className="text-xs text-gray-600 w-32 truncate shrink-0">{proj.project_name || proj.projectName}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-2">
+                <span className="text-xs theme-text-muted w-32 truncate shrink-0">{proj.project_name || proj.projectName}</span>
+                <div className="flex-1 bg-[var(--surface-soft)] rounded-full h-2">
                   <div className={`h-2 rounded-full ${proj.score >= 75 ? "bg-emerald-500" : proj.score >= 50 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${proj.score || 0}%` }} />
                 </div>
                 <span className={`text-xs font-bold w-8 text-right ${proj.score >= 75 ? "text-emerald-600" : proj.score >= 50 ? "text-amber-500" : "text-red-500"}`}>{proj.score || 0}</span>
@@ -794,12 +853,12 @@ const autonomousInsight = useMemo(() => {
       {/* COACHING */}
       {coaching.length > 0 && (
         <div>
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recommendations</div>
+          <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-2">Recommendations</div>
           <div className="space-y-2">
             {coaching.map((nudge, idx) => (
-              <div key={idx} className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5">
-                <span className="text-indigo-400 mt-0.5 shrink-0">→</span>
-                <span className="text-xs text-indigo-800 leading-relaxed">
+              <div key={idx} className="flex items-start gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-3 py-2.5">
+                <span className="text-indigo-500 mt-0.5 shrink-0">→</span>
+                <span className="text-xs theme-text leading-relaxed">
                   {typeof nudge === "string" ? nudge : nudge.message || nudge.action}
                 </span>
               </div>
@@ -814,59 +873,151 @@ const autonomousInsight = useMemo(() => {
 })()}
       <section className="space-y-6">
         <div className="grid lg:grid-cols-3 gap-6">
-{/* 🔥 Org Intelligence Overview */}
-{isAdmin && intelligence && (
-  <section className="theme-surface rounded-xl shadow border theme-border p-6 grid md:grid-cols-4 gap-6">
-    <div>
-      <div className="text-xs theme-text-muted">Average Score</div>
-      <div className="text-2xl font-bold">
-        {intelligence.orgScore.averageScore ?? "-"}
-      </div>
-    </div>
+{/* Org Intelligence Overview */}
+{isAdmin && intelligence && (() => {
+  const avg = intelligence.orgScore.averageScore;
+  const scoreColor = avg >= 75 ? "text-emerald-500" : avg >= 50 ? "text-amber-500" : "text-red-500";
+  const scoreBg   = avg >= 75 ? "bg-emerald-500/10 border-emerald-500/20" : avg >= 50 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
+  const monthLabel = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
 
-    <div>
-      <div className="text-xs theme-text-muted">Total Users</div>
-      <div className="text-2xl font-bold">
-        {intelligence.orgScore.userCount}
-      </div>
-    </div>
+  const tiles = [
+    {
+      label: "Avg Score",
+      value: avg != null ? Number(avg).toFixed(1) : "—",
+      sub: monthLabel,
+      icon: <BarChart2 className="w-4 h-4" />,
+      valueClass: scoreColor,
+      bg: scoreBg,
+      iconBg: avg >= 75 ? "bg-emerald-500/15 text-emerald-500" : avg >= 50 ? "bg-amber-500/15 text-amber-500" : "bg-red-500/15 text-red-500",
+    },
+    {
+      label: "Total Members",
+      value: intelligence.orgScore.userCount,
+      sub: "in workspace",
+      icon: <Users className="w-4 h-4" />,
+      valueClass: "text-[color:var(--primary)]",
+      bg: "bg-[color:var(--primary)]/10 border-[color:var(--primary)]/20",
+      iconBg: "bg-[color:var(--primary)]/15 text-[color:var(--primary)]",
+    },
+    {
+      label: "High Performers",
+      value: intelligence.orgScore.highPerformers,
+      sub: "score ≥ 80",
+      icon: <TrendingUp className="w-4 h-4" />,
+      valueClass: "text-emerald-500",
+      bg: "bg-emerald-500/10 border-emerald-500/20",
+      iconBg: "bg-emerald-500/15 text-emerald-500",
+    },
+    {
+      label: "At Risk",
+      value: intelligence.orgScore.atRiskUsers,
+      sub: "need attention",
+      icon: <AlertTriangle className="w-4 h-4" />,
+      valueClass: intelligence.orgScore.atRiskUsers > 0 ? "text-red-600" : "theme-text-muted",
+      bg: intelligence.orgScore.atRiskUsers > 0 ? "bg-red-500/10 border-red-500/20" : "bg-[var(--surface-soft)] border-[var(--border)]",
+      iconBg: intelligence.orgScore.atRiskUsers > 0 ? "bg-red-500/15 text-red-500" : "bg-[var(--surface-strong)] theme-text-muted",
+    },
+  ];
 
-    <div>
-      <div className="text-xs theme-text-muted">High Performers</div>
-      <div className="text-2xl font-bold text-green-600">
-        {intelligence.orgScore.highPerformers}
-      </div>
-    </div>
-
-    <div>
-      <div className="text-xs theme-text-muted">At Risk</div>
-      <div className="text-2xl font-bold text-red-600">
-        {intelligence.orgScore.atRiskUsers}
-      </div>
-    </div>
-  </section>
-)}
-{/* 🔥 Performance Leaderboard */}
-{isAdmin && intelligence?.leaderboard && (
-  <section className="theme-surface-soft border theme-border rounded-xl p-6">
-    <h2 className="text-sm font-semibold mb-4">Top Performers</h2>
-
-    <div className="space-y-2">
-      {intelligence.leaderboard.map((u, index) => (
-        <div
-          key={`${u.userId || u.username || "leader"}-${index}`}
-          className="flex justify-between items-center text-sm border-b pb-2"
-        >
-          <div className="flex items-center gap-2">
-            <span className="font-bold">#{index + 1}</span>
-            <span>{u.username}</span>
-          </div>
-          <span className="font-semibold">{u.score}</span>
+  return (
+    <section className="theme-surface rounded-xl border theme-border p-5 lg:col-span-2">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-sm font-semibold theme-text">Organization Overview</h2>
+          <p className="text-xs theme-text-muted mt-0.5">{monthLabel}</p>
         </div>
-      ))}
-    </div>
-  </section>
-)}
+        <span className="text-[10px] px-2 py-1 rounded-full bg-[color:var(--primary)]/10 text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20">
+          Intelligence
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {tiles.map(tile => (
+          <div key={tile.label} className={`rounded-xl border p-4 flex items-start gap-3 ${tile.bg}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tile.iconBg}`}>
+              {tile.icon}
+            </div>
+            <div className="min-w-0">
+              <div className={`text-2xl font-bold leading-none ${tile.valueClass}`}>{tile.value}</div>
+              <div className="text-[11px] font-semibold theme-text mt-1 truncate">{tile.label}</div>
+              <div className="text-[10px] theme-text-muted truncate">{tile.sub}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+})()}
+
+{/* Top Performers */}
+{isAdmin && intelligence?.leaderboard?.length > 0 && (() => {
+  const medals = ["🥇", "🥈", "🥉"];
+  const rankColors = [
+    "bg-amber-500/10 border-amber-500/20 text-amber-500",
+    "bg-[var(--surface-soft)] border-[var(--border)] theme-text-muted",
+    "bg-orange-500/10 border-orange-500/20 text-orange-500",
+  ];
+
+  return (
+    <section className="theme-surface border theme-border rounded-xl p-5 flex flex-col">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
+          <Trophy className="w-4 h-4 text-amber-500" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold theme-text">Top Performers</h2>
+          <p className="text-[10px] theme-text-muted">This month's leaderboard</p>
+        </div>
+      </div>
+
+      <div className="space-y-2 flex-1">
+        {intelligence.leaderboard.map((u, index) => {
+          const score = Number(u.score) || 0;
+          const scoreColor = score >= 75 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-500";
+          const barColor  = score >= 75 ? "bg-emerald-500" : score >= 50 ? "bg-amber-400" : "bg-red-400";
+          const initials  = (u.username || "?").slice(0, 2).toUpperCase();
+          const isTop3    = index < 3;
+
+          return (
+            <div
+              key={`${u.userId || u.username}-${index}`}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--surface-soft)] transition-colors group"
+            >
+              {/* Rank */}
+              {isTop3 ? (
+                <span className="text-base w-6 text-center shrink-0">{medals[index]}</span>
+              ) : (
+                <span className="text-xs font-bold theme-text-muted w-6 text-center shrink-0">
+                  #{index + 1}
+                </span>
+              )}
+
+              {/* Avatar */}
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                isTop3 ? rankColors[index] + " border" : "bg-[var(--surface-soft)] theme-text-muted border border-[var(--border)]"
+              }`}>
+                {initials}
+              </div>
+
+              {/* Name + bar */}
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold theme-text truncate">{u.username}</div>
+                <div className="mt-1 w-full bg-[var(--surface-soft)] rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-700 ${barColor}`}
+                    style={{ width: `${Math.min(score, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Score */}
+              <span className={`text-sm font-bold shrink-0 ${scoreColor}`}>{score}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+})()}
 </div>
 
 {isAdmin && intelligence?.forecast && (
@@ -894,14 +1045,14 @@ const autonomousInsight = useMemo(() => {
 
       <div>
         <div className="theme-text-muted">Trend Direction</div>
-        <div className="text-lg font-semibold text-emerald-600">
+        <div className="text-lg font-semibold text-emerald-500">
           {intelligence.forecast.trend}
         </div>
       </div>
 
       <div>
         <div className="theme-text-muted">Risk Projection</div>
-        <div className="text-lg font-semibold text-red-600">
+        <div className="text-lg font-semibold text-red-500">
           {intelligence.forecast.riskProjection ?? "-"}
         </div>
       </div>
@@ -941,7 +1092,7 @@ const autonomousInsight = useMemo(() => {
   <div className="mt-5 border-t pt-4">
     <button
       onClick={() => setForecastReasoningOpen(true)}
-      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+      className="text-xs font-semibold text-[color:var(--primary)] hover:opacity-80"
     >
       View AI forecast reasoning
     </button>
@@ -962,7 +1113,7 @@ const autonomousInsight = useMemo(() => {
     <span
   className={`text-xs font-semibold ${
     healthScore === null
-      ? "text-slate-400"
+      ? "theme-text-muted"
       : healthScore > 75
       ? "text-emerald-600"
       : healthScore > 50
@@ -1028,122 +1179,199 @@ const autonomousInsight = useMemo(() => {
         </div>
       </section>
 
-      {/* My tasks summary (for everyone) */}
-      <section className="bg-white rounded-xl shadow p-4 grid md:grid-cols-3 gap-4 text-xs">
-        <div>
-          <h2 className="font-semibold mb-2">My tasks summary</h2>
-          <div className="space-y-1">
-            <div className="flex justify-between">
-              <span>Total assigned to me</span>
-              <span className="font-semibold">{myTasks.length}</span>
+      {/* ── Quick-glance row: My Tasks · Role · Projects ── */}
+      <div className="grid md:grid-cols-3 gap-4">
+
+        {/* My Tasks card */}
+        <div className="theme-surface border theme-border rounded-xl p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-indigo-500" />
+              <span className="text-sm font-semibold theme-text">My Tasks</span>
             </div>
-            <div className="flex justify-between">
-              <span>Overdue</span>
-              <span className="font-semibold text-red-600">
+            <Link
+              to={isAdmin || isManager ? "/my-tasks?tab=mine" : "/my-tasks"}
+              className="flex items-center gap-1 text-xs text-[color:var(--primary)] hover:opacity-80 font-medium"
+            >
+              View all <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-[color:var(--primary)]/10 border border-[color:var(--primary)]/20 px-3 py-2.5 text-center">
+              <div className="text-2xl font-bold text-[color:var(--primary)]">{myTasks.length}</div>
+              <div className="text-[10px] text-[color:var(--primary)] font-medium mt-0.5">Total assigned</div>
+            </div>
+            <Link
+              to={isAdmin || isManager ? "/my-tasks?tab=mine" : "/my-tasks"}
+              className={`rounded-lg border px-3 py-2.5 text-center block transition-colors ${
+                myOverdueTasks.length > 0
+                  ? "bg-red-500/10 border-red-500/25 hover:bg-red-500/15"
+                  : "bg-emerald-500/10 border-emerald-500/20"
+              }`}
+            >
+              <div className={`text-2xl font-bold ${myOverdueTasks.length > 0 ? "text-red-500" : "text-emerald-500"}`}>
                 {myOverdueTasks.length}
-              </span>
+              </div>
+              <div className={`text-[10px] font-medium mt-0.5 ${myOverdueTasks.length > 0 ? "text-red-500" : "text-emerald-500"}`}>
+                {myOverdueTasks.length > 0 ? "Overdue" : "All on time"}
+              </div>
+            </Link>
+          </div>
+          {myTasks.filter(t => t.status === "in-progress" || t.status === "in_progress").length > 0 && (
+            <div className="flex items-center gap-2 text-xs theme-text-muted">
+              <Clock className="w-3 h-3 text-blue-400" />
+              <span>{myTasks.filter(t => t.status === "in-progress" || t.status === "in_progress").length} in progress</span>
             </div>
+          )}
+        </div>
+
+        {/* Role card */}
+        <div className="theme-surface border theme-border rounded-xl p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            {isAdmin ? <Shield className="w-4 h-4 text-violet-500" /> : <Users className="w-4 h-4 text-violet-500" />}
+            <span className="text-sm font-semibold theme-text capitalize">{role} Access</span>
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-500 border border-violet-500/20 font-semibold capitalize">{role}</span>
+          </div>
+          <div className="space-y-1.5">
+            {[
+              { label: "View & manage projects", to: "/projects" },
+              { label: isAdmin ? "Admin panel & users" : "Team tasks", to: isAdmin ? "/admin/users" : "/my-tasks" },
+              ...(isAdmin ? [{ label: "Enterprise settings", to: "/enterprise" }] : []),
+              { label: "Goals", to: "/okr" },
+            ].map(item => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--surface-soft)] transition-colors group"
+              >
+                <span className="text-xs theme-text-muted group-hover:theme-text">{item.label}</span>
+                <ChevronRight className="w-3 h-3 text-[var(--border)] group-hover:theme-text-muted" />
+              </Link>
+            ))}
           </div>
         </div>
 
-        {/* For admin/manager, extra info */}
-        {(isAdmin || isManager) && (
-          <>
-            <div>
-              <h2 className="font-semibold mb-2">Role overview</h2>
-              <p className="text-[11px] text-slate-600">
-                As {role}, you can manage projects and tasks according to RBAC:
-              </p>
-              <ul className="mt-1 list-disc list-inside text-[11px] text-slate-600">
-                <li>See all projects you&apos;re allowed to access</li>
-                <li>Create & manage tasks in those projects</li>
-                {isAdmin && <li>Manage users & project assignments</li>}
-              </ul>
+        {/* Projects card */}
+        <div className="theme-surface border theme-border rounded-xl p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FolderKanban className="w-4 h-4 text-amber-500" />
+              <span className="text-sm font-semibold theme-text">Projects</span>
             </div>
-
-            <div>
-              <h2 className="font-semibold mb-2">Projects you own / access</h2>
-              <p className="text-[11px] text-slate-600 mb-1">
-                You have access to {projects.length} project
-                {projects.length === 1 ? "" : "s"}.
-              </p>
-              <ul className="max-h-32 overflow-y-auto text-[11px] text-slate-700 space-y-1">
-                {projects.map((p) => (
-                  <li key={p.id}>
-                    <span className="font-medium">{p.name}</span>{" "}
-                    <span className="text-slate-400">
-                      (added by {p.added_by})
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        )}
-
-        {/* For plain user, explain limitations */}
-        {isUser && (
-          <div>
-            <h2 className="font-semibold mb-2">Access rules</h2>
-            <p className="text-[11px] text-slate-600">
-              You can:
-            </p>
-            <ul className="mt-1 list-disc list-inside text-[11px] text-slate-600">
-              <li>See only projects assigned to you</li>
-              <li>See only tasks within those projects</li>
-              <li>Change status of tasks assigned to you</li>
-              <li>Add comments to tasks</li>
-            </ul>
+            <Link
+              to="/projects"
+              className="flex items-center gap-1 text-xs text-[color:var(--primary)] hover:opacity-80 font-medium"
+            >
+              All projects <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
-        )}
-      </section>
+          <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+            {projects.length === 0 ? (
+              <p className="text-xs theme-text-muted text-center py-4">No projects yet</p>
+            ) : (
+              projects.slice(0, 8).map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/projects/${p.id}`}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--surface-soft)] transition-colors group"
+                >
+                  <span className="text-xs font-medium theme-text truncate max-w-[150px]">{p.name}</span>
+                  <ChevronRight className="w-3 h-3 text-[var(--border)] group-hover:theme-text-muted shrink-0" />
+                </Link>
+              ))
+            )}
+          </div>
+          {projects.length > 8 && (
+            <Link to="/projects" className="text-xs text-[color:var(--primary)] hover:opacity-80 text-center font-medium">
+              +{projects.length - 8} more projects
+            </Link>
+          )}
+        </div>
+      </div>
 
       {/* Top overdue tasks */}
-      <section className="theme-surface rounded-xl shadow border theme-border p-4">
-        <h2 className="text-sm font-semibold mb-3">Top overdue tasks</h2>
+      <section className="theme-surface rounded-xl border theme-border p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-500" />
+            <h2 className="text-sm font-semibold theme-text">Overdue Tasks</h2>
+            {topOverdue.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 border border-red-500/20 font-bold">
+                {topOverdue.length}
+              </span>
+            )}
+          </div>
+          <Link
+            to="/my-tasks?tab=overdue"
+            className="flex items-center gap-1 text-xs text-[color:var(--primary)] hover:opacity-80 font-medium"
+          >
+            View all <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
 
         {loading && (
-          <div className="text-sm theme-text-muted">Loading overdue tasks...</div>
+          <div className="text-sm theme-text-muted">Loading...</div>
         )}
 
         {!loading && topOverdue.length === 0 && (
-          <div className="text-sm theme-text-muted">
-            No overdue tasks in your scope. 🎉
+          <div className="flex flex-col items-center justify-center py-8 gap-2">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center">
+              <CheckSquare className="w-5 h-5 text-emerald-500" />
+            </div>
+            <p className="text-sm font-medium text-emerald-500">All tasks on track</p>
+            <p className="text-xs theme-text-muted">No overdue tasks in your scope</p>
           </div>
         )}
 
         <div className="space-y-2">
-          {topOverdue.map((t) => (
-            <div
-              key={t.id}
-              className="theme-overdue-card border rounded-lg px-3 py-2 text-xs"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="font-medium text-[11px] theme-overdue-text">
-                    {t.task}
-                  </div>
-                  <div className="text-[10px] theme-overdue-text">
-                    Project:{" "}
-                    <span className="font-semibold">
-                      {t.project_name || t._project?.name || "Unknown"}
-                    </span>
-                  </div>
-                  <div className="text-[10px] theme-overdue-soft">
-                    Due:{" "}
-                    {t.due_date
-                      ? new Date(t.due_date).toLocaleDateString()
-                      : "N/A"}
+          {topOverdue.map((t) => {
+            const projectId = t.project_id || t._project?.id;
+            const projectName = t.project_name || t._project?.name || "Unknown";
+            const daysOverdue = t.due_date
+              ? Math.floor((Date.now() - new Date(t.due_date)) / 86400000)
+              : null;
+            const priority = t.priority;
+            const taskTitle = t.task || t.title;
+
+            const card = (
+              <div className="flex items-start justify-between gap-3 border border-red-500/20 bg-red-500/10 hover:bg-red-500/15 transition-colors rounded-xl px-4 py-3 cursor-pointer group">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="mt-0.5 shrink-0 w-2 h-2 rounded-full bg-red-400 mt-1.5" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-red-500 truncate group-hover:opacity-80">
+                      {taskTitle}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="text-[10px] text-red-600 font-medium">
+                        {projectName}
+                      </span>
+                      {priority && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                          priority === "high" ? "bg-red-500/15 text-red-500" :
+                          priority === "medium" ? "bg-amber-500/15 text-amber-500" :
+                          "bg-[var(--surface-soft)] theme-text-muted"
+                        }`}>{priority}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                {t.assigned_to && (
-                  <div className="text-[10px] theme-overdue-soft">
-                    Assigned: {t.assigned_to}
+                <div className="shrink-0 text-right">
+                  <div className="text-xs font-bold text-red-500">
+                    {daysOverdue !== null ? `${daysOverdue}d` : ""}
                   </div>
-                )}
+                  <div className="text-[10px] text-red-500 mt-0.5">overdue</div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+
+            return projectId ? (
+              <Link key={t.id} to={`/projects/${projectId}`}>
+                {card}
+              </Link>
+            ) : (
+              <div key={t.id}>{card}</div>
+            );
+          })}
         </div>
       </section>
 
@@ -1173,7 +1401,7 @@ const autonomousInsight = useMemo(() => {
 )}
 
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <div className="text-sm theme-overdue-text theme-overdue-card border rounded-lg px-3 py-2">
           {error}
         </div>
       )}

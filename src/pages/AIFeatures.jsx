@@ -313,14 +313,28 @@ function ReportTab() {
   const [type, setType] = useState("weekly");
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [projectId, setProjectId] = useState("");
+
+  useEffect(() => {
+    api.get("/projects").then(r => {
+      const list = r.data?.projects || r.data || [];
+      setProjects(list);
+      if (list.length > 0) setProjectId(list[0].id);
+    }).catch(() => {});
+  }, []);
 
   const generate = async () => {
+    if (type === "project" && !projectId) return toast.error("Please select a project");
     setLoading(true);
     setReport(null);
     try {
-      const r = await api.post("/ai-features/report", { type });
+      const r = await api.post("/ai-features/report", {
+        type,
+        projectId: type === "project" ? projectId : undefined,
+      });
       setReport(r.data);
-    } catch { toast.error("Report generation failed"); }
+    } catch (err) { toast.error(err.response?.data?.error || "Report generation failed"); }
     setLoading(false);
   };
 
@@ -328,14 +342,24 @@ function ReportTab() {
     <div className="space-y-4">
       <div className="theme-surface-card rounded-xl p-5 border theme-border">
         <h2 className="font-semibold theme-text mb-3">Generate AI Report</h2>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           {["weekly","monthly","project"].map(t => (
             <button key={t} onClick={() => setType(t)}
               className={`px-3 py-2 rounded-lg text-sm font-medium capitalize border transition-colors ${type === t ? "bg-indigo-600 text-white border-indigo-600" : "theme-border theme-text"}`}>
               {t}
             </button>
           ))}
-          <button onClick={generate} disabled={loading} className="ml-auto px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-2">
+          {type === "project" && (
+            <select
+              value={projectId}
+              onChange={e => setProjectId(e.target.value)}
+              className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text"
+            >
+              <option value="">— Select project —</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
+          <button onClick={generate} disabled={loading || (type === "project" && !projectId)} className="ml-auto px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50">
             {loading ? <><RefreshCw className="w-4 h-4 animate-spin" />Generating…</> : <><Sparkles className="w-4 h-4" />Generate</>}
           </button>
         </div>
@@ -346,7 +370,9 @@ function ReportTab() {
           <div className="flex items-center gap-3 pb-4 border-b theme-border">
             <BarChart2 className="w-5 h-5 text-indigo-500" />
             <div>
-              <h2 className="font-semibold theme-text capitalize">{report.type} Report</h2>
+              <h2 className="font-semibold theme-text capitalize">
+                {report.type === "project" && report.projectName ? report.projectName : report.type} Report
+              </h2>
               <p className="text-xs theme-text-muted">Generated {new Date(report.generatedAt).toLocaleString()}</p>
             </div>
           </div>
@@ -404,6 +430,16 @@ function SmartParseTab() {
   const [parsed, setParsed] = useState(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+
+  useEffect(() => {
+    api.get("/projects").then(r => {
+      const list = r.data?.projects || r.data || [];
+      setProjects(list);
+      if (list.length > 0) setSelectedProjectId(list[0].id);
+    }).catch(() => {});
+  }, []);
 
   const parse = async () => {
     if (!text.trim()) return;
@@ -411,19 +447,22 @@ function SmartParseTab() {
     try {
       const r = await api.post("/ai-features/parse-task", { text });
       setParsed(r.data);
+      // If AI detected a project, pre-select it
+      if (r.data.project_id) setSelectedProjectId(r.data.project_id);
     } catch { toast.error("Parse failed"); }
     setLoading(false);
   };
 
   const create = async () => {
     if (!parsed) return;
+    if (!selectedProjectId) return toast.error("Please select a project");
     setCreating(true);
     try {
       await api.post("/tasks", {
-        title: parsed.title,
+        task: parsed.title,
         priority: parsed.priority,
-        assignee_id: parsed.assignee_id || undefined,
-        project_id: parsed.project_id || undefined,
+        assigned_to: parsed.assignee_id || undefined,
+        project_id: selectedProjectId,
       });
       toast.success("Task created!");
       setParsed(null);
@@ -480,15 +519,22 @@ function SmartParseTab() {
               <p className="font-medium theme-text mt-0.5">{parsed.assignee_name || "Unassigned"}</p>
             </div>
             <div>
-              <span className="text-xs theme-text-muted">Project</span>
-              <p className="font-medium theme-text mt-0.5">{parsed.project_name || "None"}</p>
+              <span className="text-xs theme-text-muted">Project <span className="text-red-500">*</span></span>
+              <select
+                value={selectedProjectId}
+                onChange={e => setSelectedProjectId(e.target.value)}
+                className="mt-0.5 w-full px-2 py-1 rounded border theme-border theme-surface text-sm theme-text"
+              >
+                <option value="">— Select project —</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             </div>
             <div>
               <span className="text-xs theme-text-muted">Due Date Hint</span>
               <p className="font-medium theme-text mt-0.5">{parsed.due_date_hint || "Not specified"}</p>
             </div>
           </div>
-          <button onClick={create} disabled={creating} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-1">
+          <button onClick={create} disabled={creating || !selectedProjectId} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50">
             <Plus className="w-4 h-4" /> {creating ? "Creating…" : "Create Task"}
           </button>
         </div>

@@ -50,13 +50,6 @@ const GENERAL_CHANNEL_KEY = "team-general";
 const AVAILABILITY_CHANNEL_KEY = "availability-updates";
 const PROJECT_MANAGER_CHANNEL_KEY = "project-manager";
 const QUICK_REACTIONS = ["👍", "👎", "❤️", "😂", "🎉", "😮", "😢", "🔥", "✅", "👀", "🙏", "💯"];
-const quillModules = {
-  toolbar: [
-    ["bold", "italic"],
-    ["link"],
-    [{ list: "bullet" }],
-  ],
-};
 const quillFormats = ["bold", "italic", "underline", "list", "bullet", "link"];
 
 function formatDateLabel(dateStr) {
@@ -175,6 +168,8 @@ export default function Chat() {
   const [mobileText, setMobileText] = useState(""); // kept for legacy, mobile now uses editorHtml
   const mobileTextareaRef = useRef(null);
   const mobileQuillRef = useRef(null); // ref to ReactQuill instance for mobile
+  const desktopQuillRef = useRef(null); // ref to ReactQuill instance for desktop
+  const threadQuillRef = useRef(null);   // ref to ReactQuill instance for thread sidebar
 
   // AI preference (per-user, per-workspace)
 const [aiReplyEnabled, setAiReplyEnabled] = useState(false);
@@ -1975,7 +1970,7 @@ useEffect(() => {
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${aiReplyEnabled ? "chat-sidebar-toggle-on" : "chat-sidebar-toggle-off"}`}
                 >
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${aiReplyEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                  <span className={`inline-block h-5 w-5 transform rounded-full theme-surface shadow transition-transform ${aiReplyEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
                 </button>
               </div>
 
@@ -2186,14 +2181,14 @@ useEffect(() => {
 
         {/* ── SCREEN 2: Active chat ── */}
         {mobileView === "chat" && (
-          <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+          <div className="flex-1 flex flex-col theme-surface theme-text overflow-hidden relative">
 
             {/* Header */}
-            <header className="px-3 py-3 border-b border-slate-100 flex items-center gap-2 bg-white shrink-0">
+            <header className="px-3 py-3 border-b theme-border flex items-center gap-2 theme-surface shrink-0">
               <button
                 type="button"
                 onClick={() => setMobileView("list")}
-                className="p-2 -ml-1 text-slate-500 active:text-slate-800 rounded-lg"
+                className="p-2 -ml-1 theme-text-muted hover:theme-text rounded-lg"
               >
                 <ChevronLeft size={22} />
               </button>
@@ -2201,17 +2196,17 @@ useEffect(() => {
               {isDmChannel && activeDmUser ? (
                 <div className="relative shrink-0">
                   <Avatar name={activeDmUser.username} src={userAvatarMap[activeDmUser.id]} size="sm" />
-                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${dmPresenceClass}`} />
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[var(--surface)] ${dmPresenceClass}`} />
                 </div>
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                  <Hash size={15} className="text-slate-500" />
+                <div className="w-8 h-8 rounded-lg theme-surface-soft flex items-center justify-center shrink-0">
+                  <Hash size={15} className="theme-text-muted" />
                 </div>
               )}
 
               <div className="flex-1 min-w-0">
-                <h2 className="font-semibold text-slate-800 text-[15px] truncate leading-tight">{activeChannelTitle}</h2>
-                <p className="text-[11px] text-slate-400 truncate leading-tight">
+                <h2 className="font-semibold theme-text text-[15px] truncate leading-tight">{activeChannelTitle}</h2>
+                <p className="text-[11px] theme-text-muted truncate leading-tight">
                   {isDmChannel ? dmPresenceText : activeChannel?.description || "Team channel"}
                 </p>
               </div>
@@ -2221,7 +2216,7 @@ useEffect(() => {
                   type="button"
                   onClick={handleToggleHuddle}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-colors shrink-0 ${
-                    isHuddleActiveHere ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500 active:bg-slate-200"
+                    isHuddleActiveHere ? "bg-amber-500/15 text-amber-500 border border-amber-500/20" : "theme-surface-soft theme-text-muted"
                   }`}
                   title={huddleButtonLabel}
                 >
@@ -2240,22 +2235,22 @@ useEffect(() => {
 
             {/* Huddle banner */}
             {isHuddleActiveHere && (
-              <div className="mx-3 mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] flex items-center justify-between shrink-0">
+              <div className="mx-3 mt-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] flex items-center justify-between shrink-0">
                 <span>🔊 Huddle · <span className="font-semibold">{activeHuddle.startedBy?.username}</span></span>
                 <div className="flex items-center gap-2">
                   {!huddleJoined && !huddleConnecting && (
-                    <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-amber-300 rounded-lg px-2 py-1 bg-white active:bg-amber-50">Join</button>
+                    <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-amber-500/25 rounded-lg px-2 py-1 theme-surface hover:bg-amber-500/10">Join</button>
                   )}
-                  {huddleJoined && <span className="text-amber-700 font-medium">You&apos;re in</span>}
+                  {huddleJoined && <span className="text-amber-500 font-medium">You&apos;re in</span>}
                 </div>
               </div>
             )}
 
             {/* Editing banner */}
             {editingMessageId && (
-              <div className="mx-3 mt-2 px-3 py-1.5 bg-amber-50 border-l-2 border-amber-400 rounded text-[11px] flex items-center justify-between shrink-0">
-                <span className="text-amber-700 font-medium">Editing message</span>
-                <button type="button" onClick={handleCancelEdit} className="text-amber-600 text-[10px] underline">Cancel</button>
+              <div className="mx-3 mt-2 px-3 py-1.5 bg-amber-500/10 border-l-2 border-amber-500 rounded text-[11px] flex items-center justify-between shrink-0">
+                <span className="text-amber-500 font-medium">Editing message</span>
+                <button type="button" onClick={handleCancelEdit} className="text-amber-500 text-[10px] underline">Cancel</button>
               </div>
             )}
 
@@ -2268,16 +2263,16 @@ useEffect(() => {
             >
               {loadingHistory && activeMessages.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="text-[12px] text-slate-400">Loading...</div>
+                  <div className="text-[12px] theme-text-muted">Loading...</div>
                 </div>
               ) : messagesToRender.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-                  <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
-                    <MessageSquare size={24} className="text-slate-400" />
+                  <div className="w-14 h-14 rounded-full theme-surface-soft flex items-center justify-center">
+                    <MessageSquare size={24} className="theme-text-soft" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-slate-600">No messages yet</div>
-                    <div className="text-[12px] text-slate-400 mt-1">Say hi 👋</div>
+                    <div className="text-sm font-medium theme-text">No messages yet</div>
+                    <div className="text-[12px] theme-text-muted mt-1">Say hi 👋</div>
                   </div>
                 </div>
               ) : (
@@ -2309,19 +2304,19 @@ useEffect(() => {
                   return (
                     <div key={m.id}>
                       {showDateDivider && (
-                        <div className="flex items-center gap-3 my-4">
-                          <div className="flex-1 h-px bg-slate-100" />
-                          <span className="text-[10px] text-slate-400 font-medium">{dateDividerLabel}</span>
-                          <div className="flex-1 h-px bg-slate-100" />
-                        </div>
+                          <div className="flex items-center gap-3 my-4">
+                            <div className="flex-1 h-px theme-border" />
+                            <span className="text-[10px] theme-text-muted font-medium theme-surface px-2">{dateDividerLabel}</span>
+                            <div className="flex-1 h-px theme-border" />
+                          </div>
                       )}
 
                       {isSystem ? (
-                        <div className="flex items-center justify-center my-1.5">
-                          <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 rounded-full px-3 py-0.5">
-                            {m.textHtml || m.text}
-                          </span>
-                        </div>
+                          <div className="flex items-center justify-center my-1.5">
+                            <span className="text-[10px] theme-text-muted theme-surface-soft border theme-border rounded-full px-3 py-0.5">
+                              {m.textHtml || m.text}
+                            </span>
+                          </div>
                       ) : (
                         <div className={`flex gap-2.5 ${isGrouped ? "pt-0.5" : "pt-3"}`}>
                           {isGrouped ? (
@@ -2335,25 +2330,25 @@ useEffect(() => {
                           <div className="flex-1 min-w-0">
                             {!isGrouped && (
                               <div className="flex items-baseline gap-2 mb-0.5">
-                                <span className={`text-[13px] font-bold ${isOwn ? "text-blue-700" : "text-slate-800"}`}>
+                                <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
                                   {isOwn ? "You" : m.username || "User"}
                                 </span>
-                                <span className="text-[10px] text-slate-400 tabular-nums">{time}</span>
+                                <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
                                 {m.username === "AI Assistant" && (
-                                  <span className="text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5 font-medium">AI</span>
+                                  <span className="text-[9px] bg-violet-500/15 text-violet-500 rounded-full px-1.5 py-0.5 font-medium">AI</span>
                                 )}
                               </div>
                             )}
 
                             {m.deletedAt ? (
-                              <div className="text-[12px] text-slate-300 italic flex items-center gap-1.5">
+                              <div className="text-[12px] theme-text-soft italic flex items-center gap-1.5">
                                 <span>🚫</span> <span>Deleted</span>
                               </div>
                             ) : (
                               <>
                                 {(m.textHtml || m.text) && (
                                   <div
-                                    className="text-[14px] text-slate-700 leading-relaxed break-words chat-prose"
+                                    className="text-[14px] theme-text leading-relaxed break-words chat-prose"
                                     style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
                                     dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
                                   />
@@ -2370,17 +2365,17 @@ useEffect(() => {
                                         <div key={ai}>
                                           {isImage && (
                                             <a href={fullUrl} target="_blank" rel="noreferrer">
-                                              <img src={fullUrl} alt={att.name} className="max-h-48 max-w-full rounded-2xl object-contain border border-slate-200 shadow-sm" />
+                                              <img src={fullUrl} alt={att.name} className="max-h-48 max-w-full rounded-2xl object-contain border theme-border shadow-sm" />
                                             </a>
                                           )}
                                           {isVideo && <video src={fullUrl} controls className="max-h-48 max-w-full rounded-2xl shadow-sm" />}
                                           {!isImage && !isVideo && (
                                             <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer"
-                                              className="inline-flex items-center gap-2 text-[12px] text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                                              className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2 hover:opacity-90">
                                               <span>📄</span>
                                               <div>
                                                 <div className="font-medium truncate max-w-[160px]">{att.name}</div>
-                                                {att.size && <div className="text-[10px] text-slate-400">{(att.size / 1024).toFixed(0)} KB</div>}
+                                                {att.size && <div className="text-[10px] theme-text-muted">{(att.size / 1024).toFixed(0)} KB</div>}
                                               </div>
                                             </a>
                                           )}
@@ -2404,8 +2399,8 @@ useEffect(() => {
                                           onClick={() => handleToggleReaction(m.id, emoji)}
                                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[13px] border transition-all ${
                                             hasReacted
-                                              ? "bg-blue-50 border-blue-300 text-blue-700 font-semibold"
-                                              : "bg-white border-slate-200 text-slate-600"
+                                              ? "bg-[color:var(--primary)]/12 border-[color:var(--primary)]/35 text-[color:var(--primary)] font-semibold"
+                                              : "theme-surface border theme-border theme-text-muted"
                                           }`}
                                         >
                                           <span>{emoji}</span>
@@ -2418,13 +2413,13 @@ useEffect(() => {
 
                                 {/* Inline reaction picker (tap emoji button in toolbar) */}
                                 {openReactionFor === m.id && (
-                                  <div className="mt-2 flex flex-wrap gap-1.5 p-3 bg-white border border-slate-200 rounded-2xl shadow-xl z-30">
+                                  <div className="mt-2 flex flex-wrap gap-1.5 p-3 theme-surface border theme-border rounded-2xl shadow-xl z-30">
                                     {QUICK_REACTIONS.map((emoji) => (
                                       <button
                                         key={emoji}
                                         type="button"
                                         onClick={() => handleAddReactionFromPicker(m.id, emoji)}
-                                        className="text-xl px-1.5 py-1 hover:bg-slate-100 rounded-xl transition-colors"
+                                        className="text-xl px-1.5 py-1 hover:bg-[var(--surface-soft)] rounded-xl transition-colors"
                                       >
                                         {emoji}
                                       </button>
@@ -2437,7 +2432,7 @@ useEffect(() => {
                                   <button
                                     type="button"
                                     onClick={() => handleOpenThread(m)}
-                                    className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-blue-600 bg-blue-50 rounded-full px-3 py-1.5"
+                                    className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--primary)] bg-[color:var(--primary)]/10 rounded-full px-3 py-1.5"
                                   >
                                     <MessageSquare size={12} />
                                     {replyCountById[m.id]} repl{replyCountById[m.id] === 1 ? "y" : "ies"}
@@ -2452,14 +2447,14 @@ useEffect(() => {
                                 <button
                                   type="button"
                                   onClick={() => handleOpenReactionPicker(m.id)}
-                                  className="p-1.5 rounded-lg bg-slate-50 text-slate-400 active:bg-slate-100 text-[15px]"
+                                  className="p-1.5 rounded-lg theme-surface-soft theme-text-muted active:bg-[var(--surface-strong)] text-[15px]"
                                 >
                                   <Smile size={14} />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenThread(m)}
-                                  className="p-1.5 rounded-lg bg-slate-50 text-slate-400 active:bg-slate-100"
+                                  className="p-1.5 rounded-lg theme-surface-soft theme-text-muted active:bg-[var(--surface-strong)]"
                                 >
                                   <MessageSquare size={14} />
                                 </button>
@@ -2474,7 +2469,7 @@ useEffect(() => {
                                         : m.text || "";
                                       setMobileText(plain);
                                     }}
-                                    className="p-1.5 rounded-lg bg-slate-50 text-slate-400 active:bg-slate-100 text-sm"
+                                    className="p-1.5 rounded-lg theme-surface-soft theme-text-muted active:bg-[var(--surface-strong)] text-sm"
                                   >
                                     ✏️
                                   </button>
@@ -2483,7 +2478,7 @@ useEffect(() => {
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteMessage(m.id)}
-                                    className="p-1.5 rounded-lg bg-slate-50 text-red-300 active:bg-red-50 text-sm"
+                                    className="p-1.5 rounded-lg theme-surface-soft text-red-500 active:bg-red-500/10 text-sm"
                                   >
                                     🗑️
                                   </button>
@@ -2501,11 +2496,11 @@ useEffect(() => {
 
             {/* Typing indicator */}
             {typingUsernames.length > 0 && (
-              <div className="px-4 py-1.5 text-[11px] text-slate-400 flex items-center gap-2 shrink-0">
+              <div className="px-4 py-1.5 text-[11px] theme-text-muted flex items-center gap-2 shrink-0">
                 <div className="flex gap-0.5">
-                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <span className="w-1.5 h-1.5 bg-[var(--text-soft)] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 bg-[var(--text-soft)] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 bg-[var(--text-soft)] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
                 <span>
                   {typingUsernames.length === 1
@@ -2519,34 +2514,34 @@ useEffect(() => {
             {pendingAttachments.length > 0 && (
               <div className="px-3 pt-2 pb-0 flex flex-wrap gap-2 shrink-0">
                 {pendingAttachments.map((att, i) => (
-                  <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px]">
+                  <div key={i} className="flex items-center gap-1.5 theme-surface-soft border theme-border rounded-lg px-2.5 py-1.5 text-[11px]">
                     {att.type?.startsWith("image/") ? (
                       <img src={`${BACKEND_URL}${att.url}`} alt={att.name} className="h-8 w-8 object-cover rounded" />
                     ) : (
                       <span>📎</span>
                     )}
-                    <span className="max-w-[100px] truncate text-slate-600">{att.name}</span>
-                    <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="text-slate-300 hover:text-red-400">✕</button>
+                    <span className="max-w-[100px] truncate theme-text">{att.name}</span>
+                    <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="theme-text-soft hover:text-red-500">✕</button>
                   </div>
                 ))}
               </div>
             )}
 
             {/* ── Slack-style rich text composer ── */}
-            <div className="px-3 pt-2 pb-3 bg-white border-t border-slate-100 shrink-0">
+            <div className="px-3 pt-2 pb-3 theme-surface border-t theme-border shrink-0">
               {activeChannelKey !== AVAILABILITY_CHANNEL_KEY ? (
                 <form onSubmit={handleSend}>
                   {/* Composer box: editor + formatting bar */}
                   <div
-                    className="border border-slate-200 rounded-2xl overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-400/40 focus-within:border-blue-300 transition-all shadow-sm"
+                    className="border theme-border rounded-2xl overflow-hidden theme-surface focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)] transition-all shadow-sm"
                     onKeyDown={(e) => {
                       if (e.key === "Escape" && editingMessageId) handleCancelEdit();
                     }}
                   >
                     {/* Editing banner inside composer */}
                     {editingMessageId && (
-                      <div className="px-3 py-1 bg-amber-50 border-b border-amber-100 flex items-center justify-between text-[11px]">
-                        <span className="text-amber-700 font-medium">Editing message</span>
+                      <div className="px-3 py-1 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-[11px]">
+                        <span className="text-amber-500 font-medium">Editing message</span>
                         <button type="button" onClick={handleCancelEdit} className="text-amber-500 underline">Cancel</button>
                       </div>
                     )}
@@ -2572,7 +2567,7 @@ useEffect(() => {
                     />
 
                     {/* Formatting + action bar — Slack style */}
-                    <div className="flex items-center px-2 py-1.5 border-t border-slate-100 bg-slate-50/70 gap-0.5">
+                    <div className="flex items-center px-2 py-1.5 border-t theme-border theme-surface-soft gap-0.5">
                       {/* Bold */}
                       <button
                         type="button"
@@ -2581,7 +2576,7 @@ useEffect(() => {
                           const q = mobileQuillRef.current?.getEditor();
                           if (q) q.format("bold", !q.getFormat().bold);
                         }}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl text-[14px] font-bold text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl text-[14px] font-bold theme-text-muted active:bg-[var(--surface-strong)] hover:bg-[var(--surface-strong)] transition-colors"
                         title="Bold"
                       >B</button>
                       {/* Italic */}
@@ -2592,7 +2587,7 @@ useEffect(() => {
                           const q = mobileQuillRef.current?.getEditor();
                           if (q) q.format("italic", !q.getFormat().italic);
                         }}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl text-[14px] italic text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl text-[14px] italic theme-text-muted active:bg-[var(--surface-strong)] hover:bg-[var(--surface-strong)] transition-colors"
                         title="Italic"
                       >I</button>
                       {/* Strikethrough */}
@@ -2603,7 +2598,7 @@ useEffect(() => {
                           const q = mobileQuillRef.current?.getEditor();
                           if (q) q.format("strike", !q.getFormat().strike);
                         }}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl theme-text-muted active:bg-[var(--surface-strong)] hover:bg-[var(--surface-strong)] transition-colors"
                         title="Strikethrough"
                       ><span className="text-[13px] line-through font-medium">S</span></button>
                       {/* Inline code */}
@@ -2614,7 +2609,7 @@ useEffect(() => {
                           const q = mobileQuillRef.current?.getEditor();
                           if (q) q.format("code", !q.getFormat().code);
                         }}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl font-mono text-[13px] text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl font-mono text-[13px] theme-text-muted active:bg-[var(--surface-strong)] hover:bg-[var(--surface-strong)] transition-colors"
                         title="Inline code"
                       >{"`"}</button>
                       {/* Bullet list */}
@@ -2628,7 +2623,7 @@ useEffect(() => {
                             q.format("list", cur === "bullet" ? false : "bullet");
                           }
                         }}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl theme-text-muted active:bg-[var(--surface-strong)] hover:bg-[var(--surface-strong)] transition-colors"
                         title="Bullet list"
                       >
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -2641,13 +2636,13 @@ useEffect(() => {
                         </svg>
                       </button>
 
-                      <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
+                      <div className="w-px h-5 theme-border mx-1 shrink-0" />
 
                       {/* Attach */}
                       <button
                         type="button"
                         onClick={handleAttachmentClick}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 active:bg-slate-200 hover:bg-slate-200 transition-colors"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl theme-text-muted active:bg-[var(--surface-strong)] hover:bg-[var(--surface-strong)] transition-colors"
                         title="Attach file"
                       >
                         <Paperclip size={16} />
@@ -2657,7 +2652,7 @@ useEffect(() => {
                       <button
                         type="submit"
                         disabled={!connected || (!editorHtml.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment}
-                        className="ml-auto w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 disabled:opacity-30 disabled:cursor-not-allowed active:bg-blue-700 shadow-sm transition-colors"
+                        className="ml-auto w-9 h-9 rounded-xl theme-primary flex items-center justify-center shrink-0 disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 shadow-sm transition-colors"
                       >
                         {sending ? (
                           <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -2670,7 +2665,7 @@ useEffect(() => {
                   <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={handleAttachmentChange} />
                 </form>
               ) : (
-                <div className="text-center py-3 text-[12px] text-slate-400 italic bg-slate-50 rounded-xl border border-slate-100">
+                <div className="text-center py-3 text-[12px] theme-text-muted italic theme-surface-soft rounded-xl border theme-border">
                   Read-only channel
                 </div>
               )}
@@ -2681,36 +2676,36 @@ useEffect(() => {
         {/* ── THREAD OVERLAY (full-screen, slides over chat) ── */}
         {mobileView === "chat" && activeThreadKey && threadRootMessage && (
           <div
-            className="absolute inset-0 bg-white flex flex-col z-20"
+            className="absolute inset-0 theme-surface theme-text flex flex-col z-20"
             style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}
           >
             {/* Thread header */}
-            <header className="px-4 py-3.5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <header className="px-4 py-3.5 border-b theme-border flex items-center gap-3 shrink-0">
               <button
                 type="button"
                 onClick={handleCloseThread}
-                className="p-1.5 -ml-1.5 text-slate-500 active:text-slate-800"
+                className="p-1.5 -ml-1.5 theme-text-muted hover:theme-text"
               >
                 <ChevronLeft size={22} />
               </button>
               <div>
-                <div className="text-[15px] font-semibold text-slate-800">Thread</div>
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[15px] font-semibold theme-text">Thread</div>
+                <div className="text-[11px] theme-text-muted">
                   in {threadParentChannel ? `#${threadParentChannel.name}` : "this channel"}
                 </div>
               </div>
             </header>
 
             {/* Root message */}
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 shrink-0">
+            <div className="px-4 py-3 theme-surface-soft border-b theme-border shrink-0">
               <div className="flex items-center gap-2 mb-2">
                 <Avatar name={threadRootMessage.username || "User"} src={userAvatarMap[threadRootMessage.userId || threadRootMessage.user_id]} size="sm" />
-                <span className="text-[13px] font-semibold text-slate-700">
+                <span className="text-[13px] font-semibold theme-text">
                   {threadRootMessage.username === user.username ? "You" : threadRootMessage.username || "User"}
                 </span>
               </div>
               <div
-                className="text-[13px] text-slate-600 leading-relaxed break-words line-clamp-4 chat-prose"
+                className="text-[13px] theme-text leading-relaxed break-words line-clamp-4 chat-prose"
                 dangerouslySetInnerHTML={{ __html: threadRootMessage.textHtml || threadRootMessage.text || "" }}
               />
             </div>
@@ -2718,7 +2713,7 @@ useEffect(() => {
             {/* Thread replies */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
               {threadMessages.length === 0 ? (
-                <div className="text-[12px] text-slate-400 text-center mt-10">
+                <div className="text-[12px] theme-text-muted text-center mt-10">
                   No replies yet — start the conversation
                 </div>
               ) : (
@@ -2732,14 +2727,14 @@ useEffect(() => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2 mb-0.5">
-                          <span className={`text-[13px] font-bold ${isOwn ? "text-blue-700" : "text-slate-800"}`}>
+                          <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
                             {isOwn ? "You" : m.username || "User"}
                           </span>
-                          <span className="text-[10px] text-slate-400 tabular-nums">{time}</span>
+                          <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
                         </div>
                         {(m.textHtml || m.text) && (
                           <div
-                            className="text-[14px] text-slate-700 leading-relaxed break-words chat-prose"
+                            className="text-[14px] theme-text leading-relaxed break-words chat-prose"
                             style={{ wordBreak: "break-word" }}
                             dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
                           />
@@ -2751,9 +2746,9 @@ useEffect(() => {
                               const isImage = att.type?.startsWith("image/");
                               return (
                                 <div key={ai}>
-                                  {isImage && <a href={fullUrl} target="_blank" rel="noreferrer"><img src={fullUrl} alt={att.name} className="max-h-40 max-w-full rounded-xl border border-slate-200" /></a>}
+                                  {isImage && <a href={fullUrl} target="_blank" rel="noreferrer"><img src={fullUrl} alt={att.name} className="max-h-40 max-w-full rounded-xl border theme-border" /></a>}
                                   {!isImage && (
-                                    <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-blue-600">
+                                    <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--primary)]">
                                       <span>📎</span><span className="truncate max-w-[180px]">{att.name}</span>
                                     </a>
                                   )}
@@ -2770,8 +2765,8 @@ useEffect(() => {
             </div>
 
             {/* Thread composer — rich text */}
-            <form onSubmit={handleSendThread} className="border-t border-slate-100 px-3 pt-2 pb-3 shrink-0 bg-white">
-              <div className="border border-slate-200 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400/40 focus-within:border-blue-300 transition-all">
+            <form onSubmit={handleSendThread} className="border-t theme-border px-3 pt-2 pb-3 shrink-0 theme-surface">
+              <div className="border theme-border rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)] transition-all theme-surface">
                 <ReactQuill
                   theme="snow"
                   value={threadEditorHtml}
@@ -2781,18 +2776,18 @@ useEffect(() => {
                   placeholder="Reply in thread…"
                   className="mobile-quill"
                 />
-                <div className="flex items-center px-2 py-1.5 border-t border-slate-100 bg-slate-50/70">
+                <div className="flex items-center px-2 py-1.5 border-t theme-border theme-surface-soft">
                   <button
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); }}
-                    className="text-[11px] text-slate-400 px-2"
+                    className="text-[11px] theme-text-muted px-2"
                   >
                     <span className="italic">Aa</span>
                   </button>
                   <button
                     type="submit"
                     disabled={!connected || !(threadEditorHtml || "").replace(/<[^>]*>/g, "").trim()}
-                    className="ml-auto w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white disabled:opacity-30 active:bg-blue-700 shadow-sm"
+                    className="ml-auto w-9 h-9 rounded-xl theme-primary flex items-center justify-center disabled:opacity-30 hover:opacity-90 shadow-sm"
                   >
                     <Send size={15} />
                   </button>
@@ -2837,7 +2832,7 @@ useEffect(() => {
   // ========================================================
 
   return (
-    <div className="h-full flex overflow-hidden rounded-xl shadow-lg">
+    <div className="h-full min-h-0 flex overflow-hidden rounded-2xl border theme-border theme-surface shadow-lg">
 
       {/* Mobile sidebar backdrop */}
       {mobileSidebarOpen && (
@@ -2849,14 +2844,14 @@ useEffect(() => {
 
       {/* ===== LEFT SIDEBAR ===== */}
       <aside className={`
-        chat-sidebar flex flex-col shrink-0 z-50
+        chat-sidebar flex flex-col shrink-0 z-50 md:border-r chat-sidebar-divider
         fixed inset-y-0 left-0 w-72 transition-transform duration-300 ease-out
         md:relative md:w-60 md:translate-x-0
         ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
         {/* App header */}
-        <div className="px-4 py-3.5 border-b chat-sidebar-divider shrink-0">
-          <div className="flex items-center justify-between">
+        <div className="h-16 px-4 border-b chat-sidebar-divider shrink-0 flex items-center">
+          <div className="flex items-center justify-between w-full">
             <span className="text-[13px] font-bold tracking-tight chat-sidebar-item is-active" style={{background:"none"}}>Workspace</span>
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
@@ -2900,13 +2895,13 @@ useEffect(() => {
               }}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${aiReplyEnabled ? "chat-sidebar-toggle-on" : "chat-sidebar-toggle-off"}`}
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${aiReplyEnabled ? "translate-x-4" : "translate-x-1"}`} />
+              <span className={`inline-block h-4 w-4 transform rounded-full theme-surface shadow-sm transition-transform ${aiReplyEnabled ? "translate-x-4" : "translate-x-1"}`} />
             </button>
           </div>
         </div>
 
         {/* Scrollable nav */}
-        <nav className="flex-1 overflow-y-auto py-3 chat-sidebar-nav">
+        <nav className="flex-1 overflow-y-auto py-3 pr-1 chat-sidebar-nav">
 
           {/* CHANNELS section header */}
           <div className="px-4 pt-1 pb-1.5 flex items-center justify-between">
@@ -3139,7 +3134,7 @@ useEffect(() => {
       </aside>
 
       {/* ===== MAIN CHAT AREA ===== */}
-      <div className="flex-1 flex flex-col bg-white min-w-0 relative">
+      <div className="flex-1 flex flex-col theme-surface theme-text min-w-0 relative">
 
         {/* Disconnect banner */}
         {!connected && !joining && (
@@ -3150,29 +3145,29 @@ useEffect(() => {
         )}
 
         {/* Channel header */}
-        <header className="px-3 md:px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <header className="h-16 px-3 md:px-5 border-b theme-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
             {/* Hamburger — mobile only */}
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="md:hidden shrink-0 text-slate-500 hover:text-slate-700 p-1 -ml-1"
+              className="md:hidden shrink-0 theme-text-muted hover:theme-text p-1 -ml-1"
             >
               <Menu size={20} />
             </button>
             {isDmChannel && activeDmUser ? (
               <div className="relative shrink-0">
                 <Avatar name={activeDmUser.username} src={userAvatarMap[activeDmUser.id]} size="sm" />
-                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${dmPresenceClass}`} />
+                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[var(--surface)] ${dmPresenceClass}`} />
               </div>
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                <Hash size={15} className="text-slate-500" />
+              <div className="w-8 h-8 rounded-lg theme-surface-soft flex items-center justify-center shrink-0">
+                <Hash size={15} className="theme-text-muted" />
               </div>
             )}
             <div className="min-w-0">
-              <h1 className="font-semibold text-slate-800 text-sm truncate">{activeChannelTitle}</h1>
-              <p className="text-[11px] text-slate-400 truncate">
+              <h1 className="font-semibold theme-text text-sm truncate">{activeChannelTitle}</h1>
+              <p className="text-[11px] theme-text-muted truncate">
                 {isDmChannel
                   ? dmPresenceText
                   : activeChannelKey === AVAILABILITY_CHANNEL_KEY
@@ -3181,22 +3176,22 @@ useEffect(() => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-start md:self-auto">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search..."
-              className="hidden md:block text-xs border border-slate-200 rounded-lg px-3 py-1.5 w-32 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-slate-50"
+              className="hidden md:block h-9 text-xs border theme-border rounded-lg px-3 w-36 theme-input theme-placeholder focus:outline-none"
             />
             {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
               <button
                 type="button"
                 onClick={handleToggleHuddle}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 md:px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-2.5 md:px-3 text-[11px] font-medium transition-colors ${
                   isHuddleActiveHere
-                    ? "bg-amber-50 border-amber-200 text-amber-700"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                    : "theme-surface-soft theme-border theme-text-muted hover:opacity-90"
                 }`}
               >
                 <span>🔊</span>
@@ -3204,8 +3199,8 @@ useEffect(() => {
               </button>
             )}
             {!isDmChannel && (
-              <div className="hidden md:flex items-center gap-1.5 text-[11px] text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                <Users size={12} className="text-slate-400" />
+              <div className="hidden md:flex h-9 items-center gap-1.5 text-[11px] theme-text-muted border theme-border rounded-lg px-2.5 theme-surface-soft">
+                <Users size={12} className="theme-text-soft" />
                 <span>{Object.values(presenceMap).filter(p => p.status === "online" || p.status === "available").length} online</span>
               </div>
             )}
@@ -3214,28 +3209,28 @@ useEffect(() => {
 
         {/* Huddle banner */}
         {isHuddleActiveHere && (
-          <div className="mx-4 mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] flex items-center justify-between shrink-0">
+          <div className="mx-4 mt-3 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[11px] flex items-center justify-between shrink-0">
             <div>
               <span>🔊 Huddle in progress · started by <span className="font-semibold">{activeHuddle.startedBy?.username}</span></span>
-              {huddleError && <div className="text-[10px] text-red-600 mt-0.5">{huddleError}</div>}
+              {huddleError && <div className="text-[10px] text-red-500 mt-0.5">{huddleError}</div>}
             </div>
             <div className="flex items-center gap-2">
-              {huddleConnecting && <span className="text-[10px] text-slate-500">Joining...</span>}
+              {huddleConnecting && <span className="text-[10px] theme-text-muted">Joining...</span>}
               {!huddleJoined && !huddleConnecting && (
-                <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-amber-300 rounded px-2 py-1 hover:bg-amber-100">
+                <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-amber-500/25 rounded px-2 py-1 theme-surface hover:bg-amber-500/10">
                   Join huddle
                 </button>
               )}
-              {huddleJoined && <span className="text-[10px] text-amber-700">You&apos;re in this huddle</span>}
+              {huddleJoined && <span className="text-[10px] text-amber-500">You&apos;re in this huddle</span>}
             </div>
           </div>
         )}
 
         {/* Editing banner */}
         {editingMessageId && (
-          <div className="mx-4 mt-2 px-3 py-1.5 bg-amber-50 border-l-2 border-amber-400 rounded text-[11px] flex items-center justify-between shrink-0">
-            <span className="text-amber-700 font-medium">Editing message</span>
-            <button type="button" onClick={handleCancelEdit} className="text-amber-600 hover:text-amber-800 text-[10px] underline">Cancel</button>
+          <div className="mx-4 mt-2 px-3 py-1.5 bg-amber-500/10 border-l-2 border-amber-500 rounded text-[11px] flex items-center justify-between shrink-0">
+            <span className="text-amber-500 font-medium">Editing message</span>
+            <button type="button" onClick={handleCancelEdit} className="text-amber-500 hover:opacity-80 text-[10px] underline">Cancel</button>
           </div>
         )}
 
@@ -3243,16 +3238,16 @@ useEffect(() => {
         <div ref={listRef} onScroll={handleScrollMessages} className="flex-1 overflow-y-auto px-5 py-4" style={{ scrollbarWidth: "thin" }}>
           {loadingHistory && activeMessages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-[12px] text-slate-400">Loading conversation...</div>
+              <div className="text-[12px] theme-text-muted">Loading conversation...</div>
             </div>
           ) : messagesToRender.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
-                <MessageSquare size={20} className="text-slate-400" />
+              <div className="w-12 h-12 rounded-full theme-surface-soft flex items-center justify-center">
+                <MessageSquare size={20} className="theme-text-soft" />
               </div>
               <div>
-                <div className="text-sm font-medium text-slate-600">No messages yet</div>
-                <div className="text-[11px] text-slate-400 mt-1">Be the first to say hi 👋</div>
+                <div className="text-sm font-medium theme-text">No messages yet</div>
+                <div className="text-[11px] theme-text-muted mt-1">Be the first to say hi 👋</div>
               </div>
             </div>
           ) : (
@@ -3288,28 +3283,28 @@ useEffect(() => {
                   {/* Date divider */}
                   {showDateDivider && (
                     <div className="flex items-center gap-3 my-5">
-                      <div className="flex-1 h-px bg-slate-100" />
-                      <span className="text-[10px] text-slate-400 font-medium px-2 bg-white">{dateDividerLabel}</span>
-                      <div className="flex-1 h-px bg-slate-100" />
+                      <div className="flex-1 h-px theme-border" />
+                      <span className="text-[10px] theme-text-muted font-medium px-2 theme-surface">{dateDividerLabel}</span>
+                      <div className="flex-1 h-px theme-border" />
                     </div>
                   )}
 
                   {/* System message */}
                   {isSystem ? (
                     <div className="flex items-center justify-center my-1.5">
-                      <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 rounded-full px-3 py-0.5">
+                      <span className="text-[10px] theme-text-muted theme-surface-soft border theme-border rounded-full px-3 py-0.5">
                         {m.textHtml || m.text}
                       </span>
-                      {time && <span className="text-[9px] text-slate-300 ml-2">{time}</span>}
+                      {time && <span className="text-[9px] theme-text-soft ml-2">{time}</span>}
                     </div>
                   ) : (
                     /* ── Normal message row — full-width hover highlight ── */
-                    <div className={`group relative -mx-5 px-5 hover:bg-slate-50/80 transition-colors rounded ${isGrouped ? "py-0.5" : "pt-3 pb-0.5"}`}>
+                    <div className={`group relative -mx-5 px-5 hover:bg-[var(--surface-soft)]/80 transition-colors rounded ${isGrouped ? "py-0.5" : "pt-3 pb-0.5"}`}>
                       <div className="flex gap-3">
                         {/* Avatar or grouped time hint */}
                         {isGrouped ? (
                           <div className="w-8 shrink-0 flex items-start justify-center pt-1">
-                            <span className="text-[9px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity leading-4 tabular-nums">{time}</span>
+                            <span className="text-[9px] theme-text-soft opacity-0 group-hover:opacity-100 transition-opacity leading-4 tabular-nums">{time}</span>
                           </div>
                         ) : (
                           <div className="w-8 shrink-0 mt-0.5 cursor-pointer">
@@ -3332,29 +3327,29 @@ useEffect(() => {
                               : m.username || "User";
                             return (
                               <div className="flex items-baseline gap-2 mb-0.5">
-                                <span className={`text-[13px] font-bold ${isOwn ? "text-blue-700" : standupProject ? "text-indigo-700" : "text-slate-800"}`}>
+                                <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : standupProject ? "text-indigo-500" : "theme-text"}`}>
                                   {displayName}
                                 </span>
-                                <span className="text-[10px] text-slate-400 tabular-nums">{time}</span>
+                                <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
                                 {standupProject && (
-                                  <span className="text-[9px] bg-indigo-50 text-indigo-500 rounded-full px-1.5 py-0.5 font-medium">Standup</span>
+                                  <span className="text-[9px] bg-indigo-500/15 text-indigo-500 rounded-full px-1.5 py-0.5 font-medium">Standup</span>
                                 )}
                                 {!standupProject && m.username === "AI Assistant" && (
-                                  <span className="text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5 font-medium">AI</span>
+                                  <span className="text-[9px] bg-violet-500/15 text-violet-500 rounded-full px-1.5 py-0.5 font-medium">AI</span>
                                 )}
                               </div>
                             );
                           })()}
 
                           {m.deletedAt ? (
-                            <div className="text-[12px] text-slate-300 italic flex items-center gap-1.5">
+                            <div className="text-[12px] theme-text-soft italic flex items-center gap-1.5">
                               <span>🚫</span> <span>This message was deleted.</span>
                             </div>
                           ) : (
                             <>
                               {(m.textHtml || m.text) && (
                                 <div
-                                  className="text-[13px] text-slate-700 leading-relaxed break-words chat-prose"
+                                  className="text-[13px] theme-text leading-relaxed break-words chat-prose"
                                   style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
                                   dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
                                 />
@@ -3373,18 +3368,18 @@ useEffect(() => {
                                       <div key={ai}>
                                         {isImage && (
                                           <a href={fullUrl} target="_blank" rel="noreferrer">
-                                            <img src={fullUrl} alt={att.name} className="max-h-52 max-w-sm rounded-xl object-contain border border-slate-200 hover:brightness-95 transition-all shadow-sm" />
+                                            <img src={fullUrl} alt={att.name} className="max-h-52 max-w-sm rounded-xl object-contain border theme-border hover:brightness-95 transition-all shadow-sm" />
                                           </a>
                                         )}
                                         {isVideo && <video src={fullUrl} controls className="max-h-52 max-w-sm rounded-xl shadow-sm" />}
                                         {isAudio && <audio src={fullUrl} controls className="w-64 mt-1" />}
                                         {!isImage && !isVideo && !isAudio && (
                                           <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer"
-                                            className="inline-flex items-center gap-2 text-[12px] text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2.5 shadow-sm hover:shadow transition-all">
+                                            className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2.5 shadow-sm hover:opacity-90 transition-all">
                                             <span className="text-base">📄</span>
                                             <div>
                                               <div className="font-medium truncate max-w-[180px]">{att.name}</div>
-                                              {att.size && <div className="text-[10px] text-slate-400">{(att.size / 1024).toFixed(0)} KB</div>}
+                                              {att.size && <div className="text-[10px] theme-text-muted">{(att.size / 1024).toFixed(0)} KB</div>}
                                             </div>
                                           </a>
                                         )}
@@ -3408,8 +3403,8 @@ useEffect(() => {
                                         onClick={() => handleToggleReaction(m.id, emoji)}
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12px] border transition-all ${
                                           hasReacted
-                                            ? "bg-blue-50 border-blue-300 text-blue-700 font-semibold shadow-sm"
-                                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                                            ? "bg-[color:var(--primary)]/12 border-[color:var(--primary)]/35 text-[color:var(--primary)] font-semibold shadow-sm"
+                                            : "theme-surface border theme-border theme-text-muted hover:bg-[var(--surface-soft)]"
                                         }`}
                                       >
                                         <span>{emoji}</span>
@@ -3422,13 +3417,13 @@ useEffect(() => {
 
                               {/* Inline reaction picker */}
                               {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && openReactionFor === m.id && (
-                                <div className="mt-2 inline-flex flex-wrap gap-1 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30">
+                                <div className="mt-2 inline-flex flex-wrap gap-1 p-2 theme-surface border theme-border rounded-2xl shadow-xl z-30">
                                   {QUICK_REACTIONS.map((emoji) => (
                                     <button
                                       key={emoji}
                                       type="button"
                                       onClick={() => handleAddReactionFromPicker(m.id, emoji)}
-                                      className="text-lg px-1.5 py-0.5 hover:bg-slate-100 rounded-xl transition-colors hover:scale-125 transform"
+                                      className="text-lg px-1.5 py-0.5 hover:bg-[var(--surface-soft)] rounded-xl transition-colors hover:scale-125 transform"
                                     >
                                       {emoji}
                                     </button>
@@ -3441,7 +3436,7 @@ useEffect(() => {
                                 <button
                                   type="button"
                                   onClick={() => handleOpenThread(m)}
-                                  className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-full px-3 py-1 transition-colors"
+                                  className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-[color:var(--primary)] bg-[color:var(--primary)]/10 hover:bg-[color:var(--primary)]/15 rounded-full px-3 py-1 transition-colors"
                                 >
                                   <MessageSquare size={11} />
                                   {replyCountById[m.id]} repl{replyCountById[m.id] === 1 ? "y" : "ies"}
@@ -3450,7 +3445,7 @@ useEffect(() => {
 
                               {/* Read receipts */}
                               {isLastOwn && !m.deletedAt && (
-                                <div className="mt-1 text-[10px] text-slate-400 flex items-center gap-1">
+                                <div className="mt-1 text-[10px] theme-text-muted flex items-center gap-1">
                                   <span>{readers.length === 0 ? "✓ Delivered" : `✓✓ Seen by ${readers.map(r => r.username).join(", ")}`}</span>
                                 </div>
                               )}
@@ -3461,11 +3456,11 @@ useEffect(() => {
 
                       {/* ── Right-side action toolbar (appears on row hover) ── */}
                       {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && !m.deletedAt && (
-                        <div className="absolute top-1.5 right-4 hidden group-hover:flex items-center bg-white border border-slate-200 rounded-lg shadow-md overflow-hidden z-20">
+                        <div className="absolute top-1.5 right-4 hidden group-hover:flex items-center theme-surface border theme-border rounded-lg shadow-md overflow-hidden z-20">
                           <button
                             type="button"
                             onClick={() => handleOpenReactionPicker(m.id)}
-                            className="p-2 hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors border-r border-slate-100"
+                            className="p-2 hover:bg-[var(--surface-soft)] theme-text-muted hover:theme-text transition-colors border-r theme-border"
                             title="Add reaction"
                           >
                             <Smile size={14} />
@@ -3473,7 +3468,7 @@ useEffect(() => {
                           <button
                             type="button"
                             onClick={() => handleOpenThread(m)}
-                            className="p-2 hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors border-r border-slate-100"
+                            className="p-2 hover:bg-[var(--surface-soft)] theme-text-muted hover:theme-text transition-colors border-r theme-border"
                             title="Reply in thread"
                           >
                             <MessageSquare size={14} />
@@ -3483,7 +3478,7 @@ useEffect(() => {
                               type="button"
                               onClick={() => handleExplainAI(m.id)}
                               disabled={aiExplainLoading === m.id}
-                              className="p-2 hover:bg-violet-50 text-slate-400 hover:text-violet-600 transition-colors border-r border-slate-100 text-sm leading-none"
+                              className="p-2 hover:bg-violet-500/12 theme-text-muted hover:text-violet-500 transition-colors border-r theme-border text-sm leading-none"
                               title="Why this reply?"
                             >
                               🧠
@@ -3493,7 +3488,7 @@ useEffect(() => {
                             <button
                               type="button"
                               onClick={() => handleStartEditMessage(m)}
-                              className="p-2 hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors border-r border-slate-100 text-sm leading-none"
+                              className="p-2 hover:bg-[var(--surface-soft)] theme-text-muted hover:theme-text transition-colors border-r theme-border text-sm leading-none"
                               title="Edit message"
                             >
                               ✏️
@@ -3503,7 +3498,7 @@ useEffect(() => {
                             <button
                               type="button"
                               onClick={() => handleDeleteMessage(m.id)}
-                              className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors text-sm leading-none"
+                              className="p-2 hover:bg-red-500/10 theme-text-muted hover:text-red-500 transition-colors text-sm leading-none"
                               title="Delete message"
                             >
                               🗑️
@@ -3524,7 +3519,7 @@ useEffect(() => {
           <button
             type="button"
             onClick={scrollToBottom}
-            className="absolute bottom-28 right-8 z-20 flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 text-[11px] font-medium px-3 py-2 rounded-full shadow-lg hover:shadow-xl hover:bg-slate-50 transition-all"
+            className="absolute bottom-28 right-8 z-20 flex items-center gap-1.5 theme-surface border theme-border theme-text text-[11px] font-medium px-3 py-2 rounded-full shadow-lg hover:shadow-xl hover:bg-[var(--surface-soft)] transition-all"
           >
             ↓ Jump to latest
           </button>
@@ -3532,11 +3527,11 @@ useEffect(() => {
 
         {/* Typing indicator */}
         {typingUsernames.length > 0 && (
-          <div className="px-5 py-1 text-[11px] text-slate-400 flex items-center gap-2 shrink-0">
+          <div className="px-5 py-1 text-[11px] theme-text-muted flex items-center gap-2 shrink-0">
             <div className="flex gap-0.5">
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              <span className="w-1.5 h-1.5 bg-[var(--text-soft)] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 bg-[var(--text-soft)] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 bg-[var(--text-soft)] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
             </div>
             <span>
               {typingUsernames.length === 1
@@ -3547,13 +3542,13 @@ useEffect(() => {
         )}
 
         {/* ===== COMPOSER ===== */}
-        <div className="px-4 pb-4 pt-1 shrink-0">
+        <div className="px-4 pb-3 pt-1 shrink-0">
           {activeChannelKey !== AVAILABILITY_CHANNEL_KEY ? (
             <form onSubmit={handleSend}>
               {/* @mention dropdown */}
               {mentionQuery !== null && (
                 <div className="relative mb-1">
-                  <div className="absolute bottom-0 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-56 max-h-44 overflow-y-auto">
+                  <div className="absolute bottom-0 left-0 z-50 theme-surface border theme-border rounded-xl shadow-lg w-56 max-h-44 overflow-y-auto">
                     {users
                       .filter(u => u.id !== user.id && u.role !== "system" && !u.is_system && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
                       .slice(0, 8)
@@ -3561,7 +3556,7 @@ useEffect(() => {
                         <button
                           key={u.id}
                           type="button"
-                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left"
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--surface-soft)] text-left"
                           onMouseDown={(e) => {
                             e.preventDefault();
                             const replaced = editorHtml.replace(
@@ -3575,14 +3570,14 @@ useEffect(() => {
                           {u.avatar_url ? (
                             <FetchImg src={resolveUrl(u.avatar_url)} alt={u.username} className="w-6 h-6 rounded-full object-cover" />
                           ) : (
-                            <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-semibold">{u.username?.[0]?.toUpperCase()}</div>
+                            <div className="w-6 h-6 rounded-full theme-surface-soft flex items-center justify-center text-[10px] font-semibold theme-text">{u.username?.[0]?.toUpperCase()}</div>
                           )}
                           <span className="text-[12px] font-medium">{u.username}</span>
-                          <span className="text-[10px] text-slate-400 capitalize ml-auto">{u.role}</span>
+                          <span className="text-[10px] theme-text-muted capitalize ml-auto">{u.role}</span>
                         </button>
                       ))}
                     {users.filter(u => u.id !== user.id && u.role !== "system" && !u.is_system && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase())).length === 0 && (
-                      <div className="px-3 py-2 text-[11px] text-slate-400">No matches</div>
+                      <div className="px-3 py-2 text-[11px] theme-text-muted">No matches</div>
                     )}
                   </div>
                 </div>
@@ -3594,14 +3589,14 @@ useEffect(() => {
                   {pendingAttachments.map((att, i) => {
                     const isImage = att.type?.startsWith("image/");
                     return (
-                      <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px]">
+                      <div key={i} className="flex items-center gap-1.5 theme-surface-soft border theme-border rounded-lg px-2.5 py-1.5 text-[11px]">
                         {isImage ? (
                           <img src={`${BACKEND_URL}${att.url}`} alt={att.name} className="h-8 w-8 object-cover rounded" />
                         ) : (
                           <span>📎</span>
                         )}
-                        <span className="max-w-[120px] truncate text-slate-600">{att.name}</span>
-                        <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="text-slate-300 hover:text-red-400 ml-0.5">✕</button>
+                        <span className="max-w-[120px] truncate theme-text">{att.name}</span>
+                        <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="theme-text-soft hover:text-red-500 ml-0.5">✕</button>
                       </div>
                     );
                   })}
@@ -3610,7 +3605,7 @@ useEffect(() => {
 
               {/* Integrated composer box */}
               <div
-                className="border border-slate-200 rounded-xl bg-white shadow-sm focus-within:ring-2 focus-within:ring-blue-300 focus-within:border-blue-300 transition-shadow"
+                className="chat-composer-shell border theme-border rounded-xl theme-surface shadow-sm focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)] transition-shadow"
                 onKeyDown={(e) => {
                   if (e.ctrlKey && e.key === "Enter") {
                     e.preventDefault();
@@ -3621,47 +3616,78 @@ useEffect(() => {
                   }
                 }}
               >
+                {/* Editing banner */}
+                {editingMessageId && (
+                  <div className="px-3 py-1 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-[11px]">
+                    <span className="text-amber-500 font-medium">Editing message</span>
+                    <button type="button" onClick={handleCancelEdit} className="text-amber-500 hover:underline">Cancel</button>
+                  </div>
+                )}
+
                 <ReactQuill
+                  ref={desktopQuillRef}
                   theme="snow"
                   value={editorHtml}
                   onChange={handleEditorChange}
-                  modules={quillModules}
+                  modules={{ toolbar: false }}
                   formats={quillFormats}
                   placeholder={connected ? `Message ${isDmChannel && activeDmUser ? activeDmUser.username : activeChannelTitle}… (Ctrl+Enter to send)` : "Connecting..."}
                   className="text-sm"
                 />
-                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={handleAttachmentClick}
-                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                      title="Attach file (images, docs, video)"
-                    >
-                      📎
-                    </button>
-                    {uploadingAttachment && (
-                      <span className="text-[10px] text-slate-400 ml-1 animate-pulse">Uploading…</span>
-                    )}
-                    <span className="text-[10px] text-slate-300 ml-2 hidden sm:block">Ctrl+Enter to send</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {editingMessageId && (
-                      <button
-                        type="button"
-                        onClick={handleCancelEdit}
-                        className="text-[11px] text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    )}
+
+                {/* Compact action bar — formatting + attach on left, send on right */}
+                <div className="flex items-center px-2 py-1.5 border-t theme-border gap-0.5">
+                  {/* Formatting buttons */}
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); const q = desktopQuillRef.current?.getEditor(); if (q) q.format("bold", !q.getFormat().bold); }}
+                    className="w-7 h-7 flex items-center justify-center rounded text-[13px] font-bold theme-text-muted hover:bg-[var(--surface-soft)] transition-colors"
+                    title="Bold"
+                  >B</button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); const q = desktopQuillRef.current?.getEditor(); if (q) q.format("italic", !q.getFormat().italic); }}
+                    className="w-7 h-7 flex items-center justify-center rounded text-[13px] italic theme-text-muted hover:bg-[var(--surface-soft)] transition-colors"
+                    title="Italic"
+                  >I</button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); const q = desktopQuillRef.current?.getEditor(); if (q) { const cur = q.getFormat().list; q.format("list", cur === "bullet" ? false : "bullet"); } }}
+                    className="w-7 h-7 flex items-center justify-center rounded theme-text-muted hover:bg-[var(--surface-soft)] transition-colors"
+                    title="Bullet list"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <circle cx="2.5" cy="4" r="1" fill="currentColor" stroke="none"/>
+                      <circle cx="2.5" cy="8" r="1" fill="currentColor" stroke="none"/>
+                      <circle cx="2.5" cy="12" r="1" fill="currentColor" stroke="none"/>
+                      <line x1="5.5" y1="4" x2="14" y2="4"/>
+                      <line x1="5.5" y1="8" x2="14" y2="8"/>
+                      <line x1="5.5" y1="12" x2="14" y2="12"/>
+                    </svg>
+                  </button>
+
+                  <div className="w-px h-4 bg-[var(--border)] mx-1 shrink-0" />
+
+                  <button
+                    type="button"
+                    onClick={handleAttachmentClick}
+                    className="w-7 h-7 flex items-center justify-center rounded theme-text-muted hover:bg-[var(--surface-soft)] transition-colors text-[14px]"
+                    title="Attach file"
+                  >📎</button>
+                  {uploadingAttachment && (
+                    <span className="text-[10px] theme-text-muted ml-1 animate-pulse">Uploading…</span>
+                  )}
+
+                  <span className="text-[10px] theme-text-soft ml-2 hidden sm:block">Ctrl+Enter to send</span>
+
+                  <div className="ml-auto flex items-center gap-2">
                     <button
                       type="submit"
                       disabled={!connected || (!editorHtml.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment}
-                      className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[12px] font-semibold px-4 py-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
+                      className="inline-flex items-center gap-1.5 theme-primary hover:opacity-90 text-[12px] font-semibold px-3 py-1 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
                     >
                       <Send size={12} />
-                      <span>{sending ? "Sending…" : editingMessageId ? "Save edit" : "Send"}</span>
+                      <span>{sending ? "Sending…" : editingMessageId ? "Save" : "Send"}</span>
                     </button>
                   </div>
                 </div>
@@ -3670,7 +3696,7 @@ useEffect(() => {
               <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={handleAttachmentChange} />
             </form>
           ) : (
-            <div className="text-center py-3 text-[11px] text-slate-400 italic bg-slate-50 rounded-xl border border-slate-100">
+            <div className="text-center py-3 text-[11px] theme-text-muted italic theme-surface-soft rounded-xl border theme-border">
               This channel is read-only — attendance updates are posted automatically.
             </div>
           )}
@@ -3679,34 +3705,34 @@ useEffect(() => {
 
       {/* ===== THREAD SIDEBAR ===== */}
       {activeThreadKey && threadRootMessage && (
-        <aside className="w-80 bg-white border-l border-slate-100 flex flex-col shrink-0">
+        <aside className="w-80 theme-surface border-l theme-border flex flex-col shrink-0 theme-text">
           {/* Header */}
-          <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="px-4 py-3.5 border-b theme-border flex items-center justify-between shrink-0">
             <div>
-              <div className="text-[12px] font-semibold text-slate-800">Thread</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-[12px] font-semibold theme-text">Thread</div>
+              <div className="text-[10px] theme-text-muted mt-0.5">
                 in {threadParentChannel ? `#${threadParentChannel.name}` : "this channel"}
               </div>
             </div>
             <button
               type="button"
               onClick={handleCloseThread}
-              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted hover:theme-text transition-colors"
             >
               ✕
             </button>
           </div>
 
           {/* Root message preview */}
-          <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 shrink-0">
+          <div className="px-4 py-3 theme-surface-soft border-b theme-border shrink-0">
             <div className="flex items-center gap-2 mb-1.5">
               <Avatar name={threadRootMessage.username || "User"} src={userAvatarMap[threadRootMessage.userId || threadRootMessage.user_id]} size="sm" />
-              <span className="text-[11px] font-semibold text-slate-700">
+              <span className="text-[11px] font-semibold theme-text">
                 {threadRootMessage.username === user.username ? "You" : threadRootMessage.username || "User"}
               </span>
             </div>
             <div
-              className="text-[11px] text-slate-600 whitespace-pre-wrap break-words line-clamp-4"
+              className="text-[11px] theme-text whitespace-pre-wrap break-words line-clamp-4 chat-prose"
               dangerouslySetInnerHTML={{ __html: threadRootMessage.textHtml || threadRootMessage.text || "" }}
             />
           </div>
@@ -3714,7 +3740,7 @@ useEffect(() => {
           {/* Replies */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
             {threadMessages.length === 0 ? (
-              <div className="text-[11px] text-slate-400 text-center mt-8">No replies yet. Start the conversation.</div>
+              <div className="text-[11px] theme-text-muted text-center mt-8">No replies yet. Start the conversation.</div>
             ) : (
               threadMessages.map((m) => {
                 const isOwn = String(m.userId || m.user_id) === String(user.id);
@@ -3726,14 +3752,14 @@ useEffect(() => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-1.5 mb-0.5">
-                        <span className="text-[11px] font-semibold text-slate-800">
+                        <span className={`text-[11px] font-semibold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
                           {isOwn ? "You" : m.username || "User"}
                         </span>
-                        <span className="text-[9px] text-slate-400">{time}</span>
+                        <span className="text-[9px] theme-text-muted">{time}</span>
                       </div>
                       {(m.textHtml || m.text) && (
                         <div
-                          className="text-[12px] text-slate-700 leading-relaxed whitespace-pre-wrap break-words"
+                          className="text-[12px] theme-text leading-relaxed whitespace-pre-wrap break-words chat-prose"
                           dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
                         />
                       )}
@@ -3747,11 +3773,11 @@ useEffect(() => {
                             const isAudio = att.type?.startsWith("audio/");
                             return (
                               <div key={ai}>
-                                {isImage && <a href={fullUrl} target="_blank" rel="noreferrer"><img src={fullUrl} alt={att.name} className="max-h-32 max-w-full rounded-lg object-contain border border-slate-200" /></a>}
+                                {isImage && <a href={fullUrl} target="_blank" rel="noreferrer"><img src={fullUrl} alt={att.name} className="max-h-32 max-w-full rounded-lg object-contain border theme-border" /></a>}
                                 {isVideo && <video src={fullUrl} controls className="max-h-32 max-w-full rounded-lg" />}
                                 {isAudio && <audio src={fullUrl} controls className="w-full" />}
                                 {!isImage && !isVideo && !isAudio && (
-                                  <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:underline">
+                                  <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-[color:var(--primary)] hover:underline">
                                     <span>📎</span><span className="truncate max-w-[160px]">{att.name}</span>
                                   </a>
                                 )}
@@ -3768,26 +3794,31 @@ useEffect(() => {
           </div>
 
           {/* Thread composer */}
-          <form onSubmit={handleSendThread} className="border-t border-slate-100 px-3 py-3 shrink-0">
-            <div className="border border-slate-200 rounded-xl bg-white focus-within:ring-2 focus-within:ring-blue-200 focus-within:border-blue-300 transition-shadow">
+          <form onSubmit={handleSendThread} className="border-t theme-border px-3 py-2 shrink-0 theme-surface">
+            <div className="chat-composer-shell border theme-border rounded-xl theme-surface focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)] transition-shadow">
               <ReactQuill
+                ref={threadQuillRef}
                 theme="snow"
                 value={threadEditorHtml}
                 onChange={handleThreadEditorChange}
-                modules={quillModules}
+                modules={{ toolbar: false }}
                 formats={quillFormats}
-                placeholder="Reply in thread..."
+                placeholder="Reply in thread…"
                 className="text-xs"
               />
-              <div className="flex justify-end px-3 py-2 border-t border-slate-100">
-                <button
-                  type="submit"
-                  disabled={!connected || !(threadEditorHtml || "").trim()}
-                  className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Send size={11} />
-                  <span>Reply</span>
-                </button>
+              <div className="flex items-center px-2 py-1 border-t theme-border gap-0.5">
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); const q = threadQuillRef.current?.getEditor(); if (q) q.format("bold", !q.getFormat().bold); }} className="w-6 h-6 flex items-center justify-center rounded text-[12px] font-bold theme-text-muted hover:bg-[var(--surface-soft)] transition-colors" title="Bold">B</button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); const q = threadQuillRef.current?.getEditor(); if (q) q.format("italic", !q.getFormat().italic); }} className="w-6 h-6 flex items-center justify-center rounded text-[12px] italic theme-text-muted hover:bg-[var(--surface-soft)] transition-colors" title="Italic">I</button>
+                <div className="ml-auto">
+                  <button
+                    type="submit"
+                    disabled={!connected || !(threadEditorHtml || "").trim()}
+                    className="inline-flex items-center gap-1 theme-primary hover:opacity-90 text-[11px] font-medium px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Send size={11} />
+                    <span>Reply</span>
+                  </button>
+                </div>
               </div>
             </div>
           </form>

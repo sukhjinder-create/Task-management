@@ -51,7 +51,7 @@ export function Modal({ isOpen, onClose, children, className, size = 'md', ...pr
       {/* Modal */}
       <div
         className={cn(
-          'relative w-full theme-surface theme-text rounded-xl shadow-xl border theme-border',
+          'relative w-full theme-surface theme-text rounded-xl shadow-xl border theme-border overflow-hidden isolate',
           'animate-in fade-in-0 zoom-in-95 duration-200',
           sizes[size],
           className

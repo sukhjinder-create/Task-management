@@ -81,8 +81,8 @@ const reason = report?.reason;
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[999]">
-      <div className="bg-white rounded-lg shadow-xl w-[800px] p-5 text-sm">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[999] p-4">
+      <div className="theme-dialog-panel w-full max-w-[800px] p-5 text-sm">
         {/* Header */}
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-base font-semibold">

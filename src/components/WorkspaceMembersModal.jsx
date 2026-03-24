@@ -110,7 +110,7 @@ export default function WorkspaceMembersModal({ workspace, onClose, onMembersCha
         className="absolute inset-0 bg-black opacity-30"
         onClick={() => onClose && onClose()}
       />
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl z-10 overflow-hidden">
+      <div className="relative theme-dialog-panel w-full max-w-2xl z-10">
         <div className="px-4 py-3 border-b flex items-center justify-between">
           <div>
             <h3 className="font-semibold">{workspace.name} — Members</h3>

@@ -10,6 +10,7 @@ const fs   = require("fs");
 const isDev  = process.env.NODE_ENV === "development" || process.env.ELECTRON_DEV === "true";
 const isMac  = process.platform === "darwin";
 const isWin  = process.platform === "win32";
+const rendererUrl = process.env.ELECTRON_RENDERER_URL || "http://localhost:5173";
 
 // ─── Window state persistence ─────────────────────────────────────────────────
 const STATE_FILE = path.join(app.getPath("userData"), "window-state.json");
@@ -76,7 +77,7 @@ function createWindow() {
   if (state.isMaximized) mainWindow.maximize();
 
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.loadURL(rendererUrl);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     const indexPath = path.join(__dirname, "../dist/index.html");

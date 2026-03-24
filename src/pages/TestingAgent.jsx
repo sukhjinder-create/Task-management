@@ -230,6 +230,371 @@ function InsightsPanel({ insights }) {
   );
 }
 
+function PreviewSummaryCard({ label, value }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-sm font-medium text-gray-800">{value ?? "-"}</p>
+    </div>
+  );
+}
+
+function PreviewStepList({ steps = [] }) {
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return <p className="text-sm text-gray-500">No concrete execution steps were generated.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {steps.map((step, index) => (
+        <div key={`${step.action || "step"}-${index}`} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono text-gray-400">#{index + 1}</span>
+            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700">{step.action || "step"}</span>
+          </div>
+          <p className="mt-1 text-sm text-gray-800">{step.description || step.label || step.url || "Execution step"}</p>
+          {step.url && <p className="mt-1 text-xs text-gray-500 font-mono break-all">{step.url}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MissionPreviewPanel({ preview, loading, error }) {
+  if (loading) {
+    return <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">Building execution preview...</div>;
+  }
+  if (error) {
+    return <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
+  }
+  if (!preview) return null;
+
+  const page = preview.pageContext || null;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Execution Preview</p>
+          <h3 className="text-base font-semibold text-gray-900">
+            {preview.mode === "multi_scenario" ? "Coverage plan" : preview.mode === "deep_exploration" ? "Product audit plan" : "Run plan"}
+          </h3>
+        </div>
+        {preview.url && (
+          <span className="max-w-[18rem] truncate rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 border border-gray-200">
+            {preview.url}
+          </span>
+        )}
+      </div>
+
+      {page && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <PreviewSummaryCard label="Navigation" value={page.navCount} />
+          <PreviewSummaryCard label="Inputs" value={page.inputCount} />
+          <PreviewSummaryCard label="Forms" value={page.formCount} />
+          <PreviewSummaryCard label="Tabs" value={page.tabCount} />
+        </div>
+      )}
+
+      {preview.mode === "multi_scenario" && Array.isArray(preview.scenarios) && (
+        <div className="space-y-3">
+          {preview.scenarios.map((scenario) => (
+            <div key={scenario.type} className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold text-gray-900 capitalize">{String(scenario.type || "").replace(/_/g, " ")}</h4>
+                <span className="text-xs text-gray-500">{scenario.steps?.length || 0} planned steps</span>
+              </div>
+              <PreviewStepList steps={scenario.steps || []} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {preview.mode === "deep_exploration" && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <PreviewSummaryCard label="Login Id" value={preview.credentialsDetected?.email ? "Detected" : "Not detected"} />
+            <PreviewSummaryCard label="Password" value={preview.credentialsDetected?.password ? "Detected" : "Not detected"} />
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-3">
+            <p className="text-sm font-semibold text-gray-900 mb-2">Audit phases</p>
+            <ul className="space-y-1">
+              {(preview.phases || []).map((phase, index) => (
+                <li key={phase} className="text-sm text-gray-700 flex items-start gap-2">
+                  <span className="mt-0.5 text-xs font-semibold text-blue-600">{index + 1}.</span>
+                  <span>{phase}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-3">
+            <p className="text-sm font-semibold text-gray-900 mb-2">Preflight checklist</p>
+            <ul className="space-y-1">
+              {(preview.checklist || []).map((item) => (
+                <li key={item} className="text-sm text-gray-700 flex items-start gap-2">
+                  <span className="mt-0.5 text-blue-500">•</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {(preview.mode === "browser" || preview.mode === "auto_discover") && (
+        <PreviewStepList steps={preview.steps || []} />
+      )}
+    </div>
+  );
+}
+
+const RUN_MODE_META = {
+  auto: {
+    title: "Recon & Smoke",
+    purpose: "Start with a low-friction page and validate that basic navigation and core affordances are alive.",
+    evidence: ["page scan", "planned smoke steps", "step screenshots", "failure reasons"],
+  },
+  guided: {
+    title: "Scenario Run",
+    purpose: "Reproduce one workflow exactly and leave behind a step-by-step trail of what changed.",
+    evidence: ["explicit plan", "live screenshots", "per-step status", "replayable failure point"],
+  },
+  multi: {
+    title: "Coverage Sweep",
+    purpose: "Attack the same feature from multiple test angles so blind spots do not hide in a single happy path.",
+    evidence: ["scenario set", "separate scenario outcomes", "coverage notes", "comparative failure detail"],
+  },
+  deep: {
+    title: "Product Audit",
+    purpose: "Log in, map the reachable product surface, and return a usable QA report instead of vague commentary.",
+    evidence: ["audit phases", "module discovery", "issue list", "prioritized QA report"],
+  },
+  cli: {
+    title: "Repository Run",
+    purpose: "Execute the project test commands tied to the selected task and capture the raw command evidence.",
+    evidence: ["generated cases", "command output", "repo context", "pass/fail summary"],
+  },
+};
+
+const RUN_MODE_TEMPLATES = {
+  auto: [
+    { label: "Marketing Page", value: "https://example.com" },
+    { label: "Signup Page", value: "https://example.com/signup" },
+    { label: "Dashboard Landing", value: "https://example.com/dashboard" },
+  ],
+  guided: [
+    {
+      label: "Login Flow",
+      value: "Go to https://example.com/login, sign in with email: qa@example.com password: Test@1234, verify the dashboard loads and the user menu is visible.",
+    },
+    {
+      label: "Create Record",
+      value: "Go to https://example.com, login with email: qa@example.com password: Test@1234, create a new item, verify the success state appears and the item is listed.",
+    },
+    {
+      label: "Approval Flow",
+      value: "Open https://example.com, login with email: qa@example.com password: Test@1234, approve one pending request, verify its status changes and the action is reflected in the activity feed.",
+    },
+  ],
+  multi: [
+    { label: "Auth Surface", description: "Login and password reset experience for a SaaS app", url: "https://example.com" },
+    { label: "Dashboard CRUD", description: "Create, edit, filter, and archive records in the dashboard", url: "https://example.com/app" },
+    { label: "Checkout Flow", description: "Cart, checkout, coupon handling, failed payment retry, and order confirmation", url: "https://example.com" },
+  ],
+  deep: [
+    {
+      label: "Full SaaS Audit",
+      value: "Go to https://example.com\nLogin with email: qa@example.com password: Test@1234\nExplore all modules, test core workflows, validate forms, and produce a detailed QA report.",
+    },
+    {
+      label: "Admin Audit",
+      value: "Go to https://example.com/admin\nLogin with email: admin@example.com password: Test@1234\nExplore every admin module, test settings, roles, and approvals, and report reproducible issues.",
+    },
+  ],
+};
+
+function QuickTemplateBar({ title = "Starter templates", items = [], onSelect }) {
+  if (!items.length) return null;
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{title}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {items.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => onSelect(item)}
+            className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-blue-300 hover:text-blue-700"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RunPrepPanel({ mode, selectedTask, values }) {
+  const meta = RUN_MODE_META[mode] || RUN_MODE_META.auto;
+  const readiness = [];
+
+  readiness.push({
+    label: "Task selected",
+    ok: Boolean(selectedTask),
+    hint: selectedTask ? `${selectedTask.taskKey ? `[${selectedTask.taskKey}] ` : ""}${selectedTask.task}` : "Pick the task this run belongs to.",
+  });
+
+  if (mode === "auto") {
+    readiness.push({
+      label: "Target URL",
+      ok: String(values.autoUrl || "").trim().startsWith("http"),
+      hint: "Use a full HTTP or HTTPS page URL.",
+    });
+  }
+
+  if (mode === "guided") {
+    const raw = String(values.browserInstructions || "").trim();
+    readiness.push({
+      label: "Scenario instructions",
+      ok: raw.length >= 20,
+      hint: "Describe the workflow, assertions, and credentials if needed.",
+    });
+    readiness.push({
+      label: "Navigation target",
+      ok: /https?:\/\//i.test(raw),
+      hint: "Include a URL so the run starts from a known page.",
+    });
+  }
+
+  if (mode === "multi") {
+    readiness.push({
+      label: "Feature description",
+      ok: String(values.multiDescription || "").trim().length >= 12,
+      hint: "Describe the product area to cover from multiple angles.",
+    });
+    readiness.push({
+      label: "Base URL",
+      ok: !String(values.multiUrl || "").trim() || String(values.multiUrl || "").trim().startsWith("http"),
+      hint: "Optional, but useful when scenarios should anchor to one environment.",
+    });
+  }
+
+  if (mode === "deep") {
+    const raw = String(values.deepInstructions || "").trim();
+    readiness.push({
+      label: "Audit instructions",
+      ok: raw.length >= 30,
+      hint: "Explain scope clearly so the audit does not wander.",
+    });
+    readiness.push({
+      label: "Target URL",
+      ok: /https?:\/\//i.test(raw),
+      hint: "Include the application URL.",
+    });
+    readiness.push({
+      label: "Credentials or public access",
+      ok: /(email|username|password)/i.test(raw),
+      hint: "Add credentials unless the product is fully public.",
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{meta.title}</p>
+        <p className="mt-1 text-sm text-gray-700">{meta.purpose}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2">
+        {readiness.map((item) => (
+          <div key={item.label} className={`rounded-lg border px-3 py-2 ${item.ok ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+            <div className="flex items-center gap-2">
+              {item.ok ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />}
+              <p className={`text-sm font-medium ${item.ok ? "text-green-800" : "text-amber-800"}`}>{item.label}</p>
+            </div>
+            <p className={`mt-1 text-xs ${item.ok ? "text-green-700" : "text-amber-700"}`}>{item.hint}</p>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Evidence produced</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {meta.evidence.map((item) => (
+            <span key={item} className="rounded-full bg-white px-2 py-1 text-xs font-medium text-blue-800 border border-blue-100">
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LiveScreenView({ displayShot, displayCaption, done, stopRequested, status, lastStep, className = "" }) {
+  return (
+    <div className={`relative bg-gray-900 rounded-lg overflow-hidden ${className}`} style={{ aspectRatio: "16/10" }}>
+      {displayShot ? (
+        <img src={displayShot} alt="Agent view" className="w-full h-full object-contain transition-opacity duration-300" />
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <span className="w-6 h-6 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+          <p className="text-xs text-gray-400">Agent starting up...</p>
+        </div>
+      )}
+      {displayCaption && (
+        <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white px-3 py-1.5 flex items-center gap-2">
+          {!done ? (
+            <span className={`w-2 h-2 rounded-full ${stopRequested ? "bg-orange-400" : "bg-green-400"} animate-pulse shrink-0`} />
+          ) : status === "passed" ? (
+            <CheckCircle2 className="w-3 h-3 text-green-400 shrink-0" />
+          ) : status === "cancelled" ? (
+            <Square className="w-3 h-3 text-slate-300 shrink-0" />
+          ) : (
+            <XCircle className="w-3 h-3 text-red-400 shrink-0" />
+          )}
+          <span className="text-xs text-gray-200 truncate">{displayCaption}</span>
+          {lastStep?.durationMs > 0 && (
+            <span className="text-xs text-gray-400 shrink-0 ml-auto">{formatMs(lastStep.durationMs)}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LiveStepList({ liveSteps, done, bottomRef, maxH = "max-h-48" }) {
+  return (
+    <div className={`space-y-1 overflow-y-auto ${maxH} pr-0.5`}>
+      {liveSteps.length === 0 && (
+        <p className="text-xs text-blue-400 text-center py-3 animate-pulse">Waiting for first step...</p>
+      )}
+      {liveSteps.map((step, i) => (
+        <div
+          key={i}
+          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs ${step.status === "passed" ? "bg-green-50 border border-green-100" : step.status === "failed" ? "bg-red-50 border border-red-100" : "bg-white border border-gray-100"}`}
+        >
+          {step.status === "passed"
+            ? <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
+            : step.status === "failed"
+              ? <XCircle className="w-3 h-3 text-red-500 shrink-0" />
+              : step.status === "cancelled"
+                ? <Square className="w-3 h-3 text-slate-500 shrink-0" />
+                : i === liveSteps.length - 1 && !done
+                  ? <span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
+                  : <Clock className="w-3 h-3 text-gray-300 shrink-0" />}
+          <span className="font-mono text-gray-400 shrink-0">#{i + 1}</span>
+          <span className="font-semibold text-gray-500 bg-gray-100 px-1 py-0.5 rounded shrink-0">{step.action}</span>
+          <span className="text-gray-700 truncate">{step.description}</span>
+          {step.screenshot && step.screenshot !== true && (
+            <Camera className="w-3 h-3 text-indigo-400 shrink-0 ml-auto" title="Has screenshot" />
+          )}
+        </div>
+      ))}
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Live Run Panel â€” mini screen + step list + fullscreen
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -251,10 +616,6 @@ function LiveRunPanel({ runId, onFinished }) {
   useEffect(() => {
     if (!runId) return;
     finishedRef.current = false;
-    setLiveSteps([]);
-    setCurrentScreen(null);
-    setStatus("running");
-    setStopRequested(false);
 
     const poll = async () => {
       try {
@@ -317,76 +678,6 @@ function LiveRunPanel({ runId, onFinished }) {
   const displayCaption = (!done && currentScreen?.caption) ? currentScreen.caption
     : lastStep ? `${lastStep.action}: ${lastStep.description}` : null;
 
-  // â”€â”€ Reusable screenshot viewport â”€â”€
-  function ScreenView({ className = "" }) {
-    return (
-      <div className={`relative bg-gray-900 rounded-lg overflow-hidden ${className}`}
-        style={{ aspectRatio: "16/10" }}>
-        {displayShot
-          ? <img src={displayShot} alt="Agent view" className="w-full h-full object-contain transition-opacity duration-300" />
-          : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-              <span className="w-6 h-6 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-              <p className="text-xs text-gray-400">Agent starting up...</p>
-            </div>
-          )
-        }
-        {/* Live caption bar */}
-        {displayCaption && (
-          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white px-3 py-1.5 flex items-center gap-2">
-            {!done
-              ? <span className={`w-2 h-2 rounded-full ${stopRequested ? "bg-orange-400" : "bg-green-400"} animate-pulse shrink-0`} />
-              : status === "passed"
-                ? <CheckCircle2 className="w-3 h-3 text-green-400 shrink-0" />
-                : status === "cancelled"
-                  ? <Square className="w-3 h-3 text-slate-300 shrink-0" />
-                : <XCircle className="w-3 h-3 text-red-400 shrink-0" />
-            }
-            <span className="text-xs text-gray-200 truncate">{displayCaption}</span>
-            {lastStep?.durationMs > 0 && (
-              <span className="text-xs text-gray-400 shrink-0 ml-auto">{formatMs(lastStep.durationMs)}</span>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // â”€â”€ Step list â”€â”€
-  function StepList({ maxH = "max-h-48" }) {
-    return (
-      <div className={`space-y-1 overflow-y-auto ${maxH} pr-0.5`}>
-        {liveSteps.length === 0 && (
-          <p className="text-xs text-blue-400 text-center py-3 animate-pulse">Waiting for first step...</p>
-        )}
-        {liveSteps.map((step, i) => (
-          <div key={i}
-            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs
-              ${step.status === "passed" ? "bg-green-50 border border-green-100"
-                : step.status === "failed" ? "bg-red-50 border border-red-100"
-                : "bg-white border border-gray-100"}`}>
-            {step.status === "passed"
-              ? <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
-              : step.status === "failed"
-                ? <XCircle className="w-3 h-3 text-red-500 shrink-0" />
-                : step.status === "cancelled"
-                  ? <Square className="w-3 h-3 text-slate-500 shrink-0" />
-                : i === liveSteps.length - 1 && !done
-                  ? <span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
-                  : <Clock className="w-3 h-3 text-gray-300 shrink-0" />}
-            <span className="font-mono text-gray-400 shrink-0">#{i + 1}</span>
-            <span className="font-semibold text-gray-500 bg-gray-100 px-1 py-0.5 rounded shrink-0">{step.action}</span>
-            <span className="text-gray-700 truncate">{step.description}</span>
-            {step.screenshot && step.screenshot !== true && (
-              <Camera className="w-3 h-3 text-indigo-400 shrink-0 ml-auto" title="Has screenshot" />
-            )}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-    );
-  }
-
   // â”€â”€ Fullscreen overlay â”€â”€
   if (fullscreen) {
     return (
@@ -435,11 +726,11 @@ function LiveRunPanel({ runId, onFinished }) {
         {/* Fullscreen body: large screenshot left, steps right */}
         <div className="flex flex-1 overflow-hidden">
           <div className="flex-1 p-4 flex flex-col">
-            <ScreenView className="flex-1 h-full" />
+            <LiveScreenView className="flex-1 h-full" displayShot={displayShot} displayCaption={displayCaption} done={done} stopRequested={stopRequested} status={status} lastStep={lastStep} />
           </div>
           <div className="w-80 bg-gray-900 border-l border-gray-700 p-3 flex flex-col gap-2 overflow-hidden">
             <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide shrink-0">Steps</p>
-            <StepList maxH="h-full overflow-y-auto" />
+            <LiveStepList liveSteps={liveSteps} done={done} bottomRef={bottomRef} maxH="h-full overflow-y-auto" />
           </div>
         </div>
       </div>
@@ -494,9 +785,9 @@ function LiveRunPanel({ runId, onFinished }) {
       {!minimized && (
         <div className="p-3 space-y-2">
           {/* Mini screenshot screen */}
-          <ScreenView />
+          <LiveScreenView displayShot={displayShot} displayCaption={displayCaption} done={done} stopRequested={stopRequested} status={status} lastStep={lastStep} />
           {/* Step list */}
-          <StepList maxH="max-h-44" />
+          <LiveStepList liveSteps={liveSteps} done={done} bottomRef={bottomRef} maxH="max-h-44" />
         </div>
       )}
     </div>
@@ -1044,7 +1335,7 @@ function InfoTile({ label, value, valueColor = "text-gray-800" }) {
 // Main component
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function TestingAgent() {
-  const [settings, setSettings] = useState(null);
+  const [_settings, setSettings] = useState(null);
   const [settingsDraft, setSettingsDraft] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -1078,17 +1369,15 @@ export default function TestingAgent() {
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1, hasPrev: false, hasNext: false });
   const [historyLoading, setHistoryLoading] = useState(true);
   const [selectedRun, setSelectedRun] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewError, setPreviewError] = useState("");
 
   const [profiles, setProfiles] = useState([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
   const [profilesSearch, setProfilesSearch] = useState("");
   const [profileEdits, setProfileEdits] = useState({});
   const [savingProfileId, setSavingProfileId] = useState("");
-
-  useEffect(() => { loadSettings(); loadRuns(1, ""); loadProfiles(""); }, []);
-  useEffect(() => { const t = setTimeout(() => loadTaskOptions(taskSearch), 250); return () => clearTimeout(t); }, [taskSearch]);
-  useEffect(() => { const t = setTimeout(() => loadProfiles(profilesSearch), 300); return () => clearTimeout(t); }, [profilesSearch]);
-  useEffect(() => { const t = setTimeout(() => loadRuns(1, historySearch), 400); return () => clearTimeout(t); }, [historySearch]);
 
   const selectedTask = useMemo(() => taskOptions.find((t) => t.id === selectedTaskId) || null, [taskOptions, selectedTaskId]);
   const stats = useMemo(() => ({
@@ -1147,10 +1436,33 @@ export default function TestingAgent() {
     try {
       const res = await api.get("/testing-agent/runs", { params: { page, limit: 20, search: search || undefined } });
       setRuns(res.data?.items || []);
-      setPagination(res.data?.pagination || pagination);
+      setPagination((prev) => res.data?.pagination || prev);
     } catch { toast.error("Failed to load test run history"); }
     finally { setHistoryLoading(false); }
   }, []);
+
+  useEffect(() => { loadSettings(); loadRuns(1, ""); loadProfiles(""); }, [loadRuns]);
+  useEffect(() => { const t = setTimeout(() => loadTaskOptions(taskSearch), 250); return () => clearTimeout(t); }, [taskSearch]);
+  useEffect(() => { const t = setTimeout(() => loadProfiles(profilesSearch), 300); return () => clearTimeout(t); }, [profilesSearch]);
+  useEffect(() => { const t = setTimeout(() => loadRuns(1, historySearch), 400); return () => clearTimeout(t); }, [historySearch, loadRuns]);
+  useEffect(() => { setPreviewData(null); setPreviewError(""); }, [runMode, selectedTaskId]);
+
+  function applyAutoTemplate(item) {
+    setAutoUrl(item.value || "");
+  }
+
+  function applyGuidedTemplate(item) {
+    setBrowserInstructions(item.value || "");
+  }
+
+  function applyMultiTemplate(item) {
+    setMultiDescription(item.description || "");
+    setMultiUrl(item.url || "");
+  }
+
+  function applyDeepTemplate(item) {
+    setDeepInstructions(item.value || "");
+  }
 
   async function loadProfiles(search = "") {
     setProfilesLoading(true);
@@ -1193,6 +1505,20 @@ export default function TestingAgent() {
     }
   }
 
+  async function previewAutoDiscover() {
+    if (!selectedTaskId) { toast.error("Select a task first"); return; }
+    if (!autoUrl.trim().startsWith("http")) { toast.error("Enter a valid URL starting with http"); return; }
+    setPreviewLoading(true); setPreviewError("");
+    try {
+      const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/auto-discover-preview`, { url: autoUrl.trim() });
+      setPreviewData(res.data);
+    } catch (err) {
+      const msg = err?.response?.data?.details || err?.response?.data?.error || "Failed to build preview";
+      setPreviewError(msg);
+      toast.error(msg);
+    } finally { setPreviewLoading(false); }
+  }
+
   async function handleBrowserRun() {
     if (!selectedTaskId) { toast.error("Select a task first"); return; }
     if (!browserInstructions.trim()) { toast.error("Enter test instructions first"); return; }
@@ -1217,6 +1543,21 @@ export default function TestingAgent() {
     }
   }
 
+  async function previewBrowser() {
+    if (!selectedTaskId) { toast.error("Select a task first"); return; }
+    if (!browserInstructions.trim()) { toast.error("Enter test instructions first"); return; }
+    setPreviewLoading(true); setPreviewError("");
+    try {
+      const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/browser-preview`, { instructions: browserInstructions.trim() });
+      setPreviewData(res.data);
+      if (res.data?.mode === "deep_exploration") setRunMode("deep");
+    } catch (err) {
+      const msg = err?.response?.data?.details || err?.response?.data?.error || "Failed to build preview";
+      setPreviewError(msg);
+      toast.error(msg);
+    } finally { setPreviewLoading(false); }
+  }
+
   async function handleMultiScenario() {
     if (!selectedTaskId) { toast.error("Select a task first"); return; }
     if (!multiDescription.trim()) { toast.error("Enter a feature description first"); return; }
@@ -1236,6 +1577,23 @@ export default function TestingAgent() {
       else if (os === "cancelled") toast("Multi-scenario run stopped"); else toast.error(`Scenario run found issues - ${res.data.summary?.failed ?? "?"} scenario(s) failed`, { duration: 5000 });
       await loadRuns(1, historySearch);
     } catch (err) { toast.error(err?.response?.data?.details || err?.response?.data?.error || "Multi-scenario run failed", { duration: 6000 }); } finally { if (!liveStarted) setRunning(false); }
+  }
+
+  async function previewMultiScenario() {
+    if (!selectedTaskId) { toast.error("Select a task first"); return; }
+    if (!multiDescription.trim()) { toast.error("Enter a feature description first"); return; }
+    setPreviewLoading(true); setPreviewError("");
+    try {
+      const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/multi-scenario-preview`, {
+        description: multiDescription.trim(),
+        url: multiUrl.trim() || null,
+      });
+      setPreviewData(res.data);
+    } catch (err) {
+      const msg = err?.response?.data?.details || err?.response?.data?.error || "Failed to build preview";
+      setPreviewError(msg);
+      toast.error(msg);
+    } finally { setPreviewLoading(false); }
   }
 
   async function handleDeepTest() {
@@ -1263,6 +1621,22 @@ export default function TestingAgent() {
       toast.error(err?.response?.data?.details || err?.response?.data?.error || "Deep test failed", { duration: 6000 });
       setRunning(false);
     }
+  }
+
+  async function previewDeepTest() {
+    if (!selectedTaskId) { toast.error("Select a task first"); return; }
+    if (!deepInstructions.trim()) { toast.error("Enter instructions with a URL and credentials"); return; }
+    setPreviewLoading(true); setPreviewError("");
+    try {
+      const res = await api.post(`/testing-agent/tasks/${selectedTaskId}/deep-explore-preview`, {
+        instructions: deepInstructions.trim(),
+      });
+      setPreviewData(res.data);
+    } catch (err) {
+      const msg = err?.response?.data?.details || err?.response?.data?.error || "Failed to build preview";
+      setPreviewError(msg);
+      toast.error(msg);
+    } finally { setPreviewLoading(false); }
   }
 
   async function handleGenerate() {
@@ -1321,11 +1695,11 @@ export default function TestingAgent() {
 
   // â”€â”€ RENDER â”€â”€
   const TABS = [
-    { key: "auto",   label: "Auto-Test",      Icon: Wand2,     desc: "Paste URL, AI does the rest" },
-    { key: "guided", label: "Guided Test",     Icon: Globe,     desc: "Natural language instructions" },
-    { key: "deep",   label: "Deep Test",       Icon: Eye,       desc: "Login -> explore all modules" },
-    { key: "multi",  label: "Multi-Scenario",  Icon: Layers,    desc: "4 scenarios in one shot" },
-    { key: "cli",    label: "CLI Tests",       Icon: Terminal,  desc: "Run your test commands" },
+    { key: "auto",   label: "Recon & Smoke",  Icon: Wand2,    desc: "Scan a live page and run a grounded smoke plan" },
+    { key: "guided", label: "Scenario Run",   Icon: Globe,    desc: "Run a tester-defined workflow with proof after each step" },
+    { key: "deep",   label: "Product Audit",  Icon: Eye,      desc: "Authenticate, map the product, and audit modules end to end" },
+    { key: "multi",  label: "Coverage Sweep", Icon: Layers,   desc: "Happy path, errors, edge cases, and performance" },
+    { key: "cli",    label: "Repository Run", Icon: Terminal, desc: "Execute repo commands and attach run evidence" },
   ];
 
   return (
@@ -1337,7 +1711,7 @@ export default function TestingAgent() {
         </div>
         <div>
           <h1 className="text-2xl font-bold theme-text">Testing Agent</h1>
-          <p className="text-sm theme-text-muted">AI-powered browser automation - self-healing selectors - live insights</p>
+          <p className="text-sm theme-text-muted">Evidence-first browser and repository testing with reproducible runs, previews, and reports.</p>
         </div>
       </div>
 
@@ -1420,21 +1794,30 @@ export default function TestingAgent() {
 
           {/* Mode tabs â€” 5 tabs */}
           <div className="grid grid-cols-3 gap-1.5">
-            {TABS.map(({ key, label, Icon }) => (
-              <button key={key} onClick={() => setRunMode(key)}
-                className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors ${runMode === key ? "theme-primary text-white shadow" : "theme-surface-soft theme-text-muted hover:opacity-90"}`}
-              >
-                <Icon className="w-3.5 h-3.5" />{label}
-              </button>
-            ))}
+            {TABS.map((tab) => {
+              const TabIcon = tab.Icon;
+              return (
+                <button key={tab.key} onClick={() => setRunMode(tab.key)}
+                  className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors ${runMode === tab.key ? "theme-primary text-white shadow" : "theme-surface-soft theme-text-muted hover:opacity-90"}`}
+                >
+                  <TabIcon className="w-3.5 h-3.5" />{tab.label}
+                </button>
+              );
+            })}
           </div>
+
+          <RunPrepPanel
+            mode={runMode}
+            selectedTask={selectedTask}
+            values={{ autoUrl, browserInstructions, multiDescription, multiUrl, deepInstructions }}
+          />
 
           {/* â”€â”€ AUTO-TEST TAB â”€â”€ */}
           {runMode === "auto" && (
             <div className="space-y-2">
               <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg px-3 py-2">
-                <p className="text-xs text-indigo-700 font-semibold">AI Auto-Discovery</p>
-                <p className="text-xs text-indigo-600 mt-0.5">Paste any URL - AI explores the page, builds a test plan, executes it, and gives you insights. No instructions needed.</p>
+                <p className="text-xs text-indigo-700 font-semibold">Grounded smoke run</p>
+                <p className="text-xs text-indigo-600 mt-0.5">Paste a URL, inspect the generated plan, then launch a smoke pass grounded in the actual page surface.</p>
               </div>
               <label className="block text-xs font-medium theme-text-muted">URL to test</label>
               <input
@@ -1443,19 +1826,30 @@ export default function TestingAgent() {
                 placeholder="https://myapp.com"
                 className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm"
               />
-              <button onClick={handleAutoDiscover} disabled={running || !selectedTaskId || !autoUrl.trim()}
-                className="w-full px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
-              >
-                <Wand2 className="w-4 h-4" />
-                {running ? "AI is exploring your app..." : "Auto-Test This URL"}
-              </button>
-              {liveRunId && <LiveRunPanel runId={liveRunId} onFinished={(run) => {
+              <QuickTemplateBar items={RUN_MODE_TEMPLATES.auto} onSelect={applyAutoTemplate} />
+              <div className="flex gap-2">
+                <button onClick={previewAutoDiscover} disabled={previewLoading || running || !selectedTaskId || !autoUrl.trim()}
+                  className="flex-1 px-3 py-2.5 rounded-lg border theme-border theme-surface-soft font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm theme-text"
+                >
+                  <FileText className="w-4 h-4" />
+                  {previewLoading ? "Previewing..." : "Preview Plan"}
+                </button>
+                <button onClick={handleAutoDiscover} disabled={running || !selectedTaskId || !autoUrl.trim()}
+                  className="flex-1 px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
+                >
+                  <Wand2 className="w-4 h-4" />
+                  {running ? "Running smoke pass..." : "Run Smoke Test"}
+                </button>
+              </div>
+              <p className="text-xs theme-text-soft">Best for quick confidence checks on public or low-friction pages.</p>
+              <MissionPreviewPanel preview={previewData} loading={previewLoading} error={previewError} />
+              {liveRunId && <LiveRunPanel key={liveRunId} runId={liveRunId} onFinished={(run) => {
                 setRunning(false);
                 const s = run?.status;
                 const sum = run?.output_json?.summary;
-                if (s === "cancelled") toast("Auto-test stopped");
-                else if (s === "passed") toast.success(`Auto-test passed - ${sum?.passed ?? "?"}/${sum?.total ?? "?"} steps`);
-                else toast.error(`Auto-test found issues - ${sum?.failed ?? "?"} step(s) failed`, { duration: 5000 });
+                if (s === "cancelled") toast("Smoke test stopped");
+                else if (s === "passed") toast.success(`Smoke test passed - ${sum?.passed ?? "?"}/${sum?.total ?? "?"} steps`);
+                else toast.error(`Smoke test found issues - ${sum?.failed ?? "?"} step(s) failed`, { duration: 5000 });
                 loadRuns(1, historySearch);
               }} />}
               {autoResult && !running && (
@@ -1482,18 +1876,28 @@ export default function TestingAgent() {
                 placeholder={"go to https://myapp.com, click Login, enter admin@test.com / pass123, verify dashboard shows"}
                 className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm resize-none"
               />
-              <button onClick={handleBrowserRun} disabled={running || !selectedTaskId || !browserInstructions.trim()}
-                className="w-full px-3 py-2 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm"
-              >
-                <Globe className="w-4 h-4" />
-                {running ? "Running browser..." : "Run Browser Test"}
-              </button>
-              <p className="text-xs theme-text-soft">AI parses your instructions, executes them with self-healing Playwright automation, and captures screenshots + AI failure analysis at each step.</p>
-              {liveRunId && <LiveRunPanel runId={liveRunId} onFinished={(run) => {
+              <QuickTemplateBar items={RUN_MODE_TEMPLATES.guided} onSelect={applyGuidedTemplate} />
+              <div className="flex gap-2">
+                <button onClick={previewBrowser} disabled={previewLoading || running || !selectedTaskId || !browserInstructions.trim()}
+                  className="flex-1 px-3 py-2 rounded-lg border theme-border theme-surface-soft font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm theme-text"
+                >
+                  <FileText className="w-4 h-4" />
+                  {previewLoading ? "Previewing..." : "Preview Plan"}
+                </button>
+                <button onClick={handleBrowserRun} disabled={running || !selectedTaskId || !browserInstructions.trim()}
+                  className="flex-1 px-3 py-2 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm"
+                >
+                  <Globe className="w-4 h-4" />
+                  {running ? "Executing scenario..." : "Run Scenario"}
+                </button>
+              </div>
+              <p className="text-xs theme-text-soft">Use this for a specific workflow you want reproduced exactly, with evidence after each meaningful state change.</p>
+              <MissionPreviewPanel preview={previewData} loading={previewLoading} error={previewError} />
+              {liveRunId && <LiveRunPanel key={liveRunId} runId={liveRunId} onFinished={(run) => {
                 setRunning(false);
                 const s = run?.status;
                 const sum = run?.output_json?.summary;
-                if (s === "cancelled") toast("Browser test stopped"); else if (s === "passed") toast.success(`Browser test passed - ${sum?.passed ?? "?"}/${sum?.total ?? "?"} steps`); else toast.error(`Browser test finished - ${sum?.failed ?? "?"} step(s) failed`, { duration: 5000 });
+                if (s === "cancelled") toast("Scenario run stopped"); else if (s === "passed") toast.success(`Scenario run passed - ${sum?.passed ?? "?"}/${sum?.total ?? "?"} steps`); else toast.error(`Scenario run finished - ${sum?.failed ?? "?"} step(s) failed`, { duration: 5000 });
                 loadRuns(1, historySearch);
               }} />}
             </div>
@@ -1503,8 +1907,8 @@ export default function TestingAgent() {
           {runMode === "multi" && (
             <div className="space-y-2">
               <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg px-3 py-2">
-                <p className="text-xs text-orange-700 font-semibold">4-Scenario Coverage</p>
-                <p className="text-xs text-orange-600 mt-0.5">Describe a feature -&gt; AI generates and runs: happy path, error handling, edge cases, and performance tests.</p>
+                <p className="text-xs text-orange-700 font-semibold">Coverage sweep</p>
+                <p className="text-xs text-orange-600 mt-0.5">Build a four-angle plan before launch: happy path, handled failures, edge cases, and performance.</p>
               </div>
               <label className="block text-xs font-medium theme-text-muted">Feature / app description</label>
               <textarea
@@ -1521,13 +1925,24 @@ export default function TestingAgent() {
                 placeholder="https://myapp.com"
                 className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm"
               />
-              <button onClick={handleMultiScenario} disabled={running || !selectedTaskId || !multiDescription.trim()}
-                className="w-full px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
-              >
-                <Layers className="w-4 h-4" />
-                {running ? "Running 4 scenarios..." : "Run 4 Scenarios"}
-              </button>
-              <p className="text-xs theme-text-soft">Each scenario runs as a separate browser session. Takes 3-8 minutes depending on complexity.</p>{liveRunId && <LiveRunPanel runId={liveRunId} onFinished={(run) => { setRunning(false); const output = run?.output_json || {}; const result = { description: output.description || multiDescription.trim(), scenarios: Array.isArray(output.scenarios) ? output.scenarios : [], overallStatus: output.overallStatus || run?.status || "failed", summary: output.summary || {}, }; setMultiResult(result); const os = result.overallStatus; if (run?.status === "cancelled" || os === "cancelled") toast("Multi-scenario run stopped"); else if (os === "passed") toast.success(`All ${result.summary?.total ?? "?"} scenarios passed`); else if (os === "partial") toast(`${result.summary?.passed ?? 0} of ${result.summary?.total ?? "?"} scenarios passed`); else toast.error(`Scenario run found issues - ${result.summary?.failed ?? "?"} scenario(s) failed`, { duration: 5000 }); loadRuns(1, historySearch); }} />}
+              <QuickTemplateBar items={RUN_MODE_TEMPLATES.multi} onSelect={applyMultiTemplate} />
+              <div className="flex gap-2">
+                <button onClick={previewMultiScenario} disabled={previewLoading || running || !selectedTaskId || !multiDescription.trim()}
+                  className="flex-1 px-3 py-2.5 rounded-lg border theme-border theme-surface-soft font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm theme-text"
+                >
+                  <FileText className="w-4 h-4" />
+                  {previewLoading ? "Previewing..." : "Preview Coverage"}
+                </button>
+                <button onClick={handleMultiScenario} disabled={running || !selectedTaskId || !multiDescription.trim()}
+                  className="flex-1 px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
+                >
+                  <Layers className="w-4 h-4" />
+                  {running ? "Running coverage..." : "Run Coverage Sweep"}
+                </button>
+              </div>
+              <p className="text-xs theme-text-soft">Each scenario runs separately so you can see which testing angle failed and why.</p>
+              <MissionPreviewPanel preview={previewData} loading={previewLoading} error={previewError} />
+              {liveRunId && <LiveRunPanel key={liveRunId} runId={liveRunId} onFinished={(run) => { setRunning(false); const output = run?.output_json || {}; const result = { description: output.description || multiDescription.trim(), scenarios: Array.isArray(output.scenarios) ? output.scenarios : [], overallStatus: output.overallStatus || run?.status || "failed", summary: output.summary || {}, }; setMultiResult(result); const os = result.overallStatus; if (run?.status === "cancelled" || os === "cancelled") toast("Coverage sweep stopped"); else if (os === "passed") toast.success(`All ${result.summary?.total ?? "?"} scenarios passed`); else if (os === "partial") toast(`${result.summary?.passed ?? 0} of ${result.summary?.total ?? "?"} scenarios passed`); else toast.error(`Coverage sweep found issues - ${result.summary?.failed ?? "?"} scenario(s) failed`, { duration: 5000 }); loadRuns(1, historySearch); }} />}
               {multiResult && !running && (
                 <div className="mt-2 space-y-2">
                   <div className="flex items-center justify-between">
@@ -1548,11 +1963,11 @@ export default function TestingAgent() {
           {runMode === "deep" && (
             <div className="space-y-2">
               <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-lg px-3 py-2 space-y-1">
-                <p className="text-xs text-violet-700 font-semibold">3-Phase Deep Test - Recon -&gt; Precise Test Cases -&gt; Aggressive Execution</p>
+                <p className="text-xs text-violet-700 font-semibold">Product audit</p>
                 <div className="text-xs text-violet-600 space-y-0.5">
-                  <p><span className="font-semibold">Phase 1:</span> Logs in, visits every module, <b>clicks every button</b>, opens every modal, explores every tab - builds a complete feature map.</p>
-                  <p><span className="font-semibold">Phase 2:</span> AI generates <b>precise test cases</b> per module based on exact fields found (XSS, SQL injection, empty submit, boundary values).</p>
-                  <p><span className="font-semibold">Phase 3:</span> Executes all tests aggressively. Produces a full QA bug report with severity ratings.</p>
+                  <p><span className="font-semibold">Phase 1:</span> Authenticate and map reachable product surface.</p>
+                  <p><span className="font-semibold">Phase 2:</span> Build module-level tests from real DOM and workflow evidence.</p>
+                  <p><span className="font-semibold">Phase 3:</span> Execute the audit and produce a usable QA report.</p>
                 </div>
               </div>
 
@@ -1564,6 +1979,7 @@ export default function TestingAgent() {
                 placeholder={`Go to https://myapp.com\nLogin with email: user@example.com password: Test@1234\nExplore all modules and test every single feature`}
                 className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm resize-none font-mono"
               />
+              <QuickTemplateBar items={RUN_MODE_TEMPLATES.deep} onSelect={applyDeepTemplate} />
 
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
                 <p className="text-xs text-amber-700 font-semibold">Tips for best results</p>
@@ -1575,32 +1991,44 @@ export default function TestingAgent() {
                 </ul>
               </div>
 
-              <button
-                onClick={handleDeepTest}
-                disabled={running || !selectedTaskId || !deepInstructions.trim()}
-                className="w-full px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
-              >
-                <Eye className="w-4 h-4" />
-                {running ? "Deep exploring... (live below)" : "Start Deep Test"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={previewDeepTest}
+                  disabled={previewLoading || running || !selectedTaskId || !deepInstructions.trim()}
+                  className="flex-1 px-3 py-2.5 rounded-lg border theme-border theme-surface-soft font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm theme-text"
+                >
+                  <FileText className="w-4 h-4" />
+                  {previewLoading ? "Previewing..." : "Preview Audit"}
+                </button>
+                <button
+                  onClick={handleDeepTest}
+                  disabled={running || !selectedTaskId || !deepInstructions.trim()}
+                  className="flex-1 px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
+                >
+                  <Eye className="w-4 h-4" />
+                  {running ? "Running audit..." : "Start Product Audit"}
+                </button>
+              </div>
+              <MissionPreviewPanel preview={previewData} loading={previewLoading} error={previewError} />
 
               {liveRunId && (
                 <LiveRunPanel
+                  key={liveRunId}
                   runId={liveRunId}
                   onFinished={(run) => {
                     setRunning(false);
                     const s = run?.status;
                     const sum = run?.output_json?.summary;
                     if (s === "cancelled") {
-                      toast("Deep test stopped");
+                      toast("Product audit stopped");
                       loadRuns(1, historySearch);
                       return;
                     }
                     const modules = sum?.modules ?? "?";
                     const bugs = sum?.bugsFound ?? 0;
                     const score = sum?.overallHealthScore;
-                    if (s === "passed") toast.success(`Deep test complete - ${modules} modules, ${bugs} bugs found, health ${score ?? "?"}/10`, { duration: 6000 });
-                    else toast.error(`Deep test done - ${bugs} bugs, ${sum?.failed ?? "?"} failures across ${modules} modules`, { duration: 6000 });
+                    if (s === "passed") toast.success(`Product audit complete - ${modules} modules, ${bugs} bugs found, health ${score ?? "?"}/10`, { duration: 6000 });
+                    else toast.error(`Product audit finished - ${bugs} bugs, ${sum?.failed ?? "?"} failures across ${modules} modules`, { duration: 6000 });
                     loadRuns(1, historySearch);
                   }}
                 />
@@ -1627,6 +2055,13 @@ export default function TestingAgent() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+        <p className="text-sm font-semibold text-blue-900">Tester experience goals</p>
+        <p className="mt-1 text-sm text-blue-800">
+          Every run should make its intent visible before launch, prove state changes while executing, and leave behind usable evidence for the next person.
+        </p>
       </div>
 
       {/* Run History */}

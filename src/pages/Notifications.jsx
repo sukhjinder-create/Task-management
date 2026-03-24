@@ -59,15 +59,15 @@ export default function Notifications() {
   const [tab, setTab] = useState("all");        // "all" | "unread"
   const [typeFilter, setTypeFilter] = useState("all");
 
-  const updateUnreadCount = (list) => {
-    publishUnreadCount((list || []).filter((n) => !n.is_read).length);
-  };
+  // Publish unread count whenever notifications list changes
+  useEffect(() => {
+    publishUnreadCount(notifications.filter((n) => !n.is_read).length);
+  }, [notifications]);
 
   useEffect(() => {
     api.get("/notifications").then((res) => {
       const list = res.data || [];
       setNotifications(list);
-      updateUnreadCount(list);
     }).catch((err) => {
       toast.error(err.response?.data?.error || "Failed to load notifications");
     }).finally(() => setLoading(false));
@@ -83,9 +83,7 @@ export default function Notifications() {
     const handler = (notif) => {
       setNotifications((prev) => {
         if (prev.some((n) => n.id === notif.id)) return prev;
-        const next = [notif, ...prev];
-        updateUnreadCount(next);
-        return next;
+        return [notif, ...prev];
       });
       toast(`🔔 ${notif.message}`, { duration: 4000 });
     };
@@ -107,11 +105,7 @@ export default function Notifications() {
     setMarking(true);
     try {
       await api.post("/notifications/mark-all-read");
-      setNotifications((prev) => {
-        const next = prev.map((n) => ({ ...n, is_read: true }));
-        updateUnreadCount(next);
-        return next;
-      });
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       toast.success("All marked as read");
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed");
@@ -123,11 +117,7 @@ export default function Notifications() {
   const handleMarkOneRead = async (id) => {
     try {
       const res = await api.post(`/notifications/${id}/read`);
-      setNotifications((prev) => {
-        const next = prev.map((n) => (n.id === res.data.id ? res.data : n));
-        updateUnreadCount(next);
-        return next;
-      });
+      setNotifications((prev) => prev.map((n) => (n.id === res.data.id ? res.data : n)));
     } catch { /* silent */ }
   };
 

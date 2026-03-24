@@ -48,6 +48,7 @@ import Leave      from "./pages/Leave.jsx";
 import OKR        from "./pages/OKR.jsx";
 import Reviews    from "./pages/Reviews.jsx";
 import AIFeatures from "./pages/AIFeatures.jsx";
+import AIHub      from "./pages/AIHub.jsx";
 
 /**
  * ======================================================
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="okr"         element={<OKR />} />
           <Route path="reviews"     element={<Reviews />} />
           <Route path="ai-features" element={<AIFeatures />} />
+          <Route path="ai"          element={<AIHub />} />
           <Route
             path="enterprise"
             element={

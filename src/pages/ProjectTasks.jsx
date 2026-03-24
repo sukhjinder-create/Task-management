@@ -1,7 +1,7 @@
 // src/pages/ProjectTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, TrendingDown, Keyboard, Filter } from "lucide-react";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, TrendingDown, Keyboard, Filter, EyeOff, Target } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -18,11 +18,19 @@ import BurndownModal from "../components/BurndownModal.jsx";
 import SavedFiltersPanel from "../components/SavedFiltersPanel.jsx";
 
 function statusLabel(status) {
+  if (status === "backlog") return "Backlog";
   if (status === "pending") return "Pending";
   if (status === "in-progress") return "In Progress";
   if (status === "completed") return "Completed";
   if (!status) return "No status";
   return status;
+}
+
+const FIXED_STATUS_KEYS = new Set(["backlog", "pending", "in-progress", "completed"]);
+const LOCKED_EDGE_KEYS = new Set(["backlog", "completed"]);
+
+function normalizeStatusLabel(value = "") {
+  return String(value).trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function priorityLabel(priority) {
@@ -35,6 +43,94 @@ function priorityBadgeColor(priority) {
   if (priority === "high") return "danger";
   if (priority === "low") return "success";
   return "warning";
+}
+
+function historyActorLabel(log) {
+  return log?.username || log?.email || "Someone";
+}
+
+function formatProjectHistoryMessage(log) {
+  const actor = historyActorLabel(log);
+  const taskTitle = log?.metadata?.taskTitle || log?.old_value?.task || log?.new_value?.task || "task";
+  const sprintName = log?.metadata?.sprintName || log?.new_value?.name || log?.old_value?.name || "sprint";
+  const columnLabel = log?.new_value?.label || log?.old_value?.label || "column";
+
+  switch (log?.action) {
+    case "project.history.project.created":
+      return `${actor} created this project`;
+    case "project.history.project.updated":
+      return `${actor} updated the project details`;
+    case "project.history.project.deleted":
+      return `${actor} deleted this project`;
+    case "project.history.task.created":
+      return `${actor} created "${taskTitle}"`;
+    case "project.history.task.deleted":
+      return `${actor} deleted "${taskTitle}"`;
+    case "project.history.task.status_changed":
+      return `${actor} changed "${taskTitle}" status`;
+    case "project.history.task.assignee_changed":
+      return `${actor} reassigned "${taskTitle}"`;
+    case "project.history.task.priority_changed":
+      return `${actor} changed "${taskTitle}" priority`;
+    case "project.history.task.title_changed":
+      return `${actor} renamed a task`;
+    case "project.history.task.description_updated":
+      return `${actor} updated "${taskTitle}" description`;
+    case "project.history.task.due_date_changed":
+      return `${actor} changed "${taskTitle}" due date`;
+    case "project.history.task.sprint_changed":
+      return `${actor} moved "${taskTitle}" between sprint and backlog`;
+    case "project.history.task.type_changed":
+      return `${actor} changed "${taskTitle}" type`;
+    case "project.history.task.story_points_changed":
+      return `${actor} changed "${taskTitle}" story points`;
+    case "project.history.task.blocked_changed":
+      return `${actor} changed "${taskTitle}" blocked state`;
+    case "project.history.comment.added":
+      return `${actor} commented on "${taskTitle}"`;
+    case "project.history.sprint.created":
+      return `${actor} created sprint "${sprintName}"`;
+    case "project.history.sprint.updated":
+      return `${actor} updated sprint "${sprintName}"`;
+    case "project.history.sprint.deleted":
+      return `${actor} deleted sprint "${sprintName}"`;
+    case "project.history.sprint.started":
+      return `${actor} started sprint "${sprintName}"`;
+    case "project.history.sprint.completed":
+      return `${actor} completed sprint "${sprintName}"`;
+    case "project.history.sprint.visibility_changed":
+      return `${actor} changed sprint visibility`;
+    case "project.history.status_column.created":
+      return `${actor} created column "${columnLabel}"`;
+    case "project.history.status_column.updated":
+      return `${actor} updated column "${columnLabel}"`;
+    case "project.history.status_column.deleted":
+      return `${actor} deleted column "${columnLabel}"`;
+    default:
+      return `${actor} performed ${String(log?.action || "an update").replace(/^project\.history\./, "")}`;
+  }
+}
+
+function formatHistoryChange(log) {
+  const oldValue = log?.old_value || {};
+  const newValue = log?.new_value || {};
+  const key = Object.keys({ ...oldValue, ...newValue })[0];
+  if (!key) return null;
+
+  const oldLabel = oldValue[key] ?? "empty";
+  const newLabel = newValue[key] ?? "empty";
+
+  if (log?.action?.endsWith(".created")) {
+    return null;
+  }
+  if (log?.action?.endsWith(".deleted")) {
+    return null;
+  }
+  if (oldLabel === newLabel) {
+    return null;
+  }
+
+  return `${key.replace(/_/g, " ")}: ${oldLabel} -> ${newLabel}`;
 }
 
 function isOverdue(task) {
@@ -180,6 +276,8 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   const editEditorRef = useRef(null);
 
   const canEdit = role === "admin" || role === "manager";
+  const canDragTasks = canEdit || role === "user";
+  const canMoveTask = (task) => canEdit || (role === "user" && task?.assigned_to === user?.id);
 
   // Deep-link guard
   const [initialTaskOpened, setInitialTaskOpened] = useState(false);
@@ -191,10 +289,20 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   const [newStatusKey, setNewStatusKey] = useState("");
   const [newStatusLabel, setNewStatusLabel] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [showProjectHistory, setShowProjectHistory] = useState(false);
+  const [projectHistory, setProjectHistory] = useState([]);
+  const [loadingProjectHistory, setLoadingProjectHistory] = useState(false);
+  const [projectHistoryPage, setProjectHistoryPage] = useState(1);
+  const [projectHistoryMeta, setProjectHistoryMeta] = useState({
+    total: 0,
+    totalPages: 1,
+  });
+  const projectHistoryRefreshTimerRef = useRef(null);
 
   // 🔹 edit / delete state for an existing column
   const [editingStatusId, setEditingStatusId] = useState(null);
   const [editStatusLabel, setEditStatusLabel] = useState("");
+  const [draggingStatusId, setDraggingStatusId] = useState(null);
 
   // 🔹 Quick-add task per column
   const [quickNewTitles, setQuickNewTitles] = useState({}); // { [statusKey]: "title" }
@@ -211,7 +319,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   const [planningSprintId, setPlanningSprintId] = useState(null);
   const [showSprintModal, setShowSprintModal] = useState(false);
   const [editingSprint, setEditingSprint] = useState(null); // null = create
-  const [sprintForm, setSprintForm] = useState({ name: "", goal: "", start_date: "", end_date: "" });
+  const [sprintForm, setSprintForm] = useState({ name: "", goal: "", start_date: "", end_date: "", is_hidden: false });
   const [savingSprint, setSavingSprint] = useState(false);
   const [showSprintPanel, setShowSprintPanel] = useState(false);
 
@@ -225,6 +333,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [templateList, setTemplateList] = useState([]);
   const [dupeSuggestions, setDupeSuggestions] = useState([]);
+  const [dragTaskId, setDragTaskId] = useState(null);
 
   useEffect(() => {
     creatingFromNLRef.current = creatingFromNL;
@@ -295,6 +404,76 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       loadStatuses();
     }
   }, [projectId, api]);
+
+  const refreshStatusColumns = async () => {
+    if (!projectId) return;
+    const res = await api.get(`/project-statuses/${projectId}`);
+    setStatusColumnsConfig(res.data || []);
+  };
+
+  const refreshProjectHistory = async ({
+    silent = false,
+    page = projectHistoryPage,
+  } = {}) => {
+    if (!canEdit || !showProjectHistory || !projectId) return;
+
+    if (!silent) {
+      setLoadingProjectHistory(true);
+    }
+
+    try {
+      const res = await api.get(`/projects/${projectId}/history`, {
+        params: {
+          page,
+          pageSize: 10,
+        },
+      });
+
+      setProjectHistory(res.data?.logs || []);
+      setProjectHistoryMeta({
+        total: res.data?.total || 0,
+        totalPages: res.data?.totalPages || 1,
+      });
+    } catch (err) {
+      console.error("Failed to load project history:", err);
+      if (!silent) {
+        toast.error("Failed to load project history");
+      }
+    } finally {
+      if (!silent) {
+        setLoadingProjectHistory(false);
+      }
+    }
+  };
+
+  const refreshProjectHistoryToLatest = async () => {
+    if (!canEdit || !showProjectHistory) return;
+    if (projectHistoryPage !== 1) {
+      setProjectHistoryPage(1);
+      return;
+    }
+    await refreshProjectHistory({ page: 1 });
+  };
+
+  useEffect(() => {
+    if (!canEdit || !showProjectHistory || !projectId) return;
+
+    refreshProjectHistory();
+    projectHistoryRefreshTimerRef.current = window.setInterval(() => {
+      refreshProjectHistory({ silent: true });
+    }, 8000);
+
+    return () => {
+      if (projectHistoryRefreshTimerRef.current) {
+        window.clearInterval(projectHistoryRefreshTimerRef.current);
+        projectHistoryRefreshTimerRef.current = null;
+      }
+    };
+  }, [canEdit, projectHistoryPage, projectId, showProjectHistory]);
+
+  useEffect(() => {
+    setProjectHistoryPage(1);
+  }, [projectId, showProjectHistory]);
 
   // ===== Load sprints for project =====
   useEffect(() => {
@@ -370,7 +549,13 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       }
     });
 
-    return Array.from(map.values());
+    const ordered = Array.from(map.values());
+    const backlog = ordered.find((col) => col.key === "backlog");
+    const completed = ordered.find((col) => col.key === "completed");
+    const middle = ordered.filter(
+      (col) => col.key !== "backlog" && col.key !== "completed"
+    );
+    return [backlog, ...middle, completed].filter(Boolean);
   }, [statusColumnsConfig, tasks]);
 
   // Tasks filtered by sprint/backlog view (must be before grouped)
@@ -538,6 +723,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       });
       setNewSubtasks([]);
       setShowCreateModal(false);
+      await refreshProjectHistoryToLatest();
 
       toast.success("Task created");
     } catch (err) {
@@ -576,6 +762,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       }
 
       setNlCommand("");
+      await refreshProjectHistoryToLatest();
       toast.success(res.data?.summary || "Tasks created from natural language");
       setShowCreateModal(false);
     } catch (err) {
@@ -691,11 +878,54 @@ const [loadingLogs, setLoadingLogs] = useState(false);
           ? { ...prev, status: updated.status }
           : prev
       );
+      await refreshProjectHistoryToLatest();
     } catch (err) {
       console.error("Failed to update status:", err);
       const msg =
         err.response?.data?.error || "Failed to update status";
       toast.error(msg);
+    }
+  };
+
+  const onDragStart = (taskId) => {
+    if (!canDragTasks) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (!canMoveTask(task)) return;
+    setDragTaskId(taskId);
+  };
+
+  const onDragOver = (e) => {
+    if (!canDragTasks) return;
+    e.preventDefault();
+  };
+
+  const onDragEnd = () => {
+    setDragTaskId(null);
+  };
+
+  const onDrop = async (newStatus) => {
+    if (!canDragTasks || !dragTaskId) return;
+
+    const task = tasks.find((t) => t.id === dragTaskId);
+    if (!task) {
+      setDragTaskId(null);
+      return;
+    }
+
+    if (!canMoveTask(task)) {
+      setDragTaskId(null);
+      return;
+    }
+
+    if ((task.status || "") === (newStatus || "")) {
+      setDragTaskId(null);
+      return;
+    }
+
+    try {
+      await handleStatusChange(task.id, newStatus);
+    } finally {
+      setDragTaskId(null);
     }
   };
 
@@ -732,6 +962,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       setTasks((prev) => [created, ...prev]);
 
       setQuickNewTitles((prev) => ({ ...prev, [statusKey]: "" }));
+      await refreshProjectHistoryToLatest();
     } catch (err) {
       console.error("Error creating task (quick add):", err);
       const msg =
@@ -865,6 +1096,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       );
       setSelectedTaskDetails(updated);
       setIsEditing(false);
+      await refreshProjectHistoryToLatest();
       toast.success("Task updated");
     } catch (err) {
       console.error("Failed to save task:", err);
@@ -899,6 +1131,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       );
       setSelectedTaskDetails(null);
       setAttachments([]);
+      await refreshProjectHistoryToLatest();
       toast.success("Task deleted");
     } catch (err) {
       console.error("Failed to delete task:", err);
@@ -1017,6 +1250,18 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       return;
     }
 
+    if (
+      statusColumnsConfig.some(
+        (col) =>
+          col.key === key ||
+          normalizeStatusLabel(col.label || statusLabel(col.key)) ===
+            normalizeStatusLabel(label || statusLabel(key))
+      )
+    ) {
+      toast.error("A column with the same name already exists");
+      return;
+    }
+
     setSavingStatus(true);
     try {
       const payload = {
@@ -1028,8 +1273,10 @@ const [loadingLogs, setLoadingLogs] = useState(false);
         payload
       );
       const created = res.data;
-
-      setStatusColumnsConfig((prev) => [...prev, created]);
+      if (created) {
+        await refreshStatusColumns();
+        await refreshProjectHistoryToLatest();
+      }
       setNewStatusKey("");
       setNewStatusLabel("");
       toast.success("Column added");
@@ -1066,16 +1313,33 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       return;
     }
 
+    if (FIXED_STATUS_KEYS.has(col.key)) {
+      toast.error("Default columns cannot be renamed");
+      return;
+    }
+
+    const normalizedLabel = normalizeStatusLabel(editStatusLabel);
+    if (
+      statusColumnsConfig.some(
+        (status) =>
+          status.id !== id &&
+          normalizeStatusLabel(status.label || statusLabel(status.key)) ===
+            normalizedLabel
+      )
+    ) {
+      toast.error("A column with the same name already exists");
+      return;
+    }
+
     try {
       const payload = {
         label: editStatusLabel.trim(),
       };
       const res = await api.put(`/project-statuses/${id}`, payload);
-      const updated = res.data;
-
-      setStatusColumnsConfig((prev) =>
-        prev.map((c) => (c.id === updated.id ? updated : c))
-      );
+      if (res.data) {
+        await refreshStatusColumns();
+        await refreshProjectHistoryToLatest();
+      }
       toast.success("Column updated");
       setEditingStatusId(null);
       setEditStatusLabel("");
@@ -1094,6 +1358,11 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       return;
     }
 
+    if (FIXED_STATUS_KEYS.has(col.key)) {
+      toast.error("Default columns cannot be deleted");
+      return;
+    }
+
     if (
       !window.confirm(
         `Delete column "${col.label || col.key}"? Tasks with this status will no longer appear in any column.`
@@ -1104,9 +1373,8 @@ const [loadingLogs, setLoadingLogs] = useState(false);
 
   try {
       await api.delete(`/project-statuses/${id}`);
-      setStatusColumnsConfig((prev) =>
-        prev.filter((c) => c.id !== id)
-      );
+      await refreshStatusColumns();
+      await refreshProjectHistoryToLatest();
       toast.success("Column deleted");
 
       if (editingStatusId === id) {
@@ -1119,6 +1387,67 @@ const [loadingLogs, setLoadingLogs] = useState(false);
         err.response?.data?.error || "Failed to delete column";
       toast.error(msg);
     }
+  };
+
+  const handleStatusOrderChange = async (col, targetSortOrder) => {
+    if (!col?.id || LOCKED_EDGE_KEYS.has(col.key)) return;
+
+    try {
+      const res = await api.put(`/project-statuses/${col.id}`, {
+        sort_order: targetSortOrder,
+      });
+      if (res.data) {
+        await refreshStatusColumns();
+        await refreshProjectHistoryToLatest();
+      }
+    } catch (err) {
+      console.error("Failed to reorder column:", err);
+      const msg = err.response?.data?.error || "Failed to reorder column";
+      toast.error(msg);
+    }
+  };
+
+  const handleStatusDragStart = (statusId) => {
+    setDraggingStatusId(statusId);
+  };
+
+  const handleStatusDragEnd = () => {
+    setDraggingStatusId(null);
+  };
+
+  const handleStatusDragOver = (e, col) => {
+    if (!draggingStatusId || LOCKED_EDGE_KEYS.has(col.key)) return;
+    e.preventDefault();
+  };
+
+  const handleStatusDrop = async (targetCol) => {
+    if (!draggingStatusId || !targetCol || LOCKED_EDGE_KEYS.has(targetCol.key)) {
+      setDraggingStatusId(null);
+      return;
+    }
+
+    const source = statusColumnsConfig.find((col) => col.id === draggingStatusId);
+    if (!source || LOCKED_EDGE_KEYS.has(source.key) || source.id === targetCol.id) {
+      setDraggingStatusId(null);
+      return;
+    }
+
+    const middle = statusColumnsConfig.filter(
+      (col) => !LOCKED_EDGE_KEYS.has(col.key)
+    );
+    const sourceIndex = middle.findIndex((col) => col.id === source.id);
+    const targetIndex = middle.findIndex((col) => col.id === targetCol.id);
+    if (sourceIndex === -1 || targetIndex === -1) {
+      setDraggingStatusId(null);
+      return;
+    }
+
+    const reordered = [...middle];
+    const [moved] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    const newIndex = reordered.findIndex((col) => col.id === source.id);
+    await handleStatusOrderChange(source, newIndex + 2);
+    setDraggingStatusId(null);
   };
 
   const formatLogMessage = (log) => {
@@ -1183,7 +1512,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   // ─── SPRINT HANDLERS ──────────────────────────────────────
   const handleOpenCreateSprint = () => {
     setEditingSprint(null);
-    setSprintForm({ name: "", goal: "", start_date: "", end_date: "" });
+    setSprintForm({ name: "", goal: "", start_date: "", end_date: "", is_hidden: false });
     setShowSprintModal(true);
   };
 
@@ -1194,6 +1523,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       goal: sprint.goal || "",
       start_date: sprint.start_date ? sprint.start_date.slice(0, 10) : "",
       end_date: sprint.end_date ? sprint.end_date.slice(0, 10) : "",
+      is_hidden: sprint.is_hidden || false,
     });
     setShowSprintModal(true);
   };
@@ -1206,10 +1536,12 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       if (editingSprint) {
         const res = await api.put(`/sprints/${editingSprint.id}`, sprintForm);
         setSprints(prev => prev.map(s => s.id === editingSprint.id ? res.data : s));
+        await refreshProjectHistoryToLatest();
         toast.success("Sprint updated");
       } else {
         const res = await api.post(`/projects/${projectId}/sprints`, sprintForm);
         setSprints(prev => [res.data, ...prev]);
+        await refreshProjectHistoryToLatest();
         toast.success("Sprint created");
       }
       setShowSprintModal(false);
@@ -1225,6 +1557,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       const res = await api.post(`/sprints/${sprint.id}/start`);
       setSprints(prev => prev.map(s => s.id === sprint.id ? res.data : s));
       setActiveSprint(res.data);
+      await refreshProjectHistoryToLatest();
       toast.success(`Sprint "${sprint.name}" started!`);
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to start sprint");
@@ -1240,6 +1573,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       // Reload tasks since incomplete ones moved to backlog
       const tasksRes = await api.get(`/tasks/${projectId}`);
       setTasks(tasksRes.data || []);
+      await refreshProjectHistoryToLatest();
       toast.success(`Sprint completed. ${res.data.movedToBacklog} task(s) moved to backlog.`);
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to complete sprint");
@@ -1254,6 +1588,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       if (activeSprint?.id === sprint.id) setActiveSprint(null);
       const tasksRes = await api.get(`/tasks/${projectId}`);
       setTasks(tasksRes.data || []);
+      await refreshProjectHistoryToLatest();
       toast.success("Sprint deleted");
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to delete sprint");
@@ -1265,6 +1600,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       await api.patch(`/tasks/${taskId}/sprint`, { sprint_id: sprintId });
       const tasksRes = await api.get(`/tasks/${projectId}`);
       setTasks(tasksRes.data || []);
+      await refreshProjectHistoryToLatest();
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to update sprint");
     }
@@ -1321,6 +1657,101 @@ const [loadingLogs, setLoadingLogs] = useState(false);
           </div>
         </Card.Content>
       </Card>
+
+      {canEdit && (
+        <Card>
+          <Card.Content className="p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">
+                  Project History
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Admin and manager activity for this project, including tasks, columns, sprints, and durable delete records.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowProjectHistory((value) => !value)}
+              >
+                {showProjectHistory ? "Hide History" : "Show History"}
+              </Button>
+            </div>
+
+            {showProjectHistory && (
+              <div className="mt-4 space-y-3">
+                {loadingProjectHistory ? (
+                  <div className="text-sm text-gray-500">Loading history...</div>
+                ) : projectHistory.length === 0 ? (
+                  <div className="text-sm text-gray-500">No project history recorded yet.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {projectHistory.map((log) => {
+                      const changeText = formatHistoryChange(log);
+                      return (
+                        <div
+                          key={log.id}
+                          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                        >
+                          <div className="text-sm font-medium text-gray-900">
+                            {formatProjectHistoryMessage(log)}
+                          </div>
+                          {changeText && (
+                            <div className="mt-1 text-xs text-gray-600">{changeText}</div>
+                          )}
+                          <div className="mt-1 text-[11px] text-gray-500">
+                            {new Date(log.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <div className="text-xs text-gray-500">
+                    {projectHistoryMeta.total} entries
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={projectHistoryPage <= 1 || loadingProjectHistory}
+                      onClick={() =>
+                        setProjectHistoryPage((page) => Math.max(1, page - 1))
+                      }
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs text-gray-500">
+                      Page {projectHistoryPage} of {projectHistoryMeta.totalPages}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={
+                        loadingProjectHistory ||
+                        projectHistoryPage >= projectHistoryMeta.totalPages
+                      }
+                      onClick={() =>
+                        setProjectHistoryPage((page) =>
+                          Math.min(projectHistoryMeta.totalPages, page + 1)
+                        )
+                      }
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card.Content>
+        </Card>
+      )}
 
 
       {/* ─── SPRINT PANEL ─────────────────────────────────── */}
@@ -1468,6 +1899,11 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColor}`}>
                           {sprint.status}
                         </span>
+                        {sprint.is_hidden && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 flex items-center gap-1">
+                            <EyeOff className="w-2.5 h-2.5" /> Hidden
+                          </span>
+                        )}
                         {sprint.start_date && (
                           <span className="text-[10px] text-slate-400">
                             {new Date(sprint.start_date).toLocaleDateString()} – {sprint.end_date ? new Date(sprint.end_date).toLocaleDateString() : "no end"}
@@ -1503,6 +1939,36 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                             <span className="text-[10px] text-red-500 shrink-0">{sprint.overdue_tasks} overdue</span>
                           )}
                         </div>
+
+                        {/* Linked Goals — visible to all, clickable for admin/manager */}
+                        {(sprint.linked_goals || []).length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                            <Target className="w-3 h-3 text-indigo-400 shrink-0" />
+                            {(sprint.linked_goals).map(g => {
+                              const goalStatusColor =
+                                g.goal_status === "done"      ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
+                                g.goal_status === "at_risk"   ? "bg-amber-50  text-amber-700  border-amber-200"  :
+                                g.goal_status === "off_track" ? "bg-red-50    text-red-600    border-red-200"    :
+                                                                "bg-green-50  text-green-700  border-green-200";
+                              const pill = (
+                                <span
+                                  key={g.goal_id}
+                                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full border flex items-center gap-1 ${goalStatusColor}`}
+                                  title={`Goal: ${g.goal_title} · ${g.goal_progress ?? 0}% complete`}
+                                >
+                                  {g.goal_title}
+                                  <span className="opacity-60">· {g.goal_progress ?? 0}%</span>
+                                </span>
+                              );
+                              // Admin and manager can click to go to Goals page
+                              return canEdit ? (
+                                <a key={g.goal_id} href="/okr" title="Go to Goals page">
+                                  {pill}
+                                </a>
+                              ) : pill;
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                     {canEdit && (
@@ -1610,6 +2076,19 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   />
                 </div>
               </div>
+              {/* Hidden sprint toggle — admin only */}
+              {role === "admin" && (
+                <label className="flex items-center gap-3 cursor-pointer select-none py-1">
+                  <div className={`relative w-10 h-5 rounded-full transition-colors ${sprintForm.is_hidden ? "bg-amber-400" : "bg-slate-200"}`}
+                    onClick={() => setSprintForm(f => ({ ...f, is_hidden: !f.is_hidden }))}>
+                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${sprintForm.is_hidden ? "translate-x-5" : ""}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Hidden Sprint (Planning)</p>
+                    <p className="text-xs text-slate-500">Only admins can see this sprint — use for advance planning</p>
+                  </div>
+                </label>
+              )}
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" className="text-sm text-slate-600 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50" onClick={() => setShowSprintModal(false)}>
                   Cancel
@@ -1796,18 +2275,30 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             </h3>
             {statusColumnsConfig.length === 0 ? (
               <p className="text-[11px] text-slate-500 mb-2">
-                No custom columns yet. Add your first one below.
+                Default columns are created automatically for every project.
               </p>
             ) : (
               <ul className="mb-2 flex flex-col gap-1 text-[11px]">
                 {statusColumnsConfig.map((col) => {
                   const id = col.id || col.key;
                   const isEditingThis = editingStatusId === id;
+                  const isFixed = FIXED_STATUS_KEYS.has(col.key);
+                  const isEdgeLocked = LOCKED_EDGE_KEYS.has(col.key);
+                  const taskCount = (grouped[col.key] || []).length;
 
                   return (
                     <li
                       key={id}
-                      className="flex items-center justify-between gap-2 border border-slate-200 rounded-md bg-white px-2 py-1"
+                      draggable={!isEdgeLocked}
+                      onDragStart={() => handleStatusDragStart(id)}
+                      onDragEnd={handleStatusDragEnd}
+                      onDragOver={(e) => handleStatusDragOver(e, col)}
+                      onDrop={() => handleStatusDrop(col)}
+                      className={`flex items-center justify-between gap-2 border border-slate-200 rounded-md bg-white px-2 py-1 ${
+                        !isEdgeLocked ? "cursor-grab active:cursor-grabbing" : ""
+                      } ${
+                        draggingStatusId === id ? "opacity-70" : ""
+                      }`}
                     >
                       {isEditingThis ? (
                         <>
@@ -1851,30 +2342,64 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                           <div className="flex-1">
                             <span className="font-medium">
                               {col.label || statusLabel(col.key)}
+                            </span>
+                            <span className="ml-1 text-slate-500">
+                              ({taskCount})
                             </span>{" "}
                             <span className="text-slate-400">
                               ({col.key})
                             </span>
+                            {isEdgeLocked && (
+                              <span className="ml-2 text-[10px] text-slate-400">
+                                locked
+                              </span>
+                            )}
                           </div>
                           <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleStartEditStatusColumn(col)
-                              }
-                              className="text-[11px] text-blue-600 border border-blue-200 rounded px-2 py-[2px] hover:bg-blue-50"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleDeleteStatusColumn(col)
-                              }
-                              className="text-[11px] text-red-600 border border-red-200 rounded px-2 py-[2px] hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
+                            {!isEdgeLocked && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleStatusOrderChange(col, Math.max(2, (col.sort_order || 2) - 1))
+                                }
+                                className="text-[11px] text-slate-600 border border-slate-200 rounded px-2 py-[2px] hover:bg-slate-50"
+                              >
+                                ↑
+                              </button>
+                            )}
+                            {!isEdgeLocked && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleStatusOrderChange(col, Math.min(statusColumnsConfig.length - 1, (col.sort_order || 2) + 1))
+                                }
+                                className="text-[11px] text-slate-600 border border-slate-200 rounded px-2 py-[2px] hover:bg-slate-50"
+                              >
+                                ↓
+                              </button>
+                            )}
+                            {!isFixed && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleStartEditStatusColumn(col)
+                                }
+                                className="text-[11px] text-blue-600 border border-blue-200 rounded px-2 py-[2px] hover:bg-blue-50"
+                              >
+                                Edit
+                              </button>
+                            )}
+                            {!isFixed && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDeleteStatusColumn(col)
+                                }
+                                className="text-[11px] text-red-600 border border-red-200 rounded px-2 py-[2px] hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            )}
                           </div>
                         </>
                       )}
@@ -1912,9 +2437,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             </form>
 
             <p className="mt-1 text-[10px] text-slate-400">
-              Columns here affect this project only. Tasks can be
-              moved by changing their status or dragging them between
-              columns.
+              Backlog stays first, Completed stays last, and only middle
+              columns can be reordered. Completed remains the scoring
+              completion state.
             </p>
           </div>
         )}
@@ -2054,6 +2579,8 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     ? "border-red-300 bg-red-50"
                     : "border-slate-200 bg-slate-50"
                 }`}
+                onDragOver={onDragOver}
+                onDrop={() => onDrop(col.key)}
               >
                 {/* Column header with + button */}
                 <div className="flex justify-between items-center mb-2">
@@ -2094,8 +2621,14 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   {grouped[col.key]?.map((t) => (
                     <Card
                       key={t.id}
+                      draggable={canMoveTask(t)}
+                      onDragStart={() => onDragStart(t.id)}
+                      onDragEnd={onDragEnd}
                       className={
-                        "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 " +
+                        "transition-all hover:shadow-md hover:-translate-y-0.5 " +
+                        (canMoveTask(t)
+                          ? "cursor-grab active:cursor-grabbing "
+                          : "cursor-pointer ") +
                         (isOverdue(t)
                           ? "border-danger-300 bg-danger-50"
                           : "border-gray-200 hover:border-primary-200")

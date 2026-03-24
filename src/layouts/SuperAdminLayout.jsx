@@ -57,17 +57,14 @@ export default function SuperAdminLayout() {
   }
 
   return (
-    <div className="flex h-screen theme-bg theme-text">
+    <div className="flex h-screen overflow-hidden theme-bg theme-text">
       {/* SIDEBAR */}
-      <aside className="w-64 theme-surface border-r theme-border flex flex-col p-4">
-        <div className="mb-6">
+      <aside className="w-64 theme-surface border-r theme-border flex flex-col overflow-hidden shrink-0">
+        <div className="h-16 px-4 border-b theme-border flex items-center">
           <h2 className="text-lg font-semibold">Superadmin</h2>
-          <p className="text-xs theme-text-muted">
-            Platform Control Panel
-          </p>
         </div>
 
-        <nav className="space-y-2 flex-1">
+        <nav className="space-y-2 flex-1 p-4 overflow-y-auto sidebar-scroll">
           <NavLink
             to="/superadmin/workspaces"
             end
@@ -103,26 +100,29 @@ export default function SuperAdminLayout() {
           </NavLink>
         </nav>
 
-        <button
-          onClick={logout}
-          className="mt-4 text-left px-3 py-2 rounded text-sm text-red-500 hover:bg-[var(--surface-soft)]"
-        >
-          Logout
-        </button>
+        <div className="p-4 border-t theme-border shrink-0">
+          <button
+            onClick={logout}
+            className="w-full text-left px-3 py-2 rounded text-sm text-red-500 hover:bg-[var(--surface-soft)]"
+          >
+            Logout
+          </button>
+        </div>
       </aside>
 
       {/* MAIN CONTENT */}
       <main className="flex-1 theme-bg overflow-auto">
-        <header className="theme-surface border-b theme-border px-6 py-4 flex items-center justify-between">
+        <header className="h-16 theme-surface border-b theme-border px-6 flex items-center justify-between">
           <div className="text-sm theme-text-muted">
             Superadmin Area
           </div>
           <ThemeSwitcher compact />
         </header>
 
-        <div className="p-6">
-          {/* ✅ THIS WILL NOW RENDER CORRECTLY */}
-          <Outlet />
+        <div className="p-4">
+          <div className="rounded-2xl border theme-border theme-surface shadow-lg p-3 md:p-4">
+            <Outlet />
+          </div>
         </div>
       </main>
     </div>
