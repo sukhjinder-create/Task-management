@@ -1,9 +1,9 @@
 # electron-builder.yml
 # Build config for Mac (.dmg) and Windows (.exe installer)
 
-appId: com.taskmanager.app
-productName: Task Manager
-copyright: Copyright © 2026 Task Manager
+appId: com.proxima.app
+productName: Proxima
+copyright: Copyright © 2026 Proxima
 
 # Built web assets
 directories:
@@ -34,7 +34,7 @@ mac:
       arch: [x64, arm64]
 
 dmg:
-  title: Task Manager
+  title: Proxima
   icon: public/icon.icns
   contents:
     - x: 130
@@ -58,7 +58,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Task Manager
+  shortcutName: Proxima
 
 # ─── Linux ───────────────────────────────────────────────────────────────────
 linux:

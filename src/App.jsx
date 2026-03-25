@@ -19,6 +19,7 @@ import Autopilot from "./pages/Autopilot.jsx";
 import TestingAgent from "./pages/TestingAgent.jsx";
 import SlackMigration from "./pages/SlackMigration.jsx";
 import Migrations from "./pages/Migrations.jsx";
+import WorkspaceBilling from "./pages/WorkspaceBilling.jsx";
 
 // ---- Intelligence pages (NEW) ----
 import UserPerformance from "./pages/intelligence/UserPerformance.jsx";
@@ -35,6 +36,7 @@ import SuperAdminWorkspaces from "./pages/SuperAdminWorkspaces.jsx";
 import SuperadminLogin from "./pages/SuperadminLogin.jsx";
 import SuperadminPayments from "./pages/SuperadminPayments.jsx";
 import SuperadminSettings from "./pages/SuperadminSettings.jsx";
+import SuperadminPlans from "./pages/SuperadminPlans.jsx";
 import ProtectedSuperadmin from "./components/ProtectedSuperadmin";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext";
 
@@ -174,6 +176,15 @@ export default function App() {
             }
           />
 
+          <Route
+            path="admin/billing"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <WorkspaceBilling />
+              </ProtectedRoute>
+            }
+          />
+
           {/* ---- NEW: Admin Intelligence ---- */}
           <Route
             path="admin/intelligence"
@@ -209,8 +220,9 @@ export default function App() {
         >
           <Route index element={<Navigate to="workspaces" replace />} />
           <Route path="workspaces" element={<SuperAdminWorkspaces />} />
-          <Route path="payments" element={<SuperadminPayments />} />
-          <Route path="settings" element={<SuperadminSettings />} />
+          <Route path="plans"      element={<SuperadminPlans />} />
+          <Route path="payments"   element={<SuperadminPayments />} />
+          <Route path="settings"   element={<SuperadminSettings />} />
         </Route>
 
         {/* ============================

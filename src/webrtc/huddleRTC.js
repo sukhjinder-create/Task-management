@@ -72,7 +72,7 @@ export default function useHuddleWebRTC({ channelId, user, activeHuddle }) {
       if (document.visibilityState === "hidden" && joined) {
         document.title = "Huddle in progress…";
       } else {
-        document.title = "TaskManager";
+        document.title = "Proxima";
       }
     };
 

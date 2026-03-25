@@ -237,6 +237,143 @@ function SsoTab() {
   );
 }
 
+// ─── Audit helpers ────────────────────────────────────────────────────────────
+
+function describeAudit(log) {
+  const m   = log.metadata  || {};
+  const o   = log.old_value || {};
+  const n   = log.new_value || {};
+
+  switch (log.action) {
+    // Auth
+    case "user.login":             return "Signed in";
+    case "user.logout":            return "Signed out";
+    case "user.mfa.enabled":       return "Enabled two-factor authentication";
+    case "user.mfa.disabled":      return "Disabled two-factor authentication";
+    case "user.password.changed":  return "Changed password";
+    case "user.profile.updated":   return "Updated profile settings";
+    case "sso.login":              return `Signed in via SSO${m.provider ? ` (${m.provider})` : ""}`;
+    case "mfa.backup_code.used":   return "Used a MFA backup code";
+
+    // Tasks
+    case "task.create": return `Created task${m.name ? ` "${m.name}"` : ""}${m.projectName ? ` in "${m.projectName}"` : ""}`;
+    case "task.update": {
+      const changed = Object.keys(n).filter(k => JSON.stringify(o[k]) !== JSON.stringify(n[k]));
+      if (changed.length > 0)
+        return `Updated task — changed: ${changed.map(k => `${k} from "${o[k] ?? "—"}" to "${n[k] ?? "—"}"`).join("; ")}`;
+      return `Updated task${m.name ? ` "${m.name}"` : ""}`;
+    }
+    case "task.delete": return `Deleted task${m.name ? ` "${m.name}"` : ""}`;
+    case "task.assign": return `Assigned task to ${n.assignee || m.assignee || "someone"}`;
+    case "task.status": return `Changed task status: "${o.status || "—"}" → "${n.status || m.status || "—"}"`;
+
+    // Projects
+    case "project.create":        return `Created project${m.name ? ` "${m.name}"` : ""}`;
+    case "project.update":        return `Updated project${m.name ? ` "${m.name}"` : ""}`;
+    case "project.delete":        return `Deleted project${m.name ? ` "${m.name}"` : ""}`;
+    case "project.member.add":    return `Added member${m.username ? ` ${m.username}` : ""} to project${m.projectName ? ` "${m.projectName}"` : ""}`;
+    case "project.member.remove": return `Removed member${m.username ? ` ${m.username}` : ""} from project${m.projectName ? ` "${m.projectName}"` : ""}`;
+
+    // Leave
+    case "leave.request.create":  return `Submitted leave request${m.type ? ` (${m.type})` : ""}${m.start_date ? ` · ${m.start_date}` : ""}${m.end_date ? ` → ${m.end_date}` : ""}`;
+    case "leave.request.approve": return `Approved leave request${m.username ? ` for ${m.username}` : ""}`;
+    case "leave.request.reject":  return `Rejected leave request${m.username ? ` for ${m.username}` : ""}${m.reason ? ` — "${m.reason}"` : ""}`;
+    case "leave.request.cancel":  return "Cancelled leave request";
+
+    // Reviews
+    case "review.submit":          return `Submitted review${m.revieweeName ? ` for ${m.revieweeName}` : ""}${m.cycleName ? ` in cycle "${m.cycleName}"` : ""}${m.score ? ` · ${m.score}/5` : ""}`;
+    case "review.cycle.create":    return `Created review cycle${m.name ? ` "${m.name}"` : ""}`;
+    case "review.cycle.activate":  return `Activated review cycle${m.name ? ` "${m.name}"` : ""}`;
+    case "review.cycle.complete":  return `Completed review cycle${m.name ? ` "${m.name}"` : ""}`;
+
+    // Reports & exports
+    case "report.download":   return `Downloaded ${m.reportType || "report"}${m.format ? ` (${m.format.toUpperCase()})` : ""}${m.month ? ` for ${m.month}` : ""}${m.projectName ? ` — "${m.projectName}"` : ""}`;
+    case "report.export":     return `Exported report as ${m.format?.toUpperCase() || "CSV"}${m.projectName ? ` for project "${m.projectName}"` : ""}`;
+    case "attendance.export": return `Exported attendance report${m.month ? ` for ${m.month}` : ""}`;
+
+    // Workspace / Users
+    case "workspace.settings.update": return "Updated workspace settings";
+    case "user.role.change":   return `Changed role: "${o.role || "—"}" → "${n.role || "—"}"${m.targetUsername ? ` for ${m.targetUsername}` : ""}`;
+    case "user.invite":        return `Invited${m.email ? ` ${m.email}` : " user"} to workspace`;
+    case "user.remove":        return `Removed${m.username ? ` ${m.username}` : " user"} from workspace`;
+
+    // Wiki
+    case "wiki.page.create": return `Created wiki page${m.title ? ` "${m.title}"` : ""}`;
+    case "wiki.page.update": return `Edited wiki page${m.title ? ` "${m.title}"` : ""}`;
+    case "wiki.page.delete": return `Deleted wiki page${m.title ? ` "${m.title}"` : ""}`;
+
+    // API Keys / Webhooks
+    case "api_key.create":  return `Created API key${m.name ? ` "${m.name}"` : ""}`;
+    case "api_key.revoke":  return `Revoked API key${m.name ? ` "${m.name}"` : ""}`;
+    case "webhook.create":  return `Added webhook${m.url ? ` → ${m.url}` : ""}`;
+    case "webhook.delete":  return `Removed webhook${m.url ? ` → ${m.url}` : ""}`;
+
+    // GDPR
+    case "gdpr.erasure_request": return "Submitted GDPR data erasure request";
+    case "gdpr.consent":         return "Updated data consent preferences";
+
+    default: {
+      const readable = log.action.split(".").map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+      return m.name ? `${readable}: "${m.name}"` : readable;
+    }
+  }
+}
+
+function AuditDetail({ log }) {
+  const m = log.metadata || {};
+  const hasOld = log.old_value && Object.keys(log.old_value).length > 0;
+  const hasNew = log.new_value && Object.keys(log.new_value).length > 0;
+  const metaKeys = Object.keys(m).filter(k => m[k] != null && m[k] !== "");
+
+  const renderKV = (obj) => Object.entries(obj).map(([k, v]) => (
+    <div key={k} className="flex gap-2 text-[11px]">
+      <span className="theme-text-muted w-28 shrink-0 capitalize">{k.replace(/_/g, " ")}</span>
+      <span className="theme-text font-medium break-all">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
+    </div>
+  ));
+
+  return (
+    <div className="grid gap-4 md:grid-cols-3 text-xs">
+      {/* Context */}
+      {metaKeys.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold theme-text-muted uppercase tracking-wide mb-2">Context</p>
+          <div className="space-y-1">{renderKV(m)}</div>
+        </div>
+      )}
+
+      {/* Before → After */}
+      {(hasOld || hasNew) && (
+        <div className={metaKeys.length > 0 ? "" : "md:col-span-2"}>
+          <p className="text-[10px] font-semibold theme-text-muted uppercase tracking-wide mb-2">Changes</p>
+          <div className="space-y-1.5">
+            {Array.from(new Set([...Object.keys(log.old_value || {}), ...Object.keys(log.new_value || {})])).map(k => {
+              const before = log.old_value?.[k];
+              const after  = log.new_value?.[k];
+              const changed = JSON.stringify(before) !== JSON.stringify(after);
+              return (
+                <div key={k} className="flex gap-2 text-[11px] items-start">
+                  <span className="theme-text-muted w-24 shrink-0 capitalize">{k.replace(/_/g, " ")}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {before != null && <span className={`px-1.5 py-0.5 rounded ${changed ? "bg-red-500/10 text-red-500 line-through" : "bg-gray-500/10 theme-text"}`}>{String(before)}</span>}
+                    {changed && before != null && after != null && <span className="theme-text-muted">→</span>}
+                    {after  != null && changed && <span className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-500">{String(after)}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* No detail available */}
+      {metaKeys.length === 0 && !hasOld && !hasNew && (
+        <div className="md:col-span-3 theme-text-muted text-[11px]">No additional details recorded.</div>
+      )}
+    </div>
+  );
+}
+
 // ─── Audit Logs Tab ───────────────────────────────────────────────────────────
 function AuditTab() {
   const api = useApi();
@@ -269,15 +406,26 @@ function AuditTab() {
   const endRow = Math.min(page * pageSize, total);
 
   const ACTION_COLORS = {
-    "user.login": "bg-blue-100 text-blue-700",
-    "user.mfa.enabled": "bg-green-100 text-green-700",
-    "task.create": "bg-indigo-100 text-indigo-700",
-    "request.get": "bg-slate-100 text-slate-700",
-    "request.post": "bg-emerald-100 text-emerald-700",
-    "request.put": "bg-amber-100 text-amber-700",
-    "request.delete": "bg-rose-100 text-rose-700",
-    "gdpr.erasure_request": "bg-red-100 text-red-700",
-    default: "bg-gray-100 text-gray-700",
+    "user.login":             "bg-blue-500/10 text-blue-500",
+    "user.logout":            "bg-gray-500/10 text-gray-500",
+    "user.mfa.enabled":       "bg-green-500/10 text-green-500",
+    "user.mfa.disabled":      "bg-red-500/10 text-red-500",
+    "task.create":            "bg-indigo-500/10 text-indigo-500",
+    "task.update":            "bg-amber-500/10 text-amber-500",
+    "task.delete":            "bg-red-500/10 text-red-500",
+    "project.create":         "bg-purple-500/10 text-purple-500",
+    "review.submit":          "bg-emerald-500/10 text-emerald-500",
+    "review.cycle.create":    "bg-teal-500/10 text-teal-500",
+    "leave.request.create":   "bg-cyan-500/10 text-cyan-500",
+    "leave.request.approve":  "bg-green-500/10 text-green-500",
+    "leave.request.reject":   "bg-red-500/10 text-red-500",
+    "report.download":        "bg-orange-500/10 text-orange-500",
+    "report.export":          "bg-orange-500/10 text-orange-500",
+    "attendance.export":      "bg-orange-500/10 text-orange-500",
+    "gdpr.erasure_request":   "bg-red-500/10 text-red-500",
+    "api_key.create":         "bg-violet-500/10 text-violet-500",
+    "api_key.revoke":         "bg-red-500/10 text-red-500",
+    default:                  "bg-gray-500/10 text-gray-500",
   };
 
   return (
@@ -337,46 +485,32 @@ function AuditTab() {
                       {log.email && <div className="theme-text-muted">{log.email}</div>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ACTION_COLORS[log.action] || ACTION_COLORS.default}`}>
-                        {log.action}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`w-fit px-2 py-0.5 rounded-full text-[10px] font-medium ${ACTION_COLORS[log.action] || ACTION_COLORS.default}`}>
+                          {log.action}
+                        </span>
+                        <span className="text-xs theme-text">{describeAudit(log)}</span>
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-xs theme-text-muted">{log.entity_type ? `${log.entity_type}${log.entity_id ? `:${String(log.entity_id).slice(0,8)}` : ""}` : "—"}</td>
+                    <td className="px-4 py-3 text-xs theme-text-muted">{log.entity_type || "—"}</td>
                     <td className="px-4 py-3 text-xs theme-text-muted">{log.ip_address || "—"}</td>
                     <td className="px-4 py-3 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border theme-border theme-text-muted hover:theme-text"
-                      >
-                        {expandedId === log.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        View
-                      </button>
+                      {(log.old_value || log.new_value || (log.metadata && Object.keys(log.metadata).length > 0)) && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md border theme-border theme-text-muted hover:theme-text"
+                        >
+                          {expandedId === log.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          {expandedId === log.id ? "Hide" : "Details"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                   {expandedId === log.id && (
                     <tr className="border-b theme-border bg-[var(--surface-soft)]/40">
-                      <td colSpan={6} className="px-4 py-4">
-                        <div className="grid gap-3 md:grid-cols-3 text-xs">
-                          <div>
-                            <p className="font-semibold theme-text mb-1">Metadata</p>
-                            <pre className="whitespace-pre-wrap break-words theme-text-muted text-[11px]">
-                              {JSON.stringify(log.metadata || {}, null, 2)}
-                            </pre>
-                          </div>
-                          <div>
-                            <p className="font-semibold theme-text mb-1">Old Value</p>
-                            <pre className="whitespace-pre-wrap break-words theme-text-muted text-[11px]">
-                              {JSON.stringify(log.old_value ?? null, null, 2)}
-                            </pre>
-                          </div>
-                          <div>
-                            <p className="font-semibold theme-text mb-1">New Value</p>
-                            <pre className="whitespace-pre-wrap break-words theme-text-muted text-[11px]">
-                              {JSON.stringify(log.new_value ?? null, null, 2)}
-                            </pre>
-                          </div>
-                        </div>
+                      <td colSpan={6} className="px-5 py-4">
+                        <AuditDetail log={log} />
                       </td>
                     </tr>
                   )}

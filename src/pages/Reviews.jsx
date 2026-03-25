@@ -52,6 +52,7 @@ export default function Reviews() {
   // Summary modal
   const [summaryData, setSummaryData] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [modalTab, setModalTab] = useState("submitted"); // "submitted" | "pending"
 
   const loadPending = useCallback(() => {
     api.get("/reviews/pending").then(r => setPendingReviews(r.data || [])).catch(() => {});
@@ -128,6 +129,7 @@ export default function Reviews() {
   const openSummary = async (cycle) => {
     setSummaryLoading(true);
     setSummaryData(null);
+    setModalTab("submitted");
     try {
       const [summaryRes, reviewsRes] = await Promise.all([
         api.get(`/reviews/cycles/${cycle.id}/summary`),
@@ -410,23 +412,79 @@ export default function Reviews() {
 
                 {summaryLoading ? (
                   <div className="py-16 text-center theme-text-muted text-sm">Loading reviews…</div>
-                ) : (
-                  <div className="overflow-y-auto flex-1 p-4 space-y-4">
-                    {summaryData.stats.length === 0 && (
-                      <p className="text-center theme-text-muted text-sm py-8">No reviews in this cycle yet.</p>
-                    )}
-                    {summaryData.stats.map(member => {
-                      const memberReviews = summaryData.reviews.filter(r => r.reviewee_id === member.reviewee_id);
-                      return (
-                        <MemberReviewGroup
-                          key={member.reviewee_id}
-                          member={member}
-                          reviews={memberReviews}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
+                ) : (() => {
+                  // Pre-compute per-member submitted/pending counts
+                  const memberData = summaryData.stats.map(member => {
+                    const memberReviews = summaryData.reviews.filter(r => r.reviewee_id === member.reviewee_id);
+                    const submitted = memberReviews.filter(r => r.status === "submitted");
+                    const pending   = memberReviews.filter(r => r.status !== "submitted");
+                    return { member, memberReviews, submitted, pending };
+                  });
+                  const totalSubmitted = memberData.reduce((s, m) => s + m.submitted.length, 0);
+                  const totalPending   = memberData.reduce((s, m) => s + m.pending.length, 0);
+
+                  return (
+                    <>
+                      {/* Modal-level tabs */}
+                      <div className="flex border-b theme-border shrink-0">
+                        {[
+                          { key: "submitted", label: "Submitted",     count: totalSubmitted, activeColor: "border-green-500 text-green-500",  badgeColor: "bg-green-500/10 text-green-500" },
+                          { key: "pending",   label: "Not Submitted", count: totalPending,   activeColor: "border-amber-500 text-amber-500",  badgeColor: "bg-amber-500/10 text-amber-500" },
+                        ].map(t => (
+                          <button
+                            key={t.key}
+                            onClick={() => setModalTab(t.key)}
+                            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors
+                              ${modalTab === t.key ? t.activeColor : "border-transparent theme-text-muted hover:theme-text"}`}
+                          >
+                            {t.label}
+                            <span className={`min-w-[20px] h-5 flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 ${modalTab === t.key ? t.badgeColor : "bg-[var(--surface-strong)] theme-text-muted"}`}>
+                              {t.count}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="overflow-y-auto flex-1 p-4 space-y-3">
+                        {summaryData.stats.length === 0 && (
+                          <p className="text-center theme-text-muted text-sm py-8">No reviews in this cycle yet.</p>
+                        )}
+
+                        {/* Submitted tab — member cards with only submitted reviews */}
+                        {modalTab === "submitted" && memberData
+                          .filter(m => m.submitted.length > 0)
+                          .map(({ member, submitted }) => (
+                            <MemberReviewGroup
+                              key={member.reviewee_id}
+                              member={member}
+                              reviews={submitted}
+                              mode="submitted"
+                            />
+                          ))
+                        }
+                        {modalTab === "submitted" && memberData.every(m => m.submitted.length === 0) && (
+                          <p className="text-center theme-text-muted text-sm py-8">No reviews submitted yet.</p>
+                        )}
+
+                        {/* Pending tab — member cards with only pending reviews */}
+                        {modalTab === "pending" && memberData
+                          .filter(m => m.pending.length > 0)
+                          .map(({ member, pending }) => (
+                            <MemberReviewGroup
+                              key={member.reviewee_id}
+                              member={member}
+                              reviews={pending}
+                              mode="pending"
+                            />
+                          ))
+                        }
+                        {modalTab === "pending" && memberData.every(m => m.pending.length === 0) && (
+                          <p className="text-center theme-text-muted text-sm py-8">Everyone has submitted — all done!</p>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -666,11 +724,23 @@ function AboutMeCard({ review }) {
 
 // ─── ADMIN: MEMBER REVIEW GROUP (inside cycle detail modal) ──────────────────
 
-function MemberReviewGroup({ member, reviews }) {
-  const [expanded, setExpanded] = useState(null); // review id that's open
+// mode="submitted" → reviews are all submitted; mode="pending" → reviews are all pending
+function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
+  const [expanded, setExpanded] = useState(null);
+  const [showSummary, setShowSummary] = useState(false);
 
-  const submittedReviews = reviews.filter(r => r.status === "submitted");
-  const pendingReviews   = reviews.filter(r => r.status !== "submitted");
+  // Summary data — only relevant in submitted mode
+  const byType = ["self", "manager", "peer"].map(type => {
+    const typed = reviews.filter(r => r.type === type && r.overall_score);
+    if (!typed.length) return null;
+    const avg = (typed.reduce((s, r) => s + Number(r.overall_score), 0) / typed.length).toFixed(1);
+    return { type, avg, count: typed.length };
+  }).filter(Boolean);
+
+  const allStrengths    = reviews.map(r => r.strengths).filter(Boolean);
+  const allImprovements = reviews.map(r => r.improvements).filter(Boolean);
+  const allGoals        = reviews.map(r => r.goals_next).filter(Boolean);
+  const hasSummary      = mode === "submitted" && (byType.length > 0 || allStrengths.length > 0);
 
   return (
     <div className="theme-surface-card rounded-xl border theme-border overflow-hidden">
@@ -679,83 +749,176 @@ function MemberReviewGroup({ member, reviews }) {
         <div className="flex-1">
           <p className="font-semibold theme-text">{member.username}</p>
           <p className="text-xs theme-text-muted">
-            {member.submitted}/{member.total} submitted
+            {mode === "submitted"
+              ? `${reviews.length} review${reviews.length !== 1 ? "s" : ""} submitted`
+              : `${reviews.length} review${reviews.length !== 1 ? "s" : ""} not submitted`}
           </p>
         </div>
-        {member.avg_score ? (
-          <div className="flex items-center gap-1.5">
-            <div className="flex gap-0.5">
-              {[1,2,3,4,5].map(n => (
-                <Star key={n} className={`w-3.5 h-3.5 ${n <= Math.round(member.avg_score) ? "text-amber-400 fill-amber-400" : "text-gray-300"}`} />
-              ))}
+        <div className="flex items-center gap-2">
+          {mode === "submitted" && member.avg_score && (
+            <div className="flex items-center gap-1.5">
+              <div className="flex gap-0.5">
+                {[1,2,3,4,5].map(n => (
+                  <Star key={n} className={`w-3.5 h-3.5 ${n <= Math.round(member.avg_score) ? "text-amber-400 fill-amber-400" : "text-gray-300"}`} />
+                ))}
+              </div>
+              <span className="text-sm font-bold theme-text">{member.avg_score}/5</span>
             </div>
-            <span className="text-sm font-bold theme-text">{member.avg_score}</span>
-          </div>
-        ) : (
-          <span className="text-xs theme-text-muted">No submissions yet</span>
-        )}
+          )}
+          {hasSummary && (
+            <button
+              onClick={() => setShowSummary(s => !s)}
+              className={`text-xs px-2 py-1 rounded-lg border transition-colors ${showSummary ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20" : "border-[var(--border)] theme-text-muted hover:theme-text"}`}
+            >
+              {showSummary ? "Hide Summary" : "Summary"}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Submitted reviews */}
-      <div className="divide-y theme-border">
-        {submittedReviews.map(r => (
-          <div key={r.id}>
-            <button
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-soft)] transition-colors text-left"
-              onClick={() => setExpanded(expanded === r.id ? null : r.id)}
-            >
+      {/* ── Per-user summary panel ── */}
+      {showSummary && (
+        <div className="px-4 py-4 bg-indigo-500/5 border-b border-indigo-500/10 space-y-4">
+          {byType.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-indigo-500 uppercase tracking-wide mb-2">Score Breakdown</p>
+              <div className="flex gap-3 flex-wrap">
+                {byType.map(({ type, avg, count }) => (
+                  <div key={type} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${TYPE_COLOR[type]}`} style={{background:"var(--surface-soft)"}}>
+                    <span className="text-xs font-medium">{TYPE_LABEL[type]}</span>
+                    <span className="text-sm font-bold">{avg}/5</span>
+                    {count > 1 && <span className="text-[10px] opacity-60">({count})</span>}
+                  </div>
+                ))}
+              </div>
+              {(() => {
+                const self = byType.find(t => t.type === "self");
+                const ext  = byType.filter(t => t.type !== "self");
+                if (!self || !ext.length) return null;
+                const extAvg = (ext.reduce((s,t) => s + Number(t.avg), 0) / ext.length).toFixed(1);
+                const diff   = (Number(self.avg) - Number(extAvg)).toFixed(1);
+                return (
+                  <p className="text-xs theme-text-muted mt-1.5">
+                    Self-assessed <strong className="theme-text">{Number(diff) > 0 ? `+${diff}` : diff}</strong> vs others' average
+                    {" · "}{Number(diff) > 0.5 ? "may be overestimating" : Number(diff) < -0.5 ? "may be underestimating" : "well-calibrated"}
+                  </p>
+                );
+              })()}
+            </div>
+          )}
+
+          {allStrengths.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-green-500 uppercase tracking-wide mb-2">
+                Strengths · <span className="normal-case font-normal">{allStrengths.length} reviewer{allStrengths.length !== 1 ? "s" : ""}</span>
+              </p>
+              <div className="space-y-2">
+                {allStrengths.map((s, i) => (
+                  <div key={i} className="flex gap-2 text-sm theme-text">
+                    <span className="text-green-500 shrink-0">•</span>
+                    <span className="leading-relaxed">{s}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {allImprovements.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-amber-500 uppercase tracking-wide mb-2">
+                Areas for Improvement · <span className="normal-case font-normal">{allImprovements.length} reviewer{allImprovements.length !== 1 ? "s" : ""}</span>
+              </p>
+              <div className="space-y-2">
+                {allImprovements.map((s, i) => (
+                  <div key={i} className="flex gap-2 text-sm theme-text">
+                    <span className="text-amber-500 shrink-0">•</span>
+                    <span className="leading-relaxed">{s}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {allGoals.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-blue-500 uppercase tracking-wide mb-2">
+                Goals for Next Quarter · <span className="normal-case font-normal">{allGoals.length} reviewer{allGoals.length !== 1 ? "s" : ""}</span>
+              </p>
+              <div className="space-y-2">
+                {allGoals.map((s, i) => (
+                  <div key={i} className="flex gap-2 text-sm theme-text">
+                    <span className="text-blue-500 shrink-0">→</span>
+                    <span className="leading-relaxed">{s}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Submitted mode: expandable review cards ── */}
+      {mode === "submitted" && (
+        <div className="divide-y theme-border">
+          {reviews.map(r => (
+            <div key={r.id}>
+              <button
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-soft)] transition-colors text-left"
+                onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+              >
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_COLOR[r.type]}`}>
+                  {TYPE_LABEL[r.type]}
+                </span>
+                <span className="text-sm theme-text flex-1">by <strong>{r.reviewer_name}</strong></span>
+                {r.overall_score && (
+                  <div className="flex gap-0.5 shrink-0">
+                    {[1,2,3,4,5].map(n => (
+                      <Star key={n} className={`w-3.5 h-3.5 ${n <= r.overall_score ? "text-amber-400 fill-amber-400" : "text-gray-200"}`} />
+                    ))}
+                  </div>
+                )}
+                {expanded === r.id
+                  ? <ChevronUp className="w-4 h-4 theme-text-muted shrink-0" />
+                  : <ChevronDown className="w-4 h-4 theme-text-muted shrink-0" />}
+              </button>
+              {expanded === r.id && (
+                <div className="px-4 pb-4 pt-1 space-y-3 bg-[var(--surface-soft)]">
+                  {[
+                    { key: "strengths",    label: "Strengths" },
+                    { key: "improvements", label: "Areas for Improvement" },
+                    { key: "goals_next",   label: "Goals for Next Quarter" },
+                  ].map(({ key, label }) => r[key] && (
+                    <div key={key}>
+                      <p className="text-[11px] font-semibold theme-text-muted uppercase tracking-wide mb-1">{label}</p>
+                      <p className="text-sm theme-text leading-relaxed">{r[key]}</p>
+                    </div>
+                  ))}
+                  {!r.strengths && !r.improvements && !r.goals_next && (
+                    <p className="text-sm theme-text-muted italic">No written feedback provided.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Pending mode: simple list ── */}
+      {mode === "pending" && (
+        <div className="divide-y theme-border">
+          {reviews.map(r => (
+            <div key={r.id} className="flex items-center gap-3 px-4 py-3">
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_COLOR[r.type]}`}>
                 {TYPE_LABEL[r.type]}
               </span>
-              <span className="text-sm theme-text flex-1">
-                by <strong>{r.reviewer_name}</strong>
+              <span className="text-sm theme-text flex-1">by {r.reviewer_name}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_COLOR[r.status]}`}>
+                {r.status.replace("_", " ")}
               </span>
-              {r.overall_score && (
-                <div className="flex gap-0.5 shrink-0">
-                  {[1,2,3,4,5].map(n => (
-                    <Star key={n} className={`w-3.5 h-3.5 ${n <= r.overall_score ? "text-amber-400 fill-amber-400" : "text-gray-200"}`} />
-                  ))}
-                </div>
-              )}
-              <span className="bg-green-500/10 text-green-500 text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0">submitted</span>
-              {expanded === r.id
-                ? <ChevronUp className="w-4 h-4 theme-text-muted shrink-0" />
-                : <ChevronDown className="w-4 h-4 theme-text-muted shrink-0" />}
-            </button>
-
-            {expanded === r.id && (
-              <div className="px-4 pb-4 pt-1 space-y-3 bg-[var(--surface-soft)]">
-                {[
-                  { key: "strengths",    label: "Strengths" },
-                  { key: "improvements", label: "Areas for Improvement" },
-                  { key: "goals_next",   label: "Goals for Next Quarter" },
-                ].map(({ key, label }) => r[key] && (
-                  <div key={key}>
-                    <p className="text-[11px] font-semibold theme-text-muted uppercase tracking-wide mb-1">{label}</p>
-                    <p className="text-sm theme-text leading-relaxed">{r[key]}</p>
-                  </div>
-                ))}
-                {!r.strengths && !r.improvements && !r.goals_next && (
-                  <p className="text-sm theme-text-muted italic">No written feedback provided.</p>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Pending reviews (collapsed, non-expandable) */}
-        {pendingReviews.map(r => (
-          <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 opacity-50">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_COLOR[r.type]}`}>
-              {TYPE_LABEL[r.type]}
-            </span>
-            <span className="text-sm theme-text-muted flex-1">by {r.reviewer_name}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${STATUS_COLOR[r.status]}`}>
-              {r.status.replace("_", " ")}
-            </span>
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

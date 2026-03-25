@@ -1,4 +1,4 @@
-package com.taskmanager.app;
+package com.proxima.app;
 
 import com.getcapacitor.BridgeActivity;
 

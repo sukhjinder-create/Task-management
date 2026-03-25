@@ -5,8 +5,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.taskmanager.app",
-  appName: "Task Manager",
+  appId: "com.proxima.app",
+  appName: "Proxima",
   webDir: "dist-mobile",
 
   server: {

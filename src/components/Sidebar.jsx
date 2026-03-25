@@ -20,6 +20,7 @@ import {
   Star,
   Sparkles,
   Shield,
+  CreditCard,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../api";
@@ -97,6 +98,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   const adminItems = [
     { to: "/admin/attendance",     label: "Attendance",         icon: Clock,        show: isAdmin },
     { to: "/admin/users",          label: "Admin Panel",        icon: Users,        show: isAdmin },
+    { to: "/admin/billing",        label: "Billing",            icon: CreditCard,   show: isAdmin },
     { to: "/enterprise",           label: "Enterprise",         icon: Shield,       show: isAdmin },
     { to: "/admin/migrations",     label: "Migrations",         icon: Hash,         show: isAdmin },
   ];
@@ -127,7 +129,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         collapsed ? "justify-center px-2" : "px-4 justify-between"
       )}>
         {!collapsed && (
-          <h1 className="text-xl font-bold theme-text truncate">TaskManager</h1>
+          <h1 className="text-xl font-bold theme-text truncate">Proxima</h1>
         )}
         <button
           type="button"
