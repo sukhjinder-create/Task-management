@@ -86,13 +86,14 @@ async function openExecutiveDetail(view = "summary") {
       } catch (err) {
         console.warn("Dashboard overview not available yet");
       }
-      // 🔥 Load workspace health (initial value)
-// ✅ Load workspace health baseline
-try {
-  const healthRes = await api.get("/intelligence/workspace/health");
-  setHealthScore(healthRes.data.healthScore);
-} catch (err) {
-  console.warn("Health not available yet");
+      // 🔥 Load workspace health (admin only)
+if (isAdmin) {
+  try {
+    const healthRes = await api.get("/intelligence/workspace/health");
+    setHealthScore(healthRes.data.healthScore);
+  } catch (err) {
+    console.warn("Health not available yet");
+  }
 }
 
       // Fetch performance trend (last 3 months)
@@ -190,15 +191,14 @@ if (isAdmin) {
   }, []);
 
   useEffect(() => {
+  if (!isAdmin) return; // workspace health pulse is admin-only
   const socket = getSocket();
   if (!socket) return;
 
   const subscribe = () => {
-    console.log("✅ Subscribing to workspace realtime");
     socket.emit("workspace:subscribe");
   };
 
-  // ✅ wait until socket is actually connected
   if (socket.connected) {
     subscribe();
   } else {
@@ -206,13 +206,10 @@ if (isAdmin) {
   }
 
   const onPulse = (data) => {
-    console.log("🔥 HEALTH PULSE RECEIVED", data);
-  const healthValue = Number(data?.health);
-
-  if (Number.isNaN(healthValue)) return;
-
-  setHealthScore(Math.max(0, Math.min(100, healthValue)));
-};
+    const healthValue = Number(data?.health);
+    if (Number.isNaN(healthValue)) return;
+    setHealthScore(Math.max(0, Math.min(100, healthValue)));
+  };
 
   socket.on("workspace:health-pulse", onPulse);
 
@@ -220,7 +217,7 @@ if (isAdmin) {
     socket.off("workspace:health-pulse", onPulse);
     socket.off("connect", subscribe);
   };
-}, []);
+}, [isAdmin]);
 
   /* ======================================
    LIVE INTELLIGENCE UPDATES
@@ -416,7 +413,7 @@ const autonomousInsight = useMemo(() => {
    AUTONOMOUS AI INSIGHT CARD
 ====================================== */}
 
-{autonomousInsight && (
+{isAdmin && autonomousInsight && (
   <div className={`rounded-xl border p-4 ${
     autonomousInsight.type === "critical" ? "bg-red-500/10 border-red-500/30" :
     autonomousInsight.type === "warning"  ? "bg-amber-500/10 border-amber-500/30" :
@@ -460,7 +457,7 @@ const autonomousInsight = useMemo(() => {
    WORKSPACE CONTROL CENTER — AI ATTENTION
 ====================================== */}
 
-{(isAdmin || isManager || isUser) && (
+{isAdmin && (
   <Card className="theme-surface theme-text border theme-border">
     <Card.Content>
       <div className="flex items-center justify-between mb-4">
@@ -1103,8 +1100,9 @@ const autonomousInsight = useMemo(() => {
         <div>
           <h1 className="text-lg font-semibold">Dashboard</h1>
           {/* ===============================
-   WORKSPACE HEALTH PULSE
+   WORKSPACE HEALTH PULSE (admin only)
 ================================ */}
+{isAdmin && (
 <section className="theme-surface rounded-xl shadow p-4 border theme-border">
   <div className="flex justify-between items-center mb-2">
     <h2 className="text-sm font-semibold">
@@ -1144,6 +1142,7 @@ const autonomousInsight = useMemo(() => {
     Live organizational health reacting to task execution in real time.
   </p>
 </section>
+)}
           <p className="text-xs theme-text-muted">
             Role: {role}. Showing an overview of projects and tasks you are allowed
             to access.

@@ -2,6 +2,7 @@
 // Phase 3 AI Features: Meeting Notes→Tasks, Risk Heatmap, Digest, NL Reports, Smart Task Parse
 import { useState, useEffect } from "react";
 import { useApi } from "../api";
+import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import {
   Sparkles, FileText, AlertTriangle, Bell, BarChart2,
@@ -310,7 +311,11 @@ function DigestTab() {
 // ─── AI Report ────────────────────────────────────────────────────────────────
 function ReportTab() {
   const api = useApi();
-  const [type, setType] = useState("weekly");
+  const { auth } = useAuth();
+  const isManager = auth?.user?.role === "manager";
+
+  // Managers can only generate project reports
+  const [type, setType] = useState(isManager ? "project" : "weekly");
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState([]);
@@ -338,12 +343,15 @@ function ReportTab() {
     setLoading(false);
   };
 
+  // Type buttons: managers only see "project"
+  const reportTypes = isManager ? ["project"] : ["weekly", "monthly", "project"];
+
   return (
     <div className="space-y-4">
       <div className="theme-surface-card rounded-xl p-5 border theme-border">
         <h2 className="font-semibold theme-text mb-3">Generate AI Report</h2>
         <div className="flex gap-2 flex-wrap items-center">
-          {["weekly","monthly","project"].map(t => (
+          {reportTypes.map(t => (
             <button key={t} onClick={() => setType(t)}
               className={`px-3 py-2 rounded-lg text-sm font-medium capitalize border transition-colors ${type === t ? "bg-indigo-600 text-white border-indigo-600" : "theme-border theme-text"}`}>
               {t}

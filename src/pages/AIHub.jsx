@@ -59,7 +59,7 @@ const FEATURES = [
     description: "Automate assignment, deadline movement, escalation, and standup preparation without losing control.",
     bullets: ["Auto-assign and reprioritize", "Blocker escalation and action review", "Scheduled standup generation"],
     stats: "Executes every 4 hours",
-    roles: ["admin", "manager"],
+    roles: ["admin"],
     palette: {
       base: "#10b981",
       accent: "#059669",

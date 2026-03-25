@@ -36,21 +36,26 @@ function relativeTime(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-const TYPE_FILTERS = [
-  { value: "all",              label: "All" },
-  { value: "task_assigned",    label: "Assigned" },
-  { value: "task_updated",     label: "Updated" },
-  { value: "comment_added",    label: "Comments" },
-  { value: "comment_mention",  label: "Mentions" },
-  { value: "project_assigned", label: "Projects" },
-  { value: "autopilot_summary",label: "Autopilot" },
-  { value: "workspace_warning",label: "Warnings" },
+const ALL_TYPE_FILTERS = [
+  { value: "all",              label: "All",       roles: ["user", "manager", "admin"] },
+  { value: "task_assigned",    label: "Assigned",  roles: ["user", "manager", "admin"] },
+  { value: "task_updated",     label: "Updated",   roles: ["user", "manager", "admin"] },
+  { value: "comment_added",    label: "Comments",  roles: ["user", "manager", "admin"] },
+  { value: "comment_mention",  label: "Mentions",  roles: ["user", "manager", "admin"] },
+  { value: "leave",            label: "Leave",     roles: ["user", "manager", "admin"] },
+  { value: "project_assigned", label: "Projects",  roles: ["manager", "admin"] },
+  { value: "autopilot_summary",label: "Autopilot", roles: ["admin"] },
+  { value: "workspace_warning",label: "Warnings",  roles: ["admin"] },
 ];
+
+const LEAVE_TYPES = new Set(["leave_request", "leave_status"]);
 
 export default function Notifications() {
   const api = useApi();
   const { auth } = useAuth();
   const navigate = useNavigate();
+  const role = auth.user?.role || "user";
+  const visibleFilters = ALL_TYPE_FILTERS.filter((f) => f.roles.includes(role));
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +157,7 @@ export default function Notifications() {
 
   const filtered = notifications.filter((n) => {
     if (tab === "unread" && n.is_read) return false;
+    if (typeFilter === "leave") return LEAVE_TYPES.has(n.type);
     if (typeFilter !== "all" && n.type !== typeFilter) return false;
     return true;
   });
@@ -204,7 +210,7 @@ export default function Notifications() {
 
         {/* ── Type filter chips (horizontal scroll) ── */}
         <div className="flex gap-2 mt-2 overflow-x-auto pb-1 -mx-4 px-4">
-          {TYPE_FILTERS.map((f) => (
+          {visibleFilters.map((f) => (
             <button
               key={f.value}
               onClick={() => setTypeFilter(f.value)}

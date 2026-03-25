@@ -1,5 +1,6 @@
 // src/pages/StrategicIntelligence.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '../context/AuthContext';
 import {
   Brain, Sparkles, TrendingUp, AlertCircle, ArrowRight,
   Users, FolderOpen, LayoutDashboard, RefreshCw,
@@ -337,7 +338,9 @@ const QUICK_QUESTIONS = {
 
 function AskTab() {
   const api = useApi();
-  const [scope, setScope] = useState('workspace');
+  const { auth } = useAuth();
+  const isManager = auth?.user?.role === 'manager';
+  const [scope, setScope] = useState(isManager ? 'project' : 'workspace');
   const [entityId, setEntityId] = useState('');
   const [question, setQuestion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -417,12 +420,12 @@ function AskTab() {
     <div className="space-y-5">
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Scope selector */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className={`grid gap-3 ${isManager ? 'grid-cols-2' : 'grid-cols-3'}`}>
           {[
             { id: 'workspace', label: 'Workspace', sub: 'Overall insights', icon: TrendingUp },
             { id: 'project',   label: 'Project',   sub: 'Project analysis', icon: FolderOpen },
             { id: 'task',      label: 'Task',       sub: 'Task details',    icon: AlertCircle },
-          ].map(({ id, label, sub, icon: Icon }) => (
+          ].filter(s => isManager ? s.id !== 'workspace' : true).map(({ id, label, sub, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -554,7 +557,15 @@ function AskTab() {
 
 /* ─── Main page ──────────────────────────────────────────────────────────────── */
 export default function StrategicIntelligence() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const { auth } = useAuth();
+  const isManager = auth?.user?.role === 'manager';
+
+  // Managers only access Ask AI
+  const visibleTabs = useMemo(
+    () => isManager ? TABS.filter(t => t.id === 'ask') : TABS,
+    [isManager]
+  );
+  const [activeTab, setActiveTab] = useState(isManager ? 'ask' : 'dashboard');
 
   return (
     <div className="space-y-5">
@@ -578,7 +589,7 @@ export default function StrategicIntelligence() {
 
       {/* Tab bar */}
       <div className="flex bg-white rounded-xl border border-gray-200 p-1 gap-1">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {visibleTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}

@@ -87,10 +87,10 @@ export default function Sidebar({ collapsed, onToggle }) {
     { to: "/my-tasks",      label: tasksLabel,       icon: CheckSquare,     show: true },
     { to: "/wiki",          label: "Wiki / Docs",    icon: BookOpen,        show: true },
     { to: "/leave",         label: "Leave",          icon: CalendarDays,    show: true },
-    { to: "/okr",           label: "Goals",          icon: Target,          show: true },
+    { to: "/okr",           label: "Goals",          icon: Target,          show: isAdmin },
     { to: "/reviews",       label: "Reviews",        icon: Star,            show: true },
-    { to: "/reports",       label: "Reports",        icon: FileText,        show: true },
-    { to: "/ai",            label: "AI Hub",         icon: Sparkles,        show: true },
+    { to: "/reports",       label: "Reports",        icon: FileText,        show: isAdmin || role === "manager" },
+    { to: "/ai",            label: "AI Hub",         icon: Sparkles,        show: isAdmin || role === "manager" },
     { to: "/chat",          label: "Team Chat",      icon: MessageSquare,   show: true },
     { to: "/notifications", label: "Notifications",  icon: Bell,            show: true, badge: unreadCount },
   ];

@@ -95,16 +95,44 @@ export default function App() {
           <Route path="notifications" element={<Notifications />} />
           <Route path="profile" element={<Profile />} />
           <Route path="chat" element={<Chat />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="intelligence" element={<StrategicIntelligence />} />
+          <Route
+            path="reports"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                <Reports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="intelligence"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                <StrategicIntelligence />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ---- Enterprise Phase 1-4 routes ---- */}
           <Route path="wiki"        element={<Wiki />} />
           <Route path="leave"       element={<Leave />} />
-          <Route path="okr"         element={<OKR />} />
+          <Route
+            path="okr"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <OKR />
+              </ProtectedRoute>
+            }
+          />
           <Route path="reviews"     element={<Reviews />} />
           <Route path="ai-features" element={<AIFeatures />} />
-          <Route path="ai"          element={<AIHub />} />
+          <Route
+            path="ai"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                <AIHub />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="enterprise"
             element={
@@ -118,7 +146,7 @@ export default function App() {
           <Route
             path="autopilot"
             element={
-              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+              <ProtectedRoute allowedRoles={["admin"]}>
                 <Autopilot />
               </ProtectedRoute>
             }

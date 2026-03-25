@@ -151,10 +151,12 @@ export default function Reports() {
   const api = useApi();
   const { auth } = useAuth();
   const user = auth.user;
+  const isManager = user?.role === "manager";
 
   // meta
   const [projects, setProjects]   = useState([]);
-  const [users, setUsers]         = useState([]);
+  const [users, setUsers]         = useState([]);       // all workspace users (full list)
+  const [visibleUsers, setVisibleUsers] = useState([]); // users scoped to project filter
   const [sprints, setSprints]     = useState([]);
 
   // filters
@@ -185,15 +187,55 @@ export default function Reports() {
           api.get("/users"),
           api.get("/sprints"),
         ]);
-        setProjects(pRes.data || []);
-        setUsers(uRes.data || []);
+        const projectList = pRes.data || [];
+        const userList = uRes.data || [];
+        setProjects(projectList);
+        setUsers(userList);
         setSprints(sRes.data || []);
+
+        // For managers: initial visible users = users from all their assigned projects
+        if (isManager && projectList.length > 0) {
+          const ids = projectList.map((p) => p.id).join(",");
+          try {
+            const scopedRes = await api.get(`/users?projectIds=${ids}`);
+            setVisibleUsers(scopedRes.data || userList);
+          } catch {
+            setVisibleUsers(userList);
+          }
+        } else {
+          setVisibleUsers(userList);
+        }
       } catch (err) {
         console.error("Reports meta load failed", err);
       }
     }
     load();
-  }, [user, api]);
+  }, [user, api]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Update visible users when project filter changes ───────────────────────
+  useEffect(() => {
+    if (!user || projects.length === 0) return;
+    async function refreshUsers() {
+      // Effective project scope for user filter
+      const scope = selectedProjectIds.length > 0
+        ? selectedProjectIds
+        : isManager
+          ? projects.map((p) => p.id) // manager with no selection → all their projects
+          : null; // admin with no selection → all users
+
+      if (scope && scope.length > 0) {
+        try {
+          const res = await api.get(`/users?projectIds=${scope.join(",")}`);
+          setVisibleUsers(res.data || users);
+        } catch {
+          setVisibleUsers(users);
+        }
+      } else {
+        setVisibleUsers(users);
+      }
+    }
+    refreshUsers();
+  }, [selectedProjectIds, projects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Run report ─────────────────────────────────────────────────────────────
   const handleRun = async () => {
@@ -353,7 +395,7 @@ export default function Reports() {
           />
           <MultiSelectChips
             label="Users"
-            options={users}
+            options={visibleUsers}
             value={selectedUserIds}
             onChange={setSelectedUserIds}
             getLabel={(u) => u ? (u.username || u.email || "-") : "-"}
