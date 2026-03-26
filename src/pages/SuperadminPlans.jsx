@@ -6,7 +6,7 @@ import { API_BASE_URL } from "../api";
 import {
   Plus, Pencil, Trash2, RefreshCw, CheckCircle,
   Zap, Crown, Users, Star, X, ChevronDown, ChevronUp,
-  BadgeCheck, AlertCircle, Search,
+  BadgeCheck, AlertCircle, Search, KeyRound, UserCog,
 } from "lucide-react";
 
 function getSuperadminAxios() {
@@ -31,69 +31,22 @@ function rupees(paise) {
 }
 
 // ── Master feature catalog ─────────────────────────────────────────────────────
-// Every feature Proxima offers. Plans include a subset of these.
-// The key is what gets stored in billing_plans.features[].
+// Exactly mirrors the sidebar navigation items a workspace admin sees.
+// Always-free items (Dashboard, Projects, My Tasks, Notifications, Profile,
+// Admin Panel, Billing) are NOT listed here — they're never gated.
 export const MASTER_FEATURES = [
-  // Core
-  { key: "task_management",     label: "Task Management",          category: "Core" },
-  { key: "project_management",  label: "Project Management",       category: "Core" },
-  { key: "my_tasks",            label: "My Tasks View",            category: "Core" },
-  { key: "subtasks",            label: "Subtasks",                 category: "Core" },
-  { key: "comments",            label: "Comments & Mentions",      category: "Core" },
-  { key: "file_uploads",        label: "File Uploads",             category: "Core" },
-  { key: "notifications",       label: "Notifications",            category: "Core" },
-  // Productivity
-  { key: "time_tracking",       label: "Time Tracking",            category: "Productivity" },
-  { key: "sprints",             label: "Sprints & Milestones",     category: "Productivity" },
-  { key: "custom_workflows",    label: "Custom Workflows",         category: "Productivity" },
-  { key: "issue_templates",     label: "Issue Templates",          category: "Productivity" },
-  { key: "saved_filters",       label: "Saved Filters",            category: "Productivity" },
-  { key: "tags",                label: "Tags & Labels",            category: "Productivity" },
-  // Reporting
-  { key: "basic_reporting",     label: "Basic Reporting",          category: "Reporting" },
-  { key: "advanced_analytics",  label: "Advanced Analytics",       category: "Reporting" },
-  { key: "dashboard",           label: "Team Dashboard",           category: "Reporting" },
-  { key: "export_data",         label: "Data Export (CSV/PDF)",    category: "Reporting" },
-  // HR & People
-  { key: "leave_management",    label: "Leave Management",         category: "HR & People" },
-  { key: "attendance",          label: "Attendance Tracking",      category: "HR & People" },
-  { key: "okr_goals",           label: "OKR & Goals",              category: "HR & People" },
-  { key: "performance_reviews", label: "Performance Reviews",      category: "HR & People" },
-  { key: "wiki_docs",           label: "Wiki / Docs",              category: "HR & People" },
-  // Communication
-  { key: "team_chat",           label: "Team Chat",                category: "Communication" },
-  { key: "video_huddle",        label: "Video Huddle",             category: "Communication" },
-  // AI
-  { key: "ai_hub",              label: "AI Hub",                   category: "AI" },
-  { key: "ai_autopilot",        label: "AI Autopilot",             category: "AI" },
-  { key: "ai_testing_agent",    label: "AI Testing Agent",         category: "AI" },
-  { key: "strategic_intel",     label: "Strategic Intelligence",   category: "AI" },
-  // Integrations
-  { key: "integrations_basic",  label: "Basic Integrations (1)",   category: "Integrations" },
-  { key: "integrations_pro",    label: "Pro Integrations (5)",     category: "Integrations" },
-  { key: "integrations_unlimited", label: "Unlimited Integrations",category: "Integrations" },
-  { key: "slack_migration",     label: "Slack Migration",          category: "Integrations" },
-  { key: "asana_migration",     label: "Asana Migration",          category: "Integrations" },
-  { key: "git_automation",      label: "Git Automation",           category: "Integrations" },
-  // Security & Compliance
-  { key: "mfa",                 label: "Multi-Factor Auth (MFA)",  category: "Security" },
-  { key: "sso_saml",            label: "SSO / SAML Login",         category: "Security" },
-  { key: "audit_logs_30d",      label: "Audit Logs (30 days)",     category: "Security" },
-  { key: "audit_logs_full",     label: "Audit Logs (Full history)",category: "Security" },
-  { key: "gdpr_tools",          label: "GDPR Tools",               category: "Security" },
-  // Developer
-  { key: "api_access",          label: "API Access",               category: "Developer" },
-  { key: "webhooks",            label: "Custom Webhooks",          category: "Developer" },
-  // Enterprise
-  { key: "custom_branding",     label: "Custom Branding",          category: "Enterprise" },
-  { key: "dedicated_manager",   label: "Dedicated Account Manager",category: "Enterprise" },
-  { key: "sla_guarantee",       label: "SLA Guarantee (99.9%)",    category: "Enterprise" },
-  { key: "onpremise",           label: "On-Premise Deployment",    category: "Enterprise" },
-  // Support
-  { key: "support_community",   label: "Community Support",        category: "Support" },
-  { key: "support_email",       label: "Email Support",            category: "Support" },
-  { key: "support_priority",    label: "Priority Support",         category: "Support" },
-  { key: "support_dedicated",   label: "Dedicated Support",        category: "Support" },
+  // ── Sidebar → navItems (gatable) ──────────────────────────────────────────
+  { key: "wiki_docs",           label: "Wiki / Docs",    category: "Sidebar" },
+  { key: "leave_management",    label: "Leave",          category: "Sidebar" },
+  { key: "okr_goals",           label: "Goals",          category: "Sidebar" },
+  { key: "performance_reviews", label: "Reviews",        category: "Sidebar" },
+  { key: "basic_reporting",     label: "Reports",        category: "Sidebar" },
+  { key: "ai_hub",              label: "AI Hub",         category: "Sidebar" },
+  { key: "team_chat",           label: "Team Chat",      category: "Sidebar" },
+  // ── Sidebar → adminItems (gatable) ────────────────────────────────────────
+  { key: "attendance",          label: "Attendance",     category: "Admin" },
+  { key: "custom_branding",     label: "Enterprise",     category: "Admin" },
+  { key: "slack_migration",     label: "Migrations",     category: "Admin" },
 ];
 
 const FEATURE_BY_KEY = Object.fromEntries(MASTER_FEATURES.map(f => [f.key, f]));
@@ -462,10 +415,157 @@ function PlanModal({ plan, onClose, onSaved }) {
   );
 }
 
+// ── User management modal (reused from Plans page) ────────────────────────────
+function UserManageModal({ ws, onClose }) {
+  const api = getSuperadminAxios();
+  const [users, setUsers]             = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [action, setAction]           = useState(null); // { type: "edit"|"reset", user }
+  const [editForm, setEditForm]       = useState({ username: "", email: "", role: "" });
+  const [newPassword, setNewPassword] = useState("");
+  const [saving, setSaving]           = useState(false);
+
+  useEffect(() => {
+    api.get(`/superadmin/workspaces/${ws.id}/users`)
+      .then(r => setUsers(r.data || []))
+      .catch(() => toast.error("Failed to load users"))
+      .finally(() => setLoading(false));
+  }, [ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openEdit  = u => { setAction({ type: "edit",  user: u }); setEditForm({ username: u.username, email: u.email, role: u.role }); };
+  const openReset = u => { setAction({ type: "reset", user: u }); setNewPassword(""); };
+  const closeAction = () => setAction(null);
+
+  const handleEdit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const { data } = await api.put(`/superadmin/workspaces/${ws.id}/users/${action.user.id}`, editForm);
+      setUsers(prev => prev.map(u => u.id === action.user.id ? { ...u, ...data } : u));
+      toast.success("User updated");
+      closeAction();
+    } catch (err) { toast.error(err?.response?.data?.error || "Update failed"); }
+    setSaving(false);
+  };
+
+  const handleReset = async e => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) return toast.error("Min 6 characters");
+    setSaving(true);
+    try {
+      await api.post(`/superadmin/workspaces/${ws.id}/reset-password`, { userId: action.user.id, newPassword });
+      toast.success(`Password reset for ${action.user.username}`);
+      closeAction();
+    } catch (err) { toast.error(err?.response?.data?.error || "Reset failed"); }
+    setSaving(false);
+  };
+
+  const handleDelete = async u => {
+    if (!window.confirm(`Delete user "${u.username}" (${u.email})? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/superadmin/workspaces/${ws.id}/users/${u.id}`);
+      setUsers(prev => prev.filter(x => x.id !== u.id));
+      toast.success(`${u.username} deleted`);
+      if (action?.user?.id === u.id) closeAction();
+    } catch (err) { toast.error(err?.response?.data?.error || "Delete failed"); }
+  };
+
+  const ROLE_COLOR = {
+    admin: "bg-indigo-500/10 text-indigo-500",
+    owner: "bg-purple-500/10 text-purple-500",
+    user:  "bg-gray-500/10 text-gray-500",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="theme-surface rounded-2xl border theme-border w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b theme-border">
+          <h3 className="font-semibold theme-text">{ws.name} — Users ({users.length})</h3>
+          <button onClick={onClose} className="theme-text-muted hover:theme-text"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="px-5 py-4">
+          {loading ? (
+            <div className="py-8 text-center text-sm theme-text-muted">Loading…</div>
+          ) : users.length === 0 ? (
+            <div className="py-8 text-center text-sm theme-text-muted">No users in this workspace</div>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {users.map(u => (
+                <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border theme-border hover:bg-[var(--surface-soft)]">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium theme-text truncate">{u.username}</p>
+                    <p className="text-xs theme-text-muted truncate">{u.email}</p>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${ROLE_COLOR[u.role] || ROLE_COLOR.user}`}>
+                    {u.role}
+                  </span>
+                  <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-indigo-500 shrink-0" title="Edit">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => openReset(u)} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-amber-500 shrink-0" title="Reset password">
+                    <KeyRound className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => handleDelete(u)} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-red-500 shrink-0" title="Delete">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {action?.type === "edit" && (
+            <form onSubmit={handleEdit} className="mt-4 p-3 rounded-xl border theme-border bg-[var(--surface-soft)] space-y-2">
+              <p className="text-xs font-semibold theme-text">Edit <span className="text-indigo-500">{action.user.username}</span></p>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))}
+                  placeholder="Username"
+                  className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+                <input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="Email"
+                  className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+                <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
+                  className="col-span-2 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                  <option value="owner">Owner</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" disabled={saving}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+                  {saving ? "…" : "Save"}
+                </button>
+                <button type="button" onClick={closeAction} className="px-3 py-2 border theme-border rounded-lg text-sm theme-text">Cancel</button>
+              </div>
+            </form>
+          )}
+
+          {action?.type === "reset" && (
+            <form onSubmit={handleReset} className="mt-4 p-3 rounded-xl border theme-border bg-[var(--surface-soft)] space-y-2">
+              <p className="text-xs font-semibold theme-text">Reset password for <span className="text-amber-500">{action.user.username}</span></p>
+              <div className="flex gap-2">
+                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                  placeholder="New password (min 6 chars)"
+                  className="flex-1 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
+                <button type="submit" disabled={saving}
+                  className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-60">
+                  {saving ? "…" : "Reset"}
+                </button>
+                <button type="button" onClick={closeAction} className="px-3 py-2 border theme-border rounded-lg text-sm theme-text">Cancel</button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Plan card ─────────────────────────────────────────────────────────────────
-function PlanCard({ plan, onEdit, onDelete, onSync }) {
-  const [syncing, setSyncing]   = useState(false);
-  const [expanded, setExpanded] = useState(false);
+function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUsers }) {
+  const [syncing, setSyncing]       = useState(false);
+  const [expanded, setExpanded]     = useState(false);
+  const [wsExpanded, setWsExpanded] = useState(false);
 
   const razorpaySynced = !!(plan.razorpay_monthly_plan_id || plan.razorpay_yearly_plan_id);
   const isFree = !plan.price_monthly_paise && !plan.price_yearly_paise;
@@ -601,23 +701,87 @@ function PlanCard({ plan, onEdit, onDelete, onSync }) {
           )}
         </div>
       )}
+
+      {/* Workspaces on this plan (expandable) */}
+      <div className="border-t theme-border">
+        <button onClick={() => setWsExpanded(p => !p)}
+          className="w-full flex items-center justify-between px-5 py-2.5 text-xs theme-text-muted hover:theme-text transition-colors">
+          <span className="flex items-center gap-1.5">
+            <Users className="w-3 h-3" />
+            {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""} on this plan
+          </span>
+          {wsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
+        {wsExpanded && (
+          workspaces.length === 0 ? (
+            <p className="px-5 pb-3 text-xs theme-text-muted italic">No workspaces on this plan yet.</p>
+          ) : (
+            <ul className="px-5 pb-3 space-y-1.5 max-h-48 overflow-y-auto">
+              {workspaces.map(ws => {
+                const status = ws.is_active ? "active" : "suspended";
+                return (
+                  <li key={ws.id} className="flex items-center justify-between gap-2 text-xs py-1 border-b theme-border last:border-0">
+                    <div className="min-w-0">
+                      <p className="theme-text font-medium truncate">{ws.name}</p>
+                      {ws.owner_email && (
+                        <p className="theme-text-muted truncate">{ws.owner_email}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] theme-text-muted">
+                        {ws.user_count ?? 0} users
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                        status === "active" ? "bg-green-500/10 text-green-500" : "bg-amber-500/10 text-amber-500"
+                      }`}>
+                        {status}
+                      </span>
+                      <button
+                        onClick={() => onManageUsers(ws)}
+                        className="p-1 rounded hover:bg-[var(--surface-soft)] text-indigo-500"
+                        title="Manage users"
+                      >
+                        <UserCog className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        )}
+      </div>
     </div>
   );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SuperadminPlans() {
-  const [plans, setPlans]       = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [showCreate, setCreate] = useState(false);
-  const [editPlan, setEdit]     = useState(null);
+  const [plans, setPlans]           = useState([]);
+  const [workspacesByPlan, setWsByPlan] = useState({}); // { [planSlug]: ws[] }
+  const [loading, setLoading]       = useState(false);
+  const [showCreate, setCreate]     = useState(false);
+  const [editPlan, setEdit]         = useState(null);
+  const [manageWs, setManageWs]     = useState(null); // workspace whose users to manage
   const api = getSuperadminAxios();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/superadmin/plans");
-      setPlans(data || []);
+      const [plansRes, wsRes] = await Promise.all([
+        api.get("/superadmin/plans"),
+        api.get("/superadmin/workspaces"),
+      ]);
+      setPlans(plansRes.data || []);
+
+      // Group workspaces by their billing_plan slug
+      const grouped = {};
+      (wsRes.data || []).forEach(ws => {
+        const slug = ws.billing_plan || ws.plan || "unassigned";
+        if (!grouped[slug]) grouped[slug] = [];
+        grouped[slug].push(ws);
+      });
+      setWsByPlan(grouped);
     } catch (err) {
       toast.error(err?.response?.data?.error || "Failed to load plans");
     } finally {
@@ -701,13 +865,22 @@ export default function SuperadminPlans() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {plans.map(plan => (
-            <PlanCard key={plan.id} plan={plan} onEdit={setEdit} onDelete={handleDelete} onSync={handleSync} />
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              workspaces={workspacesByPlan[plan.slug] || []}
+              onEdit={setEdit}
+              onDelete={handleDelete}
+              onSync={handleSync}
+              onManageUsers={setManageWs}
+            />
           ))}
         </div>
       )}
 
       {showCreate && <PlanModal onClose={() => setCreate(false)} onSaved={load} />}
       {editPlan   && <PlanModal plan={editPlan} onClose={() => setEdit(null)} onSaved={load} />}
+      {manageWs   && <UserManageModal ws={manageWs} onClose={() => setManageWs(null)} />}
     </div>
   );
 }

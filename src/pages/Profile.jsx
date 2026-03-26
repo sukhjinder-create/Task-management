@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { getSocket, initSocket } from "../socket";
 import toast from "react-hot-toast";
 import { Avatar } from "../components/ui";
-import { Camera, User, Mail, Shield, FolderKanban } from "lucide-react";
+import { Camera, User, Mail, Shield, FolderKanban, Building2 } from "lucide-react";
 
 const BACKEND = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 function resolveUrl(src) {
@@ -167,6 +167,7 @@ export default function Profile() {
               { icon: User,         label: "Username",  value: profile.username },
               { icon: Mail,         label: "Email",     value: profile.email },
               { icon: Shield,       label: "Role",      value: (profile.role || "").charAt(0).toUpperCase() + (profile.role || "").slice(1) },
+              { icon: Building2,    label: "Workspace", value: profile.workspace_name || "—" },
               {
                 icon: FolderKanban,
                 label: "Projects",

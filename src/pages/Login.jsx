@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../api";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import ThemeSwitcher from "../components/ThemeSwitcher";
+import { Eye, EyeOff } from "lucide-react";
 
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
@@ -16,6 +17,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // MFA second step
   const [mfaRequired, setMfaRequired] = useState(false);
@@ -168,17 +170,30 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium theme-text-muted mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              className="w-full border theme-border theme-surface theme-text rounded-lg px-3 py-2 text-sm"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              placeholder="Your password"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium theme-text-muted">Password</label>
+              <Link to="/forgot-password" className="text-xs text-indigo-500 hover:text-indigo-600">
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                className="w-full border theme-border theme-surface theme-text rounded-lg px-3 py-2 pr-10 text-sm"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                placeholder="Your password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted hover:theme-text transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <button

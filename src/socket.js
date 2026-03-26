@@ -30,6 +30,11 @@ function createSocket() {
     reconnectionDelay: 700,
   });
 
+  // When superadmin changes this workspace's plan, re-fetch plan features
+  socket.on("workspace:plan_updated", (data) => {
+    window.dispatchEvent(new CustomEvent("plan:updated", { detail: data }));
+  });
+
   return socket;
 }
 

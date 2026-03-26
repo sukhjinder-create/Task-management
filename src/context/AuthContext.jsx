@@ -66,6 +66,15 @@ export function AuthProvider({ children }) {
      3. Logout → clear everything
   --------------------------------------------- */
   const logout = () => {
+    // Fire-and-forget audit log before clearing the token
+    const stored = (() => { try { return JSON.parse(localStorage.getItem("auth")); } catch { return null; } })();
+    if (stored?.token) {
+      fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${stored.token}` },
+      }).catch(() => {});
+    }
+
     localStorage.removeItem("auth");
     window.__AUTH_TOKEN__ = null;
 

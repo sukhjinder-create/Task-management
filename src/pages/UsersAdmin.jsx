@@ -4,7 +4,7 @@ import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import Select from "react-select";
-import { Users, Plus, Edit2, Trash2, Bot, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Users, Plus, Edit2, Trash2, Bot, ChevronDown, ChevronUp, X, KeyRound } from "lucide-react";
 
 const ROLES = ["admin", "manager", "user"];
 
@@ -36,6 +36,10 @@ export default function UsersAdmin() {
   const [editUser, setEditUser] = useState({ username: "", email: "", role: "user" });
   const [selectedProjectsEdit, setSelectedProjectsEdit] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const [resetUserId, setResetUserId]     = useState(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetting, setResetting]         = useState(false);
 
   if (currentUser?.role !== "admin") {
     return (
@@ -175,6 +179,21 @@ export default function UsersAdmin() {
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!resetPassword || resetPassword.length < 6) return toast.error("Min 6 characters");
+    setResetting(true);
+    try {
+      await api.post(`/users/${resetUserId}/reset-password`, { newPassword: resetPassword });
+      toast.success("Password reset successfully");
+      setResetUserId(null);
+      setResetPassword("");
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to reset password");
+    }
+    setResetting(false);
   };
 
   const selectedProjectOptionsCreate = projectOptions.filter((o) => selectedProjectsCreate.includes(o.value));
@@ -344,11 +363,52 @@ export default function UsersAdmin() {
                 deletingId={deletingId}
                 onEdit={() => startEditUser(u)}
                 onDelete={() => handleDeleteUser(u.id)}
+                onResetPassword={() => { setResetUserId(u.id); setResetPassword(""); }}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* Reset Password Modal */}
+      {resetUserId && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/50">
+          <div className="flex-1" onClick={() => setResetUserId(null)} />
+          <div className="theme-surface rounded-t-3xl shadow-2xl">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b theme-border">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-amber-500" />
+                <p className="font-semibold theme-text">Reset Password</p>
+              </div>
+              <button onClick={() => setResetUserId(null)} className="p-2 rounded-full theme-text-muted active:opacity-70">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleResetPassword} className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={resetPassword}
+                  onChange={e => setResetPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  className="w-full border theme-border rounded-lg px-3 py-2.5 text-sm theme-surface theme-text"
+                />
+              </div>
+              <div className="flex gap-3 pb-4">
+                <button type="button" onClick={() => setResetUserId(null)}
+                  className="flex-1 py-2.5 rounded-xl border theme-border theme-text text-sm font-semibold active:opacity-70">
+                  Cancel
+                </button>
+                <button type="submit" disabled={resetting}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold active:bg-amber-600 disabled:opacity-50">
+                  {resetting ? "Resetting…" : "Reset Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit User Modal */}
       {isEditModalOpen && editingUserId && (
@@ -406,7 +466,7 @@ export default function UsersAdmin() {
   );
 }
 
-function UserCard({ user, deletingId, onEdit, onDelete }) {
+function UserCard({ user, deletingId, onEdit, onDelete, onResetPassword }) {
   const roleColors = { admin: "bg-red-100 text-red-700", manager: "bg-blue-100 text-blue-700", user: "bg-slate-100 text-slate-600" };
   const initials = (user.username || "?").slice(0, 2).toUpperCase();
 
@@ -429,11 +489,16 @@ function UserCard({ user, deletingId, onEdit, onDelete }) {
           )}
         </div>
       </div>
-      <div className="flex items-center border-t theme-border px-3 py-2 gap-1" >
+      <div className="flex items-center border-t theme-border px-3 py-2 gap-1">
         <button onClick={onEdit}
           className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg theme-text-muted hover:bg-[var(--surface-soft)] active:bg-[var(--surface-soft)] transition-colors text-xs">
           <Edit2 className="w-3.5 h-3.5" />
           <span>Edit</span>
+        </button>
+        <button onClick={onResetPassword}
+          className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-amber-500 hover:bg-amber-50 active:bg-amber-50 transition-colors text-xs">
+          <KeyRound className="w-3.5 h-3.5" />
+          <span>Password</span>
         </button>
         <button onClick={onDelete} disabled={deletingId === user.id}
           className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-red-500 hover:bg-red-50 active:bg-red-50 transition-colors text-xs disabled:opacity-40">

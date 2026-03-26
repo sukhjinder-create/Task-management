@@ -52,6 +52,10 @@ import Reviews    from "./pages/Reviews.jsx";
 import AIFeatures from "./pages/AIFeatures.jsx";
 import AIHub      from "./pages/AIHub.jsx";
 
+// ---- Auth flow pages ----
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword  from "./pages/ResetPassword.jsx";
+
 /**
  * ======================================================
  * APP ROOT
@@ -69,6 +73,8 @@ export default function App() {
             PUBLIC
         ============================ */}
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/auth/magic" element={<AuthCallback />} />
         <Route path="/superadmin/login" element={<SuperadminLogin />} />
@@ -94,11 +100,14 @@ export default function App() {
           <Route path="my-tasks" element={<MyTasks />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="profile" element={<Profile />} />
-          <Route path="chat" element={<Chat />} />
+          <Route
+            path="chat"
+            element={<ProtectedRoute requiredFeature="team_chat"><Chat /></ProtectedRoute>}
+          />
           <Route
             path="reports"
             element={
-              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+              <ProtectedRoute allowedRoles={["admin", "manager"]} requiredFeature="basic_reporting">
                 <Reports />
               </ProtectedRoute>
             }
@@ -106,29 +115,29 @@ export default function App() {
           <Route
             path="intelligence"
             element={
-              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+              <ProtectedRoute allowedRoles={["admin", "manager"]} requiredFeature="advanced_analytics">
                 <StrategicIntelligence />
               </ProtectedRoute>
             }
           />
 
           {/* ---- Enterprise Phase 1-4 routes ---- */}
-          <Route path="wiki"        element={<Wiki />} />
-          <Route path="leave"       element={<Leave />} />
+          <Route path="wiki"   element={<ProtectedRoute requiredFeature="wiki_docs"><Wiki /></ProtectedRoute>} />
+          <Route path="leave"  element={<ProtectedRoute requiredFeature="leave_management"><Leave /></ProtectedRoute>} />
           <Route
             path="okr"
             element={
-              <ProtectedRoute allowedRoles={["admin"]}>
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="okr_goals">
                 <OKR />
               </ProtectedRoute>
             }
           />
-          <Route path="reviews"     element={<Reviews />} />
-          <Route path="ai-features" element={<AIFeatures />} />
+          <Route path="reviews"     element={<ProtectedRoute requiredFeature="performance_reviews"><Reviews /></ProtectedRoute>} />
+          <Route path="ai-features" element={<ProtectedRoute requiredFeature="ai_hub"><AIFeatures /></ProtectedRoute>} />
           <Route
             path="ai"
             element={
-              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+              <ProtectedRoute allowedRoles={["admin", "manager"]} requiredFeature="ai_hub">
                 <AIHub />
               </ProtectedRoute>
             }
@@ -146,7 +155,7 @@ export default function App() {
           <Route
             path="autopilot"
             element={
-              <ProtectedRoute allowedRoles={["admin"]}>
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="ai_autopilot">
                 <Autopilot />
               </ProtectedRoute>
             }
@@ -155,7 +164,7 @@ export default function App() {
           <Route
             path="testing-agent"
             element={
-              <ProtectedRoute allowedRoles={["admin", "manager"]}>
+              <ProtectedRoute allowedRoles={["admin", "manager"]} requiredFeature="ai_testing_agent">
                 <TestingAgent />
               </ProtectedRoute>
             }
@@ -164,7 +173,7 @@ export default function App() {
           <Route
             path="admin/slack-migration"
             element={
-              <ProtectedRoute allowedRoles={["admin"]}>
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="slack_migration">
                 <SlackMigration />
               </ProtectedRoute>
             }
@@ -189,7 +198,7 @@ export default function App() {
           <Route
             path="admin/attendance"
             element={
-              <ProtectedRoute allowedRoles={["admin"]}>
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="attendance">
                 <AdminAttendance />
               </ProtectedRoute>
             }

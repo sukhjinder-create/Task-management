@@ -12,7 +12,7 @@ import {
   CheckCircle, Zap, Crown, CreditCard, RefreshCw,
   AlertCircle, Shield, Clock, Users, ChevronRight,
   BadgeCheck, Smartphone, Building, UserCheck, UserX,
-  Info,
+  Info, Pencil, Trash2, X,
 } from "lucide-react";
 
 // ── Load Razorpay script once ─────────────────────────────────────────────────
@@ -199,6 +199,11 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
   const [costLoading, setCostLoading]   = useState(false);
   const [activating,  setActivating]    = useState(false);
   const [loading,     setLoading]       = useState(true);
+  const [editingUser, setEditingUser]   = useState(null);
+  const [editForm,    setEditForm]      = useState({ username: "", email: "", role: "user", projects: [] });
+  const [saving,      setSaving]        = useState(false);
+  const [deletingId,  setDeletingId]    = useState(null);
+  const [projects,    setProjects]      = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -213,6 +218,10 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
   }, [api]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    api.get("/projects").then(r => setProjects(r.data || [])).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recalculate cost whenever selection changes
   useEffect(() => {
@@ -235,6 +244,46 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
   function toggleAll() {
     const ids = (pendingData?.users || []).map(u => u.id);
     setSelected(prev => prev.length === ids.length ? [] : ids);
+  }
+
+  function openEdit(u) {
+    setEditingUser(u);
+    setEditForm({ username: u.username, email: u.email, role: u.role, projects: Array.isArray(u.projects) ? u.projects : [] });
+  }
+
+  async function handleEditSave(e) {
+    e.preventDefault();
+    if (!editForm.username.trim() || !editForm.email.trim()) return toast.error("Username and email are required");
+    if (editForm.role === "manager" && editForm.projects.length === 0) {
+      return toast.error("Assign at least one project to a manager");
+    }
+    setSaving(true);
+    try {
+      await api.put(`/users/${editingUser.id}`, editForm);
+      setPendingData(prev => ({
+        ...prev,
+        users: (prev?.users || []).map(u => u.id === editingUser.id ? { ...u, ...editForm } : u),
+      }));
+      toast.success("User updated");
+      setEditingUser(null);
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Update failed");
+    }
+    setSaving(false);
+  }
+
+  async function handleDelete(u) {
+    if (!window.confirm(`Delete "${u.username}"? This cannot be undone.`)) return;
+    setDeletingId(u.id);
+    try {
+      await api.delete(`/users/${u.id}`);
+      setPendingData(prev => ({ ...prev, users: (prev?.users || []).filter(x => x.id !== u.id) }));
+      setSelected(prev => prev.filter(id => id !== u.id));
+      toast.success(`${u.username} deleted`);
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Delete failed");
+    }
+    setDeletingId(null);
   }
 
   async function handleActivate() {
@@ -419,7 +468,7 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
                   <p className="text-sm font-medium theme-text truncate">{u.username}</p>
                   <p className="text-xs theme-text-muted truncate">{u.email}</p>
                 </div>
-                <div className="shrink-0 text-right">
+                <div className="shrink-0 flex items-center gap-2">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
                     u.role === "admin"   ? "bg-purple-500/10 text-purple-600" :
                     u.role === "manager" ? "bg-blue-500/10 text-blue-600"    :
@@ -427,9 +476,21 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
                   }`}>
                     {u.role}
                   </span>
-                  {pricePaise && (
-                    <p className="text-xs theme-text-muted mt-0.5">{rupees(pricePaise)}/mo</p>
-                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); openEdit(u); }}
+                    className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-indigo-500"
+                    title="Edit user"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDelete(u); }}
+                    disabled={deletingId === u.id}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 disabled:opacity-40"
+                    title="Delete user"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </li>
             ))}
@@ -444,6 +505,78 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
             </span>
           </div>
         </>
+      )}
+
+      {/* Edit user modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="theme-surface rounded-2xl border theme-border w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b theme-border">
+              <h3 className="font-semibold theme-text text-sm">Edit unlicensed user</h3>
+              <button onClick={() => setEditingUser(null)} className="theme-text-muted hover:theme-text">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleEditSave} className="px-5 py-4 space-y-3">
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">Username</label>
+                <input value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))}
+                  className="w-full border theme-border rounded-lg px-3 py-2 text-sm theme-surface theme-text" />
+              </div>
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">Email</label>
+                <input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full border theme-border rounded-lg px-3 py-2 text-sm theme-surface theme-text" />
+              </div>
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">Role</label>
+                <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value, projects: [] }))}
+                  className="w-full border theme-border rounded-lg px-3 py-2 text-sm theme-surface theme-text">
+                  <option value="user">User</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              {editForm.role === "manager" && (
+                <div>
+                  <label className="block text-xs theme-text-muted mb-1">Projects <span className="text-red-400">*</span></label>
+                  {projects.length === 0 ? (
+                    <p className="text-xs theme-text-muted italic">No projects available</p>
+                  ) : (
+                    <div className="max-h-36 overflow-y-auto border theme-border rounded-lg divide-y divide-[var(--border)]">
+                      {projects.map(p => (
+                        <label key={p.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[var(--surface-soft)]">
+                          <input
+                            type="checkbox"
+                            checked={editForm.projects.includes(p.id)}
+                            onChange={e => setEditForm(f => ({
+                              ...f,
+                              projects: e.target.checked
+                                ? [...f.projects, p.id]
+                                : f.projects.filter(id => id !== p.id),
+                            }))}
+                            className="rounded"
+                          />
+                          <span className="text-sm theme-text truncate">{p.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button type="submit" disabled={saving}
+                  className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-50">
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                <button type="button" onClick={() => setEditingUser(null)}
+                  className="flex-1 py-2 rounded-xl border theme-border text-sm theme-text">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

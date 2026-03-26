@@ -242,36 +242,72 @@ export default function SuperAdminWorkspaces() {
 
 // ─── Workspace Detail Modal ───────────────────────────────────────────────────
 function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
-  const [users, setUsers]           = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [resetUser, setResetUser]   = useState(null);  // user object for password reset
+  const [users, setUsers]             = useState([]);
+  const [loading, setLoading]         = useState(true);
+  // active inline action: { type: "reset" | "edit", user }
+  const [action, setAction]           = useState(null);
   const [newPassword, setNewPassword] = useState("");
-  const [resetting, setResetting]   = useState(false);
+  const [editForm, setEditForm]       = useState({ username: "", email: "", role: "" });
+  const [saving, setSaving]           = useState(false);
 
-  useEffect(() => {
+  const loadUsers = () => {
     axiosSuper.get(`/superadmin/workspaces/${ws.id}/users`)
       .then(r => setUsers(r.data || []))
       .catch(() => toast.error("Failed to load users"))
       .finally(() => setLoading(false));
-  }, [ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+
+  useEffect(() => { loadUsers(); }, [ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openReset = (u) => { setAction({ type: "reset", user: u }); setNewPassword(""); };
+  const openEdit  = (u) => { setAction({ type: "edit",  user: u }); setEditForm({ username: u.username, email: u.email, role: u.role }); };
+  const closeAction = () => setAction(null);
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
     if (!newPassword || newPassword.length < 6)
       return toast.error("Password must be at least 6 characters");
-    setResetting(true);
+    setSaving(true);
     try {
       await axiosSuper.post(`/superadmin/workspaces/${ws.id}/reset-password`, {
-        userId: resetUser.id,
+        userId: action.user.id,
         newPassword,
       });
-      toast.success(`Password reset for ${resetUser.username}`);
-      setResetUser(null);
-      setNewPassword("");
+      toast.success(`Password reset for ${action.user.username}`);
+      closeAction();
     } catch (err) {
       toast.error(err?.response?.data?.error || "Reset failed");
     }
-    setResetting(false);
+    setSaving(false);
+  };
+
+  const handleEditUser = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const updated = await axiosSuper.put(
+        `/superadmin/workspaces/${ws.id}/users/${action.user.id}`,
+        editForm
+      );
+      setUsers(prev => prev.map(u => u.id === action.user.id ? { ...u, ...updated.data } : u));
+      toast.success("User updated");
+      closeAction();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Update failed");
+    }
+    setSaving(false);
+  };
+
+  const handleDeleteUser = async (u) => {
+    if (!window.confirm(`Delete user "${u.username}" (${u.email})? This cannot be undone.`)) return;
+    try {
+      await axiosSuper.delete(`/superadmin/workspaces/${ws.id}/users/${u.id}`);
+      setUsers(prev => prev.filter(x => x.id !== u.id));
+      toast.success(`${u.username} deleted`);
+      if (action?.user?.id === u.id) closeAction();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Delete failed");
+    }
   };
 
   const ROLE_COLOR = {
@@ -287,7 +323,7 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
       ) : users.length === 0 ? (
         <div className="py-8 text-center text-sm theme-text-muted">No users in this workspace</div>
       ) : (
-        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
           {users.map(u => (
             <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border theme-border hover:bg-[var(--surface-soft)]">
               <div className="flex-1 min-w-0">
@@ -297,23 +333,67 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${ROLE_COLOR[u.role] || ROLE_COLOR.user}`}>
                 {u.role}
               </span>
-              <button
-                onClick={() => { setResetUser(u); setNewPassword(""); }}
+              {/* Edit */}
+              <button onClick={() => openEdit(u)}
+                className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-indigo-500 shrink-0"
+                title="Edit user">
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              {/* Reset password */}
+              <button onClick={() => openReset(u)}
                 className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-amber-500 shrink-0"
-                title="Reset password"
-              >
+                title="Reset password">
                 <KeyRound className="w-3.5 h-3.5" />
+              </button>
+              {/* Delete */}
+              <button onClick={() => handleDeleteUser(u)}
+                className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-red-500 shrink-0"
+                title="Delete user">
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           ))}
         </div>
       )}
 
+      {/* Edit user inline form */}
+      {action?.type === "edit" && (
+        <form onSubmit={handleEditUser} className="mt-4 p-3 rounded-xl border theme-border bg-[var(--surface-soft)] space-y-2">
+          <p className="text-xs font-semibold theme-text">
+            Edit <span className="text-indigo-500">{action.user.username}</span>
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <input value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))}
+              placeholder="Username"
+              className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+            <input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+              placeholder="Email"
+              className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+            <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
+              className="col-span-2 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+              <option value="owner">Owner</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving}
+              className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+              {saving ? "…" : "Save"}
+            </button>
+            <button type="button" onClick={closeAction}
+              className="px-3 py-2 border theme-border rounded-lg text-sm theme-text">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
       {/* Password reset inline form */}
-      {resetUser && (
+      {action?.type === "reset" && (
         <form onSubmit={handleResetPassword} className="mt-4 p-3 rounded-xl border theme-border bg-[var(--surface-soft)] space-y-2">
           <p className="text-xs font-semibold theme-text">
-            Reset password for <span className="text-amber-500">{resetUser.username}</span>
+            Reset password for <span className="text-amber-500">{action.user.username}</span>
           </p>
           <div className="flex gap-2">
             <input
@@ -323,11 +403,11 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
               placeholder="New password (min 6 chars)"
               className="flex-1 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-amber-400/40"
             />
-            <button type="submit" disabled={resetting}
+            <button type="submit" disabled={saving}
               className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-60">
-              {resetting ? "…" : "Reset"}
+              {saving ? "…" : "Reset"}
             </button>
-            <button type="button" onClick={() => setResetUser(null)}
+            <button type="button" onClick={closeAction}
               className="px-3 py-2 border theme-border rounded-lg text-sm theme-text">
               Cancel
             </button>
@@ -341,7 +421,7 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
 // ─── Create Modal ─────────────────────────────────────────────────────────────
 function CreateModal({ onClose, onCreated, axiosSuper }) {
   const [form, setForm] = useState({
-    name: "", plan: "basic",
+    name: "", plan: "trial",
     ownerEmail: "", ownerPassword: "", ownerName: "",
   });
   const [saving, setSaving] = useState(false);
@@ -371,10 +451,16 @@ function CreateModal({ onClose, onCreated, axiosSuper }) {
           </Field>
           <Field label="Plan" className="col-span-2">
             <select value={form.plan} onChange={e => set("plan", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+              <option value="trial">Free Trial (7 days — all features)</option>
               <option value="basic">Basic</option>
               <option value="pro">Pro</option>
               <option value="enterprise">Enterprise</option>
             </select>
+            {form.plan === "trial" && (
+              <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                ⚠️ One free trial per email domain. If this domain already used a trial, creation will fail.
+              </p>
+            )}
           </Field>
           <Field label="Admin Email" className="col-span-2">
             <input type="email" value={form.ownerEmail}

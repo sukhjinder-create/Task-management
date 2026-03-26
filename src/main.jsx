@@ -12,6 +12,7 @@ import { ThemeProvider } from "./context/ThemeContext.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { HuddleProvider } from "./context/HuddleContext.jsx";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext.jsx";
+import { PlanProvider } from "./context/PlanContext.jsx";
 import { Toaster } from "react-hot-toast";
 import "react-quill/dist/quill.snow.css";
 
@@ -20,6 +21,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
+          <PlanProvider>
           <SuperadminAuthProvider>
             <HuddleProvider>
               <App />
@@ -29,6 +31,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               />
             </HuddleProvider>
           </SuperadminAuthProvider>
+          </PlanProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

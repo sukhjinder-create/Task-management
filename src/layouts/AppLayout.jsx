@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow";
 import { Avatar, Badge, Button, Dropdown } from "../components/ui";
 import ThemeSwitcher from "../components/ThemeSwitcher";
+import { usePlan } from "../context/PlanContext";
 import { cn } from "../utils/cn";
 import { useIsMobile } from "../hooks/useIsMobile";
 import MobileLayout from "./MobileLayout";
@@ -24,6 +25,11 @@ export default function AppLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const api = useApi();
+  const { onTrial, trialEndsAt, trialExpired } = usePlan();
+
+  const trialDaysLeft = trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(trialEndsAt) - Date.now()) / 86400000))
+    : 0;
 
   const user = auth?.user;
 
@@ -383,6 +389,22 @@ export default function AppLayout({ children }) {
             </Button>
           </div>
         </header>
+
+        {/* Trial Banner */}
+        {(onTrial || trialExpired) && (
+          <div className={`px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 ${
+            trialExpired
+              ? "bg-red-500 text-white"
+              : trialDaysLeft <= 2
+                ? "bg-amber-500 text-white"
+                : "bg-indigo-500 text-white"
+          }`}>
+            {trialExpired
+              ? "⚠️ Your free trial has expired. Contact your administrator to upgrade the workspace plan."
+              : `🎉 Free trial — ${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} remaining. Full access to all features.`
+            }
+          </div>
+        )}
 
         {/* Main Content */}
         <main

@@ -263,7 +263,7 @@ export default function AdminAttendance() {
               <AttendanceCard
                 key={`${r.user_id}-${r.date}-${idx}`}
                 row={r}
-                username={userMap[String(r.user_id)] || "Unknown"}
+                username={r.username || userMap[String(r.user_id)] || "Unknown"}
               />
             ))}
           </div>
