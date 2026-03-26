@@ -11,7 +11,8 @@ import toast from "react-hot-toast";
 import {
   CheckCircle, Zap, Crown, CreditCard, RefreshCw,
   AlertCircle, Shield, Clock, Users, ChevronRight,
-  BadgeCheck, Smartphone, Building,
+  BadgeCheck, Smartphone, Building, UserCheck, UserX,
+  Info,
 } from "lucide-react";
 
 // ── Load Razorpay script once ─────────────────────────────────────────────────
@@ -78,10 +79,11 @@ function IntervalToggle({ value, onChange }) {
 }
 
 // ── Plan card ─────────────────────────────────────────────────────────────────
-function PlanCard({ plan, interval, isCurrent, isLoading, onSelect }) {
+function PlanCard({ plan, interval, isCurrent, isLoading, onSelect, memberCount }) {
   const pricePaise = interval === "yearly" ? plan.price_yearly_paise : plan.price_monthly_paise;
   const isFree  = !pricePaise;
   const features = Array.isArray(plan.features) ? plan.features : [];
+  const totalPaise = pricePaise && memberCount > 0 ? pricePaise * memberCount : null;
 
   return (
     <div className={`relative flex flex-col rounded-2xl border transition-all ${
@@ -120,11 +122,17 @@ function PlanCard({ plan, interval, isCurrent, isLoading, onSelect }) {
               <>
                 <p className="text-3xl font-black theme-text">
                   {rupees(pricePaise)}
-                  <span className="text-sm font-normal theme-text-muted">/{interval === "yearly" ? "yr" : "mo"}</span>
+                  <span className="text-sm font-normal theme-text-muted">/user/{interval === "yearly" ? "yr" : "mo"}</span>
                 </p>
+                {totalPaise && (
+                  <p className="text-sm font-semibold text-indigo-500 mt-0.5">
+                    Total: {rupees(totalPaise)}/{interval === "yearly" ? "yr" : "mo"}
+                    <span className="text-xs font-normal theme-text-muted ml-1">for {memberCount} users</span>
+                  </p>
+                )}
                 {interval === "yearly" && plan.price_monthly_paise > 0 && (
                   <p className="text-xs text-green-500 font-semibold mt-0.5">
-                    Save {rupees(plan.price_monthly_paise * 12 - plan.price_yearly_paise)}/year
+                    Save {rupees((plan.price_monthly_paise * 12 - plan.price_yearly_paise) * (memberCount || 1))}/year
                   </p>
                 )}
               </>
@@ -133,7 +141,7 @@ function PlanCard({ plan, interval, isCurrent, isLoading, onSelect }) {
 
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <span className="inline-flex items-center gap-1 text-xs theme-text-muted">
-              <Users className="w-3 h-3" /> {plan.member_limit} members
+              <Users className="w-3 h-3" /> {plan.member_limit > 0 ? `${plan.member_limit} members` : "Unlimited members"}
             </span>
             {plan.trial_days > 0 && (
               <span className="inline-flex items-center gap-1 text-xs text-indigo-500 font-medium">
@@ -179,6 +187,264 @@ function PlanCard({ plan, interval, isCurrent, isLoading, onSelect }) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Pending Users Section ─────────────────────────────────────────────────────
+function PendingUsersSection({ api, user, razorpayEnabled }) {
+  const [pendingData, setPendingData]   = useState(null);
+  const [selected,    setSelected]      = useState([]);   // selected user IDs
+  const [cost,        setCost]          = useState(null);
+  const [costLoading, setCostLoading]   = useState(false);
+  const [activating,  setActivating]    = useState(false);
+  const [loading,     setLoading]       = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/payments/pending-users");
+      setPendingData(res.data);
+    } catch {
+      /* non-fatal — pending users section is optional */
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Recalculate cost whenever selection changes
+  useEffect(() => {
+    if (selected.length === 0) { setCost(null); return; }
+    let cancelled = false;
+    setCostLoading(true);
+    api.post("/payments/activation-cost", { userIds: selected })
+      .then(r => { if (!cancelled) setCost(r.data); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCostLoading(false); });
+    return () => { cancelled = true; };
+  }, [selected, api]);
+
+  function toggleUser(id) {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  }
+
+  function toggleAll() {
+    const ids = (pendingData?.users || []).map(u => u.id);
+    setSelected(prev => prev.length === ids.length ? [] : ids);
+  }
+
+  async function handleActivate() {
+    if (selected.length === 0 || !cost) return;
+    setActivating(true);
+    try {
+      const loaded = await loadRazorpay();
+      if (!loaded) throw new Error("Failed to load Razorpay. Check your internet connection.");
+
+      const { data: order } = await api.post("/payments/create-activation-order", { userIds: selected });
+
+      await new Promise((resolve, reject) => {
+        const options = {
+          key:      order.keyId,
+          order_id: order.orderId,
+          amount:   order.amountPaise,
+          currency: "INR",
+          name:     "Proxima",
+          description: `Activate ${selected.length} user${selected.length > 1 ? "s" : ""} — ${cost.proRatedDays} days`,
+          prefill:  { name: user?.username || "", email: user?.email || "" },
+          notes:    { type: "user_activation" },
+          theme:    { color: "#6366f1" },
+          modal: {
+            ondismiss: () => {
+              toast("Activation cancelled.", { icon: "ℹ️" });
+              reject(new Error("dismissed"));
+            },
+          },
+          handler: async (response) => {
+            try {
+              await api.post("/payments/verify-activation", {
+                razorpay_order_id:   response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature:  response.razorpay_signature,
+                userIds: selected,
+              });
+              toast.success(`🎉 ${selected.length} user${selected.length > 1 ? "s" : ""} activated successfully!`);
+              setSelected([]);
+              setCost(null);
+              await load();
+              resolve();
+            } catch (err) { reject(err); }
+          },
+        };
+        const rzp = new window.Razorpay(options);
+        rzp.on("payment.failed", (resp) => {
+          toast.error(`Payment failed: ${resp.error?.description || "Unknown error"}`);
+          reject(new Error(resp.error?.description));
+        });
+        rzp.open();
+      });
+    } catch (err) {
+      if (err?.message !== "dismissed") {
+        toast.error(err?.response?.data?.error || err.message || "Activation failed");
+      }
+    } finally {
+      setActivating(false);
+    }
+  }
+
+  if (loading) return null;
+
+  const users     = pendingData?.users || [];
+  const pricePaise = pendingData?.perUserPricePaise;
+
+  if (users.length === 0 && !pricePaise) return null; // nothing to show
+
+  const allSelected = selected.length === users.length && users.length > 0;
+
+  return (
+    <div className="theme-surface border theme-border rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 border-b theme-border flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+            <UserX className="w-4 h-4 text-amber-500" />
+          </div>
+          <div>
+            <p className="text-sm font-bold theme-text">
+              Unlicensed Users
+              {users.length > 0 && (
+                <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-amber-500/10 text-amber-600 font-semibold">
+                  {users.length}
+                </span>
+              )}
+            </p>
+            <p className="text-xs theme-text-muted mt-0.5">
+              These users exist in your workspace but cannot access any features until activated.
+            </p>
+          </div>
+        </div>
+        {pricePaise && (
+          <span className="text-xs theme-text-muted flex items-center gap-1">
+            <Info className="w-3.5 h-3.5" />
+            {rupees(pricePaise)}/user/month
+          </span>
+        )}
+      </div>
+
+      {users.length === 0 ? (
+        <div className="px-6 py-8 text-center">
+          <UserCheck className="w-8 h-8 text-green-500 mx-auto mb-2" />
+          <p className="text-sm font-semibold theme-text">All users are licensed</p>
+          <p className="text-xs theme-text-muted mt-1">
+            New users added will appear here until you activate them.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Select all + cost bar */}
+          <div className="px-6 py-3 border-b theme-border flex items-center justify-between gap-4 bg-[var(--surface-soft)]">
+            <label className="flex items-center gap-2 cursor-pointer text-xs theme-text font-medium select-none">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                className="rounded"
+              />
+              {allSelected ? "Deselect all" : `Select all (${users.length})`}
+            </label>
+
+            {selected.length > 0 && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="text-xs theme-text-muted">
+                  {costLoading ? (
+                    <span className="flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> Calculating...
+                    </span>
+                  ) : cost ? (
+                    <span>
+                      <span className="font-bold theme-text">{rupees(cost.totalPaise)}</span>
+                      {" "}for {selected.length} user{selected.length > 1 ? "s" : ""}
+                      {" · "}{cost.proRatedDays} days remaining in cycle
+                    </span>
+                  ) : null}
+                </div>
+                {razorpayEnabled ? (
+                  <button
+                    onClick={handleActivate}
+                    disabled={activating || costLoading || !cost}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold disabled:opacity-50 transition-colors"
+                  >
+                    {activating
+                      ? <><RefreshCw className="w-3 h-3 animate-spin" /> Activating...</>
+                      : <><UserCheck className="w-3 h-3" /> Pay &amp; Activate</>
+                    }
+                  </button>
+                ) : (
+                  <span className="text-xs text-amber-500 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" /> Configure Razorpay to activate
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* User list */}
+          <ul className="divide-y divide-[var(--border)]">
+            {users.map(u => (
+              <li
+                key={u.id}
+                className={`flex items-center gap-3 px-6 py-3 cursor-pointer hover:bg-[var(--surface-soft)] transition-colors ${
+                  selected.includes(u.id) ? "bg-indigo-500/5" : ""
+                }`}
+                onClick={() => toggleUser(u.id)}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(u.id)}
+                  onChange={() => toggleUser(u.id)}
+                  onClick={e => e.stopPropagation()}
+                  className="rounded shrink-0"
+                />
+                {u.avatar_url ? (
+                  <img src={u.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-indigo-500/10 flex items-center justify-center shrink-0 text-xs font-bold text-indigo-500">
+                    {(u.username || "?")[0].toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium theme-text truncate">{u.username}</p>
+                  <p className="text-xs theme-text-muted truncate">{u.email}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
+                    u.role === "admin"   ? "bg-purple-500/10 text-purple-600" :
+                    u.role === "manager" ? "bg-blue-500/10 text-blue-600"    :
+                    "bg-gray-100 text-gray-500"
+                  }`}>
+                    {u.role}
+                  </span>
+                  {pricePaise && (
+                    <p className="text-xs theme-text-muted mt-0.5">{rupees(pricePaise)}/mo</p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Bottom info */}
+          <div className="px-6 py-3 border-t theme-border flex items-start gap-2 text-xs theme-text-muted">
+            <Shield className="w-3.5 h-3.5 text-indigo-500 mt-0.5 shrink-0" />
+            <span>
+              You are charged pro-rated for the remaining days in your current billing cycle.
+              At the next renewal, the full monthly rate applies.
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -413,9 +679,15 @@ export default function WorkspaceBilling() {
             isCurrent={plan.slug === currentPlan}
             isLoading={checking === plan.id}
             onSelect={handleSelectPlan}
+            memberCount={summary?.activeMemberCount || 0}
           />
         ))}
       </div>
+
+      {/* Pending / unlicensed users — only shown to admins */}
+      {["admin", "owner"].includes(user?.role) && (
+        <PendingUsersSection api={api} user={user} razorpayEnabled={razorpayEnabled} />
+      )}
 
       {/* How it works */}
       <div className="theme-surface border theme-border rounded-2xl overflow-hidden">

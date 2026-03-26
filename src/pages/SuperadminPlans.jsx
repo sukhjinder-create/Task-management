@@ -234,35 +234,56 @@ function PlanModal({ plan, onClose, onSaved }) {
   const [form, setForm] = useState(() =>
     isEdit ? {
       ...EMPTY_FORM,
-      ...plan,
-      price_monthly: plan.price_monthly_paise ? plan.price_monthly_paise / 100 : "",
-      price_yearly:  plan.price_yearly_paise  ? plan.price_yearly_paise  / 100 : "",
-      features: Array.isArray(plan.features) ? plan.features : [],
+      // Only copy the fields we actually edit — never spread raw paise values into form
+      name:               plan.name || "",
+      slug:               plan.slug || "",
+      tagline:            plan.tagline || "",
+      description:        plan.description || "",
+      price_monthly:      plan.price_monthly_paise ? plan.price_monthly_paise / 100 : "",
+      price_yearly:       plan.price_yearly_paise  ? plan.price_yearly_paise  / 100 : "",
+      yearly_discount_pct: plan.yearly_discount_pct || 0,
+      member_limit:       plan.member_limit || "",
+      max_projects:       plan.max_projects || "",
+      max_integrations:   plan.max_integrations || "",
+      storage_limit_gb:   plan.storage_limit_gb || "",
+      features:           Array.isArray(plan.features) ? plan.features : [],
+      support_level:      plan.support_level || "email",
+      trial_days:         plan.trial_days ?? 7,
+      grace_period_days:  plan.grace_period_days ?? 3,
+      is_popular:         plan.is_popular || false,
+      display_order:      plan.display_order || 0,
     } : { ...EMPTY_FORM }
   );
-  const [saving, setSaving]   = useState(false);
-  const [slugEdited, setSlugEdited] = useState(isEdit); // don't auto-update slug if manually edited
+  const [saving, setSaving] = useState(false);
+  const [slugEdited, setSlugEdited] = useState(isEdit);
+  // Price refs updated synchronously in the event handler — immune to React batching delays
+  const priceRef = useRef({
+    monthly: form.price_monthly,
+    yearly:  form.price_yearly,
+  });
 
   function set(k, v) { setForm(p => ({ ...p, [k]: v })); }
 
-  // Auto-generate slug from name (only when not manually edited)
   function handleNameChange(name) {
     set("name", name);
     if (!slugEdited) set("slug", toSlug(name));
   }
 
-  // Auto-calculate yearly discount when both prices are filled
   function handlePriceChange(key, val) {
-    set(key, val);
-    const monthly = key === "price_monthly" ? Number(val) : Number(form.price_monthly);
-    const yearly  = key === "price_yearly"  ? Number(val) : Number(form.price_yearly);
-    if (monthly > 0 && yearly > 0) {
+    const parsed = val === "" ? "" : Number(val);
+    // Update price ref immediately — before React's batched setForm runs
+    if (key === "price_monthly") priceRef.current.monthly = parsed;
+    if (key === "price_yearly")  priceRef.current.yearly  = parsed;
+
+    setForm(p => {
+      const monthly = key === "price_monthly" ? (Number(val) || 0) : (Number(p.price_monthly) || 0);
+      const yearly  = key === "price_yearly"  ? (Number(val) || 0) : (Number(p.price_yearly)  || 0);
       const annualMonthly = monthly * 12;
-      const discount = Math.round(((annualMonthly - yearly) / annualMonthly) * 100);
-      setForm(p => ({ ...p, [key]: val, yearly_discount_pct: discount > 0 ? discount : 0 }));
-    } else {
-      set(key, val);
-    }
+      const discount = (monthly > 0 && yearly > 0 && annualMonthly > yearly)
+        ? Math.round(((annualMonthly - yearly) / annualMonthly) * 100)
+        : 0;
+      return { ...p, [key]: parsed, yearly_discount_pct: discount };
+    });
   }
 
   async function submit(e) {
@@ -271,12 +292,18 @@ function PlanModal({ plan, onClose, onSaved }) {
     setSaving(true);
     try {
       const api = getSuperadminAxios();
+      const payload = {
+        ...form,
+        // Always read prices from priceRef — guaranteed to be the latest typed value
+        price_monthly: Number(priceRef.current.monthly) || 0,
+        price_yearly:  Number(priceRef.current.yearly)  || 0,
+      };
       if (isEdit) {
-        const { data } = await api.put(`/superadmin/plans/${plan.id}`, form);
+        const { data } = await api.put(`/superadmin/plans/${plan.id}`, payload);
         toast.success("Plan updated");
         onSaved(data);
       } else {
-        const { data } = await api.post("/superadmin/plans", form);
+        const { data } = await api.post("/superadmin/plans", payload);
         toast.success("Plan created");
         onSaved(data);
       }
@@ -291,7 +318,7 @@ function PlanModal({ plan, onClose, onSaved }) {
   const numField = (label, key, placeholder = "") => (
     <div>
       <label className="block text-xs font-semibold theme-text-muted mb-1">{label}</label>
-      <input type="number" value={form[key]} onChange={e => set(key, e.target.value)}
+      <input type="number" min="0" value={form[key]} onChange={e => set(key, e.target.value)}
         placeholder={placeholder}
         className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
     </div>
@@ -318,12 +345,20 @@ function PlanModal({ plan, onClose, onSaved }) {
             <div>
               <label className="block text-xs font-semibold theme-text-muted mb-1">
                 Slug *
-                <span className="ml-1.5 font-normal opacity-60">(unique ID used in code, e.g. "pro")</span>
+                <span className="ml-1.5 font-normal opacity-60">
+                  {isEdit ? "cannot be changed after creation" : 'unique code ID, e.g. "pro"'}
+                </span>
               </label>
-              <input value={form.slug}
-                onChange={e => { setSlugEdited(true); set("slug", toSlug(e.target.value)); }}
-                placeholder="pro" required
-                className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              {isEdit ? (
+                <div className="w-full px-3 py-2 rounded-lg border theme-border bg-[var(--surface-soft)] text-sm theme-text-muted font-mono">
+                  {form.slug}
+                </div>
+              ) : (
+                <input value={form.slug}
+                  onChange={e => { setSlugEdited(true); set("slug", toSlug(e.target.value)); }}
+                  placeholder="pro" required
+                  className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              )}
             </div>
           </div>
 
@@ -336,19 +371,19 @@ function PlanModal({ plan, onClose, onSaved }) {
 
           {/* Pricing */}
           <div className="border theme-border rounded-xl p-4 space-y-3">
-            <p className="text-xs font-bold theme-text uppercase tracking-wider">Pricing (₹ Rupees)</p>
+            <p className="text-xs font-bold theme-text uppercase tracking-wider">Pricing per user (₹ Rupees)</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold theme-text-muted mb-1">Monthly Price</label>
-                <input type="number" value={form.price_monthly}
-                  onChange={e => handlePriceChange("price_monthly", e.target.value)}
+                <label className="block text-xs font-semibold theme-text-muted mb-1">Per User / Month (₹)</label>
+                <input type="text" inputMode="numeric" value={form.price_monthly}
+                  onChange={e => handlePriceChange("price_monthly", e.target.value.replace(/[^0-9]/g, ""))}
                   placeholder="999"
                   className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
               </div>
               <div>
-                <label className="block text-xs font-semibold theme-text-muted mb-1">Yearly Price</label>
-                <input type="number" value={form.price_yearly}
-                  onChange={e => handlePriceChange("price_yearly", e.target.value)}
+                <label className="block text-xs font-semibold theme-text-muted mb-1">Per User / Year (₹)</label>
+                <input type="text" inputMode="numeric" value={form.price_yearly}
+                  onChange={e => handlePriceChange("price_yearly", e.target.value.replace(/[^0-9]/g, ""))}
                   placeholder="9999"
                   className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
               </div>
@@ -488,11 +523,11 @@ function PlanCard({ plan, onEdit, onDelete, onSync }) {
           ) : (
             <>
               <span className="text-2xl font-black theme-text">
-                {rupees(plan.price_monthly_paise)}<span className="text-sm font-normal theme-text-muted">/mo</span>
+                {rupees(plan.price_monthly_paise)}<span className="text-sm font-normal theme-text-muted">/user/mo</span>
               </span>
               {plan.price_yearly_paise > 0 && (
                 <span className="text-sm theme-text-muted">
-                  {rupees(plan.price_yearly_paise)}/yr
+                  {rupees(plan.price_yearly_paise)}/user/yr
                   {plan.yearly_discount_pct > 0 && (
                     <span className="ml-1.5 text-green-500 font-semibold">{plan.yearly_discount_pct}% off</span>
                   )}
@@ -505,7 +540,7 @@ function PlanCard({ plan, onEdit, onDelete, onSync }) {
         {/* Stats */}
         <div className="flex items-center gap-4 mt-3 flex-wrap">
           <span className="inline-flex items-center gap-1 text-xs theme-text-muted">
-            <Users className="w-3 h-3" /> {plan.member_limit} members
+            <Users className="w-3 h-3" /> {plan.member_limit > 0 ? `${plan.member_limit} members` : "Unlimited members"}
           </span>
           <span className="inline-flex items-center gap-1 text-xs theme-text-muted">
             <Crown className="w-3 h-3" /> {SUPPORT_LABELS[plan.support_level] || plan.support_level}
@@ -516,7 +551,7 @@ function PlanCard({ plan, onEdit, onDelete, onSync }) {
             </span>
           )}
           <span className="inline-flex items-center gap-1 text-xs theme-text-muted">
-            <CheckCircle className="w-3 h-3" /> {plan.subscriber_count ?? 0} subscribers
+            <CheckCircle className="w-3 h-3" /> {plan.subscriber_count ?? 0} workspace{plan.subscriber_count !== 1 ? "s" : ""}
           </span>
         </div>
       </div>
@@ -598,16 +633,13 @@ export default function SuperadminPlans() {
   }
 
   async function handleDelete(plan) {
-    if (plan.subscriber_count > 0) {
-      return toast.error(`Cannot deactivate — ${plan.subscriber_count} active subscriber(s).`);
-    }
-    if (!window.confirm(`Deactivate "${plan.name}"? Existing subscribers are unaffected.`)) return;
+    if (!window.confirm(`Permanently delete "${plan.name}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/superadmin/plans/${plan.id}`);
-      toast.success("Plan deactivated");
-      load();
+      toast.success(`"${plan.name}" deleted`);
+      setPlans(prev => prev.filter(p => p.id !== plan.id));
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to deactivate");
+      toast.error(err?.response?.data?.error || "Failed to delete plan");
     }
   }
 
@@ -640,7 +672,7 @@ export default function SuperadminPlans() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Active Plans",       value: active.length,   sub: `${plans.length - active.length} inactive` },
-          { label: "Total Subscribers",  value: totalSubs,       sub: "across all plans" },
+          { label: "Total Workspaces",    value: totalSubs,       sub: "across all plans" },
           { label: "Est. MRR",           value: rupees(mrrPaise), sub: "based on monthly prices" },
         ].map(s => (
           <div key={s.label} className="theme-surface border theme-border rounded-xl px-5 py-4">

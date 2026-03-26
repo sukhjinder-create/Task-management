@@ -84,13 +84,13 @@ export default function SuperAdminWorkspaces() {
   };
 
   const deleteWs = async (ws) => {
-    if (!window.confirm(`Delete "${ws.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Permanently delete "${ws.name}" and all its data? This cannot be undone.`)) return;
     try {
       await axiosSuper.delete(`/superadmin/workspaces/${ws.id}`);
-      toast.success("Workspace deleted");
+      toast.success(`"${ws.name}" permanently deleted`);
       setMenuId(null);
-      load();
-    } catch (err) { toast.error(err?.response?.data?.error || "Failed"); }
+      setWorkspaces(prev => prev.filter(w => w.id !== ws.id));
+    } catch (err) { toast.error(err?.response?.data?.error || "Failed to delete"); }
   };
 
   return (
@@ -163,7 +163,7 @@ export default function SuperAdminWorkspaces() {
                       </span>
                     )}
                     <span className="text-xs theme-text-muted flex items-center gap-1">
-                      <Users className="w-3 h-3" /> {ws.user_count ?? 0} / {ws.max_members ?? ws.member_limit} users
+                      <Users className="w-3 h-3" /> {ws.user_count ?? 0}{(ws.max_members ?? ws.member_limit) > 0 ? ` / ${ws.max_members ?? ws.member_limit}` : " / ∞"} users
                     </span>
                     <span className="text-xs theme-text-muted flex items-center gap-1">
                       <Calendar className="w-3 h-3" /> {relativeDate(ws.created_at)}
@@ -281,7 +281,7 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
   };
 
   return (
-    <Modal title={`${ws.name} — Users (${users.length} / ${ws.member_limit})`} onClose={onClose}>
+    <Modal title={`${ws.name} — Users (${users.length}${(ws.max_members ?? ws.member_limit) > 0 ? ` / ${ws.max_members ?? ws.member_limit}` : ""})`} onClose={onClose}>
       {loading ? (
         <div className="py-8 text-center text-sm theme-text-muted">Loading…</div>
       ) : users.length === 0 ? (
@@ -341,7 +341,7 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
 // ─── Create Modal ─────────────────────────────────────────────────────────────
 function CreateModal({ onClose, onCreated, axiosSuper }) {
   const [form, setForm] = useState({
-    name: "", plan: "basic", member_limit: 10,
+    name: "", plan: "basic",
     ownerEmail: "", ownerPassword: "", ownerName: "",
   });
   const [saving, setSaving] = useState(false);
@@ -354,10 +354,7 @@ function CreateModal({ onClose, onCreated, axiosSuper }) {
       return toast.error("Name, owner email and password are required");
     setSaving(true);
     try {
-      await axiosSuper.post("/superadmin/workspaces", {
-        ...form,
-        member_limit: Number(form.member_limit) || 10,
-      });
+      await axiosSuper.post("/superadmin/workspaces", form);
       toast.success("Workspace created");
       onCreated();
     } catch (err) { toast.error(err?.response?.data?.error || "Create failed"); }
@@ -372,16 +369,12 @@ function CreateModal({ onClose, onCreated, axiosSuper }) {
             <input value={form.name} onChange={e => set("name", e.target.value)}
               placeholder="Acme Corp" className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
           </Field>
-          <Field label="Plan">
+          <Field label="Plan" className="col-span-2">
             <select value={form.plan} onChange={e => set("plan", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
               <option value="basic">Basic</option>
               <option value="pro">Pro</option>
               <option value="enterprise">Enterprise</option>
             </select>
-          </Field>
-          <Field label="Member Limit">
-            <input type="number" min="1" value={form.member_limit}
-              onChange={e => set("member_limit", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
           </Field>
           <Field label="Admin Email" className="col-span-2">
             <input type="email" value={form.ownerEmail}
@@ -418,7 +411,6 @@ function EditModal({ ws, onClose, onSaved, axiosSuper }) {
   const [form, setForm] = useState({
     name: ws.name || "",
     plan: ws.plan || "basic",
-    member_limit: ws.member_limit || 10,
   });
   const [saving, setSaving] = useState(false);
 
@@ -428,10 +420,7 @@ function EditModal({ ws, onClose, onSaved, axiosSuper }) {
     e.preventDefault();
     setSaving(true);
     try {
-      await axiosSuper.put(`/superadmin/workspaces/${ws.id}`, {
-        ...form,
-        member_limit: Number(form.member_limit) || 10,
-      });
+      await axiosSuper.put(`/superadmin/workspaces/${ws.id}`, form);
       toast.success("Workspace updated");
       onSaved();
     } catch (err) { toast.error(err?.response?.data?.error || "Update failed"); }
@@ -445,16 +434,12 @@ function EditModal({ ws, onClose, onSaved, axiosSuper }) {
           <Field label="Workspace Name" className="col-span-2">
             <input value={form.name} onChange={e => set("name", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
           </Field>
-          <Field label="Plan">
+          <Field label="Plan" className="col-span-2">
             <select value={form.plan} onChange={e => set("plan", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
               <option value="basic">Basic</option>
               <option value="pro">Pro</option>
               <option value="enterprise">Enterprise</option>
             </select>
-          </Field>
-          <Field label="Member Limit">
-            <input type="number" min="1" value={form.member_limit}
-              onChange={e => set("member_limit", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
           </Field>
         </div>
         <div className="flex gap-2 pt-2">
