@@ -37,14 +37,33 @@ export function AuthProvider({ children }) {
   }, []);
 
   /* ---------------------------------------------
-     2. Login handler → stores auth everywhere
+     2. Listen for silent token refresh events
+     (fired by the axios interceptor in api.js)
   --------------------------------------------- */
-  const login = (user, token) => {
+  useEffect(() => {
+    const handler = (e) => {
+      const { user, token } = e.detail || {};
+      if (!token) return;
+      setAuth((prev) => ({
+        ...prev,
+        token,
+        user: user || prev.user,
+      }));
+    };
+    window.addEventListener("auth:token-refreshed", handler);
+    return () => window.removeEventListener("auth:token-refreshed", handler);
+  }, []);
+
+  /* ---------------------------------------------
+     3. Login handler → stores auth everywhere
+        refreshToken is optional (Google SSO skips it)
+  --------------------------------------------- */
+  const login = (user, token, refreshToken = null) => {
     if (!token) return console.error("Login missing token!");
 
-    const data = { user, token };
+    const data = { user, token, refreshToken };
 
-    // Store in browser
+    // Store in browser (include refreshToken so the axios interceptor can use it)
     localStorage.setItem("auth", JSON.stringify(data));
 
     // 🔥 Set runtime global token so axios uses it instantly
@@ -56,22 +75,27 @@ export function AuthProvider({ children }) {
       isReady: true,
     });
 
-    // OPTIONAL: If socket already connected → re-authenticate
     window.dispatchEvent(
       new CustomEvent("auth:updated", { detail: { user, token } })
     );
   };
 
   /* ---------------------------------------------
-     3. Logout → clear everything
+     4. Logout → revoke session + clear everything
   --------------------------------------------- */
   const logout = () => {
-    // Fire-and-forget audit log before clearing the token
-    const stored = (() => { try { return JSON.parse(localStorage.getItem("auth")); } catch { return null; } })();
+    // Send refresh token to backend to revoke the session
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem("auth")); } catch {}
+
     if (stored?.token) {
       fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"}/auth/logout`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${stored.token}` },
+        headers: {
+          Authorization: `Bearer ${stored.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ refreshToken: stored.refreshToken || null }),
       }).catch(() => {});
     }
 
@@ -87,10 +111,23 @@ export function AuthProvider({ children }) {
     window.dispatchEvent(new CustomEvent("auth:logout"));
   };
 
+  /* ---------------------------------------------
+     5. updateUser — patch user fields in state
+        Preserves the refreshToken in localStorage
+  --------------------------------------------- */
   const updateUser = (patch) => {
     setAuth((prev) => {
       const updated = { ...prev, user: { ...prev.user, ...patch } };
-      localStorage.setItem("auth", JSON.stringify({ user: updated.user, token: updated.token }));
+      // Read refreshToken from current storage so we don't lose it
+      let refreshToken = null;
+      try {
+        const current = JSON.parse(localStorage.getItem("auth"));
+        refreshToken = current?.refreshToken || null;
+      } catch {}
+      localStorage.setItem(
+        "auth",
+        JSON.stringify({ user: updated.user, token: updated.token, refreshToken })
+      );
       return updated;
     });
   };

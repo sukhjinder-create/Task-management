@@ -37,6 +37,7 @@ import SuperadminLogin from "./pages/SuperadminLogin.jsx";
 import SuperadminPayments from "./pages/SuperadminPayments.jsx";
 import SuperadminSettings from "./pages/SuperadminSettings.jsx";
 import SuperadminPlans from "./pages/SuperadminPlans.jsx";
+import SuperadminBackups from "./pages/SuperadminBackups.jsx";
 import ProtectedSuperadmin from "./components/ProtectedSuperadmin";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext";
 
@@ -45,6 +46,7 @@ import CreateWorkspace from "./pages/CreateWorkspace";
 
 // ---- Enterprise Phase 1-4 pages ----
 import Enterprise from "./pages/Enterprise.jsx";
+import EnterpriseIntelligence from "./pages/EnterpriseIntelligence.jsx";
 import Wiki       from "./pages/Wiki.jsx";
 import Leave      from "./pages/Leave.jsx";
 import OKR        from "./pages/OKR.jsx";
@@ -55,6 +57,9 @@ import AIHub      from "./pages/AIHub.jsx";
 // ---- Auth flow pages ----
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword  from "./pages/ResetPassword.jsx";
+
+// ---- Public pages ----
+import SLA from "./pages/SLA.jsx";
 
 /**
  * ======================================================
@@ -78,6 +83,7 @@ export default function App() {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/auth/magic" element={<AuthCallback />} />
         <Route path="/superadmin/login" element={<SuperadminLogin />} />
+        <Route path="/sla" element={<SLA />} />
 
         {/* ============================
             USER APP (PROTECTED)
@@ -145,8 +151,16 @@ export default function App() {
           <Route
             path="enterprise"
             element={
-              <ProtectedRoute allowedRoles={["admin"]}>
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="custom_branding">
                 <Enterprise />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="enterprise-intel"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="workspace_intelligence">
+                <EnterpriseIntelligence />
               </ProtectedRoute>
             }
           />
@@ -260,6 +274,7 @@ export default function App() {
           <Route path="plans"      element={<SuperadminPlans />} />
           <Route path="payments"   element={<SuperadminPayments />} />
           <Route path="settings"   element={<SuperadminSettings />} />
+          <Route path="backups"    element={<SuperadminBackups />} />
         </Route>
 
         {/* ============================

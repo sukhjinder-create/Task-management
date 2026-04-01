@@ -2,7 +2,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import ThemeSwitcher from "../components/ThemeSwitcher";
-import { Building2, CreditCard, Settings, LogOut, Shield, LayoutList } from "lucide-react";
+import { Building2, CreditCard, Settings, LogOut, Shield, LayoutList, Database } from "lucide-react";
 
 function getSuperadminToken() {
   try {
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { to: "/superadmin/workspaces", label: "Workspaces", icon: <Building2  className="w-4 h-4" /> },
   { to: "/superadmin/plans",      label: "Plans",      icon: <LayoutList className="w-4 h-4" /> },
   { to: "/superadmin/payments",   label: "Payments",   icon: <CreditCard className="w-4 h-4" /> },
+  { to: "/superadmin/backups",    label: "Backups",    icon: <Database   className="w-4 h-4" /> },
   { to: "/superadmin/settings",   label: "Settings",   icon: <Settings   className="w-4 h-4" /> },
 ];
 

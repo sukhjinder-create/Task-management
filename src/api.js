@@ -6,6 +6,17 @@ import axios from "axios";
 //   Mobile (real device): set to your PC's local network IP e.g. http://192.168.x.x:3000
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
+// ── Silent refresh state ──────────────────────────────────────────────────────
+// Tracks whether a /auth/refresh call is already in flight, and queues any
+// requests that fail while the refresh is happening so they can be retried.
+let _isRefreshing = false;
+let _refreshQueue = []; // [{ resolve, reject }]
+
+function _drainQueue(err, token) {
+  _refreshQueue.forEach((p) => (err ? p.reject(err) : p.resolve(token)));
+  _refreshQueue = [];
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true, // important
@@ -71,7 +82,7 @@ api.interceptors.request.use(
 --------------------------------------------- */
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
     const status = err?.response?.status;
     const message = err?.response?.data?.error || "";
 
@@ -104,28 +115,85 @@ api.interceptors.response.use(
     }
 
     /* ------------------------------------------
-       EXISTING 401 LOGIC (UNCHANGED)
+       401 — try silent token refresh first
     --------------------------------------------- */
     if (status === 401) {
-      console.warn("⚠️ Soft 401 captured:", message);
       const lower = String(message).toLowerCase();
+      const isTokenFailure = lower.includes("expired") || lower.includes("invalid") || lower.includes("no token");
 
-      if (lower.includes("expired") || lower.includes("invalid")) {
-        console.warn("🔴 Real token failure → logging out");
+      if (!isTokenFailure) {
+        // Business-logic 401 (e.g. wrong password) — don't touch auth state
+        return Promise.reject(err);
+      }
 
-        try {
-          localStorage.removeItem("auth");
-        } catch {}
+      const originalRequest = err.config;
 
-        window.dispatchEvent(
-          new CustomEvent("auth:unauthorized", {
-            detail: { expired: true },
-          })
-        );
-
+      // Avoid infinite retry loop
+      if (originalRequest._refreshRetry) {
+        _drainQueue(err, null);
+        _isRefreshing = false;
+        try { localStorage.removeItem("auth"); } catch {}
+        window.dispatchEvent(new CustomEvent("auth:unauthorized", { detail: { expired: true } }));
         window.dispatchEvent(new Event("auth:logout"));
-      } else {
-        console.warn("🟡 401 not jwt-related → skip logout");
+        return Promise.reject(err);
+      }
+
+      // If a refresh is already in flight, queue this request to retry after
+      if (_isRefreshing) {
+        return new Promise((resolve, reject) => {
+          _refreshQueue.push({ resolve, reject });
+        }).then((newToken) => {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        });
+      }
+
+      // Check whether we have a refresh token to use
+      let stored;
+      try { stored = JSON.parse(localStorage.getItem("auth")); } catch { stored = null; }
+      const refreshToken = stored?.refreshToken;
+
+      if (!refreshToken) {
+        // No refresh token — just log out
+        try { localStorage.removeItem("auth"); } catch {}
+        window.dispatchEvent(new CustomEvent("auth:unauthorized", { detail: { expired: true } }));
+        window.dispatchEvent(new Event("auth:logout"));
+        return Promise.reject(err);
+      }
+
+      // Start silent refresh
+      _isRefreshing = true;
+      originalRequest._refreshRetry = true;
+
+      try {
+        const refreshRes = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+        const { token: newToken, refreshToken: newRefreshToken, user } = refreshRes.data;
+
+        // Persist updated tokens
+        const updatedAuth = {
+          user: user || stored?.user,
+          token: newToken,
+          refreshToken: newRefreshToken,
+        };
+        localStorage.setItem("auth", JSON.stringify(updatedAuth));
+        try { window.__AUTH_TOKEN__ = newToken; } catch {}
+
+        // Notify React context (AuthContext listens for this)
+        window.dispatchEvent(new CustomEvent("auth:token-refreshed", { detail: updatedAuth }));
+
+        _drainQueue(null, newToken);
+
+        // Retry the original request with the new token
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      } catch (refreshErr) {
+        _drainQueue(refreshErr, null);
+        try { localStorage.removeItem("auth"); } catch {}
+        try { window.__AUTH_TOKEN__ = null; } catch {}
+        window.dispatchEvent(new Event("auth:logout"));
+        return Promise.reject(refreshErr);
+      } finally {
+        _isRefreshing = false;
       }
     }
 

@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import {
   Building2, Users, ShieldCheck, ShieldOff, Plus,
   MoreVertical, Pencil, Trash2, CheckCircle, XCircle,
-  Crown, Calendar, X, KeyRound, UserCog
+  Crown, Calendar, X, KeyRound, UserCog, CreditCard
 } from "lucide-react";
 
 function getSuperadminAxios() {
@@ -44,10 +44,11 @@ export default function SuperAdminWorkspaces() {
   const [workspaces, setWorkspaces] = useState([]);
   const [stats, setStats]           = useState(null);
   const [loading, setLoading]       = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [editWs, setEditWs]         = useState(null);
-  const [detailWs, setDetailWs]     = useState(null);  // workspace detail panel
-  const [menuId, setMenuId]         = useState(null);
+  const [showCreate, setShowCreate]     = useState(false);
+  const [editWs, setEditWs]             = useState(null);
+  const [detailWs, setDetailWs]         = useState(null);
+  const [assignPlanWs, setAssignPlanWs] = useState(null); // workspace to assign plan to
+  const [menuId, setMenuId]             = useState(null);
 
   const axiosSuper = getSuperadminAxios();
 
@@ -186,6 +187,10 @@ export default function SuperAdminWorkspaces() {
                         onClick={() => { setDetailWs(ws); setMenuId(null); }} />
                       <MenuItem icon={<Pencil className="w-3.5 h-3.5" />} label="Edit"
                         onClick={() => { setEditWs(ws); setMenuId(null); }} />
+                      {!ws.billing_plan && (
+                        <MenuItem icon={<CreditCard className="w-3.5 h-3.5" />} label="Assign Plan"
+                          onClick={() => { setAssignPlanWs(ws); setMenuId(null); }} className="text-indigo-500" />
+                      )}
                       {ws.is_active
                         ? <MenuItem icon={<ShieldOff className="w-3.5 h-3.5" />} label="Suspend"
                             onClick={() => setStatus(ws, "suspended")} className="text-amber-500" />
@@ -232,10 +237,129 @@ export default function SuperAdminWorkspaces() {
         />
       )}
 
+      {/* ── Assign Plan modal ────────────────────────────────────────────── */}
+      {assignPlanWs && (
+        <AssignPlanModal
+          ws={assignPlanWs}
+          axiosSuper={axiosSuper}
+          onClose={() => setAssignPlanWs(null)}
+          onSaved={() => { setAssignPlanWs(null); load(); }}
+        />
+      )}
+
       {/* Close menu on outside click */}
       {menuId && (
         <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />
       )}
+    </div>
+  );
+}
+
+// ─── Assign Plan Modal ────────────────────────────────────────────────────────
+function AssignPlanModal({ ws, axiosSuper, onClose, onSaved }) {
+  const [plans, setPlans]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [selected, setSelected] = useState("");
+  const [saving, setSaving]     = useState(false);
+
+  useEffect(() => {
+    axiosSuper.get("/superadmin/plans")
+      .then(r => {
+        const active = (r.data || []).filter(p => p.is_active !== false);
+        setPlans(active);
+        if (active.length > 0) setSelected(active[0].slug);
+      })
+      .catch(() => toast.error("Failed to load plans"))
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAssign = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await axiosSuper.put(`/superadmin/workspaces/${ws.id}`, { plan: selected });
+      toast.success(`Plan "${selected}" assigned to ${ws.name}`);
+      onSaved();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to assign plan");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="theme-surface rounded-2xl border theme-border w-full max-w-sm shadow-2xl">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b theme-border">
+          <div>
+            <h2 className="font-semibold theme-text text-sm">Assign Plan</h2>
+            <p className="text-xs theme-text-muted mt-0.5">{ws.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-6 theme-text-muted text-sm">Loading plans…</div>
+          ) : plans.length === 0 ? (
+            <p className="text-sm theme-text-muted text-center py-4">No active plans found. Create a plan first.</p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {plans.map(plan => (
+                  <label
+                    key={plan.id}
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                      selected === plan.slug
+                        ? "border-indigo-500 bg-indigo-50"
+                        : "theme-border hover:bg-[var(--surface-soft)]"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="plan"
+                      value={plan.slug}
+                      checked={selected === plan.slug}
+                      onChange={() => setSelected(plan.slug)}
+                      className="mt-0.5 accent-indigo-600"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold theme-text">{plan.name}</p>
+                      {plan.tagline && <p className="text-xs theme-text-muted mt-0.5">{plan.tagline}</p>}
+                      <div className="flex items-center gap-3 mt-1 text-xs theme-text-muted">
+                        <span>₹{((plan.price_monthly_paise || 0) / 100).toLocaleString("en-IN")}/mo</span>
+                        {plan.member_limit && <span>· {plan.member_limit} members</span>}
+                        {Array.isArray(plan.features) && (
+                          <span>· {plan.features.length} features</span>
+                        )}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
+                This bypasses payment — the workspace gets plan access immediately without a subscription.
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-5 pb-5">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border theme-border text-sm theme-text hover:bg-[var(--surface-soft)]">
+            Cancel
+          </button>
+          <button
+            onClick={handleAssign}
+            disabled={!selected || saving || loading || plans.length === 0}
+            className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {saving ? "Assigning…" : "Assign Plan"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

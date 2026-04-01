@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { getSocket, initSocket } from "../socket";
 import toast from "react-hot-toast";
 import { Avatar } from "../components/ui";
-import { Camera, User, Mail, Shield, FolderKanban, Building2 } from "lucide-react";
+import { Camera, User, Mail, Shield, FolderKanban, Building2, Lock, Eye, EyeOff } from "lucide-react";
 
 const BACKEND = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 function resolveUrl(src) {
@@ -32,6 +32,147 @@ function presenceLabel(status) {
   if (status === "offline") return "Offline";
   return "Offline";
 }
+
+// ── Change Password ───────────────────────────────────────────────────────────
+function ChangePassword() {
+  const api = useApi();
+  const { logout } = useAuth();
+
+  const [form, setForm] = useState({ current: "", next: "", confirm: "" });
+  const [show, setShow] = useState({ current: false, next: false, confirm: false });
+  const [saving, setSaving] = useState(false);
+
+  const toggleShow = (field) => setShow((s) => ({ ...s, [field]: !s[field] }));
+  const setField = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!form.current) { toast.error("Enter your current password"); return; }
+    if (form.next.length < 8) { toast.error("New password must be at least 8 characters"); return; }
+    if (form.next !== form.confirm) { toast.error("Passwords do not match"); return; }
+
+    setSaving(true);
+    try {
+      await api.put("/auth/change-password", {
+        currentPassword: form.current,
+        newPassword:     form.next,
+      });
+      toast.success("Password changed. Logging you out…");
+      setTimeout(() => logout(), 1500);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to change password");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputClass =
+    "w-full border theme-border theme-surface theme-text rounded-lg px-3 py-2 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-400";
+
+  return (
+    <div className="theme-surface border theme-border rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3.5 border-b theme-border">
+        <div className="w-8 h-8 rounded-lg bg-[var(--surface-soft)] flex items-center justify-center shrink-0">
+          <Lock className="w-4 h-4 theme-text-muted" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold theme-text">Change Password</p>
+          <p className="text-xs theme-text-muted">All active sessions will be signed out</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="px-4 py-4 space-y-3">
+        {/* Current password */}
+        <div>
+          <label className="block text-xs font-medium theme-text-muted mb-1">Current password</label>
+          <div className="relative">
+            <input
+              type={show.current ? "text" : "password"}
+              value={form.current}
+              onChange={setField("current")}
+              className={inputClass}
+              placeholder="Enter current password"
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => toggleShow("current")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted"
+              tabIndex={-1}
+            >
+              {show.current ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+        </div>
+
+        {/* New password */}
+        <div>
+          <label className="block text-xs font-medium theme-text-muted mb-1">New password</label>
+          <div className="relative">
+            <input
+              type={show.next ? "text" : "password"}
+              value={form.next}
+              onChange={setField("next")}
+              className={inputClass}
+              placeholder="Min. 8 characters"
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => toggleShow("next")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted"
+              tabIndex={-1}
+            >
+              {show.next ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Confirm new password */}
+        <div>
+          <label className="block text-xs font-medium theme-text-muted mb-1">Confirm new password</label>
+          <div className="relative">
+            <input
+              type={show.confirm ? "text" : "password"}
+              value={form.confirm}
+              onChange={setField("confirm")}
+              className={inputClass}
+              placeholder="Re-enter new password"
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => toggleShow("confirm")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted"
+              tabIndex={-1}
+            >
+              {show.confirm ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Match indicator */}
+        {form.next && form.confirm && (
+          <p className={`text-xs ${form.next === form.confirm ? "text-green-500" : "text-red-500"}`}>
+            {form.next === form.confirm ? "Passwords match" : "Passwords do not match"}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full theme-primary rounded-lg py-2 text-sm font-medium disabled:opacity-50 mt-1"
+        >
+          {saving ? "Updating…" : "Update password"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Profile() {
   const api = useApi();
@@ -188,6 +329,9 @@ export default function Profile() {
             ))}
           </div>
         )}
+
+        {/* Change password */}
+        {!loading && profile && <ChangePassword />}
 
       </div>
     </div>

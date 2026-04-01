@@ -16,9 +16,9 @@ export default function AuthCallback() {
   const navigate       = useNavigate();
   const [status, setStatus] = useState("Signing you in…");
 
-  const safePersistAuth = (user, token) => {
+  const safePersistAuth = (user, token, refreshToken = null) => {
     try {
-      localStorage.setItem("auth", JSON.stringify({ token, user }));
+      localStorage.setItem("auth", JSON.stringify({ token, user, refreshToken }));
       window.__AUTH_TOKEN__    = token;
       window.__WORKSPACE_ID__  = user?.workspaceId || user?.workspace_id || "GLOBAL";
       window.dispatchEvent(new Event("auth:updated"));
@@ -34,8 +34,9 @@ export default function AuthCallback() {
 
         if (urlToken && urlUser) {
           const user = JSON.parse(decodeURIComponent(urlUser));
-          safePersistAuth(user, urlToken);
-          login(user, urlToken);
+          // Google SSO: no refresh token (can't put it in URL safely)
+          safePersistAuth(user, urlToken, null);
+          login(user, urlToken, null);
           toast.success(`Welcome, ${user.username}!`);
           navigate("/projects", { replace: true });
           return;
@@ -47,9 +48,9 @@ export default function AuthCallback() {
           const res = await axios.get(`${API_BASE_URL}/auth/magic`, {
             params: { token: magicToken },
           });
-          const { token, user } = res.data;
-          safePersistAuth(user, token);
-          login(user, token);
+          const { token, user, refreshToken = null } = res.data;
+          safePersistAuth(user, token, refreshToken);
+          login(user, token, refreshToken);
           toast.success(`Welcome, ${user.username}! You're now logged in.`);
           navigate("/projects", { replace: true });
           return;

@@ -31,10 +31,9 @@ export default function Login() {
     if (err) toast.error(decodeURIComponent(err));
   }, [searchParams]);
 
-  const safePersistAuth = (user, token) => {
+  const safePersistAuth = (user, token, refreshToken = null) => {
     try {
-      // keep backward compatible storage shape: { token, user }
-      const payload = { token, user };
+      const payload = { token, user, refreshToken };
       localStorage.setItem("auth", JSON.stringify(payload));
 
       // set window globals used by socket.js and other legacy code
@@ -52,9 +51,9 @@ export default function Login() {
     }
   };
 
-  const completeLogin = (token, user) => {
-    safePersistAuth(user, token);
-    try { login(user, token); } catch (err) { console.warn("AuthContext.login threw:", err); }
+  const completeLogin = (token, user, refreshToken = null) => {
+    safePersistAuth(user, token, refreshToken);
+    try { login(user, token, refreshToken); } catch (err) { console.warn("AuthContext.login threw:", err); }
     toast.success(`Logged in as ${user.username}`);
     navigate("/projects", { replace: true });
   };
@@ -74,7 +73,7 @@ export default function Login() {
         return;
       }
 
-      completeLogin(res.data.token, res.data.user);
+      completeLogin(res.data.token, res.data.user, res.data.refreshToken || null);
     } catch (err) {
       const msg = err.response?.data?.error || "Login failed";
       toast.error(msg);
@@ -93,7 +92,7 @@ export default function Login() {
         mfa_session_token: mfaToken,
         code: mfaCode,
       });
-      completeLogin(res.data.token, res.data.user);
+      completeLogin(res.data.token, res.data.user, res.data.refreshToken || null);
     } catch (err) {
       const msg = err.response?.data?.error || "Invalid code";
       toast.error(msg);

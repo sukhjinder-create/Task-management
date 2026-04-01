@@ -35,18 +35,27 @@ function rupees(paise) {
 // Always-free items (Dashboard, Projects, My Tasks, Notifications, Profile,
 // Admin Panel, Billing) are NOT listed here — they're never gated.
 export const MASTER_FEATURES = [
-  // ── Sidebar → navItems (gatable) ──────────────────────────────────────────
-  { key: "wiki_docs",           label: "Wiki / Docs",    category: "Sidebar" },
-  { key: "leave_management",    label: "Leave",          category: "Sidebar" },
-  { key: "okr_goals",           label: "Goals",          category: "Sidebar" },
-  { key: "performance_reviews", label: "Reviews",        category: "Sidebar" },
-  { key: "basic_reporting",     label: "Reports",        category: "Sidebar" },
-  { key: "ai_hub",              label: "AI Hub",         category: "Sidebar" },
-  { key: "team_chat",           label: "Team Chat",      category: "Sidebar" },
-  // ── Sidebar → adminItems (gatable) ────────────────────────────────────────
-  { key: "attendance",          label: "Attendance",     category: "Admin" },
-  { key: "custom_branding",     label: "Enterprise",     category: "Admin" },
-  { key: "slack_migration",     label: "Migrations",     category: "Admin" },
+  // ── Sidebar modules (user-facing) ─────────────────────────────────────────
+  { key: "wiki_docs",              label: "Wiki / Docs",              category: "Sidebar" },
+  { key: "leave_management",       label: "Leave",                    category: "Sidebar" },
+  { key: "okr_goals",              label: "Goals",                    category: "Sidebar" },
+  { key: "performance_reviews",    label: "Reviews",                  category: "Sidebar" },
+  { key: "basic_reporting",        label: "Reports",                  category: "Sidebar" },
+  { key: "team_chat",              label: "Team Chat",                category: "Sidebar" },
+  // ── AI modules ────────────────────────────────────────────────────────────
+  { key: "ai_hub",                 label: "AI Hub",                   category: "AI" },
+  { key: "advanced_analytics",     label: "Strategic Intelligence",   category: "AI" },
+  { key: "workspace_intelligence", label: "Workspace Intelligence",   category: "AI" },
+  { key: "ai_autopilot",           label: "AI Autopilot",             category: "AI" },
+  { key: "ai_testing_agent",       label: "Testing Agent",            category: "AI" },
+  // ── Admin modules ─────────────────────────────────────────────────────────
+  { key: "attendance",             label: "Attendance",               category: "Admin" },
+  { key: "custom_branding",        label: "Enterprise",               category: "Admin" },
+  { key: "slack_migration",        label: "Migrations",               category: "Admin" },
+  // ── Power-user features ───────────────────────────────────────────────────
+  { key: "time_tracking",          label: "Time Tracking",            category: "Power" },
+  { key: "issue_templates",        label: "Issue Templates",          category: "Power" },
+  { key: "saved_filters",          label: "Saved Filters",            category: "Power" },
 ];
 
 const FEATURE_BY_KEY = Object.fromEntries(MASTER_FEATURES.map(f => [f.key, f]));
