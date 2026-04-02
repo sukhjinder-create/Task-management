@@ -371,3 +371,128 @@ export async function decryptEnvelopeIfNeeded(
     return fallbackPlain;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILE / ATTACHMENT ENCRYPTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Encrypt a File before upload.
+ * Returns the encrypted Blob + the raw AES key bytes + IV.
+ * The rawKey must be encrypted per-recipient at send-time via encryptFileKeyForRecipients().
+ */
+export async function encryptFileForUpload(file) {
+  const aesKey = await window.crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"]
+  );
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const plainBytes = await file.arrayBuffer();
+  const encryptedBytes = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    plainBytes
+  );
+  const rawKey = await window.crypto.subtle.exportKey("raw", aesKey);
+  return {
+    encryptedBlob: new Blob([encryptedBytes], { type: "application/octet-stream" }),
+    rawKey: new Uint8Array(rawKey),
+    iv: bufToBase64(iv),
+  };
+}
+
+/**
+ * At send-time: encrypt the file AES key for each recipient using ECDH.
+ * Same scheme as text message encryption — one encrypted key entry per user.
+ */
+export async function encryptFileKeyForRecipients(rawKey, senderId, recipientIds, usersWithKeys) {
+  const keyPair = loadKeyPairFromStorage();
+  if (!keyPair?.privateKeyJwk) return null;
+
+  const senderIdStr = String(senderId);
+  const uniqueIds = Array.from(
+    new Set([...(recipientIds || []), senderIdStr].map(String))
+  );
+
+  const keyById = new Map();
+  (usersWithKeys || []).forEach((u) => {
+    if (!u?.id) return;
+    const jwk = u.publicKeyJwk || u.public_key || u.publicKey || null;
+    if (jwk) keyById.set(String(u.id), jwk);
+  });
+  keyById.set(senderIdStr, keyPair.publicKeyJwk);
+
+  const myPriv = await importPrivateKey(keyPair.privateKeyJwk);
+  const encryptedKeys = {};
+
+  for (const id of uniqueIds) {
+    const jwk = keyById.get(id);
+    if (!jwk) continue;
+    try {
+      const recipPub = typeof jwk === "string"
+        ? await importPublicKey(JSON.parse(jwk))
+        : await importPublicKey(jwk);
+      const sharedKey = await deriveAesKey(myPriv, recipPub);
+      const keyIv = window.crypto.getRandomValues(new Uint8Array(12));
+      const encKeyBytes = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: keyIv },
+        sharedKey,
+        rawKey
+      );
+      encryptedKeys[id] = {
+        data: bufToBase64(new Uint8Array(encKeyBytes)),
+        iv: bufToBase64(keyIv),
+      };
+    } catch (err) {
+      console.warn("[E2E] encryptFileKeyForRecipients: skip", id, err.message);
+    }
+  }
+
+  return encryptedKeys;
+}
+
+/**
+ * Decrypt an encrypted file blob using ECDH + AES-GCM (two-layer).
+ * @param {ArrayBuffer} encryptedBuffer  - raw bytes fetched from server
+ * @param {{ data: string, iv: string }} encKeyEntry - this user's encrypted file AES key
+ * @param {string} fileIvB64  - base64 IV used when encrypting the file bytes
+ * @param {object|string} senderPubJwk - sender's public key JWK
+ * @returns {Promise<ArrayBuffer>} decrypted file bytes
+ */
+export async function decryptFileBlob(encryptedBuffer, encKeyEntry, fileIvB64, senderPubJwk) {
+  const keyPair = loadKeyPairFromStorage();
+  if (!keyPair?.privateKeyJwk) throw new Error("No local private key");
+  if (!encKeyEntry?.data || !encKeyEntry?.iv) throw new Error("Missing encrypted key entry");
+
+  const myPriv = await importPrivateKey(keyPair.privateKeyJwk);
+  const senderPub = typeof senderPubJwk === "string"
+    ? await importPublicKey(JSON.parse(senderPubJwk))
+    : await importPublicKey(senderPubJwk);
+  const sharedKey = await deriveAesKey(myPriv, senderPub);
+
+  // Layer 1: decrypt the file's AES key using the ECDH-derived shared key
+  const keyIv = base64ToBuf(encKeyEntry.iv);
+  const encKeyBytes = base64ToBuf(encKeyEntry.data);
+  const rawKeyBuf = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: new Uint8Array(keyIv) },
+    sharedKey,
+    encKeyBytes
+  );
+
+  const fileAesKey = await window.crypto.subtle.importKey(
+    "raw",
+    rawKeyBuf,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  // Layer 2: decrypt the actual file bytes
+  const fileIv = base64ToBuf(fileIvB64);
+  return window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: new Uint8Array(fileIv) },
+    fileAesKey,
+    encryptedBuffer
+  );
+}

@@ -6,6 +6,10 @@ import {
   generateUserKeyPair,
   encryptForRecipients,
   decryptEnvelopeIfNeeded,
+  encryptFileForUpload,
+  encryptFileKeyForRecipients,
+  decryptFileBlob,
+  loadKeyPairFromStorage,
 } from "../crypto/chatCrypto";
 import { useApi, API_BASE_URL } from "../api";
 import {
@@ -23,7 +27,7 @@ import {
 import { useHuddle } from "../context/HuddleContext";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
-import { MessageSquare, Send, Hash, Lock, Users, Settings, Plus, Smile, Menu, X as XIcon, Phone, ChevronLeft, Paperclip } from "lucide-react";
+import { MessageSquare, Send, Hash, Lock, Users, Settings, Plus, Smile, Menu, X as XIcon, Phone, ChevronLeft, Paperclip, Eye, Download } from "lucide-react";
 import { Avatar, FetchImg, Button, Badge, Card } from "../components/ui";
 import { useIsMobile } from "../hooks/useIsMobile";
 
@@ -156,6 +160,346 @@ function applyEmojiToMessage(msg) {
   return copy;
 }
 
+// ─── Full-screen attachment viewer modal ─────────────────────────────────────
+function AttachmentViewerModal({ url, name, type, onClose }) {
+  const isImage = type?.startsWith("image/");
+  const isVideo = type?.startsWith("video/");
+  const isAudio = type?.startsWith("audio/");
+  const isPdf   = type === "application/pdf";
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      {/* Header bar */}
+      <div
+        className="w-full max-w-5xl flex items-center justify-between mb-3 shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-white text-sm font-medium truncate flex-1 mr-4">{name}</p>
+        <div className="flex items-center gap-2">
+          <a
+            href={url}
+            download={name}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Download className="w-3.5 h-3.5" /> Download
+          </a>
+          <button
+            onClick={onClose}
+            className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors"
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div
+        className="flex items-center justify-center w-full max-w-5xl overflow-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isImage && (
+          <img
+            src={url}
+            alt={name}
+            className="max-h-[80vh] max-w-full rounded-xl object-contain select-none"
+          />
+        )}
+        {isVideo && (
+          <video
+            src={url}
+            controls
+            autoPlay
+            className="max-h-[80vh] max-w-full rounded-xl"
+          />
+        )}
+        {isAudio && (
+          <audio src={url} controls autoPlay className="w-full max-w-md" />
+        )}
+        {isPdf && (
+          <iframe
+            src={url}
+            title={name}
+            className="w-full rounded-xl bg-white"
+            style={{ height: "80vh" }}
+          />
+        )}
+        {!isImage && !isVideo && !isAudio && !isPdf && (
+          <div className="text-center text-white py-12">
+            <p className="text-5xl mb-4">📄</p>
+            <p className="text-lg font-medium mb-1">{name}</p>
+            <p className="text-sm text-white/50 mb-6">Preview not available for this file type</p>
+            <a
+              href={url}
+              download={name}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-gray-900 rounded-xl text-sm font-semibold hover:bg-white/90 transition-colors"
+            >
+              <Download className="w-4 h-4" /> Download to view
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Wrapper: click shows View / Download menu, View opens the modal ──────────
+function AttachmentActions({ url, name, type, children }) {
+  const [menuOpen,   setMenuOpen]   = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+
+  return (
+    <>
+      {/* Clickable area */}
+      <div
+        className="relative inline-block cursor-pointer select-none"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(true); }}
+      >
+        {children}
+
+        {/* View / Download popover */}
+        {menuOpen && (
+          <div
+            className="absolute bottom-full left-0 mb-1.5 z-30 min-w-[130px] theme-surface border theme-border rounded-xl shadow-xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm theme-text hover:bg-[var(--surface-soft)] transition-colors"
+              onClick={() => { setMenuOpen(false); setViewerOpen(true); }}
+            >
+              <Eye className="w-4 h-4 shrink-0" />
+              View
+            </button>
+            <a
+              href={url}
+              download={name}
+              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm theme-text hover:bg-[var(--surface-soft)] transition-colors"
+              onClick={() => setMenuOpen(false)}
+            >
+              <Download className="w-4 h-4 shrink-0" />
+              Download
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Click-outside overlay to close menu */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
+      )}
+
+      {/* Viewer modal */}
+      {viewerOpen && (
+        <AttachmentViewerModal
+          url={url}
+          name={name}
+          type={type}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── E2E: decrypt + render a single encrypted file attachment ────────────────
+function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys }) {
+  const [objectUrl, setObjectUrl] = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [failed, setFailed]       = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let createdUrl = null;
+
+    async function run() {
+      try {
+        // Resolve sender public key
+        let senderPubJwk = att.senderPublicKeyJwk || null;
+        if (!senderPubJwk) {
+          const senderUser = (usersWithKeys || []).find(
+            (u) => String(u.id) === String(senderId)
+          );
+          senderPubJwk =
+            senderUser?.publicKeyJwk || senderUser?.public_key || null;
+        }
+        // Self-sent message — use our own stored public key
+        if (!senderPubJwk && String(senderId) === String(currentUserId)) {
+          const kp = loadKeyPairFromStorage();
+          if (kp?.publicKeyJwk) senderPubJwk = kp.publicKeyJwk;
+        }
+        if (!senderPubJwk) throw new Error("No sender public key");
+
+        const encKeyEntry = att.encryptedKeys?.[String(currentUserId)];
+        if (!encKeyEntry) throw new Error("No key for current user");
+
+        const res = await fetch(resolveUrl(att.url));
+        if (!res.ok) throw new Error(`Fetch ${res.status}`);
+        const encBuf = await res.arrayBuffer();
+
+        const plainBuf = await decryptFileBlob(
+          encBuf, encKeyEntry, att.fileIv, senderPubJwk
+        );
+        if (cancelled) return;
+
+        createdUrl = URL.createObjectURL(
+          new Blob([plainBuf], { type: att.type || "application/octet-stream" })
+        );
+        setObjectUrl(createdUrl);
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("[E2E] EncryptedAttachmentViewer failed:", err.message);
+          setFailed(true);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [att.url, att.fileIv, String(currentUserId), String(senderId)]); // eslint-disable-line
+
+  if (loading) return (
+    <span className="inline-flex items-center gap-1.5 text-xs theme-text-muted px-3 py-2 theme-surface border theme-border rounded-xl">
+      <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+      Decrypting…
+    </span>
+  );
+
+  if (failed || !objectUrl) return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
+      🔒 Encrypted file (key unavailable)
+    </span>
+  );
+
+  const isImage = att.type?.startsWith("image/");
+  const isVideo = att.type?.startsWith("video/");
+  const isAudio = att.type?.startsWith("audio/");
+
+  if (isImage) return (
+    <AttachmentActions url={objectUrl} name={att.name} type={att.type}>
+      <img src={objectUrl} alt={att.name}
+        className="max-h-48 max-w-full rounded-2xl object-contain border theme-border shadow-sm hover:brightness-95 transition-all" />
+    </AttachmentActions>
+  );
+  if (isVideo) return (
+    <AttachmentActions url={objectUrl} name={att.name} type={att.type}>
+      <video src={objectUrl} className="max-h-48 max-w-full rounded-2xl shadow-sm pointer-events-none" />
+    </AttachmentActions>
+  );
+  if (isAudio) return (
+    <AttachmentActions url={objectUrl} name={att.name} type={att.type}>
+      <div className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2">
+        <span>🔒</span><span className="font-medium truncate max-w-[160px]">{att.name}</span>
+      </div>
+    </AttachmentActions>
+  );
+
+  return (
+    <AttachmentActions url={objectUrl} name={att.name} type={att.type}>
+      <div className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2 hover:opacity-90">
+        <span>🔒</span>
+        <div>
+          <div className="font-medium truncate max-w-[160px]">{att.name}</div>
+          {att.size && <div className="text-[10px] theme-text-muted">{(att.size / 1024).toFixed(0)} KB · Encrypted</div>}
+        </div>
+      </div>
+    </AttachmentActions>
+  );
+}
+
+// ─── Unified attachment renderer (encrypted + plain + local preview) ──────────
+function AttachmentItem({ att, senderId, currentUserId, usersWithKeys }) {
+  // Pre-send local preview (has _localUrl, not yet confirmed by server)
+  if (att._localUrl) {
+    const isImage = att.type?.startsWith("image/");
+    const isVideo = att.type?.startsWith("video/");
+    if (isImage) return (
+      <AttachmentActions url={att._localUrl} name={att.name} type={att.type}>
+        <img src={att._localUrl} alt={att.name}
+          className="max-h-48 max-w-full rounded-2xl object-contain border theme-border shadow-sm opacity-80 hover:opacity-100 transition-opacity" />
+      </AttachmentActions>
+    );
+    if (isVideo) return (
+      <AttachmentActions url={att._localUrl} name={att.name} type={att.type}>
+        <video src={att._localUrl} className="max-h-48 max-w-full rounded-2xl shadow-sm opacity-80 pointer-events-none" />
+      </AttachmentActions>
+    );
+    return (
+      <AttachmentActions url={att._localUrl} name={att.name} type={att.type}>
+        <div className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2 hover:opacity-90">
+          <span>📄</span>
+          <div>
+            <div className="font-medium truncate max-w-[160px]">{att.name}</div>
+            {att.size && <div className="text-[10px] theme-text-muted">{(att.size / 1024).toFixed(0)} KB</div>}
+          </div>
+        </div>
+      </AttachmentActions>
+    );
+  }
+
+  // Server-confirmed encrypted attachment
+  if (att.encrypted && att.encryptedKeys) {
+    return (
+      <EncryptedAttachmentViewer
+        att={att}
+        senderId={senderId}
+        currentUserId={currentUserId}
+        usersWithKeys={usersWithKeys}
+      />
+    );
+  }
+
+  // Plain (legacy / non-encrypted) attachment
+  const fullUrl = resolveUrl(att.url) || att.url;
+  const isImage = att.type?.startsWith("image/");
+  const isVideo = att.type?.startsWith("video/");
+  const isAudio = att.type?.startsWith("audio/");
+
+  if (isImage) return (
+    <AttachmentActions url={fullUrl} name={att.name} type={att.type}>
+      <img src={fullUrl} alt={att.name}
+        className="max-h-48 max-w-full rounded-2xl object-contain border theme-border shadow-sm hover:brightness-95 transition-all" />
+    </AttachmentActions>
+  );
+  if (isVideo) return (
+    <AttachmentActions url={fullUrl} name={att.name} type={att.type}>
+      <video src={fullUrl} className="max-h-48 max-w-full rounded-2xl shadow-sm pointer-events-none" />
+    </AttachmentActions>
+  );
+  if (isAudio) return (
+    <AttachmentActions url={fullUrl} name={att.name} type={att.type}>
+      <div className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2">
+        <span>🎵</span><span className="font-medium truncate max-w-[160px]">{att.name}</span>
+      </div>
+    </AttachmentActions>
+  );
+  return (
+    <AttachmentActions url={fullUrl} name={att.name} type={att.type}>
+      <div className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2 hover:opacity-90">
+        <span>📄</span>
+        <div>
+          <div className="font-medium truncate max-w-[160px]">{att.name}</div>
+          {att.size && <div className="text-[10px] theme-text-muted">{(att.size / 1024).toFixed(0)} KB</div>}
+        </div>
+      </div>
+    </AttachmentActions>
+  );
+}
+
 export default function Chat() {
   const { auth } = useAuth();
   const api = useApi();
@@ -210,6 +554,8 @@ const [reportsOpen, setReportsOpen] = useState(false);
 
   const [activeDmUser, setActiveDmUser] = useState(null);
   const [aiExplainLoading, setAiExplainLoading] = useState(null);
+  // channelKey → true when AI is processing a reply for that channel
+  const [aiTypingChannels, setAiTypingChannels] = useState({});
 
   // THREAD SIDEBAR
   const [threadParents, setThreadParents] = useState({});
@@ -231,6 +577,8 @@ const [reportContext, setReportContext] = useState(null);
   // Rich editor content (main channel)
   const [editorHtml, setEditorHtml] = useState("");
   const [sending, setSending] = useState(false);
+  // tempIds of messages that failed both socket ack and REST fallback
+  const [failedMessages, setFailedMessages] = useState(new Set());
   const [attachment, setAttachment] = useState(null); // legacy single-file preview
   const [pendingAttachments, setPendingAttachments] = useState([]); // uploaded attachments ready to send
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
@@ -560,9 +908,15 @@ useEffect(() => {
           key &&
           key !== GENERAL_CHANNEL_KEY &&
           !key.startsWith("dm:") &&
-          !key.startsWith("thread:")
+          !key.startsWith("thread:") &&
+          !key.startsWith("ai-notify:")
         );
       }),
+    [channels]
+  );
+
+  const aiNotifyChannels = useMemo(
+    () => (channels || []).filter((ch) => ch?.key?.startsWith("ai-notify:")),
     [channels]
   );
 
@@ -728,6 +1082,12 @@ useEffect(() => {
     const handleConnect = () => {
   setConnected(true);
   setJoining(false);
+  // Re-join and reload history to catch messages missed during disconnect
+  const ch = activeChannelRef.current;
+  if (ch) {
+    joinChatChannel(ch);
+    socket.emit("chat:open", ch);
+  }
 };
 
     const handleDisconnect = () => {
@@ -758,6 +1118,7 @@ useEffect(() => {
         senderPublicKeyJwk:
           m.senderPublicKeyJwk || m.sender_public_key,
         fallbackText: m.fallbackText || m.fallback_text,
+        isAiMessage: m.isAiMessage === true,
       };
 
       const decryptedText = await decryptForDisplay(
@@ -850,27 +1211,7 @@ if (msg?.textHtml?.startsWith("__REPORT_READY__")) {
   const channelId = msg.channelId || msg.channelKey || msg.channel;
   if (!channelId) return;
 
-  // ✅ 🔁 TEMP → REAL MESSAGE REPLACEMENT (CRITICAL)
-  setMessagesByChannel((prev) => {
-    const list = prev[channelId] || [];
-
-    if (msg.id && msg.tempId) {
-      const idx = list.findIndex((m) => m.id === msg.tempId);
-      if (idx !== -1) {
-        const next = [...list];
-        next[idx] = {
-          ...next[idx],
-          id: msg.id,
-          createdAt: msg.createdAt || next[idx].createdAt,
-        };
-        return { ...prev, [channelId]: next };
-      }
-    }
-
-    return prev;
-  });
-
-  // 🔐 decrypt AFTER reconciliation
+  // 🔐 Decrypt first — before any state mutation to avoid async race
   const decryptedText = await decryptForDisplay(
     msg.textHtml || msg.text_html || msg.text || "",
     msg,
@@ -896,7 +1237,18 @@ if (msg?.textHtml?.startsWith("__REPORT_READY__")) {
     parentId: msg.parentId || msg.parent_id || null,
     reactions: msg.reactions || {},
     attachments: msg.attachments || [],
+    isAiMessage: msg.isAiMessage === true,
   };
+
+  // Clear AI typing indicator for this channel when the AI message arrives
+  if (normalized.isAiMessage) {
+    setAiTypingChannels((prev) => {
+      if (!prev[channelId]) return prev;
+      const next = { ...prev };
+      delete next[channelId];
+      return next;
+    });
+  }
 
   // 📊 AI-triggered reports modal
 if (
@@ -928,7 +1280,24 @@ if (
   setMessagesByChannel((prev) => {
     const existing = prev[channelId] || [];
 
-    // 🔁 id replacement (socket echo / AI / history overlap)
+    // 1️⃣ Try tempId replacement (temp message → real message)
+    if (msg.id && msg.tempId) {
+      const tempIdx = existing.findIndex((m) => m.id === msg.tempId);
+      if (tempIdx !== -1) {
+        const next = [...existing];
+        next[tempIdx] = { ...next[tempIdx], ...normalizedWithEmoji };
+        // Deduplicate: remove any extra entry with the same real id
+        // (can appear if chat:history raced in and already added the real message)
+        return {
+          ...prev,
+          [channelId]: next.filter(
+            (m, i) => i === tempIdx || m.id !== normalizedWithEmoji.id
+          ),
+        };
+      }
+    }
+
+    // 2️⃣ Already present by real id → update in place
     const idx = existing.findIndex((m) => m.id === normalizedWithEmoji.id);
     if (idx !== -1) {
       const next = [...existing];
@@ -936,11 +1305,11 @@ if (
       return { ...prev, [channelId]: next };
     }
 
-    // ➕ otherwise push
-    return {
-      ...prev,
-      [channelId]: [...existing, normalizedWithEmoji],
-    };
+    // 3️⃣ Truly new — also strip any lingering temp with the same tempId
+    const base = msg.tempId
+      ? existing.filter((m) => m.id !== msg.tempId)
+      : existing;
+    return { ...prev, [channelId]: [...base, normalizedWithEmoji] };
   });
 
   // 🔴 Track unread for non-active channels (not own messages)
@@ -1209,6 +1578,23 @@ if (
     socket.on("chat:history", handleHistory);
     socket.on("chat:message", handleChatMessage);
     socket.on("chat:system", handleSystem);
+    const aiTypingTimers = {};
+    const handleAiTyping = (data) => {
+      const ch = data?.channelId;
+      if (!ch) return;
+      setAiTypingChannels((prev) => ({ ...prev, [ch]: true }));
+      // Auto-clear after 30 s in case the AI message never arrives
+      clearTimeout(aiTypingTimers[ch]);
+      aiTypingTimers[ch] = setTimeout(() => {
+        setAiTypingChannels((prev) => {
+          if (!prev[ch]) return prev;
+          const next = { ...prev };
+          delete next[ch];
+          return next;
+        });
+      }, 30000);
+    };
+    socket.on("chat:ai-typing", handleAiTyping);
     socket.on("presence:update", handlePresenceUpdate);
     socket.on("chat:typing", handleTyping);
     socket.on("chat:read", handleRead);
@@ -1217,11 +1603,6 @@ if (
     socket.on("chat:reaction", handleReaction);
     socket.on("chat:messageEdited", handleMessageEdited);
     socket.on("chat:messageDeleted", handleMessageDeleted);
-
-    socket.onAny((event, payload) => {
-  console.log("[SOCKET EVENT]", event, payload);
-});
-
 
     if (socket.connected) {
       handleConnect();
@@ -1233,6 +1614,7 @@ if (
       socket.off("chat:history", handleHistory);
       socket.off("chat:message", handleChatMessage);
       socket.off("chat:system", handleSystem);
+      socket.off("chat:ai-typing", handleAiTyping);
       socket.off("presence:update", handlePresenceUpdate);
       socket.off("chat:typing", handleTyping);
       socket.off("chat:read", handleRead);
@@ -1364,8 +1746,8 @@ useEffect(() => {
 
     // Locally show plaintext so UI is snappy (apply emoji conversion)
     const plainWithEmoji = convertEmojiShortcodes(html);
-    // Capture attachments before any async/state operations
-    const attachmentsToSend = [...pendingAttachments];
+    // Raw attachments include _localUrl for immediate preview in temp message
+    const rawAttachments = [...pendingAttachments];
 
     setMessagesByChannel((prev) => {
   const existing = prev[activeChannelKey] || [];
@@ -1388,17 +1770,14 @@ useEffect(() => {
         createdAt: new Date().toISOString(),
         parentId: null,
         reactions: {},
-        attachments: attachmentsToSend,
+        attachments: rawAttachments, // _localUrl used for instant preview
       },
     ],
   };
 });
 
-    // 🔐 Encrypt for recipients before sending to backend
-    // Use a zero-width space so attachment-only messages are never rejected
-    // by the backend's empty-text guard (the guard allows empty text when
-    // attachments are present, but this acts as an extra safety net)
-    const textToEncrypt = html || (attachmentsToSend.length > 0 ? "\u200b" : "");
+    // 🔐 Encrypt text for recipients
+    const textToEncrypt = html || (rawAttachments.length > 0 ? "\u200b" : "");
     let encryptedHtml = textToEncrypt;
     try {
       const recipientIds = getRecipientIdsForChannelKey(activeChannelKey);
@@ -1412,13 +1791,42 @@ useEffect(() => {
       console.error("E2E encrypt failed, sending plaintext:", err);
     }
 
-    sendChatMessage({
+    // 🔐 Finalize attachments: encrypt file keys per recipient, strip internal fields
+    const attachmentsToSend = await finalizeAttachmentsForSend(rawAttachments, activeChannelKey);
+
+    const msgPayload = {
       channelId: activeChannelKey,
       text: encryptedHtml,
       tempId,
       parentId: null,
       attachments: attachmentsToSend,
+    };
+
+    const restFallback = async () => {
+      try {
+        await api.post("/chat/messages", {
+          channelId: activeChannelKey,
+          encrypted: encryptedHtml,
+          tempId,
+          parentId: null,
+          attachments: attachmentsToSend,
+        });
+      } catch {
+        setFailedMessages((prev) => new Set(prev).add(tempId));
+      }
+    };
+
+    let fallbackTimer;
+    const sent = sendChatMessage(msgPayload, (ackData) => {
+      clearTimeout(fallbackTimer);
+      if (!ackData?.ok) restFallback();
     });
+
+    if (sent) {
+      fallbackTimer = setTimeout(restFallback, 5000);
+    } else {
+      restFallback();
+    }
 
     setEditorHtml("");
     setAttachment(null);
@@ -1440,7 +1848,7 @@ useEffect(() => {
     const tempId = createUniqueId("temp");
     setSending(true);
     const plainWithEmoji = convertEmojiShortcodes(html);
-    const attachmentsToSend = [...pendingAttachments];
+    const rawAttachments = [...pendingAttachments];
 
     setMessagesByChannel((prev) => {
       const existing = prev[activeChannelKey] || [];
@@ -1456,12 +1864,12 @@ useEffect(() => {
           createdAt: new Date().toISOString(),
           parentId: null,
           reactions: {},
-          attachments: attachmentsToSend,
+          attachments: rawAttachments,
         }],
       };
     });
 
-    const textToEncrypt = html || (attachmentsToSend.length > 0 ? "\u200b" : "");
+    const textToEncrypt = html || (rawAttachments.length > 0 ? "\u200b" : "");
     let encryptedHtml = textToEncrypt;
     try {
       const recipientIds = getRecipientIdsForChannelKey(activeChannelKey);
@@ -1470,13 +1878,42 @@ useEffect(() => {
       console.error("E2E encrypt failed, sending plaintext:", err);
     }
 
-    sendChatMessage({
+    // 🔐 Finalize attachments: encrypt file keys per recipient, strip internal fields
+    const attachmentsToSend = await finalizeAttachmentsForSend(rawAttachments, activeChannelKey);
+
+    const mobileMsgPayload = {
       channelId: activeChannelKey,
       text: encryptedHtml,
       tempId,
       parentId: null,
       attachments: attachmentsToSend,
+    };
+
+    const mobileRestFallback = async () => {
+      try {
+        await api.post("/chat/messages", {
+          channelId: activeChannelKey,
+          encrypted: encryptedHtml,
+          tempId,
+          parentId: null,
+          attachments: attachmentsToSend,
+        });
+      } catch {
+        setFailedMessages((prev) => new Set(prev).add(tempId));
+      }
+    };
+
+    let mobileFallbackTimer;
+    const mobileSent = sendChatMessage(mobileMsgPayload, (ackData) => {
+      clearTimeout(mobileFallbackTimer);
+      if (!ackData?.ok) mobileRestFallback();
     });
+
+    if (mobileSent) {
+      mobileFallbackTimer = setTimeout(mobileRestFallback, 5000);
+    } else {
+      mobileRestFallback();
+    }
 
     setMobileText("");
     setPendingAttachments([]);
@@ -1539,12 +1976,33 @@ useEffect(() => {
       console.error("E2E encrypt (thread) failed, sending plaintext:", err);
     }
 
-    sendChatMessage({
-      channelId: parentChannelKey,
-      text: encryptedHtml,
-      tempId,
-      parentId,
-    });
+    const threadRestFallback = async () => {
+      try {
+        await api.post("/chat/messages", {
+          channelId: parentChannelKey,
+          encrypted: encryptedHtml,
+          tempId,
+          parentId,
+        });
+      } catch {
+        setFailedMessages((prev) => new Set(prev).add(tempId));
+      }
+    };
+
+    let threadFallbackTimer;
+    const threadSent = sendChatMessage(
+      { channelId: parentChannelKey, text: encryptedHtml, tempId, parentId },
+      (ackData) => {
+        clearTimeout(threadFallbackTimer);
+        if (!ackData?.ok) threadRestFallback();
+      }
+    );
+
+    if (threadSent) {
+      threadFallbackTimer = setTimeout(threadRestFallback, 5000);
+    } else {
+      threadRestFallback();
+    }
 
     setThreadEditorHtml("");
   };
@@ -1600,12 +2058,28 @@ useEffect(() => {
     try {
       const uploaded = await Promise.all(
         files.map(async (file) => {
+          // 🔐 E2E: encrypt file bytes before upload — server never sees plaintext
+          const { encryptedBlob, rawKey, iv: fileIv } = await encryptFileForUpload(file);
+          const localUrl = URL.createObjectURL(file); // local preview only, never sent
+
           const formData = new FormData();
-          formData.append("file", file);
+          // Upload encrypted bytes; use .enc suffix to mark as opaque blob
+          formData.append("file", new File([encryptedBlob], file.name + ".enc", {
+            type: "application/octet-stream",
+          }));
           const res = await api.post("/upload/chat-attachment", formData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
-          return res.data; // { url, name, size, type }
+          return {
+            ...res.data,
+            name: file.name,    // original filename (not .enc)
+            type: file.type,    // original MIME type
+            size: file.size,    // original size
+            encrypted: true,
+            fileIv,
+            _rawKey: rawKey,    // stays in memory only — stripped before send
+            _localUrl: localUrl, // for pre-send preview — stripped before send
+          };
         })
       );
       setPendingAttachments((prev) => [...prev, ...uploaded]);
@@ -1618,7 +2092,38 @@ useEffect(() => {
   };
 
   const handleRemovePendingAttachment = (index) => {
+    // Revoke local preview URL to avoid memory leaks
+    const att = pendingAttachments[index];
+    if (att?._localUrl) URL.revokeObjectURL(att._localUrl);
     setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // 🔐 E2E: encrypt each attachment's AES key for all recipients, strip internal fields
+  const finalizeAttachmentsForSend = async (attachments, channelKey) => {
+    const recipientIds = getRecipientIdsForChannelKey(channelKey);
+    const kp = loadKeyPairFromStorage();
+    const senderPublicKeyJwk = kp?.publicKeyJwk || null;
+
+    return Promise.all(
+      attachments.map(async (att) => {
+        if (!att.encrypted || !att._rawKey) {
+          // Plain attachment — just strip internal fields
+          const { _rawKey, _localUrl, ...clean } = att;
+          return clean;
+        }
+        try {
+          const encryptedKeys = await encryptFileKeyForRecipients(
+            att._rawKey, user.id, recipientIds, usersWithKeys
+          );
+          const { _rawKey, _localUrl, ...clean } = att;
+          return { ...clean, encryptedKeys, senderPublicKeyJwk };
+        } catch (err) {
+          console.error("[E2E] finalizeAttachmentsForSend failed for file:", att.name, err);
+          const { _rawKey, _localUrl, ...clean } = att;
+          return clean; // send without encryption rather than blocking send
+        }
+      })
+    );
   };
 
   // Typing in main composer
@@ -1961,6 +2466,7 @@ useEffect(() => {
                     try {
                       setLoadingAiPref(true);
                       await api.put(`/users/${user.id}/ai-preference`, { aiReplyEnabled: next });
+                      if (!next) loadChannels();
                     } catch {
                       toast.error("Failed to update AI preference");
                       setAiReplyEnabled(!next);
@@ -2334,6 +2840,12 @@ useEffect(() => {
                                   {isOwn ? "You" : m.username || "User"}
                                 </span>
                                 <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
+                                {m.id?.startsWith("temp-") && !failedMessages.has(m.id) && (
+                                  <span className="text-[10px] theme-text-muted italic">Sending…</span>
+                                )}
+                                {failedMessages.has(m.id) && (
+                                  <span className="text-[10px] text-red-500 font-medium" title="Failed to deliver">⚠ Not delivered</span>
+                                )}
                                 {m.username === "AI Assistant" && (
                                   <span className="text-[9px] bg-violet-500/15 text-violet-500 rounded-full px-1.5 py-0.5 font-medium">AI</span>
                                 )}
@@ -2357,31 +2869,15 @@ useEffect(() => {
                                 {/* Attachments */}
                                 {(m.attachments || []).length > 0 && (
                                   <div className="mt-2 flex flex-wrap gap-2">
-                                    {(m.attachments || []).map((att, ai) => {
-                                      const fullUrl = resolveUrl(att.url) || att.url;
-                                      const isImage = att.type?.startsWith("image/");
-                                      const isVideo = att.type?.startsWith("video/");
-                                      return (
-                                        <div key={ai}>
-                                          {isImage && (
-                                            <a href={fullUrl} target="_blank" rel="noreferrer">
-                                              <img src={fullUrl} alt={att.name} className="max-h-48 max-w-full rounded-2xl object-contain border theme-border shadow-sm" />
-                                            </a>
-                                          )}
-                                          {isVideo && <video src={fullUrl} controls className="max-h-48 max-w-full rounded-2xl shadow-sm" />}
-                                          {!isImage && !isVideo && (
-                                            <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer"
-                                              className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2 hover:opacity-90">
-                                              <span>📄</span>
-                                              <div>
-                                                <div className="font-medium truncate max-w-[160px]">{att.name}</div>
-                                                {att.size && <div className="text-[10px] theme-text-muted">{(att.size / 1024).toFixed(0)} KB</div>}
-                                              </div>
-                                            </a>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
+                                    {(m.attachments || []).map((att, ai) => (
+                                      <AttachmentItem
+                                        key={ai}
+                                        att={att}
+                                        senderId={m.userId || m.user_id}
+                                        currentUserId={user.id}
+                                        usersWithKeys={usersWithKeys}
+                                      />
+                                    ))}
                                   </div>
                                 )}
 
@@ -2515,10 +3011,10 @@ useEffect(() => {
               <div className="px-3 pt-2 pb-0 flex flex-wrap gap-2 shrink-0">
                 {pendingAttachments.map((att, i) => (
                   <div key={i} className="flex items-center gap-1.5 theme-surface-soft border theme-border rounded-lg px-2.5 py-1.5 text-[11px]">
-                    {att.type?.startsWith("image/") ? (
-                      <img src={`${BACKEND_URL}${att.url}`} alt={att.name} className="h-8 w-8 object-cover rounded" />
+                    {att.type?.startsWith("image/") && att._localUrl ? (
+                      <img src={att._localUrl} alt={att.name} className="h-8 w-8 object-cover rounded" />
                     ) : (
-                      <span>📎</span>
+                      <span>🔒</span>
                     )}
                     <span className="max-w-[100px] truncate theme-text">{att.name}</span>
                     <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="theme-text-soft hover:text-red-500">✕</button>
@@ -2731,6 +3227,12 @@ useEffect(() => {
                             {isOwn ? "You" : m.username || "User"}
                           </span>
                           <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
+                          {m.id?.startsWith("temp-") && !failedMessages.has(m.id) && (
+                            <span className="text-[10px] theme-text-muted italic">Sending…</span>
+                          )}
+                          {failedMessages.has(m.id) && (
+                            <span className="text-[10px] text-red-500 font-medium">⚠ Not delivered</span>
+                          )}
                         </div>
                         {(m.textHtml || m.text) && (
                           <div
@@ -2741,20 +3243,15 @@ useEffect(() => {
                         )}
                         {(m.attachments || []).length > 0 && (
                           <div className="mt-2 flex flex-col gap-1">
-                            {(m.attachments || []).map((att, ai) => {
-                              const fullUrl = resolveUrl(att.url) || att.url;
-                              const isImage = att.type?.startsWith("image/");
-                              return (
-                                <div key={ai}>
-                                  {isImage && <a href={fullUrl} target="_blank" rel="noreferrer"><img src={fullUrl} alt={att.name} className="max-h-40 max-w-full rounded-xl border theme-border" /></a>}
-                                  {!isImage && (
-                                    <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--primary)]">
-                                      <span>📎</span><span className="truncate max-w-[180px]">{att.name}</span>
-                                    </a>
-                                  )}
-                                </div>
-                              );
-                            })}
+                            {(m.attachments || []).map((att, ai) => (
+                              <AttachmentItem
+                                key={ai}
+                                att={att}
+                                senderId={m.userId || m.user_id}
+                                currentUserId={user.id}
+                                usersWithKeys={usersWithKeys}
+                              />
+                            ))}
                           </div>
                         )}
                       </div>
@@ -2886,6 +3383,7 @@ useEffect(() => {
                 try {
                   setLoadingAiPref(true);
                   await api.put(`/users/${user.id}/ai-preference`, { aiReplyEnabled: next });
+                  if (!next) loadChannels();
                 } catch {
                   toast.error("Failed to update AI preference");
                   setAiReplyEnabled(!next);
@@ -3053,6 +3551,33 @@ useEffect(() => {
                       className="opacity-0 group-hover/ch:opacity-100 transition-opacity shrink-0 ml-1 chat-sidebar-label"
                     >
                       <Settings size={11} />
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
+          {/* AI Notifications section */}
+          {aiNotifyChannels.length > 0 && (
+            <>
+              <div className="px-4 pt-4 pb-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 chat-sidebar-label">
+                  🤖 AI Updates
+                </span>
+              </div>
+              {aiNotifyChannels.map((ch) => {
+                const isActive = activeChannelKey === ch.key;
+                return (
+                  <button
+                    key={ch.id || ch.key}
+                    type="button"
+                    onClick={() => handleSelectChannel(ch.key)}
+                    className={`chat-sidebar-item w-full flex items-center px-4 py-1.5 text-left rounded-sm mx-1 w-[calc(100%-8px)] ${isActive ? "is-active" : ""}`}
+                  >
+                    <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
+                      <span className="shrink-0 text-[11px]">🤖</span>
+                      <span className="truncate">{ch.name}</span>
                     </span>
                   </button>
                 );
@@ -3331,6 +3856,12 @@ useEffect(() => {
                                   {displayName}
                                 </span>
                                 <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
+                                {m.id?.startsWith("temp-") && !failedMessages.has(m.id) && (
+                                  <span className="text-[10px] theme-text-muted italic">Sending…</span>
+                                )}
+                                {failedMessages.has(m.id) && (
+                                  <span className="text-[10px] text-red-500 font-medium">⚠ Not delivered</span>
+                                )}
                                 {standupProject && (
                                   <span className="text-[9px] bg-indigo-500/15 text-indigo-500 rounded-full px-1.5 py-0.5 font-medium">Standup</span>
                                 )}
@@ -3358,34 +3889,15 @@ useEffect(() => {
                               {/* Attachments */}
                               {(m.attachments || []).length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-2">
-                                  {(m.attachments || []).map((att, ai) => {
-                                    const BACKEND = _BACKEND;
-                                    const fullUrl = att.url?.startsWith("http") ? att.url : `${BACKEND}${att.url}`;
-                                    const isImage = att.type?.startsWith("image/");
-                                    const isVideo = att.type?.startsWith("video/");
-                                    const isAudio = att.type?.startsWith("audio/");
-                                    return (
-                                      <div key={ai}>
-                                        {isImage && (
-                                          <a href={fullUrl} target="_blank" rel="noreferrer">
-                                            <img src={fullUrl} alt={att.name} className="max-h-52 max-w-sm rounded-xl object-contain border theme-border hover:brightness-95 transition-all shadow-sm" />
-                                          </a>
-                                        )}
-                                        {isVideo && <video src={fullUrl} controls className="max-h-52 max-w-sm rounded-xl shadow-sm" />}
-                                        {isAudio && <audio src={fullUrl} controls className="w-64 mt-1" />}
-                                        {!isImage && !isVideo && !isAudio && (
-                                          <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer"
-                                            className="inline-flex items-center gap-2 text-[12px] theme-text theme-surface border theme-border rounded-xl px-3 py-2.5 shadow-sm hover:opacity-90 transition-all">
-                                            <span className="text-base">📄</span>
-                                            <div>
-                                              <div className="font-medium truncate max-w-[180px]">{att.name}</div>
-                                              {att.size && <div className="text-[10px] theme-text-muted">{(att.size / 1024).toFixed(0)} KB</div>}
-                                            </div>
-                                          </a>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
+                                  {(m.attachments || []).map((att, ai) => (
+                                    <AttachmentItem
+                                      key={ai}
+                                      att={att}
+                                      senderId={m.userId || m.user_id}
+                                      currentUserId={user.id}
+                                      usersWithKeys={usersWithKeys}
+                                    />
+                                  ))}
                                 </div>
                               )}
 
@@ -3473,7 +3985,7 @@ useEffect(() => {
                           >
                             <MessageSquare size={14} />
                           </button>
-                          {m.username === "AI Assistant" && (
+                          {m.isAiMessage && (
                             <button
                               type="button"
                               onClick={() => handleExplainAI(m.id)}
@@ -3512,6 +4024,18 @@ useEffect(() => {
               );
             })
           )}
+
+          {/* AI typing indicator — shown while waiting for AI response */}
+          {aiTypingChannels[activeChannelKey] && (
+            <div className="flex items-center gap-2 px-4 py-2 text-sm theme-text-muted">
+              <span className="inline-flex gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
+              </span>
+              <span>AI assistant is typing…</span>
+            </div>
+          )}
         </div>
 
         {/* Scroll to bottom button */}
@@ -3543,7 +4067,7 @@ useEffect(() => {
 
         {/* ===== COMPOSER ===== */}
         <div className="px-4 pb-3 pt-1 shrink-0">
-          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY ? (
+          {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && !activeChannelKey?.startsWith("ai-notify:") ? (
             <form onSubmit={handleSend}>
               {/* @mention dropdown */}
               {mentionQuery !== null && (
@@ -3586,20 +4110,17 @@ useEffect(() => {
               {/* Pending attachment previews */}
               {pendingAttachments.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2">
-                  {pendingAttachments.map((att, i) => {
-                    const isImage = att.type?.startsWith("image/");
-                    return (
-                      <div key={i} className="flex items-center gap-1.5 theme-surface-soft border theme-border rounded-lg px-2.5 py-1.5 text-[11px]">
-                        {isImage ? (
-                          <img src={`${BACKEND_URL}${att.url}`} alt={att.name} className="h-8 w-8 object-cover rounded" />
-                        ) : (
-                          <span>📎</span>
-                        )}
-                        <span className="max-w-[120px] truncate theme-text">{att.name}</span>
-                        <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="theme-text-soft hover:text-red-500 ml-0.5">✕</button>
-                      </div>
-                    );
-                  })}
+                  {pendingAttachments.map((att, i) => (
+                    <div key={i} className="flex items-center gap-1.5 theme-surface-soft border theme-border rounded-lg px-2.5 py-1.5 text-[11px]">
+                      {att.type?.startsWith("image/") && att._localUrl ? (
+                        <img src={att._localUrl} alt={att.name} className="h-8 w-8 object-cover rounded" />
+                      ) : (
+                        <span>🔒</span>
+                      )}
+                      <span className="max-w-[120px] truncate theme-text">{att.name}</span>
+                      <button type="button" onClick={() => handleRemovePendingAttachment(i)} className="theme-text-soft hover:text-red-500 ml-0.5">✕</button>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -3697,7 +4218,9 @@ useEffect(() => {
             </form>
           ) : (
             <div className="text-center py-3 text-[11px] theme-text-muted italic theme-surface-soft rounded-xl border theme-border">
-              This channel is read-only — attendance updates are posted automatically.
+              {activeChannelKey?.startsWith("ai-notify:")
+                ? "This is your AI updates channel — summaries are posted here when you return from being away."
+                : "This channel is read-only — attendance updates are posted automatically."}
             </div>
           )}
         </div>
@@ -3756,6 +4279,12 @@ useEffect(() => {
                           {isOwn ? "You" : m.username || "User"}
                         </span>
                         <span className="text-[9px] theme-text-muted">{time}</span>
+                        {m.id?.startsWith("temp-") && !failedMessages.has(m.id) && (
+                          <span className="text-[9px] theme-text-muted italic">Sending…</span>
+                        )}
+                        {failedMessages.has(m.id) && (
+                          <span className="text-[9px] text-red-500 font-medium">⚠ Not delivered</span>
+                        )}
                       </div>
                       {(m.textHtml || m.text) && (
                         <div
@@ -3765,25 +4294,15 @@ useEffect(() => {
                       )}
                       {(m.attachments || []).length > 0 && (
                         <div className="mt-1 flex flex-col gap-1">
-                          {(m.attachments || []).map((att, ai) => {
-                            const BACKEND = _BACKEND;
-                            const fullUrl = att.url?.startsWith("http") ? att.url : `${BACKEND}${att.url}`;
-                            const isImage = att.type?.startsWith("image/");
-                            const isVideo = att.type?.startsWith("video/");
-                            const isAudio = att.type?.startsWith("audio/");
-                            return (
-                              <div key={ai}>
-                                {isImage && <a href={fullUrl} target="_blank" rel="noreferrer"><img src={fullUrl} alt={att.name} className="max-h-32 max-w-full rounded-lg object-contain border theme-border" /></a>}
-                                {isVideo && <video src={fullUrl} controls className="max-h-32 max-w-full rounded-lg" />}
-                                {isAudio && <audio src={fullUrl} controls className="w-full" />}
-                                {!isImage && !isVideo && !isAudio && (
-                                  <a href={fullUrl} download={att.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-[color:var(--primary)] hover:underline">
-                                    <span>📎</span><span className="truncate max-w-[160px]">{att.name}</span>
-                                  </a>
-                                )}
-                              </div>
-                            );
-                          })}
+                          {(m.attachments || []).map((att, ai) => (
+                            <AttachmentItem
+                              key={ai}
+                              att={att}
+                              senderId={m.userId || m.user_id}
+                              currentUserId={user.id}
+                              usersWithKeys={usersWithKeys}
+                            />
+                          ))}
                         </div>
                       )}
                     </div>

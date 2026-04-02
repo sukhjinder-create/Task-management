@@ -101,8 +101,19 @@ export function leaveChatChannel(channelId) {
   socket?.emit("chat:leave", channelId);
 }
 
-export function sendChatMessage(payload) {
-  socket?.emit("chat:message", payload);
+/**
+ * Send a chat message via socket with optional ack callback.
+ * The server calls ack({ ok: true, tempId }) once the message is persisted.
+ * Returns true if the socket is connected and the emit was attempted.
+ */
+export function sendChatMessage(payload, ack) {
+  if (!socket?.connected) return false;
+  if (typeof ack === "function") {
+    socket.emit("chat:message", payload, ack);
+  } else {
+    socket.emit("chat:message", payload);
+  }
+  return true;
 }
 
 export function sendTyping(channelId) {

@@ -453,70 +453,6 @@ const autonomousInsight = useMemo(() => {
   </div>
 )}
 
-      {/* ======================================
-   WORKSPACE CONTROL CENTER — AI ATTENTION
-====================================== */}
-
-{isAdmin && (
-  <Card className="theme-surface theme-text border theme-border">
-    <Card.Content>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold">Workspace Overview</h2>
-        <span className="text-xs theme-text-muted">Live</span>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {/* Overdue */}
-        <div className={`rounded-lg p-4 border ${overdueCount > 5 ? "bg-red-500/10 border-red-500/30" : overdueCount > 0 ? "bg-amber-500/10 border-amber-500/30" : "bg-emerald-500/10 border-emerald-500/20"}`}>
-          <div className="text-xs font-medium theme-text-muted mb-1">Overdue Tasks</div>
-          <div className={`text-2xl font-bold ${overdueCount > 5 ? "text-red-600" : overdueCount > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-            {overdueCount}
-          </div>
-          <div className={`text-xs mt-1 font-semibold ${overdueCount > 5 ? "text-red-500" : overdueCount > 0 ? "text-amber-500" : "text-emerald-500"}`}>
-            {overdueCount > 5 ? "⚠ High pressure" : overdueCount > 0 ? "Needs attention" : "✓ All on track"}
-          </div>
-        </div>
-
-        {/* In Progress */}
-        <div className="rounded-lg p-4 border bg-blue-500/10 border-blue-500/20">
-          <div className="text-xs font-medium theme-text-muted mb-1">In Progress</div>
-          <div className="text-2xl font-bold text-blue-600">{inProgressCount}</div>
-          <div className="text-xs mt-1 text-blue-500 font-semibold">
-            of {totalTasks} total tasks
-          </div>
-        </div>
-
-        {/* Completed */}
-        <div className="rounded-lg p-4 border bg-emerald-500/10 border-emerald-500/20">
-          <div className="text-xs font-medium theme-text-muted mb-1">Completed</div>
-          <div className="text-2xl font-bold text-emerald-600">{completedCount}</div>
-          <div className="text-xs mt-1 text-emerald-500 font-semibold">
-            {totalTasks > 0 ? `${Math.round((completedCount / totalTasks) * 100)}% completion rate` : "No tasks yet"}
-          </div>
-        </div>
-
-        {/* Risk / Trend */}
-        <div className={`rounded-lg p-4 border ${
-          myPerformance?.intelligence?.risk?.level === "High" ? "bg-red-500/10 border-red-500/30" :
-          myPerformance?.intelligence?.risk?.level === "Medium" ? "bg-amber-500/10 border-amber-500/30" :
-          "bg-[var(--surface-soft)] border-[var(--border)]"
-        }`}>
-          <div className="text-xs font-medium theme-text-muted mb-1">Risk Level</div>
-          <div className={`text-2xl font-bold ${
-            myPerformance?.intelligence?.risk?.level === "High" ? "text-red-600" :
-            myPerformance?.intelligence?.risk?.level === "Medium" ? "text-amber-600" :
-            "theme-text-muted"
-          }`}>
-            {myPerformance?.intelligence?.risk?.level || "—"}
-          </div>
-          <div className="text-xs mt-1 theme-text-muted font-semibold capitalize">
-            {intelligence?.forecast?.trend ? `Trend: ${intelligence.forecast.trend}` : `${totalProjects} project${totalProjects !== 1 ? "s" : ""} active`}
-          </div>
-        </div>
-      </div>
-    </Card.Content>
-  </Card>
-)}
 
 {/* ================================
     EXECUTIVE INTELLIGENCE SUMMARY
@@ -870,22 +806,61 @@ const autonomousInsight = useMemo(() => {
 })()}
       <section className="space-y-6">
         <div className="grid lg:grid-cols-3 gap-6">
-{/* Org Intelligence Overview */}
-{isAdmin && intelligence && (() => {
-  const avg = intelligence.orgScore.averageScore;
-  const scoreColor = avg >= 75 ? "text-emerald-500" : avg >= 50 ? "text-amber-500" : "text-red-500";
-  const scoreBg   = avg >= 75 ? "bg-emerald-500/10 border-emerald-500/20" : avg >= 50 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
+{/* Workspace Overview — merged task counts + org intelligence */}
+{isAdmin && (() => {
   const monthLabel = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+  const avg = intelligence?.orgScore?.averageScore;
+  const scoreColor = avg == null ? "theme-text-muted" : avg >= 75 ? "text-emerald-500" : avg >= 50 ? "text-amber-500" : "text-red-500";
+  const scoreBg = avg == null ? "bg-[var(--surface-soft)] border-[var(--border)]" : avg >= 75 ? "bg-emerald-500/10 border-emerald-500/20" : avg >= 50 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
 
-  const tiles = [
+  const taskTiles = [
     {
-      label: "Avg Score",
+      label: "Overdue Tasks",
+      value: overdueCount,
+      sub: overdueCount > 5 ? "⚠ High pressure" : overdueCount > 0 ? "Needs attention" : "✓ All on track",
+      icon: <AlertTriangle className="w-4 h-4" />,
+      valueClass: overdueCount > 5 ? "text-red-600" : overdueCount > 0 ? "text-amber-600" : "text-emerald-600",
+      bg: overdueCount > 5 ? "bg-red-500/10 border-red-500/30" : overdueCount > 0 ? "bg-amber-500/10 border-amber-500/30" : "bg-emerald-500/10 border-emerald-500/20",
+      iconBg: overdueCount > 5 ? "bg-red-500/15 text-red-500" : overdueCount > 0 ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500",
+    },
+    {
+      label: "In Progress",
+      value: inProgressCount,
+      sub: `of ${totalTasks} total tasks`,
+      icon: <Clock className="w-4 h-4" />,
+      valueClass: "text-blue-600",
+      bg: "bg-blue-500/10 border-blue-500/20",
+      iconBg: "bg-blue-500/15 text-blue-500",
+    },
+    {
+      label: "Completed",
+      value: completedCount,
+      sub: totalTasks > 0 ? `${Math.round((completedCount / totalTasks) * 100)}% rate` : "No tasks yet",
+      icon: <CheckSquare className="w-4 h-4" />,
+      valueClass: "text-emerald-600",
+      bg: "bg-emerald-500/10 border-emerald-500/20",
+      iconBg: "bg-emerald-500/15 text-emerald-500",
+    },
+    {
+      label: "Projects",
+      value: totalProjects,
+      sub: monthLabel,
+      icon: <FolderKanban className="w-4 h-4" />,
+      valueClass: "text-[color:var(--primary)]",
+      bg: "bg-[color:var(--primary)]/10 border-[color:var(--primary)]/20",
+      iconBg: "bg-[color:var(--primary)]/15 text-[color:var(--primary)]",
+    },
+  ];
+
+  const intelligenceTiles = intelligence ? [
+    {
+      label: "Org Avg Score",
       value: avg != null ? Number(avg).toFixed(1) : "—",
       sub: monthLabel,
       icon: <BarChart2 className="w-4 h-4" />,
       valueClass: scoreColor,
       bg: scoreBg,
-      iconBg: avg >= 75 ? "bg-emerald-500/15 text-emerald-500" : avg >= 50 ? "bg-amber-500/15 text-amber-500" : "bg-red-500/15 text-red-500",
+      iconBg: avg == null ? "bg-[var(--surface-strong)] theme-text-muted" : avg >= 75 ? "bg-emerald-500/15 text-emerald-500" : avg >= 50 ? "bg-amber-500/15 text-amber-500" : "bg-red-500/15 text-red-500",
     },
     {
       label: "Total Members",
@@ -914,33 +889,40 @@ const autonomousInsight = useMemo(() => {
       bg: intelligence.orgScore.atRiskUsers > 0 ? "bg-red-500/10 border-red-500/20" : "bg-[var(--surface-soft)] border-[var(--border)]",
       iconBg: intelligence.orgScore.atRiskUsers > 0 ? "bg-red-500/15 text-red-500" : "bg-[var(--surface-strong)] theme-text-muted",
     },
-  ];
+  ] : [];
+
+  const renderTile = (tile) => (
+    <div key={tile.label} className={`rounded-xl border p-4 flex items-start gap-3 ${tile.bg}`}>
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tile.iconBg}`}>
+        {tile.icon}
+      </div>
+      <div className="min-w-0">
+        <div className={`text-2xl font-bold leading-none ${tile.valueClass}`}>{tile.value}</div>
+        <div className="text-[11px] font-semibold theme-text mt-1 truncate">{tile.label}</div>
+        <div className="text-[10px] theme-text-muted truncate">{tile.sub}</div>
+      </div>
+    </div>
+  );
 
   return (
     <section className="theme-surface rounded-xl border theme-border p-5 lg:col-span-2">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-sm font-semibold theme-text">Organization Overview</h2>
+          <h2 className="text-sm font-semibold theme-text">Workspace Overview</h2>
           <p className="text-xs theme-text-muted mt-0.5">{monthLabel}</p>
         </div>
         <span className="text-[10px] px-2 py-1 rounded-full bg-[color:var(--primary)]/10 text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20">
-          Intelligence
+          {intelligence ? "Intelligence" : "Live"}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {tiles.map(tile => (
-          <div key={tile.label} className={`rounded-xl border p-4 flex items-start gap-3 ${tile.bg}`}>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tile.iconBg}`}>
-              {tile.icon}
-            </div>
-            <div className="min-w-0">
-              <div className={`text-2xl font-bold leading-none ${tile.valueClass}`}>{tile.value}</div>
-              <div className="text-[11px] font-semibold theme-text mt-1 truncate">{tile.label}</div>
-              <div className="text-[10px] theme-text-muted truncate">{tile.sub}</div>
-            </div>
-          </div>
-        ))}
+        {taskTiles.map(renderTile)}
       </div>
+      {intelligence && (
+        <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-[var(--border)]">
+          {intelligenceTiles.map(renderTile)}
+        </div>
+      )}
     </section>
   );
 })()}
