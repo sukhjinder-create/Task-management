@@ -1,58 +1,62 @@
 // src/pages/Reviews.jsx
-// Performance Reviews — fully automated 360° review system
+// Performance Reviews — self-review first, then manager review unlocks
 import { useState, useEffect, useCallback } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Star, Plus, Check, Users, Calendar, ChevronDown, ChevronUp,
-  UserCheck, Clock, TrendingUp, Zap,
+  UserCheck, Clock, TrendingUp, Zap, Lock, Shield,
 } from "lucide-react";
 
 const STATUS_COLOR = {
   pending:     "bg-amber-500/10 text-amber-500",
   in_progress: "bg-blue-500/10 text-blue-500",
   submitted:   "bg-green-500/10 text-green-500",
+  missed:      "bg-red-500/10 text-red-500",
 };
 const CYCLE_STATUS_COLOR = {
-  draft:     "bg-gray-500/10 text-gray-500",
+  draft:     "bg-gray-500/10 text-gray-400",
   active:    "bg-blue-500/10 text-blue-500",
   completed: "bg-green-500/10 text-green-500",
 };
-const TYPE_LABEL = { self: "Self", peer: "Peer", manager: "Manager", upward: "Upward" };
-const TYPE_COLOR = {
+const TYPE_LABEL = { self: "Self", manager: "Manager" };
+const TYPE_COLOR  = {
   self:    "bg-purple-500/10 text-purple-500",
-  peer:    "bg-indigo-500/10 text-indigo-500",
   manager: "bg-blue-500/10 text-blue-500",
-  upward:  "bg-orange-500/10 text-orange-500",
 };
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
-  const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000);
-  return diff;
+  return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
 }
 
 export default function Reviews() {
-  const api = useApi();
+  const api     = useApi();
   const { auth } = useAuth();
-  const isAdmin = ["admin", "owner"].includes(auth?.user?.role);
+  const isAdmin  = ["admin", "owner"].includes(auth?.user?.role);
 
-  const [tab, setTab] = useState("pending");
+  const [searchParams] = useSearchParams();
+  const [tab, setTab]  = useState(() => searchParams.get("tab") || "pending");
   const [pendingReviews, setPendingReviews] = useState([]);
   const [aboutMeReviews, setAboutMeReviews] = useState([]);
-  const [cycles, setCycles] = useState([]);
-  const [team, setTeam] = useState([]);
+  const [cycles, setCycles]               = useState([]);
+  const [team, setTeam]                   = useState([]);
+  const [myTeamProgress, setMyTeamProgress] = useState(null); // null = loading
+
   // Cycle create form
-  const [showNewCycle, setShowNewCycle] = useState(false);
-  const [cycleForm, setCycleForm] = useState({ name: "", type: "quarterly", start_date: "", end_date: "", peer_review_count: 2 });
+  const [showNewCycle, setShowNewCycle]   = useState(false);
+  const [cycleForm, setCycleForm]         = useState({ name: "", type: "quarterly", start_date: "", end_date: "" });
   const [creatingCycle, setCreatingCycle] = useState(false);
   const [triggeringQuarter, setTriggeringQuarter] = useState(false);
 
-  // Summary modal
-  const [summaryData, setSummaryData] = useState(null);
+  // Cycle detail modal
+  const [summaryData, setSummaryData]     = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [modalTab, setModalTab] = useState("submitted"); // "submitted" | "pending"
+  const [modalTab, setModalTab]           = useState("submitted");
+
+  // ── Data loaders ──────────────────────────────────────────────────────────
 
   const loadPending = useCallback(() => {
     api.get("/reviews/pending").then(r => setPendingReviews(r.data || [])).catch(() => {});
@@ -71,19 +75,31 @@ export default function Reviews() {
     api.get("/reviews/team").then(r => setTeam(r.data || [])).catch(() => {});
   }, [api, isAdmin]);
 
+  const loadMyTeamProgress = useCallback(() => {
+    api.get("/reviews/my-team-progress")
+      .then(r => setMyTeamProgress(r.data || { cycle: null, team: [] }))
+      .catch(() => setMyTeamProgress({ cycle: null, team: [] }));
+  }, [api]);
+
   useEffect(() => {
     loadPending();
     loadAboutMe();
+    loadMyTeamProgress();
     if (isAdmin) { loadCycles(); loadTeam(); }
   }, []);
 
   const handleTabChange = (t) => {
     setTab(t);
-    if (t === "pending") loadPending();
-    if (t === "aboutme") loadAboutMe();
-    if (t === "cycles") loadCycles();
-    if (t === "team") loadTeam();
+    if (t === "pending")  loadPending();
+    if (t === "aboutme")  loadAboutMe();
+    if (t === "myteam")   loadMyTeamProgress();
+    if (t === "cycles")   loadCycles();
+    if (t === "team")     loadTeam();
   };
+
+  const isManager = (myTeamProgress?.team?.length ?? 0) > 0;
+
+  // ── Cycle actions ─────────────────────────────────────────────────────────
 
   const createCycle = async () => {
     if (!cycleForm.name || !cycleForm.start_date || !cycleForm.end_date)
@@ -93,7 +109,7 @@ export default function Reviews() {
       await api.post("/reviews/cycles", cycleForm);
       loadCycles();
       setShowNewCycle(false);
-      setCycleForm({ name: "", type: "quarterly", start_date: "", end_date: "", peer_review_count: 2 });
+      setCycleForm({ name: "", type: "quarterly", start_date: "", end_date: "" });
       toast.success("Cycle created");
     } catch (err) { toast.error(err.response?.data?.error || "Failed"); }
     setCreatingCycle(false);
@@ -151,22 +167,31 @@ export default function Reviews() {
     } catch { toast.error("Failed to save"); }
   };
 
+  // ── Derived stats ─────────────────────────────────────────────────────────
+
   const pendingCount = pendingReviews.length;
-  const avgAboutMe = aboutMeReviews.length
-    ? (aboutMeReviews.reduce((s, r) => s + (r.overall_score || 0), 0) / aboutMeReviews.length).toFixed(1)
+  const scoredReviews = aboutMeReviews.filter(r => r.status === "submitted" && r.overall_score);
+  const avgAboutMe    = scoredReviews.length
+    ? (scoredReviews.reduce((s, r) => s + Number(r.overall_score), 0) / scoredReviews.length).toFixed(1)
     : null;
 
   const TABS = [
-    { key: "pending",  label: "To Review",  icon: <Clock className="w-4 h-4" />,      badge: pendingCount || null },
-    { key: "aboutme",  label: "About Me",   icon: <UserCheck className="w-4 h-4" /> },
+    { key: "pending", label: "To Review",  icon: <Clock className="w-4 h-4" />,      badge: pendingCount || null },
+    { key: "aboutme", label: "About Me",   icon: <UserCheck className="w-4 h-4" /> },
+    ...((isManager || isAdmin) ? [
+      { key: "myteam", label: "My Team",   icon: <Users className="w-4 h-4" /> },
+    ] : []),
     ...(isAdmin ? [
-      { key: "cycles", label: "Cycles",     icon: <Calendar className="w-4 h-4" /> },
-      { key: "team",   label: "Team",       icon: <Users className="w-4 h-4" /> },
+      { key: "cycles", label: "Cycles",    icon: <Calendar className="w-4 h-4" /> },
+      { key: "team",   label: "Team",      icon: <Shield className="w-4 h-4" /> },
     ] : []),
   ];
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
+
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
@@ -174,7 +199,7 @@ export default function Reviews() {
             <Star className="w-6 h-6 text-indigo-500" /> Performance Reviews
           </h1>
           <p className="theme-text-muted text-sm mt-1">
-            Quarterly cycles are created automatically — self, peer & manager reviews assigned
+            Two-phase cycle: employees complete their self-review first, then manager reviews unlock automatically.
           </p>
         </div>
         {isAdmin && (
@@ -189,12 +214,27 @@ export default function Reviews() {
         )}
       </div>
 
+      {/* Phase explainer (subtle) */}
+      <div className="flex items-center gap-3 mb-5 px-4 py-3 theme-surface-card rounded-xl border theme-border">
+        <div className="flex items-center gap-2 text-xs text-purple-500 font-medium">
+          <span className="w-5 h-5 rounded-full bg-purple-500/15 flex items-center justify-center text-[10px] font-bold">1</span>
+          Self-Review
+        </div>
+        <div className="flex-1 h-px bg-[var(--border)]" />
+        <div className="flex items-center gap-2 text-xs text-blue-500 font-medium">
+          <span className="w-5 h-5 rounded-full bg-blue-500/15 flex items-center justify-center text-[10px] font-bold">2</span>
+          Manager Review
+        </div>
+        <Lock className="w-3.5 h-3.5 text-blue-400/60 -ml-1" />
+        <span className="text-[10px] theme-text-muted">unlocks after Phase 1</span>
+      </div>
+
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Pending for You" value={pendingCount} color="amber" icon={<Clock className="w-4 h-4" />} />
-        <StatCard label="Reviews About Me" value={aboutMeReviews.length} color="indigo" icon={<UserCheck className="w-4 h-4" />} />
-        <StatCard label="My Avg Score" value={avgAboutMe ? `${avgAboutMe}/5` : "—"} color="green" icon={<Star className="w-4 h-4" />} />
-        <StatCard label="Active Cycles" value={cycles.filter(c => c.status === "active").length} color="blue" icon={<Calendar className="w-4 h-4" />} />
+        <StatCard label="Pending for You"  value={pendingCount}                               color="amber"  icon={<Clock className="w-4 h-4" />} />
+        <StatCard label="Reviews About Me" value={aboutMeReviews.filter(r => r.status === "submitted").length} color="indigo" icon={<UserCheck className="w-4 h-4" />} />
+        <StatCard label="My Avg Score"     value={avgAboutMe ? `${avgAboutMe}/5` : "—"}       color="green"  icon={<Star className="w-4 h-4" />} />
+        <StatCard label="Active Cycles"    value={cycles.filter(c => c.status === "active").length} color="blue"   icon={<Calendar className="w-4 h-4" />} />
       </div>
 
       {/* Tabs */}
@@ -226,7 +266,6 @@ export default function Reviews() {
               title="All caught up!" subtitle="No pending reviews assigned to you right now." />
           ) : (
             <div className="space-y-3">
-              {/* Group by cycle */}
               {groupBy(pendingReviews, "cycle_name").map(([cycleName, reviews]) => {
                 const daysLeft = daysUntil(reviews[0]?.cycle_end_date);
                 return (
@@ -234,16 +273,17 @@ export default function Reviews() {
                     <div className="flex items-center gap-2 mb-2">
                       <p className="text-sm font-semibold theme-text">{cycleName}</p>
                       {daysLeft !== null && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${daysLeft <= 1 ? "bg-red-500/10 text-red-500" : daysLeft <= 7 ? "bg-amber-500/10 text-amber-500" : "bg-gray-500/10 text-gray-500"}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          daysLeft <= 1 ? "bg-red-500/10 text-red-500"
+                          : daysLeft <= 7 ? "bg-amber-500/10 text-amber-500"
+                          : "bg-gray-500/10 text-gray-400"
+                        }`}>
                           {daysLeft <= 0 ? "Overdue" : `${daysLeft}d left`}
                         </span>
                       )}
                     </div>
                     {reviews.map(r => (
-                      <ReviewCard
-                        key={r.id} review={r}
-                        onRefresh={loadPending}
-                      />
+                      <ReviewCard key={r.id} review={r} onRefresh={() => { loadPending(); loadMyTeamProgress(); }} />
                     ))}
                   </div>
                 );
@@ -261,7 +301,6 @@ export default function Reviews() {
               title="No reviews yet" subtitle="Submitted reviews about you will appear here once a cycle closes." />
           ) : (
             <div>
-              {/* Avg score banner */}
               {avgAboutMe && (
                 <div className="theme-surface-card border theme-border rounded-xl px-5 py-4 mb-5 flex items-center gap-4">
                   <div className="flex gap-0.5">
@@ -275,20 +314,22 @@ export default function Reviews() {
                   </div>
                 </div>
               )}
-
               <div className="space-y-3">
                 {groupBy(aboutMeReviews, "cycle_name").map(([cycleName, reviews]) => (
                   <div key={cycleName}>
                     <p className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-2">{cycleName}</p>
-                    {reviews.map(r => (
-                      <AboutMeCard key={r.id} review={r} />
-                    ))}
+                    {reviews.map(r => <AboutMeCard key={r.id} review={r} />)}
                   </div>
                 ))}
               </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* ── MY TEAM ─────────────────────────────────────────────────────────── */}
+      {tab === "myteam" && (isManager || isAdmin) && (
+        <MyTeamTab progress={myTeamProgress} />
       )}
 
       {/* ── CYCLES (admin) ──────────────────────────────────────────────────── */}
@@ -311,13 +352,9 @@ export default function Reviews() {
                 <input value={cycleForm.name} onChange={e => setCycleForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Cycle name (e.g. Q2 2026)" className="col-span-2 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text" />
                 <select value={cycleForm.type} onChange={e => setCycleForm(f => ({ ...f, type: e.target.value }))}
-                  className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text">
+                  className="col-span-2 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text">
                   {["quarterly","annual","360"].map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-                <input type="number" min="0" max="5" value={cycleForm.peer_review_count}
-                  onChange={e => setCycleForm(f => ({ ...f, peer_review_count: Number(e.target.value) }))}
-                  placeholder="Peer reviews per person"
-                  className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text" />
                 <input type="date" value={cycleForm.start_date} onChange={e => setCycleForm(f => ({ ...f, start_date: e.target.value }))}
                   className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text" />
                 <input type="date" value={cycleForm.end_date} onChange={e => setCycleForm(f => ({ ...f, end_date: e.target.value }))}
@@ -342,11 +379,8 @@ export default function Reviews() {
             {cycles.map(c => {
               const daysLeft = daysUntil(c.end_date);
               return (
-                <div
-                  key={c.id}
-                  onClick={() => openSummary(c)}
-                  className="theme-surface-card rounded-xl border theme-border p-4 cursor-pointer hover:border-indigo-400/50 transition-colors group"
-                >
+                <div key={c.id} onClick={() => openSummary(c)}
+                  className="theme-surface-card rounded-xl border theme-border p-4 cursor-pointer hover:border-indigo-400/50 transition-colors group">
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -395,7 +429,6 @@ export default function Reviews() {
           {(summaryData || summaryLoading) && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
               <div className="theme-surface rounded-2xl border theme-border w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
-                {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b theme-border shrink-0">
                   <div>
                     <h3 className="font-semibold theme-text">{summaryData?.cycle?.name || "Cycle Detail"}</h3>
@@ -413,7 +446,6 @@ export default function Reviews() {
                 {summaryLoading ? (
                   <div className="py-16 text-center theme-text-muted text-sm">Loading reviews…</div>
                 ) : (() => {
-                  // Pre-compute per-member submitted/pending counts
                   const memberData = summaryData.stats.map(member => {
                     const memberReviews = summaryData.reviews.filter(r => r.reviewee_id === member.reviewee_id);
                     const submitted = memberReviews.filter(r => r.status === "submitted");
@@ -425,20 +457,17 @@ export default function Reviews() {
 
                   return (
                     <>
-                      {/* Modal-level tabs */}
                       <div className="flex border-b theme-border shrink-0">
                         {[
                           { key: "submitted", label: "Submitted",     count: totalSubmitted, activeColor: "border-green-500 text-green-500",  badgeColor: "bg-green-500/10 text-green-500" },
                           { key: "pending",   label: "Not Submitted", count: totalPending,   activeColor: "border-amber-500 text-amber-500",  badgeColor: "bg-amber-500/10 text-amber-500" },
                         ].map(t => (
-                          <button
-                            key={t.key}
-                            onClick={() => setModalTab(t.key)}
+                          <button key={t.key} onClick={() => setModalTab(t.key)}
                             className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors
-                              ${modalTab === t.key ? t.activeColor : "border-transparent theme-text-muted hover:theme-text"}`}
-                          >
+                              ${modalTab === t.key ? t.activeColor : "border-transparent theme-text-muted hover:theme-text"}`}>
                             {t.label}
-                            <span className={`min-w-[20px] h-5 flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 ${modalTab === t.key ? t.badgeColor : "bg-[var(--surface-strong)] theme-text-muted"}`}>
+                            <span className={`min-w-[20px] h-5 flex items-center justify-center rounded-full text-[10px] font-bold px-1.5
+                              ${modalTab === t.key ? t.badgeColor : "bg-[var(--surface-strong)] theme-text-muted"}`}>
                               {t.count}
                             </span>
                           </button>
@@ -450,32 +479,20 @@ export default function Reviews() {
                           <p className="text-center theme-text-muted text-sm py-8">No reviews in this cycle yet.</p>
                         )}
 
-                        {/* Submitted tab — member cards with only submitted reviews */}
                         {modalTab === "submitted" && memberData
                           .filter(m => m.submitted.length > 0)
                           .map(({ member, submitted }) => (
-                            <MemberReviewGroup
-                              key={member.reviewee_id}
-                              member={member}
-                              reviews={submitted}
-                              mode="submitted"
-                            />
+                            <MemberReviewGroup key={member.reviewee_id} member={member} reviews={submitted} mode="submitted" />
                           ))
                         }
                         {modalTab === "submitted" && memberData.every(m => m.submitted.length === 0) && (
                           <p className="text-center theme-text-muted text-sm py-8">No reviews submitted yet.</p>
                         )}
 
-                        {/* Pending tab — member cards with only pending reviews */}
                         {modalTab === "pending" && memberData
                           .filter(m => m.pending.length > 0)
                           .map(({ member, pending }) => (
-                            <MemberReviewGroup
-                              key={member.reviewee_id}
-                              member={member}
-                              reviews={pending}
-                              mode="pending"
-                            />
+                            <MemberReviewGroup key={member.reviewee_id} member={member} reviews={pending} mode="pending" />
                           ))
                         }
                         {modalTab === "pending" && memberData.every(m => m.pending.length === 0) && (
@@ -495,8 +512,12 @@ export default function Reviews() {
       {tab === "team" && isAdmin && (
         <div>
           <p className="text-sm theme-text-muted mb-4">
-            Set who each person reports to. This drives automatic <strong>manager reviews</strong> in every cycle.
+            Assign reporting lines. Manager reviews unlock only after the employee submits their self-review.
           </p>
+
+          {/* Bulk assign panel */}
+          <BulkManagerPanel team={team} onComplete={loadTeam} />
+
           <div className="theme-surface-card rounded-xl border theme-border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface-soft)] border-b theme-border">
@@ -513,11 +534,9 @@ export default function Reviews() {
                       <p className="text-xs theme-text-muted">{m.email}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <select
-                        value={m.manager_id || ""}
+                      <select value={m.manager_id || ""}
                         onChange={e => setManager(m.user_id, e.target.value || null)}
-                        className="px-2 py-1.5 rounded-lg border theme-border theme-surface text-sm theme-text max-w-[200px]"
-                      >
+                        className="px-2 py-1.5 rounded-lg border theme-border theme-surface text-sm theme-text max-w-[200px]">
                         <option value="">— No manager —</option>
                         {team.filter(t => t.user_id !== m.user_id).map(t => (
                           <option key={t.user_id} value={t.user_id}>{t.username}</option>
@@ -538,19 +557,209 @@ export default function Reviews() {
   );
 }
 
+// ─── MY TEAM TAB ──────────────────────────────────────────────────────────────
+
+function MyTeamTab({ progress }) {
+  if (!progress) {
+    return <div className="py-12 text-center text-sm theme-text-muted">Loading team data…</div>;
+  }
+
+  const { cycle, team } = progress;
+
+  if (!cycle) return (
+    <EmptyState icon={<Calendar className="w-10 h-10 text-gray-300" />}
+      title="No active review cycle"
+      subtitle="A review cycle must be active before team progress is visible." />
+  );
+
+  if (!team || team.length === 0) return (
+    <EmptyState icon={<Users className="w-10 h-10 text-indigo-200" />}
+      title="No direct reports"
+      subtitle="Team members who report to you will appear here once manager assignments are configured." />
+  );
+
+  const selfDone   = team.filter(m => m.self_review?.status === "submitted").length;
+  const managerDone = team.filter(m => m.manager_review?.status === "submitted").length;
+  const daysLeft   = daysUntil(cycle.end_date);
+
+  return (
+    <div>
+      {/* Cycle summary bar */}
+      <div className="theme-surface-card rounded-xl border theme-border px-5 py-4 mb-5">
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div>
+            <p className="font-semibold theme-text">{cycle.name}</p>
+            <p className="text-xs theme-text-muted mt-0.5">
+              Closes {cycle.end_date}
+              {daysLeft !== null && (
+                <span className={`ml-2 font-medium ${daysLeft <= 3 ? "text-red-500" : daysLeft <= 7 ? "text-amber-500" : "theme-text-muted"}`}>
+                  {daysLeft <= 0 ? "· Overdue" : `· ${daysLeft}d remaining`}
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex gap-5 text-xs theme-text-muted">
+            <span>
+              Self-reviews
+              <strong className={`ml-1 ${selfDone === team.length ? "text-green-500" : "theme-text"}`}>
+                {selfDone}/{team.length}
+              </strong>
+            </span>
+            <span>
+              Manager reviews
+              <strong className={`ml-1 ${managerDone === team.length ? "text-green-500" : "theme-text"}`}>
+                {managerDone}/{team.length}
+              </strong>
+            </span>
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-[10px] theme-text-muted mb-1">
+            <span>Overall progress</span>
+            <span>{selfDone + managerDone}/{team.length * 2} reviews</span>
+          </div>
+          <ProgressBar done={selfDone + managerDone} total={team.length * 2} />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {team.map(member => (
+          <TeamMemberProgressCard key={member.user_id} member={member} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── TEAM MEMBER PROGRESS CARD ────────────────────────────────────────────────
+
+function TeamMemberProgressCard({ member }) {
+  const [expanded, setExpanded] = useState(false);
+  const selfSubmitted = member.self_review?.status === "submitted";
+
+  const selfStatusCfg = {
+    pending:     { label: "Pending",     color: "bg-amber-500/10 text-amber-500" },
+    in_progress: { label: "In Progress", color: "bg-blue-500/10 text-blue-500"  },
+    submitted:   { label: "Submitted",   color: "bg-green-500/10 text-green-500" },
+  };
+  const mgrStatusCfg = {
+    pending:     { label: "Pending",     color: "bg-amber-500/10 text-amber-500" },
+    in_progress: { label: "In Progress", color: "bg-blue-500/10 text-blue-500"  },
+    submitted:   { label: "Submitted",   color: "bg-green-500/10 text-green-500" },
+  };
+
+  const selfStatus = member.self_review?.status || "pending";
+  const mgrStatus  = member.manager_review?.status || "pending";
+  const mgrLocked  = member.manager_review ? member.manager_review.locked : !selfSubmitted;
+
+  return (
+    <div className="theme-surface-card rounded-xl border theme-border overflow-hidden">
+      <div
+        className={`flex items-center gap-3 px-4 py-3 ${selfSubmitted ? "cursor-pointer hover:bg-[var(--surface-soft)]" : ""}`}
+        onClick={() => selfSubmitted && setExpanded(e => !e)}
+      >
+        {/* Member info */}
+        <div className="flex-1 min-w-0">
+          <p className="font-medium theme-text text-sm">{member.username}</p>
+          <p className="text-xs theme-text-muted">{member.email}</p>
+        </div>
+
+        {/* Phase 1: Self */}
+        <div className="flex flex-col items-center gap-0.5 shrink-0 min-w-[72px]">
+          <p className="text-[9px] theme-text-muted uppercase tracking-wide font-semibold">
+            <span className="text-purple-500">①</span> Self
+          </p>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${selfStatusCfg[selfStatus].color}`}>
+            {selfStatusCfg[selfStatus].label}
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div className="w-4 h-px bg-[var(--border)] shrink-0" />
+
+        {/* Phase 2: Manager */}
+        <div className="flex flex-col items-center gap-0.5 shrink-0 min-w-[80px]">
+          <p className="text-[9px] theme-text-muted uppercase tracking-wide font-semibold">
+            <span className="text-blue-500">②</span> Manager
+          </p>
+          {mgrLocked ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-gray-500/10 text-gray-400 flex items-center gap-1">
+              <Lock className="w-2.5 h-2.5" /> Locked
+            </span>
+          ) : (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${mgrStatusCfg[mgrStatus].color}`}>
+              {mgrStatusCfg[mgrStatus].label}
+            </span>
+          )}
+        </div>
+
+        {/* Expand toggle */}
+        {selfSubmitted
+          ? (expanded ? <ChevronUp className="w-4 h-4 theme-text-muted shrink-0" /> : <ChevronDown className="w-4 h-4 theme-text-muted shrink-0" />)
+          : <div className="w-4 shrink-0" />
+        }
+      </div>
+
+      {/* Expanded: self-review content */}
+      {expanded && selfSubmitted && member.self_review && (
+        <div className="border-t theme-border px-4 py-4 bg-purple-500/5 space-y-3">
+          <p className="text-[11px] font-semibold text-purple-500 uppercase tracking-wide flex items-center gap-1.5">
+            <UserCheck className="w-3.5 h-3.5" /> {member.username}'s Self-Review
+            {member.self_review.submitted_at && (
+              <span className="normal-case font-normal text-purple-400/70 ml-1">
+                · submitted {new Date(member.self_review.submitted_at).toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" })}
+              </span>
+            )}
+          </p>
+
+          {member.self_review.overall_score && (
+            <div className="flex items-center gap-2">
+              <div className="flex gap-0.5">
+                {[1,2,3,4,5].map(n => (
+                  <Star key={n} className={`w-4 h-4 ${n <= member.self_review.overall_score ? "text-amber-400 fill-amber-400" : "text-gray-300"}`} />
+                ))}
+              </div>
+              <span className="text-sm font-semibold theme-text">{member.self_review.overall_score}/5</span>
+              <span className="text-xs theme-text-muted">self-assessed</span>
+            </div>
+          )}
+
+          {[
+            { key: "strengths",    label: "Strengths",               color: "text-green-500"  },
+            { key: "improvements", label: "Areas for Improvement",   color: "text-amber-500"  },
+            { key: "goals_next",   label: "Goals for Next Quarter",  color: "text-blue-500"   },
+          ].map(({ key, label, color }) => member.self_review[key] && (
+            <div key={key}>
+              <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${color}`}>{label}</p>
+              <p className="text-sm theme-text leading-relaxed">{member.self_review[key]}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── REVIEW CARD (to fill) ────────────────────────────────────────────────────
 
 function ReviewCard({ review, onRefresh }) {
-  const api = useApi();
-  const [open, setOpen] = useState(false);
-  const [context, setContext] = useState(null);
+  const api    = useApi();
+  const [open, setOpen]                       = useState(false);
+  const [context, setContext]                 = useState(null);
+  const [selfReviewCtx, setSelfReviewCtx]     = useState(undefined); // undefined = not yet loaded
+  const [selfCtxLoaded, setSelfCtxLoaded]     = useState(false);
   const [form, setForm] = useState({
     overall_score: review.overall_score || 0,
-    strengths: review.strengths || "",
-    improvements: review.improvements || "",
-    goals_next: review.goals_next || "",
+    strengths:     review.strengths     || "",
+    improvements:  review.improvements  || "",
+    goals_next:    review.goals_next    || "",
   });
   const [saving, setSaving] = useState(false);
+
+  // For manager reviews: check if self-review is submitted via `self_review_data` field
+  // (returned by GET /pending) before we even open the card
+  const selfReviewDataFromPending = review.self_review_data;
+  const selfAlreadyKnownSubmitted = selfReviewDataFromPending?.status === "submitted";
 
   const loadContext = async () => {
     if (context || review.type === "self") return;
@@ -560,12 +769,37 @@ function ReviewCard({ review, onRefresh }) {
     } catch { /* no context */ }
   };
 
+  const loadSelfReviewCtx = async () => {
+    if (review.type !== "manager" || selfCtxLoaded) return;
+    setSelfCtxLoaded(true);
+    // If we already have it from the pending response, use that
+    if (selfAlreadyKnownSubmitted) {
+      setSelfReviewCtx(selfReviewDataFromPending);
+      return;
+    }
+    try {
+      const r = await api.get(`/reviews/reviews/${review.id}/self-review-context`);
+      setSelfReviewCtx(r.data || null);
+    } catch { setSelfReviewCtx(null); }
+  };
+
   const toggleOpen = () => {
-    if (!open) loadContext();
+    if (!open) {
+      loadContext();
+      loadSelfReviewCtx();
+    }
     setOpen(o => !o);
   };
 
+  const isLocked = review.type === "manager" && (
+    selfCtxLoaded
+      ? !selfReviewCtx
+      : !selfAlreadyKnownSubmitted
+  );
+
   const save = async (submit = false) => {
+    if (isLocked) return toast.error("Manager review is still locked — waiting for the employee's self-review.");
+    if (submit && !form.overall_score) return toast.error("Please select a rating before submitting");
     setSaving(true);
     try {
       await api.put(`/reviews/reviews/${review.id}`, {
@@ -574,7 +808,14 @@ function ReviewCard({ review, onRefresh }) {
       });
       if (submit) { toast.success("Review submitted!"); onRefresh(); setOpen(false); }
       else toast.success("Draft saved");
-    } catch (err) { toast.error(err.response?.data?.error || "Failed"); }
+    } catch (err) {
+      const msg = err.response?.data?.error || "Failed";
+      if (err.response?.status === 423) {
+        toast.error("Manager review is locked — the employee hasn't submitted their self-review yet.");
+      } else {
+        toast.error(msg);
+      }
+    }
     setSaving(false);
   };
 
@@ -587,8 +828,13 @@ function ReviewCard({ review, onRefresh }) {
               {review.type === "self" ? "Self Review" : `Review of ${review.reviewee_name}`}
             </p>
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${TYPE_COLOR[review.type]}`}>
-              {TYPE_LABEL[review.type]}
+              {TYPE_LABEL[review.type] || review.type}
             </span>
+            {review.type === "manager" && !selfAlreadyKnownSubmitted && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-500/10 text-gray-400 flex items-center gap-1">
+                <Lock className="w-2.5 h-2.5" /> Awaiting self-review
+              </span>
+            )}
           </div>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLOR[review.status]}`}>
@@ -599,7 +845,8 @@ function ReviewCard({ review, onRefresh }) {
 
       {open && (
         <div className="border-t theme-border">
-          {/* Intelligence context */}
+
+          {/* Intelligence context (for manager reviews) */}
           {context && (
             <div className="px-4 py-3 bg-indigo-500/5 border-b border-indigo-500/10">
               <p className="text-[11px] font-semibold text-indigo-500 mb-1.5 flex items-center gap-1">
@@ -626,48 +873,90 @@ function ReviewCard({ review, onRefresh }) {
             </div>
           )}
 
-          <div className="px-4 py-4 space-y-4">
-            {/* Star rating */}
-            <div>
-              <label className="block text-sm font-medium theme-text mb-2">Overall Rating</label>
-              <div className="flex gap-1">
-                {[1,2,3,4,5].map(n => (
-                  <button key={n} type="button" onClick={() => setForm(f => ({ ...f, overall_score: n }))}>
-                    <Star className={`w-7 h-7 transition-colors ${n <= form.overall_score ? "text-amber-400 fill-amber-400" : "text-gray-300 hover:text-amber-300"}`} />
-                  </button>
-                ))}
-                {form.overall_score > 0 && (
-                  <span className="ml-2 self-center text-sm font-medium theme-text-muted">{form.overall_score}/5</span>
-                )}
+          {/* Employee's self-review (for manager reviews, when submitted) */}
+          {selfReviewCtx && (
+            <div className="px-4 py-3 bg-purple-500/5 border-b border-purple-500/10">
+              <p className="text-[11px] font-semibold text-purple-500 mb-2 flex items-center gap-1">
+                <UserCheck className="w-3.5 h-3.5" /> {review.reviewee_name}'s Self-Review
+              </p>
+              {selfReviewCtx.overall_score && (
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex gap-0.5">
+                    {[1,2,3,4,5].map(n => (
+                      <Star key={n} className={`w-4 h-4 ${n <= selfReviewCtx.overall_score ? "text-amber-400 fill-amber-400" : "text-gray-300"}`} />
+                    ))}
+                  </div>
+                  <span className="text-sm font-medium theme-text">{selfReviewCtx.overall_score}/5 self-assessed</span>
+                </div>
+              )}
+              {[
+                { key: "strengths",    label: "Strengths",              color: "text-green-500" },
+                { key: "improvements", label: "Areas for Improvement",  color: "text-amber-500" },
+                { key: "goals_next",   label: "Goals for Next Quarter", color: "text-blue-500"  },
+              ].map(({ key, label, color }) => selfReviewCtx[key] && (
+                <div key={key} className="mt-1.5">
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${color}`}>{label}</p>
+                  <p className="text-xs theme-text leading-relaxed mt-0.5">{selfReviewCtx[key]}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Locked state */}
+          {review.type === "manager" && selfCtxLoaded && !selfReviewCtx && (
+            <div className="px-4 py-8 text-center bg-amber-500/3">
+              <Lock className="w-6 h-6 text-amber-500 mx-auto mb-2" />
+              <p className="text-sm font-semibold theme-text">Manager review is locked</p>
+              <p className="text-xs theme-text-muted mt-1 max-w-xs mx-auto">
+                {review.reviewee_name} needs to submit their self-review before you can complete this review.
+              </p>
+            </div>
+          )}
+
+          {/* Form — only shown when not locked */}
+          {!isLocked && (
+            <div className="px-4 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium theme-text mb-2">Overall Rating</label>
+                <div className="flex gap-1">
+                  {[1,2,3,4,5].map(n => (
+                    <button key={n} type="button" onClick={() => setForm(f => ({ ...f, overall_score: n }))}>
+                      <Star className={`w-7 h-7 transition-colors ${n <= form.overall_score ? "text-amber-400 fill-amber-400" : "text-gray-300 hover:text-amber-300"}`} />
+                    </button>
+                  ))}
+                  {form.overall_score > 0 && (
+                    <span className="ml-2 self-center text-sm font-medium theme-text-muted">{form.overall_score}/5</span>
+                  )}
+                </div>
+              </div>
+
+              {[
+                { key: "strengths",    label: "Strengths",              placeholder: "What does this person do really well?" },
+                { key: "improvements", label: "Areas for Improvement",  placeholder: "Where can they grow?" },
+                { key: "goals_next",   label: "Goals for Next Quarter", placeholder: "What should they focus on next?" },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="block text-sm font-medium theme-text mb-1">{label}</label>
+                  <textarea
+                    value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    placeholder={placeholder} rows={3}
+                    className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+                  />
+                </div>
+              ))}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => save(false)} disabled={saving}
+                  className="px-4 py-2 border theme-border rounded-lg text-sm theme-text hover:bg-[var(--surface-soft)] disabled:opacity-60">
+                  Save Draft
+                </button>
+                <button onClick={() => save(true)} disabled={saving || !form.overall_score}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+                  {saving ? "Submitting…" : "Submit Review"}
+                </button>
               </div>
             </div>
-
-            {[
-              { key: "strengths",    label: "Strengths",              placeholder: "What does this person do really well?" },
-              { key: "improvements", label: "Areas for Improvement",  placeholder: "Where can they grow?" },
-              { key: "goals_next",   label: "Goals for Next Quarter", placeholder: "What should they focus on next?" },
-            ].map(({ key, label, placeholder }) => (
-              <div key={key}>
-                <label className="block text-sm font-medium theme-text mb-1">{label}</label>
-                <textarea
-                  value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                  placeholder={placeholder} rows={3}
-                  className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
-                />
-              </div>
-            ))}
-
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => save(false)} disabled={saving}
-                className="px-4 py-2 border theme-border rounded-lg text-sm theme-text hover:bg-[var(--surface-soft)] disabled:opacity-60">
-                Save Draft
-              </button>
-              <button onClick={() => save(true)} disabled={saving || !form.overall_score}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
-                {saving ? "Submitting…" : "Submit Review"}
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>
@@ -678,44 +967,62 @@ function ReviewCard({ review, onRefresh }) {
 
 function AboutMeCard({ review }) {
   const [open, setOpen] = useState(false);
-  const isPeer = review.type === "peer";
+  const isMissed = review.status === "missed";
 
   return (
-    <div className="theme-surface-card rounded-xl border theme-border overflow-hidden mb-2">
-      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => setOpen(o => !o)}>
+    <div className={`theme-surface-card rounded-xl border overflow-hidden mb-2 ${isMissed ? "border-red-500/30" : "theme-border"}`}>
+      <div
+        className={`flex items-center gap-3 px-4 py-3 ${!isMissed ? "cursor-pointer" : ""}`}
+        onClick={() => !isMissed && setOpen(o => !o)}
+      >
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-medium theme-text">
-              {isPeer ? "Anonymous peer" : review.reviewer_name}
-            </p>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${TYPE_COLOR[review.type]}`}>
-              {TYPE_LABEL[review.type]}
+            <p className="text-sm font-medium theme-text">{review.reviewer_name}</p>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${TYPE_COLOR[review.type] || "bg-gray-500/10 text-gray-400"}`}>
+              {TYPE_LABEL[review.type] || review.type}
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-red-500/10 text-red-500">
+              {isMissed ? "Missed — penalty applied" : ""}
             </span>
             <span className="text-xs theme-text-muted">· {review.cycle_name}</span>
           </div>
         </div>
-        {review.overall_score && (
+        {!isMissed && review.overall_score && (
           <div className="flex gap-0.5 shrink-0">
             {[1,2,3,4,5].map(n => (
               <Star key={n} className={`w-4 h-4 ${n <= review.overall_score ? "text-amber-400 fill-amber-400" : "text-gray-300"}`} />
             ))}
           </div>
         )}
-        {open ? <ChevronUp className="w-4 h-4 theme-text-muted shrink-0" /> : <ChevronDown className="w-4 h-4 theme-text-muted shrink-0" />}
+        {isMissed
+          ? <span className="text-xs text-red-500 font-semibold shrink-0">−15 pts</span>
+          : (open ? <ChevronUp className="w-4 h-4 theme-text-muted shrink-0" /> : <ChevronDown className="w-4 h-4 theme-text-muted shrink-0" />)
+        }
       </div>
 
-      {open && (
+      {isMissed && (
+        <div className="border-t border-red-500/20 px-4 py-3 bg-red-500/5">
+          <p className="text-xs text-red-500">
+            This self-review was not submitted before the cycle deadline. A 15-point deduction was applied to your monthly performance score for this period.
+          </p>
+        </div>
+      )}
+
+      {!isMissed && open && (
         <div className="border-t theme-border px-4 py-4 space-y-3">
           {[
-            { key: "strengths", label: "Strengths" },
+            { key: "strengths",    label: "Strengths" },
             { key: "improvements", label: "Areas for Improvement" },
-            { key: "goals_next", label: "Goals for Next Quarter" },
+            { key: "goals_next",   label: "Goals for Next Quarter" },
           ].map(({ key, label }) => review[key] && (
             <div key={key}>
               <p className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-1">{label}</p>
-              <p className="text-sm theme-text">{review[key]}</p>
+              <p className="text-sm theme-text leading-relaxed">{review[key]}</p>
             </div>
           ))}
+          {!review.strengths && !review.improvements && !review.goals_next && (
+            <p className="text-sm theme-text-muted italic">No written feedback provided.</p>
+          )}
         </div>
       )}
     </div>
@@ -724,13 +1031,11 @@ function AboutMeCard({ review }) {
 
 // ─── ADMIN: MEMBER REVIEW GROUP (inside cycle detail modal) ──────────────────
 
-// mode="submitted" → reviews are all submitted; mode="pending" → reviews are all pending
 function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
   const [expanded, setExpanded] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
 
-  // Summary data — only relevant in submitted mode
-  const byType = ["self", "manager", "peer"].map(type => {
+  const byType = ["self", "manager"].map(type => {
     const typed = reviews.filter(r => r.type === type && r.overall_score);
     if (!typed.length) return null;
     const avg = (typed.reduce((s, r) => s + Number(r.overall_score), 0) / typed.length).toFixed(1);
@@ -744,14 +1049,13 @@ function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
 
   return (
     <div className="theme-surface-card rounded-xl border theme-border overflow-hidden">
-      {/* Member header */}
       <div className="px-4 py-3 border-b theme-border flex items-center gap-3">
         <div className="flex-1">
           <p className="font-semibold theme-text">{member.username}</p>
           <p className="text-xs theme-text-muted">
             {mode === "submitted"
               ? `${reviews.length} review${reviews.length !== 1 ? "s" : ""} submitted`
-              : `${reviews.length} review${reviews.length !== 1 ? "s" : ""} not submitted`}
+              : `${reviews.length} review${reviews.length !== 1 ? "s" : ""} pending`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -766,17 +1070,14 @@ function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
             </div>
           )}
           {hasSummary && (
-            <button
-              onClick={() => setShowSummary(s => !s)}
-              className={`text-xs px-2 py-1 rounded-lg border transition-colors ${showSummary ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20" : "border-[var(--border)] theme-text-muted hover:theme-text"}`}
-            >
-              {showSummary ? "Hide Summary" : "Summary"}
+            <button onClick={() => setShowSummary(s => !s)}
+              className={`text-xs px-2 py-1 rounded-lg border transition-colors ${showSummary ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20" : "border-[var(--border)] theme-text-muted hover:theme-text"}`}>
+              {showSummary ? "Hide" : "Summary"}
             </button>
           )}
         </div>
       </div>
 
-      {/* ── Per-user summary panel ── */}
       {showSummary && (
         <div className="px-4 py-4 bg-indigo-500/5 border-b border-indigo-500/10 space-y-4">
           {byType.length > 0 && (
@@ -784,7 +1085,7 @@ function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
               <p className="text-[11px] font-semibold text-indigo-500 uppercase tracking-wide mb-2">Score Breakdown</p>
               <div className="flex gap-3 flex-wrap">
                 {byType.map(({ type, avg, count }) => (
-                  <div key={type} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${TYPE_COLOR[type]}`} style={{background:"var(--surface-soft)"}}>
+                  <div key={type} className={`flex items-center gap-2 px-3 py-2 rounded-lg border theme-border ${TYPE_COLOR[type]}`}>
                     <span className="text-xs font-medium">{TYPE_LABEL[type]}</span>
                     <span className="text-sm font-bold">{avg}/5</span>
                     {count > 1 && <span className="text-[10px] opacity-60">({count})</span>}
@@ -793,81 +1094,59 @@ function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
               </div>
               {(() => {
                 const self = byType.find(t => t.type === "self");
-                const ext  = byType.filter(t => t.type !== "self");
-                if (!self || !ext.length) return null;
-                const extAvg = (ext.reduce((s,t) => s + Number(t.avg), 0) / ext.length).toFixed(1);
-                const diff   = (Number(self.avg) - Number(extAvg)).toFixed(1);
+                const mgr  = byType.find(t => t.type === "manager");
+                if (!self || !mgr) return null;
+                const diff = (Number(self.avg) - Number(mgr.avg)).toFixed(1);
                 return (
                   <p className="text-xs theme-text-muted mt-1.5">
-                    Self-assessed <strong className="theme-text">{Number(diff) > 0 ? `+${diff}` : diff}</strong> vs others' average
+                    Self-assessed <strong className="theme-text">{Number(diff) > 0 ? `+${diff}` : diff}</strong> vs manager
                     {" · "}{Number(diff) > 0.5 ? "may be overestimating" : Number(diff) < -0.5 ? "may be underestimating" : "well-calibrated"}
                   </p>
                 );
               })()}
             </div>
           )}
-
           {allStrengths.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold text-green-500 uppercase tracking-wide mb-2">
-                Strengths · <span className="normal-case font-normal">{allStrengths.length} reviewer{allStrengths.length !== 1 ? "s" : ""}</span>
-              </p>
-              <div className="space-y-2">
-                {allStrengths.map((s, i) => (
-                  <div key={i} className="flex gap-2 text-sm theme-text">
-                    <span className="text-green-500 shrink-0">•</span>
-                    <span className="leading-relaxed">{s}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-[11px] font-semibold text-green-500 uppercase tracking-wide mb-2">Strengths</p>
+              {allStrengths.map((s, i) => (
+                <div key={i} className="flex gap-2 text-sm theme-text mb-1">
+                  <span className="text-green-500 shrink-0">•</span><span>{s}</span>
+                </div>
+              ))}
             </div>
           )}
-
           {allImprovements.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold text-amber-500 uppercase tracking-wide mb-2">
-                Areas for Improvement · <span className="normal-case font-normal">{allImprovements.length} reviewer{allImprovements.length !== 1 ? "s" : ""}</span>
-              </p>
-              <div className="space-y-2">
-                {allImprovements.map((s, i) => (
-                  <div key={i} className="flex gap-2 text-sm theme-text">
-                    <span className="text-amber-500 shrink-0">•</span>
-                    <span className="leading-relaxed">{s}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-[11px] font-semibold text-amber-500 uppercase tracking-wide mb-2">Areas for Improvement</p>
+              {allImprovements.map((s, i) => (
+                <div key={i} className="flex gap-2 text-sm theme-text mb-1">
+                  <span className="text-amber-500 shrink-0">•</span><span>{s}</span>
+                </div>
+              ))}
             </div>
           )}
-
           {allGoals.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold text-blue-500 uppercase tracking-wide mb-2">
-                Goals for Next Quarter · <span className="normal-case font-normal">{allGoals.length} reviewer{allGoals.length !== 1 ? "s" : ""}</span>
-              </p>
-              <div className="space-y-2">
-                {allGoals.map((s, i) => (
-                  <div key={i} className="flex gap-2 text-sm theme-text">
-                    <span className="text-blue-500 shrink-0">→</span>
-                    <span className="leading-relaxed">{s}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-[11px] font-semibold text-blue-500 uppercase tracking-wide mb-2">Goals for Next Quarter</p>
+              {allGoals.map((s, i) => (
+                <div key={i} className="flex gap-2 text-sm theme-text mb-1">
+                  <span className="text-blue-500 shrink-0">→</span><span>{s}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
       )}
 
-      {/* ── Submitted mode: expandable review cards ── */}
       {mode === "submitted" && (
         <div className="divide-y theme-border">
           {reviews.map(r => (
             <div key={r.id}>
-              <button
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-soft)] transition-colors text-left"
-                onClick={() => setExpanded(expanded === r.id ? null : r.id)}
-              >
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_COLOR[r.type]}`}>
-                  {TYPE_LABEL[r.type]}
+              <button className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-soft)] transition-colors text-left"
+                onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_COLOR[r.type] || "bg-gray-500/10 text-gray-400"}`}>
+                  {TYPE_LABEL[r.type] || r.type}
                 </span>
                 <span className="text-sm theme-text flex-1">by <strong>{r.reviewer_name}</strong></span>
                 {r.overall_score && (
@@ -877,9 +1156,7 @@ function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
                     ))}
                   </div>
                 )}
-                {expanded === r.id
-                  ? <ChevronUp className="w-4 h-4 theme-text-muted shrink-0" />
-                  : <ChevronDown className="w-4 h-4 theme-text-muted shrink-0" />}
+                {expanded === r.id ? <ChevronUp className="w-4 h-4 theme-text-muted shrink-0" /> : <ChevronDown className="w-4 h-4 theme-text-muted shrink-0" />}
               </button>
               {expanded === r.id && (
                 <div className="px-4 pb-4 pt-1 space-y-3 bg-[var(--surface-soft)]">
@@ -903,13 +1180,12 @@ function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
         </div>
       )}
 
-      {/* ── Pending mode: simple list ── */}
       {mode === "pending" && (
         <div className="divide-y theme-border">
           {reviews.map(r => (
             <div key={r.id} className="flex items-center gap-3 px-4 py-3">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_COLOR[r.type]}`}>
-                {TYPE_LABEL[r.type]}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_COLOR[r.type] || "bg-gray-500/10 text-gray-400"}`}>
+                {TYPE_LABEL[r.type] || r.type}
               </span>
               <span className="text-sm theme-text flex-1">by {r.reviewer_name}</span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_COLOR[r.status]}`}>
@@ -917,6 +1193,62 @@ function MemberReviewGroup({ member, reviews, mode = "submitted" }) {
               </span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── BULK MANAGER PANEL ───────────────────────────────────────────────────────
+
+function BulkManagerPanel({ team, onComplete }) {
+  const api = useApi();
+  const [bulkManagerId, setBulkManagerId] = useState("");
+  const [applying, setApplying]           = useState(false);
+  const [open, setOpen]                   = useState(false);
+
+  const applyBulk = async () => {
+    if (!bulkManagerId) return toast.error("Select a manager first");
+    setApplying(true);
+    try {
+      const r = await api.patch("/reviews/team/bulk-manager", {
+        manager_id: bulkManagerId,
+        user_ids: [],
+      });
+      toast.success(`Manager assigned to ${r.data.updated} member${r.data.updated !== 1 ? "s" : ""}`);
+      setBulkManagerId("");
+      setOpen(false);
+      onComplete();
+    } catch (err) { toast.error(err.response?.data?.error || "Failed"); }
+    setApplying(false);
+  };
+
+  return (
+    <div className="mb-4">
+      <button onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 font-medium mb-2">
+        {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        Bulk assign manager
+      </button>
+
+      {open && (
+        <div className="theme-surface-card rounded-xl border theme-border p-4 space-y-3">
+          <p className="text-sm theme-text-muted">
+            Assign one manager as the reviewer for all workspace members at once. Individual assignments can still be changed per-member below.
+          </p>
+          <div className="flex gap-3 items-center">
+            <select value={bulkManagerId} onChange={e => setBulkManagerId(e.target.value)}
+              className="flex-1 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text">
+              <option value="">— Select a manager —</option>
+              {team.map(m => (
+                <option key={m.user_id} value={m.user_id}>{m.username} ({m.email})</option>
+              ))}
+            </select>
+            <button onClick={applyBulk} disabled={applying || !bulkManagerId}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium disabled:opacity-60 shrink-0">
+              {applying ? "Applying…" : "Assign to All"}
+            </button>
+          </div>
         </div>
       )}
     </div>

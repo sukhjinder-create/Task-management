@@ -141,14 +141,16 @@ export default function Notifications() {
     }
     if (notif.project_id) { navigate(`/projects/${notif.project_id}`); return; }
     const TYPE_ROUTES = {
-      autopilot_summary:      "/autopilot",
-      workspace_warning:      "/autopilot",
-      task_deleted:           "/my-tasks",
-      leave_request:          "/leave?tab=admin",
-      leave_status:           "/leave?tab=my",
-      review_assigned:        "/reviews",
-      review_reminder:        "/reviews",
-      review_cycle_complete:  "/reviews",
+      autopilot_summary:        "/autopilot",
+      workspace_warning:        "/autopilot",
+      task_deleted:             "/my-tasks",
+      leave_request:            "/leave?tab=admin",
+      leave_status:             "/leave?tab=my",
+      review_assigned:          "/reviews?tab=pending",
+      review_reminder:          "/reviews?tab=pending",
+      manager_review_unlocked:  "/reviews?tab=pending",
+      review_missed:            "/reviews?tab=aboutme",
+      review_cycle_complete:    "/reviews?tab=cycles",
     };
     navigate(TYPE_ROUTES[notif.type] || "/dashboard");
   };
