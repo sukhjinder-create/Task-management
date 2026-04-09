@@ -20,6 +20,8 @@ import TestingAgent from "./pages/TestingAgent.jsx";
 import SlackMigration from "./pages/SlackMigration.jsx";
 import Migrations from "./pages/Migrations.jsx";
 import WorkspaceBilling from "./pages/WorkspaceBilling.jsx";
+import WorkspaceSearchMemory from "./pages/WorkspaceSearchMemory.jsx";
+import UserProfile from "./pages/UserProfile.jsx";
 
 // ---- Intelligence pages (NEW) ----
 import UserPerformance from "./pages/intelligence/UserPerformance.jsx";
@@ -106,6 +108,15 @@ export default function App() {
           <Route path="my-tasks" element={<MyTasks />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="users/:userId/profile" element={<UserProfile />} />
+          <Route
+            path="operations"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="workspace_search_memory">
+                <Navigate to="/admin/workspace-search" replace />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="chat"
             element={<ProtectedRoute requiredFeature="team_chat"><Chat /></ProtectedRoute>}
@@ -223,6 +234,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <UsersAdmin />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="admin/workspace-search"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="workspace_search_memory">
+                <WorkspaceSearchMemory />
               </ProtectedRoute>
             }
           />

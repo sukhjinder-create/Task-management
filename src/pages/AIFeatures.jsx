@@ -1,6 +1,7 @@
 // src/pages/AIFeatures.jsx
 // Phase 3 AI Features: Meeting Notes→Tasks, Risk Heatmap, Digest, NL Reports, Smart Task Parse
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -19,7 +20,18 @@ const TABS = [
 ];
 
 export default function AIFeatures() {
-  const [tab, setTab] = useState("notes");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = TABS.some((item) => item.id === searchParams.get("tab")) ? searchParams.get("tab") : "notes";
+  const [tab, setTab] = useState(initialTab);
+
+  useEffect(() => {
+    if (!TABS.some((item) => item.id === tab)) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", tab);
+      return next;
+    }, { replace: true });
+  }, [tab, setSearchParams]);
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">

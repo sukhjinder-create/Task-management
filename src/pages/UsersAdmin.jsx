@@ -1,17 +1,21 @@
 // src/pages/UsersAdmin.jsx
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import Select from "react-select";
 import { Users, Plus, Edit2, Trash2, Bot, ChevronDown, ChevronUp, X, KeyRound } from "lucide-react";
+import UserProfileLink from "../components/UserProfileLink";
 
 const ROLES = ["admin", "manager", "user"];
 
 export default function UsersAdmin() {
   const api = useApi();
   const { auth } = useAuth();
+  const [searchParams] = useSearchParams();
   const currentUser = auth.user;
+  const highlightedUserId = searchParams.get("user");
 
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiName, setAiName] = useState("AI Assistant");
@@ -75,6 +79,17 @@ export default function UsersAdmin() {
     }
     load();
   }, [api]);
+
+  useEffect(() => {
+    if (!highlightedUserId) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`admin-user-${highlightedUserId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [highlightedUserId, users]);
 
   const projectOptions = useMemo(
     () => (projects || []).map((p) => ({ value: p.id, label: p.name })),
@@ -360,6 +375,7 @@ export default function UsersAdmin() {
               <UserCard
                 key={u.id}
                 user={u}
+                highlighted={String(highlightedUserId || "") === String(u.id)}
                 deletingId={deletingId}
                 onEdit={() => startEditUser(u)}
                 onDelete={() => handleDeleteUser(u.id)}
@@ -466,19 +482,28 @@ export default function UsersAdmin() {
   );
 }
 
-function UserCard({ user, deletingId, onEdit, onDelete, onResetPassword }) {
+function UserCard({ user, highlighted = false, deletingId, onEdit, onDelete, onResetPassword }) {
   const roleColors = { admin: "bg-red-100 text-red-700", manager: "bg-blue-100 text-blue-700", user: "bg-slate-100 text-slate-600" };
   const initials = (user.username || "?").slice(0, 2).toUpperCase();
 
   return (
-    <div className="theme-surface border theme-border rounded-2xl overflow-hidden">
+    <div
+      id={`admin-user-${user.id}`}
+      className={`${highlighted ? "ring-2 ring-primary-500 border-primary-500 bg-primary-50/40" : ""} theme-surface border theme-border rounded-2xl overflow-hidden`}
+    >
       <div className="flex items-center gap-3 p-4">
-        <div className="shrink-0 w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
+        <UserProfileLink
+          userId={user.id}
+          username={user.username}
+          className="shrink-0 w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center"
+        >
           <span className="text-primary-600 font-bold text-sm">{initials}</span>
-        </div>
+        </UserProfileLink>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-semibold theme-text truncate">{user.username}</p>
+            <UserProfileLink userId={user.id} username={user.username} className="font-semibold theme-text truncate">
+              <p className="font-semibold theme-text truncate">{user.username}</p>
+            </UserProfileLink>
             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${roleColors[user.role] || roleColors.user}`}>
               {user.role}
             </span>

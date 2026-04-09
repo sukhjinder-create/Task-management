@@ -1,5 +1,6 @@
 // src/pages/Reports.jsx
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -11,6 +12,7 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
+import { getUserProfilePath } from "../utils/userProfiles";
 
 // ─── Status / Priority meta ──────────────────────────────────────────────────
 
@@ -596,8 +598,17 @@ export default function Reports() {
                 {report.byUser?.map((row) => (
                   <tr key={row.id || row.username} className="border-b border-slate-50">
                     <td className="py-1.5">
-                      <div className="font-medium text-slate-700 truncate max-w-[120px]">{row.username || "Unassigned"}</div>
-                      <div className="text-[10px] text-slate-400 truncate max-w-[120px]">{row.email || ""}</div>
+                      {row.id ? (
+                        <Link to={getUserProfilePath(row.id, auth.user?.id)} className="hover:text-indigo-600">
+                          <div className="font-medium text-slate-700 truncate max-w-[120px]">{row.username || "Unassigned"}</div>
+                          <div className="text-[10px] text-slate-400 truncate max-w-[120px]">{row.email || ""}</div>
+                        </Link>
+                      ) : (
+                        <>
+                          <div className="font-medium text-slate-700 truncate max-w-[120px]">{row.username || "Unassigned"}</div>
+                          <div className="text-[10px] text-slate-400 truncate max-w-[120px]">{row.email || ""}</div>
+                        </>
+                      )}
                     </td>
                     <td className="py-1.5 text-right font-semibold text-slate-700">{row.task_count}</td>
                   </tr>
@@ -729,7 +740,13 @@ export default function Reports() {
                           }
                         </td>
                         <td className="px-3 py-2 text-slate-500 truncate max-w-[90px]" title={t.username}>
-                          {t.username || <span className="text-slate-300">-</span>}
+                          {t.username ? (
+                            <Link to={getUserProfilePath(t.assigned_to, auth.user?.id)} className="hover:text-indigo-600">
+                              {t.username}
+                            </Link>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${sBg} ${sText}`}>

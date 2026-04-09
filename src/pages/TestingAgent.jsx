@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Beaker, Play, RefreshCw, Save, Search, Settings, FileCode2,
   ChevronDown, ChevronRight, Terminal, CheckCircle2, XCircle,
@@ -1335,6 +1336,10 @@ function InfoTile({ label, value, valueColor = "text-gray-800" }) {
 // Main component
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function TestingAgent() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSection = ["settings", "history", "profiles"].includes(searchParams.get("section"))
+    ? searchParams.get("section")
+    : "";
   const [_settings, setSettings] = useState(null);
   const [settingsDraft, setSettingsDraft] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -1344,7 +1349,11 @@ export default function TestingAgent() {
   const [selectedTaskId, setSelectedTaskId] = useState("");
 
   // run mode: "auto" | "guided" | "multi" | "cli"
-  const [runMode, setRunMode] = useState("auto");
+  const [runMode, setRunMode] = useState(
+    ["auto", "guided", "deep", "multi", "cli"].includes(searchParams.get("mode"))
+      ? searchParams.get("mode")
+      : "auto"
+  );
   const [running, setRunning] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [liveRunId, setLiveRunId] = useState(null);
@@ -1702,6 +1711,31 @@ export default function TestingAgent() {
     { key: "cli",    label: "Repository Run", Icon: Terminal, desc: "Execute repo commands and attach run evidence" },
   ];
 
+  useEffect(() => {
+    if (!["auto", "guided", "deep", "multi", "cli"].includes(runMode)) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("mode", runMode);
+      return next;
+    }, { replace: true });
+  }, [runMode, setSearchParams]);
+
+  useEffect(() => {
+    const targetId = {
+      settings: "testing-agent-settings-section",
+      history: "testing-agent-history-section",
+      profiles: "project-profiles-section",
+    }[requestedSection];
+
+    if (!targetId) return;
+
+    const timer = window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [requestedSection]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -1726,7 +1760,7 @@ export default function TestingAgent() {
       {/* Settings + Run panel */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Settings */}
-        <div className="xl:col-span-2 theme-surface border theme-border rounded-xl p-5">
+        <div id="testing-agent-settings-section" className="xl:col-span-2 theme-surface border theme-border rounded-xl p-5">
           <h2 className="font-semibold theme-text flex items-center gap-2 mb-4">
             <Settings className="w-4 h-4 theme-text-muted" /> Automation Settings
           </h2>
@@ -2065,7 +2099,7 @@ export default function TestingAgent() {
       </div>
 
       {/* Run History */}
-      <div className="theme-surface border theme-border rounded-xl p-5">
+      <div id="testing-agent-history-section" className="theme-surface border theme-border rounded-xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h2 className="font-semibold theme-text">Run History</h2>
           <div className="flex items-center gap-2">

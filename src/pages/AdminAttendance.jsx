@@ -1,9 +1,11 @@
 // src/pages/AdminAttendance.jsx
 import { useEffect, useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import { ClipboardList, RefreshCw, Download, Filter, X, ChevronDown, ChevronUp } from "lucide-react";
+import { getUserProfilePath } from "../utils/userProfiles";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -293,7 +295,13 @@ function AttendanceCard({ row, username }) {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold theme-text truncate">{username}</p>
+          <Link
+            to={getUserProfilePath(row.user_id)}
+            onClick={(event) => event.stopPropagation()}
+            className="font-semibold theme-text truncate hover:text-[var(--primary)]"
+          >
+            {username}
+          </Link>
           <p className="text-xs theme-text-muted">{row.date}</p>
         </div>
 

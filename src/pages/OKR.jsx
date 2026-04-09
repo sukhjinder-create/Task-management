@@ -1,5 +1,6 @@
 // src/pages/OKR.jsx — Goals (replaces OKR/Objectives)
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { Modal } from "../components/ui";
@@ -37,12 +38,15 @@ const PERIODS = ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026", "2026", "2027"];
 export default function OKR() {
   const api   = useApi();
   const { auth } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin   = auth.user?.role === "admin" || auth.user?.role === "superadmin";
   const isManager = auth.user?.role === "manager";
   const canManage = isAdmin || isManager;
+  const requestedPeriod = searchParams.get("period");
+  const requestedGoalId = searchParams.get("goal");
 
   const [goals,     setGoals]     = useState([]);
-  const [period,    setPeriod]    = useState("Q2 2026");
+  const [period,    setPeriod]    = useState(PERIODS.includes(requestedPeriod) ? requestedPeriod : "Q2 2026");
   const [showNew,   setShowNew]   = useState(false);
   const [form,      setForm]      = useState({ title: "", description: "" });
   const [expanded,  setExpanded]  = useState({});
@@ -72,6 +76,43 @@ export default function OKR() {
   };
 
   useEffect(() => { load(); }, [period]);
+
+  useEffect(() => {
+    if (!requestedPeriod || requestedPeriod === period || !PERIODS.includes(requestedPeriod)) return;
+    setPeriod(requestedPeriod);
+  }, [requestedPeriod, period]);
+
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("period", period);
+      return next;
+    }, { replace: true });
+  }, [period, setSearchParams]);
+
+  useEffect(() => {
+    if (!requestedGoalId || !goals.length) return;
+    const target = goals.find((goal) => String(goal.id) === String(requestedGoalId));
+    if (!target) return;
+
+    setExpanded((current) => {
+      if (current[target.id]) return current;
+      return { ...current, [target.id]: true };
+    });
+
+    if (!assessments[target.id]) {
+      loadAssessment(target.id);
+    }
+
+    const timer = window.setTimeout(() => {
+      document.getElementById(`goal-${target.id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [requestedGoalId, goals, assessments]);
 
   // ─── CRUD ──────────────────────────────────────────────────────────────────
   const createGoal = async () => {
@@ -242,6 +283,7 @@ export default function OKR() {
           <GoalCard
             key={goal.id}
             goal={goal}
+            highlighted={String(goal.id) === String(requestedGoalId || "")}
             canManage={canManage}
             expanded={!!expanded[goal.id]}
             assessment={assessments[goal.id]}
@@ -359,7 +401,7 @@ export default function OKR() {
 }
 
 // ─── Goal Card ────────────────────────────────────────────────────────────────
-function GoalCard({ goal, canManage, expanded, assessment, onToggle, onDelete, onUpdateProgress, onLinkSprints, onUnlinkSprint }) {
+function GoalCard({ goal, highlighted = false, canManage, expanded, assessment, onToggle, onDelete, onUpdateProgress, onLinkSprints, onUnlinkSprint }) {
   const sc           = STATUS_COLOR[goal.status] || STATUS_COLOR.on_track;
   const linkedSprints = goal.linked_sprints || [];
   const sprintDriven  = linkedSprints.length > 0;
@@ -375,7 +417,10 @@ function GoalCard({ goal, canManage, expanded, assessment, onToggle, onDelete, o
   };
 
   return (
-    <div className="theme-surface-card rounded-xl border theme-border overflow-hidden">
+    <div
+      id={`goal-${goal.id}`}
+      className={`theme-surface-card rounded-xl border overflow-hidden transition-shadow ${highlighted ? "border-indigo-400 shadow-[0_0_0_1px_rgba(99,102,241,0.35)]" : "theme-border"}`}
+    >
 
       {/* ── Card header ───────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={onToggle}>

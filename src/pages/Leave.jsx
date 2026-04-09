@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, Users, Palmtree, Settings,
   Trash2, Star,
 } from "lucide-react";
+import UserProfileLink from "../components/UserProfileLink";
 
 const STATUS_BADGE = {
   pending:   "bg-amber-500/10 text-amber-600",
@@ -574,7 +575,12 @@ function AdminTab() {
           <div key={r.id} className="theme-surface-card rounded-xl border theme-border overflow-hidden">
             <div className="flex items-center gap-3 px-4 py-3">
               <div className="flex-1">
-                <p className="text-sm font-medium theme-text">{r.username} <span className="theme-text-muted font-normal">— {r.leave_type_name}</span></p>
+                <p className="text-sm font-medium theme-text">
+                  <UserProfileLink userId={r.user_id} username={r.username} className="font-medium theme-text">
+                    <span className="font-medium theme-text">{r.username}</span>
+                  </UserProfileLink>
+                  <span className="theme-text-muted font-normal"> — {r.leave_type_name}</span>
+                </p>
                 <p className="text-xs theme-text-muted">{r.start_date} → {r.end_date} · {r.days} day{r.days !== 1 ? "s" : ""}</p>
                 {r.reason && <p className="text-xs theme-text-muted italic mt-0.5">"{r.reason}"</p>}
               </div>

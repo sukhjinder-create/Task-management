@@ -1,5 +1,6 @@
 // src/pages/Chat.jsx
 import { useEffect, useRef, useState, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -30,6 +31,8 @@ import "react-quill/dist/quill.snow.css";
 import { MessageSquare, Send, Hash, Lock, Users, Settings, Plus, Smile, Menu, X as XIcon, Phone, ChevronLeft, Paperclip, Eye, Download } from "lucide-react";
 import { Avatar, FetchImg, Button, Badge, Card } from "../components/ui";
 import { useIsMobile } from "../hooks/useIsMobile";
+import UserProfileLink from "../components/UserProfileLink";
+import { buildUserLookup, linkifyUserMentionsInHtml } from "../utils/userProfiles";
 
 import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
@@ -501,6 +504,7 @@ function AttachmentItem({ att, senderId, currentUserId, usersWithKeys }) {
 }
 
 export default function Chat() {
+  const location = useLocation();
   const { auth } = useAuth();
   const api = useApi();
   const user = auth.user;
@@ -671,6 +675,22 @@ const [reportContext, setReportContext] = useState(null);
       // ignore storage errors
     }
   }, [activeChannelKey]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedChannel = params.get("channel");
+    if (!requestedChannel) return;
+    if (requestedChannel === activeChannelKey) return;
+    const exists = channels.some((channel) => channel.key === requestedChannel) || requestedChannel.startsWith("dm:");
+    if (!exists) return;
+
+    setActiveChannelKey(requestedChannel);
+    setActiveDmUser(null);
+    setActiveThreadKey(null);
+    setThreadRootMessage(null);
+    setThreadEditorHtml("");
+    setUnreadByChannel((prev) => ({ ...prev, [requestedChannel]: 0 }));
+  }, [channels, location.search, activeChannelKey]);
 
   // ----- DERIVED -----
   const activeMessages = messagesByChannel[activeChannelKey] || [];
@@ -844,6 +864,11 @@ useEffect(() => {
     }
     return map;
   }, [users]);
+
+  const usersByUsername = useMemo(() => buildUserLookup(users), [users]);
+
+  const getLinkedMessageHtml = (html) =>
+    linkifyUserMentionsInHtml(html || "", usersByUsername, user.id);
 
   const isHuddleActiveHere =
     activeHuddle && activeHuddle.channelId === activeChannelKey;
@@ -2829,16 +2854,29 @@ useEffect(() => {
                             <div className="w-8 shrink-0" />
                           ) : (
                             <div className="w-8 shrink-0 mt-0.5">
-                              <Avatar name={m.username || "User"} src={userAvatarMap[m.userId || m.user_id]} size="sm" />
+                              <UserProfileLink
+                                userId={m.userId || m.user_id}
+                                username={m.username || "User"}
+                                avatarUrl={userAvatarMap[m.userId || m.user_id]}
+                                showAvatar
+                                hideName
+                                avatarSize="sm"
+                              />
                             </div>
                           )}
 
                           <div className="flex-1 min-w-0">
                             {!isGrouped && (
                               <div className="flex items-baseline gap-2 mb-0.5">
-                                <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
-                                  {isOwn ? "You" : m.username || "User"}
-                                </span>
+                                <UserProfileLink
+                                  userId={m.userId || m.user_id}
+                                  username={m.username || "User"}
+                                  className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}
+                                >
+                                  <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
+                                    {isOwn ? "You" : m.username || "User"}
+                                  </span>
+                                </UserProfileLink>
                                 <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
                                 {m.id?.startsWith("temp-") && !failedMessages.has(m.id) && (
                                   <span className="text-[10px] theme-text-muted italic">Sending…</span>
@@ -2862,7 +2900,7 @@ useEffect(() => {
                                   <div
                                     className="text-[14px] theme-text leading-relaxed break-words chat-prose"
                                     style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
-                                    dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
+                                    dangerouslySetInnerHTML={{ __html: getLinkedMessageHtml(m.textHtml || m.text || "") }}
                                   />
                                 )}
 
@@ -3195,14 +3233,27 @@ useEffect(() => {
             {/* Root message */}
             <div className="px-4 py-3 theme-surface-soft border-b theme-border shrink-0">
               <div className="flex items-center gap-2 mb-2">
-                <Avatar name={threadRootMessage.username || "User"} src={userAvatarMap[threadRootMessage.userId || threadRootMessage.user_id]} size="sm" />
-                <span className="text-[13px] font-semibold theme-text">
-                  {threadRootMessage.username === user.username ? "You" : threadRootMessage.username || "User"}
-                </span>
+                <UserProfileLink
+                  userId={threadRootMessage.userId || threadRootMessage.user_id}
+                  username={threadRootMessage.username || "User"}
+                  avatarUrl={userAvatarMap[threadRootMessage.userId || threadRootMessage.user_id]}
+                  showAvatar
+                  hideName
+                  avatarSize="sm"
+                />
+                <UserProfileLink
+                  userId={threadRootMessage.userId || threadRootMessage.user_id}
+                  username={threadRootMessage.username || "User"}
+                  className="text-[13px] font-semibold theme-text"
+                >
+                  <span className="text-[13px] font-semibold theme-text">
+                    {threadRootMessage.username === user.username ? "You" : threadRootMessage.username || "User"}
+                  </span>
+                </UserProfileLink>
               </div>
               <div
                 className="text-[13px] theme-text leading-relaxed break-words line-clamp-4 chat-prose"
-                dangerouslySetInnerHTML={{ __html: threadRootMessage.textHtml || threadRootMessage.text || "" }}
+                dangerouslySetInnerHTML={{ __html: getLinkedMessageHtml(threadRootMessage.textHtml || threadRootMessage.text || "") }}
               />
             </div>
 
@@ -3219,13 +3270,26 @@ useEffect(() => {
                   return (
                     <div key={m.id} className="flex gap-2.5">
                       <div className="w-8 shrink-0 mt-0.5">
-                        <Avatar name={m.username || "User"} src={userAvatarMap[m.userId || m.user_id]} size="sm" />
+                        <UserProfileLink
+                          userId={m.userId || m.user_id}
+                          username={m.username || "User"}
+                          avatarUrl={userAvatarMap[m.userId || m.user_id]}
+                          showAvatar
+                          hideName
+                          avatarSize="sm"
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2 mb-0.5">
-                          <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
-                            {isOwn ? "You" : m.username || "User"}
-                          </span>
+                          <UserProfileLink
+                            userId={m.userId || m.user_id}
+                            username={m.username || "User"}
+                            className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}
+                          >
+                            <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
+                              {isOwn ? "You" : m.username || "User"}
+                            </span>
+                          </UserProfileLink>
                           <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
                           {m.id?.startsWith("temp-") && !failedMessages.has(m.id) && (
                             <span className="text-[10px] theme-text-muted italic">Sending…</span>
@@ -3238,7 +3302,7 @@ useEffect(() => {
                           <div
                             className="text-[14px] theme-text leading-relaxed break-words chat-prose"
                             style={{ wordBreak: "break-word" }}
-                            dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
+                            dangerouslySetInnerHTML={{ __html: getLinkedMessageHtml(m.textHtml || m.text || "") }}
                           />
                         )}
                         {(m.attachments || []).length > 0 && (
@@ -3833,7 +3897,14 @@ useEffect(() => {
                           </div>
                         ) : (
                           <div className="w-8 shrink-0 mt-0.5 cursor-pointer">
-                            <Avatar name={m.username || "User"} src={userAvatarMap[m.userId || m.user_id]} size="sm" />
+                            <UserProfileLink
+                              userId={m.userId || m.user_id}
+                              username={m.username || "User"}
+                              avatarUrl={userAvatarMap[m.userId || m.user_id]}
+                              showAvatar
+                              hideName
+                              avatarSize="sm"
+                            />
                           </div>
                         )}
 
@@ -3852,9 +3923,21 @@ useEffect(() => {
                               : m.username || "User";
                             return (
                               <div className="flex items-baseline gap-2 mb-0.5">
-                                <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : standupProject ? "text-indigo-500" : "theme-text"}`}>
-                                  {displayName}
-                                </span>
+                                {standupProject ? (
+                                  <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "text-indigo-500"}`}>
+                                    {displayName}
+                                  </span>
+                                ) : (
+                                  <UserProfileLink
+                                    userId={m.userId || m.user_id}
+                                    username={m.username || "User"}
+                                    className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}
+                                  >
+                                    <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
+                                      {displayName}
+                                    </span>
+                                  </UserProfileLink>
+                                )}
                                 <span className="text-[10px] theme-text-muted tabular-nums">{time}</span>
                                 {m.id?.startsWith("temp-") && !failedMessages.has(m.id) && (
                                   <span className="text-[10px] theme-text-muted italic">Sending…</span>
@@ -3882,7 +3965,7 @@ useEffect(() => {
                                 <div
                                   className="text-[13px] theme-text leading-relaxed break-words chat-prose"
                                   style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
-                                  dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
+                                  dangerouslySetInnerHTML={{ __html: getLinkedMessageHtml(m.textHtml || m.text || "") }}
                                 />
                               )}
 
@@ -4249,14 +4332,27 @@ useEffect(() => {
           {/* Root message preview */}
           <div className="px-4 py-3 theme-surface-soft border-b theme-border shrink-0">
             <div className="flex items-center gap-2 mb-1.5">
-              <Avatar name={threadRootMessage.username || "User"} src={userAvatarMap[threadRootMessage.userId || threadRootMessage.user_id]} size="sm" />
-              <span className="text-[11px] font-semibold theme-text">
-                {threadRootMessage.username === user.username ? "You" : threadRootMessage.username || "User"}
-              </span>
+              <UserProfileLink
+                userId={threadRootMessage.userId || threadRootMessage.user_id}
+                username={threadRootMessage.username || "User"}
+                avatarUrl={userAvatarMap[threadRootMessage.userId || threadRootMessage.user_id]}
+                showAvatar
+                hideName
+                avatarSize="sm"
+              />
+              <UserProfileLink
+                userId={threadRootMessage.userId || threadRootMessage.user_id}
+                username={threadRootMessage.username || "User"}
+                className="text-[11px] font-semibold theme-text"
+              >
+                <span className="text-[11px] font-semibold theme-text">
+                  {threadRootMessage.username === user.username ? "You" : threadRootMessage.username || "User"}
+                </span>
+              </UserProfileLink>
             </div>
             <div
               className="text-[11px] theme-text whitespace-pre-wrap break-words line-clamp-4 chat-prose"
-              dangerouslySetInnerHTML={{ __html: threadRootMessage.textHtml || threadRootMessage.text || "" }}
+              dangerouslySetInnerHTML={{ __html: getLinkedMessageHtml(threadRootMessage.textHtml || threadRootMessage.text || "") }}
             />
           </div>
 
@@ -4271,13 +4367,26 @@ useEffect(() => {
                 return (
                   <div key={m.id} className="flex gap-2.5">
                     <div className="w-7 shrink-0 mt-0.5">
-                      <Avatar name={m.username || "User"} src={userAvatarMap[m.userId || m.user_id]} size="sm" />
+                      <UserProfileLink
+                        userId={m.userId || m.user_id}
+                        username={m.username || "User"}
+                        avatarUrl={userAvatarMap[m.userId || m.user_id]}
+                        showAvatar
+                        hideName
+                        avatarSize="sm"
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-1.5 mb-0.5">
-                        <span className={`text-[11px] font-semibold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
-                          {isOwn ? "You" : m.username || "User"}
-                        </span>
+                        <UserProfileLink
+                          userId={m.userId || m.user_id}
+                          username={m.username || "User"}
+                          className={`text-[11px] font-semibold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}
+                        >
+                          <span className={`text-[11px] font-semibold ${isOwn ? "text-[color:var(--primary)]" : "theme-text"}`}>
+                            {isOwn ? "You" : m.username || "User"}
+                          </span>
+                        </UserProfileLink>
                         <span className="text-[9px] theme-text-muted">{time}</span>
                         {m.id?.startsWith("temp-") && !failedMessages.has(m.id) && (
                           <span className="text-[9px] theme-text-muted italic">Sending…</span>
@@ -4289,7 +4398,7 @@ useEffect(() => {
                       {(m.textHtml || m.text) && (
                         <div
                           className="text-[12px] theme-text leading-relaxed whitespace-pre-wrap break-words chat-prose"
-                          dangerouslySetInnerHTML={{ __html: m.textHtml || m.text || "" }}
+                          dangerouslySetInnerHTML={{ __html: getLinkedMessageHtml(m.textHtml || m.text || "") }}
                         />
                       )}
                       {(m.attachments || []).length > 0 && (

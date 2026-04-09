@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Star, Plus, Check, Users, Calendar, ChevronDown, ChevronUp,
   UserCheck, Clock, TrendingUp, Zap, Lock, Shield,
 } from "lucide-react";
+import { getUserProfilePath } from "../utils/userProfiles";
 
 const STATUS_COLOR = {
   pending:     "bg-amber-500/10 text-amber-500",
@@ -530,7 +531,9 @@ export default function Reviews() {
                 {team.map(m => (
                   <tr key={m.user_id} className="border-b theme-border hover:bg-[var(--surface-soft)]">
                     <td className="px-4 py-3">
-                      <p className="font-medium theme-text">{m.username}</p>
+                      <Link to={getUserProfilePath(m.user_id, auth.user?.id)} className="font-medium theme-text hover:text-[var(--primary)]">
+                        {m.username}
+                      </Link>
                       <p className="text-xs theme-text-muted">{m.email}</p>
                     </td>
                     <td className="px-4 py-3">
@@ -660,7 +663,9 @@ function TeamMemberProgressCard({ member }) {
       >
         {/* Member info */}
         <div className="flex-1 min-w-0">
-          <p className="font-medium theme-text text-sm">{member.username}</p>
+          <Link to={getUserProfilePath(member.user_id, auth.user?.id)} className="font-medium theme-text text-sm hover:text-[var(--primary)]">
+            {member.username}
+          </Link>
           <p className="text-xs theme-text-muted">{member.email}</p>
         </div>
 
@@ -704,7 +709,7 @@ function TeamMemberProgressCard({ member }) {
       {expanded && selfSubmitted && member.self_review && (
         <div className="border-t theme-border px-4 py-4 bg-purple-500/5 space-y-3">
           <p className="text-[11px] font-semibold text-purple-500 uppercase tracking-wide flex items-center gap-1.5">
-            <UserCheck className="w-3.5 h-3.5" /> {member.username}'s Self-Review
+            <UserCheck className="w-3.5 h-3.5" /> <Link to={getUserProfilePath(member.user_id, auth.user?.id)} className="hover:underline">{member.username}</Link>'s Self-Review
             {member.self_review.submitted_at && (
               <span className="normal-case font-normal text-purple-400/70 ml-1">
                 · submitted {new Date(member.self_review.submitted_at).toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" })}

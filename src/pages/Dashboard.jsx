@@ -12,6 +12,7 @@ import {
   TrendingUp, TrendingDown, Award, BarChart2,
   Trophy, Medal,
 } from "lucide-react";
+import { getUserProfilePath } from "../utils/userProfiles";
 
 function isTaskOverdue(task) {
   if (!task.due_date) return false;
@@ -971,22 +972,41 @@ const autonomousInsight = useMemo(() => {
               )}
 
               {/* Avatar */}
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                isTop3 ? rankColors[index] + " border" : "bg-[var(--surface-soft)] theme-text-muted border border-[var(--border)]"
-              }`}>
-                {initials}
-              </div>
-
-              {/* Name + bar */}
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold theme-text truncate">{u.username}</div>
-                <div className="mt-1 w-full bg-[var(--surface-soft)] rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className={`h-1.5 rounded-full transition-all duration-700 ${barColor}`}
-                    style={{ width: `${Math.min(score, 100)}%` }}
-                  />
-                </div>
-              </div>
+              {u.userId ? (
+                <Link to={getUserProfilePath(u.userId, auth.user?.id)} className="flex items-center gap-3 min-w-0 flex-1 hover:text-[var(--primary)]">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isTop3 ? rankColors[index] + " border" : "bg-[var(--surface-soft)] theme-text-muted border border-[var(--border)]"
+                  }`}>
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold theme-text truncate">{u.username}</div>
+                    <div className="mt-1 w-full bg-[var(--surface-soft)] rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={`h-1.5 rounded-full transition-all duration-700 ${barColor}`}
+                        style={{ width: `${Math.min(score, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </Link>
+              ) : (
+                <>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isTop3 ? rankColors[index] + " border" : "bg-[var(--surface-soft)] theme-text-muted border border-[var(--border)]"
+                  }`}>
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold theme-text truncate">{u.username}</div>
+                    <div className="mt-1 w-full bg-[var(--surface-soft)] rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={`h-1.5 rounded-full transition-all duration-700 ${barColor}`}
+                        style={{ width: `${Math.min(score, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Score */}
               <span className={`text-sm font-bold shrink-0 ${scoreColor}`}>{score}</span>

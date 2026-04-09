@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api";
 import toast from "react-hot-toast";
@@ -91,6 +92,7 @@ function StandupMarkdown({ content }) {
 }
 
 export default function Autopilot() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { auth } = useAuth();
   const user = auth?.user;
 
@@ -102,7 +104,11 @@ export default function Autopilot() {
   const [bulkApproving, setBulkApproving] = useState(false);
   const [processingIds, setProcessingIds] = useState(new Set());
 
-  const [activeTab, setActiveTab] = useState("pending");
+  const [activeTab, setActiveTab] = useState(
+    ["pending", "history", "settings"].includes(searchParams.get("tab"))
+      ? searchParams.get("tab")
+      : "pending"
+  );
   const [actionFilter, setActionFilter] = useState("all");
 
   const [statsRange, setStatsRange] = useState("7d");
@@ -125,6 +131,15 @@ export default function Autopilot() {
     const timer = setTimeout(() => fetchHistory(1), 350);
     return () => clearTimeout(timer);
   }, [activeTab, historyFilters.search, historyFilters.status, historyFilters.fromDate, historyFilters.toDate, historyFilters.limit]);
+
+  useEffect(() => {
+    if (!["pending", "history", "settings"].includes(activeTab)) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", activeTab);
+      return next;
+    }, { replace: true });
+  }, [activeTab, setSearchParams]);
 
   const fetchData = async () => {
     try {

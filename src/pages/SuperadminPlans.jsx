@@ -46,6 +46,7 @@ export const MASTER_FEATURES = [
   { key: "ai_hub",                 label: "AI Hub",                   category: "AI" },
   { key: "advanced_analytics",     label: "Strategic Intelligence",   category: "AI" },
   { key: "workspace_intelligence", label: "Workspace Intelligence",   category: "AI" },
+  { key: "workspace_search_memory",label: "Workspace Search + Memory", category: "AI" },
   { key: "ai_autopilot",           label: "AI Autopilot",             category: "AI" },
   { key: "ai_testing_agent",       label: "Testing Agent",            category: "AI" },
   // ── Admin modules ─────────────────────────────────────────────────────────

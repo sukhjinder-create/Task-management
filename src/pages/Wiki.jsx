@@ -1,6 +1,7 @@
 // src/pages/Wiki.jsx
 // Full-featured Wiki/Docs with space sidebar + page tree + rich text editing
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApi } from "../api";
 import toast from "react-hot-toast";
 import {
@@ -10,6 +11,7 @@ import {
 
 export default function Wiki() {
   const api = useApi();
+  const [searchParams] = useSearchParams();
   const [spaces, setSpaces] = useState([]);
   const [activeSpace, setActiveSpace] = useState(null);
   const [pages, setPages] = useState([]);        // tree
@@ -29,6 +31,14 @@ export default function Wiki() {
   useEffect(() => {
     api.get("/wiki/spaces").then(r => {
       setSpaces(r.data || []);
+      const requestedSpaceId = searchParams.get("space");
+      if (requestedSpaceId) {
+        const match = (r.data || []).find((space) => String(space.id) === String(requestedSpaceId));
+        if (match) {
+          setActiveSpace(match);
+          return;
+        }
+      }
       if (r.data?.length > 0 && !activeSpace) setActiveSpace(r.data[0]);
     }).catch(() => {});
   }, []);
@@ -42,6 +52,15 @@ export default function Wiki() {
     const r = await api.get(`/wiki/pages/${page.id}`).catch(() => null);
     if (r) { setActivePage(r.data); setEditContent(r.data.content || ""); setEditTitle(r.data.title); }
   };
+
+  useEffect(() => {
+    const requestedPageId = searchParams.get("page");
+    if (!requestedPageId || !pages.length) return;
+    const match = pages.find((page) => String(page.id) === String(requestedPageId));
+    if (match) {
+      loadPage(match);
+    }
+  }, [pages, searchParams]);
 
   const handleSearch = (q) => {
     setSearchQuery(q);

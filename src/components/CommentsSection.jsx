@@ -1,10 +1,13 @@
 // src/components/CommentsSection.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { MessageSquare } from "lucide-react";
 import { useApi } from "../api";
 import toast from "react-hot-toast";
 import { Button, Badge, Avatar } from "./ui";
+import UserProfileLink from "./UserProfileLink";
+import UserMentionText from "./UserMentionText";
+import { buildUserLookup } from "../utils/userProfiles";
 
 export default function CommentsSection({ taskId }) {
   const api = useApi();
@@ -15,13 +18,20 @@ export default function CommentsSection({ taskId }) {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [highlightId, setHighlightId] = useState(null);
+  const [workspaceUsers, setWorkspaceUsers] = useState([]);
+
+  const usersByUsername = useMemo(() => buildUserLookup(workspaceUsers), [workspaceUsers]);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const res = await api.get(`/comments/${taskId}`);
-        setComments(res.data || []);
+        const [commentsRes, usersRes] = await Promise.all([
+          api.get(`/comments/${taskId}`),
+          api.get("/users").catch(() => ({ data: [] })),
+        ]);
+        setComments(commentsRes.data || []);
+        setWorkspaceUsers(usersRes.data || []);
       } catch (err) {
         console.error(err);
       } finally {
@@ -110,19 +120,34 @@ export default function CommentsSection({ taskId }) {
               }
             >
               <div className="flex items-start gap-2">
-                <Avatar name={c.username || c.added_by} src={c.avatar_url} size="sm" />
+                <UserProfileLink
+                  userId={c.added_by}
+                  username={c.username || c.added_by}
+                  avatarUrl={c.avatar_url}
+                  showAvatar
+                  hideName
+                  avatarSize="sm"
+                  stopPropagation
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-semibold text-gray-900">
-                      {c.username || c.added_by}
-                    </span>
+                    <UserProfileLink
+                      userId={c.added_by}
+                      username={c.username || c.added_by}
+                      className="text-sm font-semibold text-gray-900"
+                      stopPropagation
+                    >
+                      <span className="text-sm font-semibold text-gray-900">
+                        {c.username || c.added_by}
+                      </span>
+                    </UserProfileLink>
                     <span className="text-xs text-gray-400">
                       {c.created_at
                         ? new Date(c.created_at).toLocaleString()
                         : ""}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-700">{c.comment_text}</p>
+                  <UserMentionText text={c.comment_text} usersByUsername={usersByUsername} className="text-sm text-gray-700" />
                 </div>
               </div>
             </div>

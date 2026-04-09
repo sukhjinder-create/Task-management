@@ -1,5 +1,6 @@
 // src/pages/StrategicIntelligence.jsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Brain, Sparkles, TrendingUp, AlertCircle, ArrowRight,
@@ -559,13 +560,28 @@ function AskTab() {
 export default function StrategicIntelligence() {
   const { auth } = useAuth();
   const isManager = auth?.user?.role === 'manager';
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Managers only access Ask AI
   const visibleTabs = useMemo(
     () => isManager ? TABS.filter(t => t.id === 'ask') : TABS,
     [isManager]
   );
-  const [activeTab, setActiveTab] = useState(isManager ? 'ask' : 'dashboard');
+  const requestedTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(
+    visibleTabs.some((tab) => tab.id === requestedTab)
+      ? requestedTab
+      : (isManager ? 'ask' : 'dashboard')
+  );
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", activeTab);
+      return next;
+    }, { replace: true });
+  }, [activeTab, visibleTabs, setSearchParams]);
 
   return (
     <div className="space-y-5">

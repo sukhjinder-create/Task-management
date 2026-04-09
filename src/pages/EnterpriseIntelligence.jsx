@@ -7,6 +7,7 @@
  *  4. Organizational Truth Map
  */
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../api";
 import {
@@ -727,7 +728,10 @@ const TABS = [
 
 export default function EnterpriseIntelligence() {
   const { auth } = useAuth();
-  const [activeTab, setActiveTab] = useState("oracle");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(
+    TABS.some((tab) => tab.id === searchParams.get("tab")) ? searchParams.get("tab") : "oracle"
+  );
 
   if (auth?.user?.role !== "admin") {
     return (
@@ -741,6 +745,15 @@ export default function EnterpriseIntelligence() {
   }
 
   const currentTab = TABS.find((t) => t.id === activeTab);
+
+  useEffect(() => {
+    if (!TABS.some((tab) => tab.id === activeTab)) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", activeTab);
+      return next;
+    }, { replace: true });
+  }, [activeTab, setSearchParams]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">

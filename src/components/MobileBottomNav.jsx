@@ -10,6 +10,7 @@ import {
   CheckSquare,
   MessageSquare,
   Bell,
+  Command,
   MoreHorizontal,
   X,
   FileText,
@@ -24,8 +25,10 @@ import {
   CalendarDays,
   Star,
   Shield,
+  Lock,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useFeature } from "../context/PlanContext";
 import { cn } from "../utils/cn";
 import { Avatar, Badge } from "./ui";
 
@@ -34,6 +37,18 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
   const navigate = useNavigate();
   const role = auth?.user?.role;
   const isAdmin = role === "admin";
+  const isManager = role === "manager";
+  const hasGoals = useFeature("okr_goals");
+  const hasWiki = useFeature("wiki_docs");
+  const hasLeave = useFeature("leave_management");
+  const hasReviews = useFeature("performance_reviews");
+  const hasReports = useFeature("basic_reporting");
+  const hasAiHub = useFeature("ai_hub");
+  const hasChat = useFeature("team_chat");
+  const hasAttendance = useFeature("attendance");
+  const hasEnterprise = useFeature("custom_branding");
+  const hasMigrations = useFeature("slack_migration");
+  const hasWorkspaceSearch = useFeature("workspace_search_memory");
 
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -41,7 +56,7 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
     { to: "/dashboard",     icon: LayoutDashboard, label: "Home" },
     { to: "/projects",      icon: FolderKanban,    label: "Projects" },
     { to: "/my-tasks",      icon: CheckSquare,     label: "Tasks" },
-    { to: "/chat",          icon: MessageSquare,   label: "Chat" },
+    { to: "/chat",          icon: MessageSquare,   label: "Chat", locked: !hasChat },
     {
       to: "/notifications",
       icon: Bell,
@@ -51,17 +66,18 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
   ];
 
   const moreItems = [
-    { to: "/okr",          icon: Target,       label: "Goals",            show: true },
-    { to: "/wiki",         icon: BookOpen,     label: "Wiki / Docs",      show: true },
-    { to: "/leave",        icon: CalendarDays, label: "Leave",            show: true },
-    { to: "/reviews",      icon: Star,         label: "Reviews",          show: true },
-    { to: "/reports",      icon: FileText,     label: "Reports",          show: true },
-    { to: "/ai",           icon: Sparkles,     label: "AI Hub",           show: true },
+    { to: "/okr",          icon: Target,       label: "Goals",            show: isAdmin,               locked: !hasGoals },
+    { to: "/admin/workspace-search", icon: Command, label: "Workspace Search", show: isAdmin, locked: !hasWorkspaceSearch },
+    { to: "/wiki",         icon: BookOpen,     label: "Wiki / Docs",      show: true,                  locked: !hasWiki },
+    { to: "/leave",        icon: CalendarDays, label: "Leave",            show: true,                  locked: !hasLeave },
+    { to: "/reviews",      icon: Star,         label: "Reviews",          show: true,                  locked: !hasReviews },
+    { to: "/reports",      icon: FileText,     label: "Reports",          show: isAdmin || isManager,  locked: !hasReports },
+    { to: "/ai",           icon: Sparkles,     label: "AI Hub",           show: isAdmin || isManager,  locked: !hasAiHub },
     { to: "/profile",      icon: User,         label: "Profile",          show: true },
-    { to: "/enterprise",   icon: Shield,       label: "Enterprise",       show: isAdmin },
-    { to: "/admin/attendance", icon: Clock,    label: "Attendance",       show: isAdmin },
+    { to: "/enterprise",   icon: Shield,       label: "Enterprise",       show: isAdmin,               locked: !hasEnterprise },
+    { to: "/admin/attendance", icon: Clock,    label: "Attendance",       show: isAdmin,               locked: !hasAttendance },
     { to: "/admin/users",  icon: Users,        label: "Admin Panel",      show: isAdmin },
-    { to: "/admin/migrations", icon: Hash,     label: "Migrations",       show: isAdmin },
+    { to: "/admin/migrations", icon: Hash,     label: "Migrations",       show: isAdmin,               locked: !hasMigrations },
   ].filter((i) => i.show);
 
   const tabClass = ({ isActive }) =>
@@ -116,7 +132,7 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
 
         {/* Nav grid */}
         <div className="grid grid-cols-3 gap-px p-4">
-          {moreItems.map(({ to, icon: Icon, label }) => (
+          {moreItems.map(({ to, icon: Icon, label, locked }) => (
             <NavLink
               key={to}
               to={to}
@@ -130,7 +146,14 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
                 )
               }
             >
-              <Icon size={22} />
+              <div className="relative">
+                <Icon size={22} />
+                {locked && (
+                  <span className="absolute -top-1 -right-2 rounded-full bg-[var(--surface)] p-0.5">
+                    <Lock size={10} />
+                  </span>
+                )}
+              </div>
               <span className="text-xs font-medium text-center leading-tight">{label}</span>
             </NavLink>
           ))}
@@ -156,12 +179,17 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
                    flex items-stretch"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {primaryTabs.map(({ to, icon: Icon, label, badge }) => (
+        {primaryTabs.map(({ to, icon: Icon, label, badge, locked }) => (
           <NavLink key={to} to={to} className={tabClass}>
             {({ isActive }) => (
               <>
                 <div className="relative">
                   <Icon size={22} strokeWidth={isActive ? 2.2 : 1.8} />
+                  {locked && (
+                    <span className="absolute -bottom-1 -right-1 rounded-full bg-[var(--surface)] p-0.5">
+                      <Lock size={9} />
+                    </span>
+                  )}
                   {badge > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1
                                      bg-red-500 text-white text-[10px] font-bold
