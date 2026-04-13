@@ -6,7 +6,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.proxima.app",
-  appName: "Proxima",
+  appName: "Asystence",
   webDir: "dist-mobile",
 
   server: {

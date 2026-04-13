@@ -93,7 +93,7 @@ export default function SuperadminSettings() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold theme-text">Platform Settings</h1>
-          <p className="text-xs theme-text-muted mt-0.5">Global configuration for Proxima</p>
+          <p className="text-xs theme-text-muted mt-0.5">Global configuration for Asystence</p>
         </div>
         <button
           onClick={handleSave}
@@ -110,7 +110,7 @@ export default function SuperadminSettings() {
       {/* General */}
       <Section icon={<Globe className="w-3.5 h-3.5 text-indigo-500" />} title="General">
         <Row label="Platform Name" sub="Displayed across the app and emails">
-          <span className="text-sm font-semibold theme-text">Proxima</span>
+          <span className="text-sm font-semibold theme-text">Asystence</span>
         </Row>
         <Row label="New Workspace Signups" sub="Allow new workspaces to register">
           <Toggle value={signupEnabled} onChange={setSignupEnabled} />

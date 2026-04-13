@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Proxima</string>
-    <string name="title_activity_main">Proxima</string>
+    <string name="app_name">Asystence</string>
+    <string name="title_activity_main">Asystence</string>
     <string name="package_name">com.proxima.app</string>
     <string name="custom_url_scheme">com.proxima.app</string>
 </resources>

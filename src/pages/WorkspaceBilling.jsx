@@ -301,7 +301,7 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
           order_id: order.orderId,
           amount:   order.amountPaise,
           currency: "INR",
-          name:     "Proxima",
+          name:     "Asystence",
           description: `Activate ${selected.length} user${selected.length > 1 ? "s" : ""} — ${cost.proRatedDays} days`,
           prefill:  { name: user?.username || "", email: user?.email || "" },
           notes:    { type: "user_activation" },
@@ -632,7 +632,7 @@ export default function WorkspaceBilling() {
         const options = {
           key:             data.keyId,
           subscription_id: data.subscriptionId,
-          name:            "Proxima",
+          name:            "Asystence",
           description:     `${data.planName} — ${interval === "yearly" ? "Yearly" : "Monthly"}`,
           image:           "/logo.png",
           currency:        "INR",
@@ -661,7 +661,7 @@ export default function WorkspaceBilling() {
               toast.success(
                 data.trialDays > 0
                   ? `🎉 ${data.trialDays}-day free trial started! Your ₹1 verification will be refunded within 3–5 days.`
-                  : `🎉 Subscribed to ${data.planName}! Welcome to Proxima.`,
+                  : `🎉 Subscribed to ${data.planName}! Welcome to Asystence.`,
                 { duration: 6000 }
               );
               await load();
@@ -881,7 +881,7 @@ export default function WorkspaceBilling() {
         </div>
         <p className="text-xs theme-text-muted mt-3 flex items-center gap-1.5">
           <Shield className="w-3.5 h-3.5 text-green-500" />
-          Payments are processed securely by Razorpay. Proxima never stores your card or bank details.
+          Payments are processed securely by Razorpay. Asystence never stores your card or bank details.
         </p>
       </div>
 

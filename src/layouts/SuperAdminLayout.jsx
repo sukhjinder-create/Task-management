@@ -2,7 +2,8 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import ThemeSwitcher from "../components/ThemeSwitcher";
-import { Building2, CreditCard, Settings, LogOut, Shield, LayoutList, Database } from "lucide-react";
+import { Building2, CreditCard, Settings, LogOut, LayoutList, Database } from "lucide-react";
+import AppBrand from "../components/AppBrand";
 
 function getSuperadminToken() {
   try {
@@ -47,14 +48,8 @@ export default function SuperAdminLayout() {
       <aside className="w-60 theme-surface border-r theme-border flex flex-col shrink-0">
 
         {/* Logo */}
-        <div className="h-16 px-5 border-b theme-border flex items-center gap-2.5 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
-            <Shield className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-bold theme-text leading-none">Proxima</p>
-            <p className="text-[10px] text-indigo-500 font-semibold tracking-wide mt-0.5">SUPERADMIN</p>
-          </div>
+        <div className="h-16 px-3 border-b theme-border flex items-center shrink-0">
+          <AppBrand className="w-full" />
         </div>
 
         {/* Nav */}
@@ -93,7 +88,7 @@ export default function SuperAdminLayout() {
       <main className="flex-1 theme-bg overflow-auto flex flex-col">
 
         {/* Topbar */}
-        <header className="h-14 theme-surface border-b theme-border px-6 flex items-center justify-between shrink-0">
+        <header className="h-16 theme-surface border-b theme-border px-6 flex items-center justify-between shrink-0">
           <p className="text-sm font-medium theme-text-muted">Platform Console</p>
           <ThemeSwitcher compact />
         </header>

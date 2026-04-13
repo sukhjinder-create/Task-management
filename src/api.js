@@ -119,7 +119,19 @@ api.interceptors.response.use(
     --------------------------------------------- */
     if (status === 401) {
       const lower = String(message).toLowerCase();
-      const isTokenFailure = lower.includes("expired") || lower.includes("invalid") || lower.includes("no token");
+      const reqUrl = String(err?.config?.url || "").toLowerCase();
+      const isAuthEndpoint =
+        reqUrl.includes("/auth/login") ||
+        reqUrl.includes("/auth/register") ||
+        reqUrl.includes("/auth/refresh") ||
+        reqUrl.includes("/auth/forgot") ||
+        reqUrl.includes("/auth/reset");
+      const isTokenFailure =
+        lower.includes("expired") ||
+        lower.includes("invalid") ||
+        lower.includes("no token") ||
+        lower.includes("unauthenticated") ||
+        (!isAuthEndpoint && lower.includes("unauthorized"));
 
       if (!isTokenFailure) {
         // Business-logic 401 (e.g. wrong password) — don't touch auth state

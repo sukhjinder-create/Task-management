@@ -2,8 +2,8 @@
 # Build config for Mac (.dmg) and Windows (.exe installer)
 
 appId: com.proxima.app
-productName: Proxima
-copyright: Copyright © 2026 Proxima
+productName: Asystence
+copyright: Copyright © 2026 Asystence
 
 # Built web assets
 directories:
@@ -34,7 +34,7 @@ mac:
       arch: [x64, arm64]
 
 dmg:
-  title: Proxima
+  title: Asystence
   icon: public/icon.icns
   contents:
     - x: 130
@@ -58,7 +58,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Proxima
+  shortcutName: Asystence
 
 # ─── Linux ───────────────────────────────────────────────────────────────────
 linux:

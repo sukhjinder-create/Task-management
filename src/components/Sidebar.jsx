@@ -32,6 +32,7 @@ import { getSocket, initSocket } from "../socket";
 import { subscribeToUnreadCount } from "../notificationBus";
 import { Avatar, Badge } from "./ui";
 import { cn } from "../utils/cn";
+import AppBrand from "./AppBrand";
 
 const COLLAPSED_KEY = "sidebarCollapsed";
 
@@ -145,19 +146,17 @@ export default function Sidebar({ collapsed, onToggle }) {
     >
       {/* ── Brand + toggle ──────────────────────────────── */}
       <div className={cn(
-        "h-16 border-b theme-border flex items-center shrink-0",
-        collapsed ? "justify-center px-2" : "px-4 justify-between"
+        "border-b theme-border flex items-center shrink-0",
+        collapsed ? "h-16 px-2 justify-between" : "h-16 px-3 gap-2"
       )}>
-        {!collapsed && (
-          <h1 className="text-xl font-bold theme-text truncate">Proxima</h1>
-        )}
+        <AppBrand collapsed={collapsed} className={cn("min-w-0", !collapsed && "flex-1")} />
         <button
           type="button"
           onClick={onToggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={cn(
             "p-1.5 rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted transition-colors shrink-0",
-            collapsed && "mx-auto"
+            !collapsed && "ml-auto"
           )}
         >
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}

@@ -51,7 +51,7 @@ function createWindow() {
     y:               state.y,
     minWidth:        900,
     minHeight:       600,
-    title:           "Proxima",
+    title:           "Asystence",
     titleBarStyle:   isMac ? "hiddenInset" : "default",
     backgroundColor: "#0f172a",
     show:            false, // show after ready-to-show to avoid flash
@@ -105,10 +105,10 @@ function createTray() {
   if (!icon) return;
 
   tray = new Tray(icon);
-  tray.setToolTip("Proxima");
+  tray.setToolTip("Asystence");
 
   const menu = Menu.buildFromTemplate([
-    { label: "Open Proxima", click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+    { label: "Open Asystence", click: () => { mainWindow?.show(); mainWindow?.focus(); } },
     { type: "separator" },
     { label: "Quit", click: () => app.quit() },
   ]);

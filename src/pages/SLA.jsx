@@ -47,7 +47,7 @@ export default function SLA() {
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
               <Shield className="w-4 h-4 text-white" />
             </div>
-            <span className="text-lg font-bold text-gray-900">Proxima</span>
+            <span className="text-lg font-bold text-gray-900">Asystence</span>
           </div>
           <Link to="/login" className="text-sm text-indigo-600 hover:underline font-medium">
             Sign in →
@@ -64,7 +64,7 @@ export default function SLA() {
           <p className="text-gray-500 text-sm">Effective date: April 1, 2026 · Last updated: March 27, 2026</p>
           <p className="mt-4 text-gray-600 leading-relaxed">
             This Service Level Agreement ("SLA") describes the uptime commitments, support response
-            times, data backup policies, and compensation terms Proxima provides to paying customers.
+            times, data backup policies, and compensation terms Asystence provides to paying customers.
           </p>
         </div>
 
@@ -83,7 +83,7 @@ export default function SLA() {
             ))}
           </div>
           <p className="text-gray-600 text-sm leading-relaxed">
-            Uptime is measured as the percentage of minutes in a calendar month during which the Proxima
+            Uptime is measured as the percentage of minutes in a calendar month during which the Asystence
             application API and web interface are available and responding to requests. Scheduled
             maintenance windows and incidents caused by customer actions are excluded from downtime
             calculations.
@@ -148,7 +148,7 @@ export default function SLA() {
             ))}
           </div>
           <p className="text-gray-600 text-sm leading-relaxed">
-            Proxima performs automated full database backups every day. Backups are compressed, encrypted,
+            Asystence performs automated full database backups every day. Backups are compressed, encrypted,
             and stored in geographically redundant object storage. In the event of a data loss incident,
             we guarantee a Recovery Point Objective (RPO) of 24 hours and a Recovery Time Objective
             (RTO) of 4 hours for Enterprise customers, and 12 hours for Professional customers.
@@ -194,7 +194,7 @@ export default function SLA() {
         </Section>
 
         <p className="text-xs text-gray-400 mt-8 text-center">
-          Proxima reserves the right to update this SLA with 30 days' notice. The current version always applies.
+          Asystence reserves the right to update this SLA with 30 days' notice. The current version always applies.
         </p>
       </main>
     </div>
