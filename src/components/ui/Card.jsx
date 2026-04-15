@@ -4,10 +4,10 @@ export function Card({ children, className, hover = false, clickable = false, ..
   return (
     <div
       className={cn(
-        'theme-surface rounded-xl shadow border theme-border',
+        'gradient-card rounded-xl shadow border theme-border',
         'transition-all duration-200',
-        hover && 'hover:shadow-md hover:-translate-y-0.5',
-        clickable && 'cursor-pointer hover:shadow-md hover:-translate-y-0.5',
+        hover && 'hover:shadow-md hover:-translate-y-0.5 hover:gradient-primary',
+        clickable && 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:gradient-primary',
         className
       )}
       {...props}
@@ -51,7 +51,7 @@ export function CardContent({ children, className, ...props }) {
 
 export function CardFooter({ children, className, ...props }) {
   return (
-    <div className={cn('px-6 py-4 border-t theme-border theme-surface-soft', className)} {...props}>
+    <div className={cn('px-6 py-4 border-t theme-border gradient-subtle', className)} {...props}>
       {children}
     </div>
   );

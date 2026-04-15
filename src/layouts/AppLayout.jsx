@@ -277,7 +277,7 @@ export default function AppLayout({ children }) {
         )}
       >
         {/* Enhanced Header */}
-        <header className="h-16 theme-surface border-b theme-border px-6 flex justify-between items-center">
+        <header className="h-16 gradient-sidebar border-b theme-border px-6 flex justify-between items-center">
           {/* Left side: User info and status */}
           <div className="flex items-center gap-4">
             {user && (
@@ -416,7 +416,7 @@ export default function AppLayout({ children }) {
           {isChatRoute ? (
             <Outlet />
           ) : (
-            <div className="min-h-full rounded-2xl border theme-border theme-surface shadow-lg p-3 md:p-4">
+            <div className="min-h-full rounded-2xl border theme-border gradient-card shadow-lg p-3 md:p-4">
               <Outlet />
             </div>
           )}

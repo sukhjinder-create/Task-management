@@ -322,8 +322,8 @@ const autonomousInsight = useMemo(() => {
       headline: "Execution Risk Detected",
       message: `${overdue} overdue task${overdue !== 1 ? "s" : ""} are accumulating with a High risk profile. ${inProgress} task${inProgress !== 1 ? "s" : ""} currently in progress. Immediate attention needed to prevent further delays.`,
       stats: [
-        { label: "Overdue", value: overdue, color: "text-red-600" },
-        { label: "In Progress", value: inProgress, color: "text-orange-500" },
+        { label: "Overdue", value: overdue, color: "text-[color:var(--overdue-text)]" },
+        { label: "In Progress", value: inProgress, color: "text-[color:var(--text-soft)]" },
         { label: "Completion Rate", value: `${completionRate}%`, color: "theme-text-muted" },
       ],
     };
@@ -336,8 +336,8 @@ const autonomousInsight = useMemo(() => {
       headline: "Overdue Tasks Need Attention",
       message: `${overdue} task${overdue !== 1 ? "s are" : " is"} past due (${overdueRate}% of total workload). ${inProgress} task${inProgress !== 1 ? "s are" : " is"} actively in progress. Address blockers to restore delivery momentum.`,
       stats: [
-        { label: "Overdue", value: overdue, color: "text-amber-600" },
-        { label: "In Progress", value: inProgress, color: "text-blue-600" },
+        { label: "Overdue", value: overdue, color: "text-[color:var(--overdue-text)]" },
+        { label: "In Progress", value: inProgress, color: "text-[color:var(--primary)]" },
         { label: "Completion Rate", value: `${completionRate}%`, color: "theme-text-muted" },
       ],
     };
@@ -350,9 +350,9 @@ const autonomousInsight = useMemo(() => {
       headline: "Performance Momentum Declining",
       message: `Completion velocity is trending downward. ${completed} task${completed !== 1 ? "s" : ""} completed so far with ${inProgress} currently in progress. Early intervention recommended.`,
       stats: [
-        { label: "Completed", value: completed, color: "text-green-600" },
-        { label: "In Progress", value: inProgress, color: "text-blue-600" },
-        { label: "Trend", value: "↓ Declining", color: "text-amber-600" },
+        { label: "Completed", value: completed, color: "text-[color:var(--text-soft)]" },
+        { label: "In Progress", value: inProgress, color: "text-[color:var(--primary)]" },
+        { label: "Trend", value: "↓ Declining", color: "text-[color:var(--overdue-text)]" },
       ],
     };
   }
@@ -364,9 +364,9 @@ const autonomousInsight = useMemo(() => {
       headline: "Strong Execution Momentum",
       message: `${completed} task${completed !== 1 ? "s" : ""} completed with ${overdue} overdue — execution is on track. ${inProgress} task${inProgress !== 1 ? "s" : ""} actively progressing.`,
       stats: [
-        { label: "Completed", value: completed, color: "text-green-600" },
-        { label: "In Progress", value: inProgress, color: "text-blue-600" },
-        { label: "Completion Rate", value: `${completionRate}%`, color: "text-green-600" },
+        { label: "Completed", value: completed, color: "text-[color:var(--text-soft)]" },
+        { label: "In Progress", value: inProgress, color: "text-[color:var(--primary)]" },
+        { label: "Completion Rate", value: `${completionRate}%`, color: "text-[color:var(--text-soft)]" },
       ],
     };
   }
@@ -378,8 +378,8 @@ const autonomousInsight = useMemo(() => {
     message: `${total} total task${total !== 1 ? "s" : ""} across ${totalProjects} project${totalProjects !== 1 ? "s" : ""}. ${inProgress} in progress, ${completed} completed, ${overdue} overdue.`,
     stats: [
       { label: "Total Tasks", value: total, color: "theme-text" },
-      { label: "In Progress", value: inProgress, color: "text-blue-600" },
-      { label: "Completed", value: completed, color: "text-green-600" },
+      { label: "In Progress", value: inProgress, color: "text-[color:var(--primary)]" },
+      { label: "Completed", value: completed, color: "text-[color:var(--text-soft)]" },
     ],
   };
 }, [myPerformance, overdueCount, intelligence, inProgressCount, completedCount, totalTasks, totalProjects]);
@@ -403,12 +403,12 @@ const autonomousInsight = useMemo(() => {
   }, [tasksForStats, dashboardOverview]);
 
   function getRiskLevel(score) {
-  if (score >= 75) return { label: "Low Risk", color: "text-emerald-600" };
-  if (score >= 50) return { label: "Medium Risk", color: "text-amber-600" };
-  return { label: "High Risk", color: "text-red-600" };
+  if (score >= 75) return { label: "Low Risk", color: "text-[color:var(--gradient-success-from)]" };
+  if (score >= 50) return { label: "Medium Risk", color: "text-[color:var(--gradient-from)]" };
+  return { label: "High Risk", color: "text-[color:var(--gradient-danger-from)]" };
 }
   return (
-  <div className="space-y-6 px-4 py-4 md:px-0 md:py-0">
+  <div className="space-y-6 px-4 py-4 md:px-0 md:py-0 gradient-bg">
 
 {/* ======================================
    AUTONOMOUS AI INSIGHT CARD
@@ -416,10 +416,10 @@ const autonomousInsight = useMemo(() => {
 
 {isAdmin && autonomousInsight && (
   <div className={`rounded-xl border p-4 ${
-    autonomousInsight.type === "critical" ? "bg-red-500/10 border-red-500/30" :
-    autonomousInsight.type === "warning"  ? "bg-amber-500/10 border-amber-500/30" :
-    autonomousInsight.type === "positive" ? "bg-emerald-500/10 border-emerald-500/30" :
-    "bg-blue-500/10 border-blue-500/20"
+    autonomousInsight.type === "critical" ? "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)]" :
+    autonomousInsight.type === "warning"  ? "bg-[color:var(--surface-strong)] border-[color:var(--border)]" :
+    autonomousInsight.type === "positive" ? "bg-[color:var(--surface-soft)] border-[color:var(--border)]" :
+    "bg-[color:var(--surface-soft)] border-[color:var(--border)]"
   }`}>
     <div className="flex items-start gap-3">
       <div className="text-xl mt-0.5">
@@ -431,10 +431,10 @@ const autonomousInsight = useMemo(() => {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className={`text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-            autonomousInsight.type === "critical" ? "bg-red-500/15 text-red-600" :
-            autonomousInsight.type === "warning"  ? "bg-amber-500/15 text-amber-600" :
-            autonomousInsight.type === "positive" ? "bg-emerald-500/15 text-emerald-600" :
-            "bg-blue-500/15 text-blue-600"
+            autonomousInsight.type === "critical" ? "bg-[color:var(--overdue-bg)] text-[color:var(--overdue-text)]" :
+            autonomousInsight.type === "warning"  ? "bg-[color:var(--surface-strong)] text-[color:var(--text-soft)]" :
+            autonomousInsight.type === "positive" ? "bg-[color:var(--surface-soft)] text-[color:var(--text-soft)]" :
+            "bg-[color:var(--surface-soft)] text-[color:var(--text-soft)]"
           }`}>AI Insight</span>
           <span className="text-sm font-semibold theme-text">{autonomousInsight.headline}</span>
         </div>
@@ -459,7 +459,7 @@ const autonomousInsight = useMemo(() => {
     EXECUTIVE INTELLIGENCE SUMMARY
 ================================ */}
 {false && isAdmin && dashboardOverview?.executiveSummary && (
-  <Card className="bg-gradient-to-r from-primary-600 to-primary-700 text-white border-primary-500">
+  <Card className="gradient-primary text-white border-primary-500">
     <Card.Content>
       <h2 className="text-lg font-semibold mb-3">
         Executive Intelligence Insight
@@ -577,15 +577,15 @@ const autonomousInsight = useMemo(() => {
 
   const getDimColor = (key, value) => {
     const isGoodHigh = dimMeta[key]?.good === "high";
-    if (isGoodHigh) return value >= 70 ? "bg-emerald-500" : value >= 40 ? "bg-amber-400" : "bg-red-400";
+    if (isGoodHigh) return value >= 70 ? "bg-[color:var(--gradient-success-from)]" : value >= 40 ? "bg-[color:var(--gradient-from)]" : "bg-[color:var(--gradient-danger-from)]";
     // good = low (workload stress)
-    return value <= 40 ? "bg-emerald-500" : value <= 70 ? "bg-amber-400" : "bg-red-400";
+    return value <= 40 ? "bg-[color:var(--gradient-success-from)]" : value <= 70 ? "bg-[color:var(--gradient-from)]" : "bg-[color:var(--gradient-danger-from)]";
   };
 
   const getDimTextColor = (key, value) => {
     const isGoodHigh = dimMeta[key]?.good === "high";
-    if (isGoodHigh) return value >= 70 ? "text-emerald-600" : value >= 40 ? "text-amber-600" : "text-red-600";
-    return value <= 40 ? "text-emerald-600" : value <= 70 ? "text-amber-600" : "text-red-600";
+    if (isGoodHigh) return value >= 70 ? "text-[color:var(--gradient-success-from)]" : value >= 40 ? "text-[color:var(--gradient-from)]" : "text-[color:var(--gradient-danger-from)]";
+    return value <= 40 ? "text-[color:var(--gradient-success-from)]" : value <= 70 ? "text-[color:var(--gradient-from)]" : "text-[color:var(--gradient-danger-from)]";
   };
 
   return (
@@ -602,19 +602,19 @@ const autonomousInsight = useMemo(() => {
           )}
         </div>
         <div className="text-right shrink-0">
-          <div className={`text-4xl font-bold ${score >= 75 ? "text-emerald-500" : score >= 50 ? "text-amber-500" : "text-red-500"}`}>
+          <div className={`text-4xl font-bold ${score >= 75 ? "text-[color:var(--gradient-success-from)]" : score >= 50 ? "text-[color:var(--gradient-from)]" : "text-[color:var(--gradient-danger-from)]"}`}>
             {score}
-            <span className="text-base font-normal theme-text-muted">/100</span>
+            <span className={`text-base font-normal ${score >= 75 ? "text-[color:var(--gradient-success-from)]" : score >= 50 ? "text-[color:var(--gradient-from)]" : "text-[color:var(--gradient-danger-from)]"}`}>/100</span>
           </div>
           {delta != null && (
-            <div className={`text-xs font-semibold mt-0.5 ${delta >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+            <div className={`text-xs font-semibold mt-0.5 ${delta >= 0 ? "text-[color:var(--gradient-success-from)]" : "text-[color:var(--gradient-danger-from)]"}`}>
               {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} vs last month
             </div>
           )}
           <div className={`text-xs font-bold mt-1 px-2 py-0.5 rounded-full inline-block ${
-            risk?.level === "High" ? "bg-red-500/15 text-red-500" :
-            risk?.level === "Medium" ? "bg-amber-500/15 text-amber-500" :
-            "bg-emerald-500/15 text-emerald-500"
+            risk?.level === "High" ? "bg-[color:var(--overdue-bg)] text-[color:var(--overdue-text)]" :
+            risk?.level === "Medium" ? "bg-[color:var(--surface-strong)] text-[color:var(--text-soft)]" :
+            "bg-[color:var(--surface-soft)] text-[color:var(--text-soft)]"
           }`}>
             {risk?.level || "—"} Risk
           </div>
@@ -624,7 +624,7 @@ const autonomousInsight = useMemo(() => {
       {/* SCORE BAR */}
       <div className="w-full bg-[var(--surface-soft)] rounded-full h-2.5">
         <div
-          className={`h-2.5 rounded-full transition-all duration-700 ${score >= 75 ? "bg-emerald-500" : score >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+          className={`h-2.5 rounded-full transition-all duration-700 ${score >= 75 ? "bg-[color:var(--gradient-success-from)]" : score >= 50 ? "bg-[color:var(--gradient-from)]" : "bg-[color:var(--gradient-danger-from)]"}`}
           style={{ width: `${Math.min(score, 100)}%` }}
         />
       </div>
@@ -640,11 +640,11 @@ const autonomousInsight = useMemo(() => {
                 <span className="theme-text-muted">30%</span>
               </div>
               <div className="w-full bg-[var(--surface-strong)] rounded-full h-1.5">
-                <div className={`h-1.5 rounded-full ${(breakdown.attendanceScore ?? 0) >= 70 ? "bg-emerald-500" : (breakdown.attendanceScore ?? 0) >= 40 ? "bg-amber-400" : "bg-red-400"}`}
+                <div className={`h-1.5 rounded-full ${(breakdown.attendanceScore ?? 0) >= 70 ? "bg-[color:var(--gradient-success-from)]" : (breakdown.attendanceScore ?? 0) >= 40 ? "bg-[color:var(--gradient-from)]" : "bg-[color:var(--gradient-danger-from)]"}`}
                   style={{ width: `${breakdown.attendanceScore ?? 0}%` }} />
               </div>
               {breakdown.hasAttendanceTracking === false && (
-                <div className="text-[9px] text-amber-500 mt-0.5">Attendance not tracked — neutral score applied</div>
+                <div className="text-[9px] text-warning-500 mt-0.5">Attendance not tracked — neutral score applied</div>
               )}
             </div>
             <div className="text-[10px] theme-text-muted shrink-0">+</div>
@@ -654,7 +654,7 @@ const autonomousInsight = useMemo(() => {
                 <span className="theme-text-muted">70%</span>
               </div>
               <div className="w-full bg-[var(--surface-strong)] rounded-full h-1.5">
-                <div className={`h-1.5 rounded-full ${(breakdown.productivityScore ?? 0) >= 70 ? "bg-emerald-500" : (breakdown.productivityScore ?? 0) >= 40 ? "bg-amber-400" : "bg-red-400"}`}
+                <div className={`h-1.5 rounded-full ${(breakdown.productivityScore ?? 0) >= 70 ? "bg-[color:var(--gradient-success-from)]" : (breakdown.productivityScore ?? 0) >= 40 ? "bg-[color:var(--gradient-from)]" : "bg-[color:var(--gradient-danger-from)]"}`}
                   style={{ width: `${breakdown.productivityScore ?? 0}%` }} />
               </div>
             </div>
@@ -666,9 +666,9 @@ const autonomousInsight = useMemo(() => {
       <div className="grid grid-cols-4 gap-2">
         {[
           { label: "My Tasks", value: myTotal, color: "theme-text", bg: "bg-[var(--surface-soft)] border-[var(--border)]" },
-          { label: "Completed", value: myCompleted, color: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/30" },
-          { label: "In Progress", value: myInProgress, color: "text-blue-500", bg: "bg-blue-500/10 border-blue-500/20" },
-          { label: "Overdue", value: myOverdue, color: myOverdue > 0 ? "text-red-500" : "theme-text-muted", bg: myOverdue > 0 ? "bg-red-500/10 border-red-500/30" : "bg-[var(--surface-soft)] border-[var(--border)]" },
+          { label: "Completed", value: myCompleted, color: "text-[color:var(--text-soft)]", bg: "bg-[color:var(--surface-soft)] border-[color:var(--border)]" },
+          { label: "In Progress", value: myInProgress, color: "text-[color:var(--primary)]", bg: "bg-[color:var(--primary)]/10 border-[color:var(--primary)]/20" },
+          { label: "Overdue", value: myOverdue, color: myOverdue > 0 ? "text-[color:var(--overdue-text)]" : "theme-text-muted", bg: myOverdue > 0 ? "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)]" : "bg-[var(--surface-soft)] border-[var(--border)]" },
         ].map(s => (
           <div key={s.label} className={`rounded-lg border p-3 text-center ${s.bg}`}>
             <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
@@ -681,9 +681,9 @@ const autonomousInsight = useMemo(() => {
       <div className="flex items-center gap-3">
         <span className="text-xs theme-text-muted w-28 shrink-0">Completion rate</span>
         <div className="flex-1 bg-[var(--surface-soft)] rounded-full h-2">
-          <div className="bg-emerald-500 h-2 rounded-full transition-all duration-700" style={{ width: `${myCompletionRate}%` }} />
+          <div className="bg-[color:var(--text-soft)] h-2 rounded-full transition-all duration-700" style={{ width: `${myCompletionRate}%` }} />
         </div>
-        <span className="text-xs font-bold text-emerald-600 w-8 text-right">{myCompletionRate}%</span>
+        <span className="text-xs font-bold text-[color:var(--text-soft)] w-8 text-right">{myCompletionRate}%</span>
       </div>
 
       {/* BEHAVIORAL DIMENSIONS */}
@@ -717,13 +717,13 @@ const autonomousInsight = useMemo(() => {
       {/* RISK + SIGNALS */}
       {risk && (
         <div className={`rounded-lg border p-3 flex items-start justify-between gap-3 ${
-          risk.level === "High" ? "bg-red-500/10 border-red-500/30" :
-          risk.level === "Medium" ? "bg-amber-500/10 border-amber-500/30" :
-          "bg-emerald-500/10 border-emerald-500/30"
+          risk.level === "High" ? "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)]" :
+          risk.level === "Medium" ? "bg-[color:var(--surface-strong)] border-[color:var(--border)]" :
+          "bg-[color:var(--surface-soft)] border-[color:var(--border)]"
         }`}>
           <div>
             <div className="text-xs font-semibold theme-text-muted mb-1">Performance Risk</div>
-            <div className={`text-2xl font-bold ${risk.level === "High" ? "text-red-500" : risk.level === "Medium" ? "text-amber-500" : "text-emerald-500"}`}>
+            <div className={`text-2xl font-bold ${risk.level === "High" ? "text-[color:var(--overdue-text)]" : risk.level === "Medium" ? "text-[color:var(--text-soft)]" : "text-[color:var(--text-soft)]"}`}>
               {Math.round(risk.probability)}%
             </div>
             <div className="text-xs theme-text-muted mt-0.5">probability of underperformance</div>
@@ -734,7 +734,7 @@ const autonomousInsight = useMemo(() => {
               <div className="flex flex-wrap gap-1.5">
                 {signals.map((s, i) => (
                   <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                    risk.level === "High" ? "bg-red-500/15 text-red-500" : "bg-amber-500/15 text-amber-500"
+                    risk.level === "High" ? "bg-[color:var(--overdue-bg)] text-[color:var(--overdue-text)]" : "bg-[color:var(--surface-strong)] text-[color:var(--text-soft)]"
                   }`}>{s}</span>
                 ))}
               </div>
@@ -775,9 +775,9 @@ const autonomousInsight = useMemo(() => {
               <div key={proj.project_id} className="flex items-center gap-3">
                 <span className="text-xs theme-text-muted w-32 truncate shrink-0">{proj.project_name || proj.projectName}</span>
                 <div className="flex-1 bg-[var(--surface-soft)] rounded-full h-2">
-                  <div className={`h-2 rounded-full ${proj.score >= 75 ? "bg-emerald-500" : proj.score >= 50 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${proj.score || 0}%` }} />
+                  <div className={`h-2 rounded-full ${proj.score >= 75 ? "bg-[color:var(--gradient-success-from)]" : proj.score >= 50 ? "bg-[color:var(--gradient-from)]" : "bg-[color:var(--gradient-danger-from)]"}`} style={{ width: `${proj.score || 0}%` }} />
                 </div>
-                <span className={`text-xs font-bold w-8 text-right ${proj.score >= 75 ? "text-emerald-600" : proj.score >= 50 ? "text-amber-500" : "text-red-500"}`}>{proj.score || 0}</span>
+                <span className={`text-xs font-bold w-8 text-right ${proj.score >= 75 ? "text-[color:var(--gradient-success-from)]" : proj.score >= 50 ? "text-[color:var(--gradient-from)]" : "text-[color:var(--gradient-danger-from)]"}`}>{proj.score || 0}</span>
               </div>
             ))}
           </div>
@@ -811,8 +811,8 @@ const autonomousInsight = useMemo(() => {
 {isAdmin && (() => {
   const monthLabel = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
   const avg = intelligence?.orgScore?.averageScore;
-  const scoreColor = avg == null ? "theme-text-muted" : avg >= 75 ? "text-emerald-500" : avg >= 50 ? "text-amber-500" : "text-red-500";
-  const scoreBg = avg == null ? "bg-[var(--surface-soft)] border-[var(--border)]" : avg >= 75 ? "bg-emerald-500/10 border-emerald-500/20" : avg >= 50 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
+  const scoreColor = avg == null ? "theme-text-muted" : avg >= 75 ? "text-[color:var(--gradient-success-from)]" : avg >= 50 ? "text-[color:var(--gradient-from)]" : "text-[color:var(--gradient-danger-from)]";
+  const scoreBg = avg == null ? "bg-[var(--surface-soft)] border-[var(--border)]" : avg >= 75 ? "bg-[color:var(--surface-soft)] border-[color:var(--border)]" : avg >= 50 ? "bg-[color:var(--surface-strong)] border-[color:var(--border)]" : "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)]";
 
   const taskTiles = [
     {
@@ -820,27 +820,27 @@ const autonomousInsight = useMemo(() => {
       value: overdueCount,
       sub: overdueCount > 5 ? "⚠ High pressure" : overdueCount > 0 ? "Needs attention" : "✓ All on track",
       icon: <AlertTriangle className="w-4 h-4" />,
-      valueClass: overdueCount > 5 ? "text-red-600" : overdueCount > 0 ? "text-amber-600" : "text-emerald-600",
-      bg: overdueCount > 5 ? "bg-red-500/10 border-red-500/30" : overdueCount > 0 ? "bg-amber-500/10 border-amber-500/30" : "bg-emerald-500/10 border-emerald-500/20",
-      iconBg: overdueCount > 5 ? "bg-red-500/15 text-red-500" : overdueCount > 0 ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500",
+      valueClass: overdueCount > 5 ? "text-[color:var(--overdue-text)]" : overdueCount > 0 ? "text-[color:var(--text-soft)]" : "text-[color:var(--text-soft)]",
+      bg: overdueCount > 5 ? "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)]" : overdueCount > 0 ? "bg-[color:var(--surface-strong)] border-[color:var(--border)]" : "bg-[color:var(--surface-soft)] border-[color:var(--border)]",
+      iconBg: overdueCount > 5 ? "bg-[color:var(--overdue-bg)] text-[color:var(--overdue-text)]" : overdueCount > 0 ? "bg-[color:var(--surface-strong)] text-[color:var(--text-soft)]" : "bg-[color:var(--surface-soft)] text-[color:var(--text-soft)]",
     },
     {
       label: "In Progress",
       value: inProgressCount,
       sub: `of ${totalTasks} total tasks`,
       icon: <Clock className="w-4 h-4" />,
-      valueClass: "text-blue-600",
-      bg: "bg-blue-500/10 border-blue-500/20",
-      iconBg: "bg-blue-500/15 text-blue-500",
+      valueClass: "text-[color:var(--primary)]",
+      bg: "bg-[color:var(--primary)]/10 border-[color:var(--primary)]/20",
+      iconBg: "bg-[color:var(--primary)]/15 text-[color:var(--primary)]",
     },
     {
       label: "Completed",
       value: completedCount,
       sub: totalTasks > 0 ? `${Math.round((completedCount / totalTasks) * 100)}% rate` : "No tasks yet",
       icon: <CheckSquare className="w-4 h-4" />,
-      valueClass: "text-emerald-600",
-      bg: "bg-emerald-500/10 border-emerald-500/20",
-      iconBg: "bg-emerald-500/15 text-emerald-500",
+      valueClass: "text-[color:var(--text-soft)]",
+      bg: "bg-[color:var(--surface-soft)] border-[color:var(--border)]",
+      iconBg: "bg-[color:var(--surface-soft)] text-[color:var(--text-soft)]",
     },
     {
       label: "Projects",
@@ -861,7 +861,7 @@ const autonomousInsight = useMemo(() => {
       icon: <BarChart2 className="w-4 h-4" />,
       valueClass: scoreColor,
       bg: scoreBg,
-      iconBg: avg == null ? "bg-[var(--surface-strong)] theme-text-muted" : avg >= 75 ? "bg-emerald-500/15 text-emerald-500" : avg >= 50 ? "bg-amber-500/15 text-amber-500" : "bg-red-500/15 text-red-500",
+      iconBg: avg == null ? "bg-[var(--surface-strong)] theme-text-muted" : avg >= 75 ? "bg-[color:var(--surface-soft)] text-[color:var(--text-soft)]" : avg >= 50 ? "bg-[color:var(--surface-strong)] text-[color:var(--text-soft)]" : "bg-[color:var(--overdue-bg)] text-[color:var(--overdue-text)]",
     },
     {
       label: "Total Members",
@@ -877,18 +877,18 @@ const autonomousInsight = useMemo(() => {
       value: intelligence.orgScore.highPerformers,
       sub: "score ≥ 80",
       icon: <TrendingUp className="w-4 h-4" />,
-      valueClass: "text-emerald-500",
-      bg: "bg-emerald-500/10 border-emerald-500/20",
-      iconBg: "bg-emerald-500/15 text-emerald-500",
+      valueClass: "text-[color:var(--text-soft)]",
+      bg: "bg-[color:var(--surface-soft)] border-[color:var(--border)]",
+      iconBg: "bg-[color:var(--surface-soft)] text-[color:var(--text-soft)]",
     },
     {
       label: "At Risk",
       value: intelligence.orgScore.atRiskUsers,
       sub: "need attention",
       icon: <AlertTriangle className="w-4 h-4" />,
-      valueClass: intelligence.orgScore.atRiskUsers > 0 ? "text-red-600" : "theme-text-muted",
-      bg: intelligence.orgScore.atRiskUsers > 0 ? "bg-red-500/10 border-red-500/20" : "bg-[var(--surface-soft)] border-[var(--border)]",
-      iconBg: intelligence.orgScore.atRiskUsers > 0 ? "bg-red-500/15 text-red-500" : "bg-[var(--surface-strong)] theme-text-muted",
+      valueClass: intelligence.orgScore.atRiskUsers > 0 ? "text-[color:var(--overdue-text)]" : "theme-text-muted",
+      bg: intelligence.orgScore.atRiskUsers > 0 ? "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)]" : "bg-[var(--surface-soft)] border-[var(--border)]",
+      iconBg: intelligence.orgScore.atRiskUsers > 0 ? "bg-[color:var(--overdue-bg)] text-[color:var(--overdue-text)]" : "bg-[var(--surface-strong)] theme-text-muted",
     },
   ] : [];
 
@@ -928,20 +928,20 @@ const autonomousInsight = useMemo(() => {
   );
 })()}
 
-{/* Top Performers */}
-{isAdmin && intelligence?.leaderboard?.length > 0 && (() => {
+      {/* Top Performers */}
+      {isAdmin && intelligence?.leaderboard?.length > 0 && (() => {
   const medals = ["🥇", "🥈", "🥉"];
   const rankColors = [
-    "bg-amber-500/10 border-amber-500/20 text-amber-500",
+    "bg-[color:var(--surface-strong)] border-[color:var(--border)] text-[color:var(--text-soft)]",
     "bg-[var(--surface-soft)] border-[var(--border)] theme-text-muted",
-    "bg-orange-500/10 border-orange-500/20 text-orange-500",
+    "bg-[color:var(--surface-strong)] border-[color:var(--border)] text-[color:var(--text-soft)]",
   ];
 
   return (
     <section className="theme-surface border theme-border rounded-xl p-5 flex flex-col">
       <div className="flex items-center gap-2 mb-4">
-        <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
-          <Trophy className="w-4 h-4 text-amber-500" />
+        <div className="w-7 h-7 rounded-lg bg-[color:var(--surface-strong)] flex items-center justify-center">
+          <Trophy className="w-4 h-4 text-[color:var(--text-soft)]" />
         </div>
         <div>
           <h2 className="text-sm font-semibold theme-text">Top Performers</h2>
@@ -952,8 +952,8 @@ const autonomousInsight = useMemo(() => {
       <div className="space-y-2 flex-1">
         {intelligence.leaderboard.map((u, index) => {
           const score = Number(u.score) || 0;
-          const scoreColor = score >= 75 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-500";
-          const barColor  = score >= 75 ? "bg-emerald-500" : score >= 50 ? "bg-amber-400" : "bg-red-400";
+          const scoreColor = score >= 75 ? "text-[color:var(--gradient-success-from)]" : score >= 50 ? "text-[color:var(--gradient-from)]" : "text-[color:var(--gradient-danger-from)]";
+          const barColor  = score >= 75 ? "bg-[color:var(--gradient-success-from)]" : score >= 50 ? "bg-[color:var(--gradient-from)]" : "bg-[color:var(--gradient-danger-from)]";
           const initials  = (u.username || "?").slice(0, 2).toUpperCase();
           const isTop3    = index < 3;
 
@@ -1044,14 +1044,14 @@ const autonomousInsight = useMemo(() => {
 
       <div>
         <div className="theme-text-muted">Trend Direction</div>
-        <div className="text-lg font-semibold text-emerald-500">
+        <div className="text-lg font-semibold text-success-500">
           {intelligence.forecast.trend}
         </div>
       </div>
 
       <div>
         <div className="theme-text-muted">Risk Projection</div>
-        <div className="text-lg font-semibold text-red-500">
+        <div className="text-lg font-semibold text-danger-500">
           {intelligence.forecast.riskProjection ?? "-"}
         </div>
       </div>
@@ -1115,10 +1115,10 @@ const autonomousInsight = useMemo(() => {
     healthScore === null
       ? "theme-text-muted"
       : healthScore > 75
-      ? "text-emerald-600"
+      ? "text-success-600"
       : healthScore > 50
-      ? "text-amber-600"
-      : "text-red-600"
+      ? "text-warning-600"
+      : "text-danger-600"
   }`}
 >
   {healthScore === null ? "Analyzing…" : `${Math.round(healthScore)}%`}
@@ -1174,7 +1174,7 @@ const autonomousInsight = useMemo(() => {
         </div>
         <div>
           <div className="theme-text-muted">Overdue</div>
-          <div className="text-lg font-semibold text-red-600">
+          <div className="text-lg font-semibold text-[color:var(--overdue-text)]">
             {overdueCount}
           </div>
         </div>
@@ -1187,7 +1187,7 @@ const autonomousInsight = useMemo(() => {
         <div className="theme-surface border theme-border rounded-xl p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-indigo-500" />
+              <CheckSquare className="w-4 h-4 text-[color:var(--primary)]" />
               <span className="text-sm font-semibold theme-text">My Tasks</span>
             </div>
             <Link
@@ -1206,21 +1206,21 @@ const autonomousInsight = useMemo(() => {
               to={isAdmin || isManager ? "/my-tasks?tab=mine" : "/my-tasks"}
               className={`rounded-lg border px-3 py-2.5 text-center block transition-colors ${
                 myOverdueTasks.length > 0
-                  ? "bg-red-500/10 border-red-500/25 hover:bg-red-500/15"
-                  : "bg-emerald-500/10 border-emerald-500/20"
+                  ? "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)] hover:bg-[color:var(--overdue-bg)]/80"
+                  : "bg-[color:var(--surface-soft)] border-[color:var(--border)]"
               }`}
             >
-              <div className={`text-2xl font-bold ${myOverdueTasks.length > 0 ? "text-red-500" : "text-emerald-500"}`}>
+              <div className={`text-2xl font-bold ${myOverdueTasks.length > 0 ? "text-[color:var(--overdue-text)]" : "text-[color:var(--text-soft)]"}`}>
                 {myOverdueTasks.length}
               </div>
-              <div className={`text-[10px] font-medium mt-0.5 ${myOverdueTasks.length > 0 ? "text-red-500" : "text-emerald-500"}`}>
+              <div className={`text-[10px] font-medium mt-0.5 ${myOverdueTasks.length > 0 ? "text-[color:var(--overdue-text)]" : "text-[color:var(--text-soft)]"}`}>
                 {myOverdueTasks.length > 0 ? "Overdue" : "All on time"}
               </div>
             </Link>
           </div>
           {myTasks.filter(t => t.status === "in-progress" || t.status === "in_progress").length > 0 && (
             <div className="flex items-center gap-2 text-xs theme-text-muted">
-              <Clock className="w-3 h-3 text-blue-400" />
+              <Clock className="w-3 h-3 text-[color:var(--primary)]" />
               <span>{myTasks.filter(t => t.status === "in-progress" || t.status === "in_progress").length} in progress</span>
             </div>
           )}
@@ -1229,9 +1229,9 @@ const autonomousInsight = useMemo(() => {
         {/* Role card */}
         <div className="theme-surface border theme-border rounded-xl p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            {isAdmin ? <Shield className="w-4 h-4 text-violet-500" /> : <Users className="w-4 h-4 text-violet-500" />}
+            {isAdmin ? <Shield className="w-4 h-4 text-[color:var(--primary)]" /> : <Users className="w-4 h-4 text-[color:var(--primary)]" />}
             <span className="text-sm font-semibold theme-text capitalize">{role} Access</span>
-            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-500 border border-violet-500/20 font-semibold capitalize">{role}</span>
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-[color:var(--primary)]/15 text-[color:var(--primary)] border border-[color:var(--primary)]/20 font-semibold capitalize">{role}</span>
           </div>
           <div className="space-y-1.5">
             {[
@@ -1243,10 +1243,10 @@ const autonomousInsight = useMemo(() => {
               <Link
                 key={item.to}
                 to={item.to}
-                className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--surface-soft)] transition-colors group"
+                className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[color:var(--surface-soft)] transition-colors group"
               >
                 <span className="text-xs theme-text-muted group-hover:theme-text">{item.label}</span>
-                <ChevronRight className="w-3 h-3 text-[var(--border)] group-hover:theme-text-muted" />
+                <ChevronRight className="w-3 h-3 text-[color:var(--border)] group-hover:theme-text-muted" />
               </Link>
             ))}
           </div>
@@ -1256,7 +1256,7 @@ const autonomousInsight = useMemo(() => {
         <div className="theme-surface border theme-border rounded-xl p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FolderKanban className="w-4 h-4 text-amber-500" />
+              <FolderKanban className="w-4 h-4 text-[color:var(--primary)]" />
               <span className="text-sm font-semibold theme-text">Projects</span>
             </div>
             <Link
@@ -1274,10 +1274,10 @@ const autonomousInsight = useMemo(() => {
                 <Link
                   key={p.id}
                   to={`/projects/${p.id}`}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--surface-soft)] transition-colors group"
+                  className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[color:var(--surface-soft)] transition-colors group"
                 >
                   <span className="text-xs font-medium theme-text truncate max-w-[150px]">{p.name}</span>
-                  <ChevronRight className="w-3 h-3 text-[var(--border)] group-hover:theme-text-muted shrink-0" />
+                  <ChevronRight className="w-3 h-3 text-[color:var(--border)] group-hover:theme-text-muted shrink-0" />
                 </Link>
               ))
             )}
@@ -1294,10 +1294,10 @@ const autonomousInsight = useMemo(() => {
       <section className="theme-surface rounded-xl border theme-border p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-500" />
+            <AlertTriangle className="w-4 h-4 text-[color:var(--overdue-text)]" />
             <h2 className="text-sm font-semibold theme-text">Overdue Tasks</h2>
             {topOverdue.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 border border-red-500/20 font-bold">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[color:var(--overdue-bg)] text-[color:var(--overdue-text)] border border-[color:var(--overdue-border)] font-bold">
                 {topOverdue.length}
               </span>
             )}
@@ -1316,10 +1316,10 @@ const autonomousInsight = useMemo(() => {
 
         {!loading && topOverdue.length === 0 && (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
-            <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center">
-              <CheckSquare className="w-5 h-5 text-emerald-500" />
+            <div className="w-10 h-10 rounded-full bg-[color:var(--surface-soft)] flex items-center justify-center">
+              <CheckSquare className="w-5 h-5 text-[color:var(--text-soft)]" />
             </div>
-            <p className="text-sm font-medium text-emerald-500">All tasks on track</p>
+            <p className="text-sm font-medium text-[color:var(--text-soft)]">All tasks on track</p>
             <p className="text-xs theme-text-muted">No overdue tasks in your scope</p>
           </div>
         )}
@@ -1335,32 +1335,32 @@ const autonomousInsight = useMemo(() => {
             const taskTitle = t.task || t.title;
 
             const card = (
-              <div className="flex items-start justify-between gap-3 border border-red-500/20 bg-red-500/10 hover:bg-red-500/15 transition-colors rounded-xl px-4 py-3 cursor-pointer group">
+              <div className="flex items-start justify-between gap-3 border border-[color:var(--overdue-border)] bg-[color:var(--overdue-bg)] hover:bg-[color:var(--overdue-bg)]/80 transition-colors rounded-xl px-4 py-3 cursor-pointer group">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className="mt-0.5 shrink-0 w-2 h-2 rounded-full bg-red-400 mt-1.5" />
+                  <div className="mt-0.5 shrink-0 w-2 h-2 rounded-full bg-[color:var(--overdue-text)] mt-1.5" />
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-red-500 truncate group-hover:opacity-80">
+                    <div className="text-sm font-semibold text-[color:var(--overdue-text)] truncate group-hover:opacity-80">
                       {taskTitle}
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="text-[10px] text-red-600 font-medium">
+                      <span className="text-[10px] text-[color:var(--overdue-text)] font-medium">
                         {projectName}
                       </span>
                       {priority && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                          priority === "high" ? "bg-red-500/15 text-red-500" :
-                          priority === "medium" ? "bg-amber-500/15 text-amber-500" :
-                          "bg-[var(--surface-soft)] theme-text-muted"
+                          priority === "high" ? "bg-[color:var(--overdue-bg)] text-[color:var(--overdue-text)]" :
+                          priority === "medium" ? "bg-[color:var(--surface-strong)] text-[color:var(--text-soft)]" :
+                          "bg-[color:var(--surface-soft)] theme-text-muted"
                         }`}>{priority}</span>
                       )}
                     </div>
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-xs font-bold text-red-500">
+                  <div className="text-xs font-bold text-[color:var(--overdue-text)]">
                     {daysOverdue !== null ? `${daysOverdue}d` : ""}
                   </div>
-                  <div className="text-[10px] text-red-500 mt-0.5">overdue</div>
+                  <div className="text-[10px] text-[color:var(--overdue-text)] mt-0.5">overdue</div>
                 </div>
               </div>
             );

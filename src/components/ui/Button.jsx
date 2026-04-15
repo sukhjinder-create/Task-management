@@ -4,12 +4,14 @@ import { Spinner } from './Spinner';
 
 const buttonVariants = {
   variant: {
-    primary: 'theme-primary shadow-sm',
+    primary: 'gradient-primary text-white shadow-sm hover:opacity-90 active:opacity-80',
+    premium: 'gradient-premium text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]',
     secondary: 'theme-surface-soft theme-text hover:opacity-90 border theme-border',
     ghost: 'bg-transparent hover:bg-[var(--surface-soft)] theme-text-muted',
-    danger: 'bg-danger-600 text-white hover:bg-danger-700 active:bg-danger-800 shadow-sm',
-    success: 'bg-success-600 text-white hover:bg-success-700 active:bg-success-800 shadow-sm',
+    danger: 'gradient-danger text-white shadow-sm hover:opacity-90 active:opacity-80',
+    success: 'gradient-success text-white shadow-sm hover:opacity-90 active:opacity-80',
     outline: 'bg-transparent border-2 theme-primary-outline hover:bg-[var(--surface-soft)]',
+    shimmer: 'gradient-shimmer text-white shadow-sm relative overflow-hidden',
   },
   size: {
     xs: 'px-2.5 py-1.5 text-xs rounded-md',

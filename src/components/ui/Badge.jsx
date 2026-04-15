@@ -8,29 +8,29 @@ const badgeVariants = {
   },
   color: {
     primary: {
-      solid: 'bg-primary-600 text-white',
+      solid: 'gradient-primary text-white',
       outline: 'border-primary-600 text-primary-600',
-      subtle: 'bg-primary-50 text-primary-700 border border-primary-200',
+      subtle: 'gradient-subtle text-primary-700 border border-primary-200',
     },
     success: {
-      solid: 'bg-success-600 text-white',
+      solid: 'gradient-success text-white',
       outline: 'border-success-600 text-success-600',
-      subtle: 'bg-success-50 text-success-700 border border-success-200',
+      subtle: 'gradient-subtle text-success-700 border border-success-200',
     },
     warning: {
-      solid: 'bg-warning-600 text-white',
+      solid: 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white',
       outline: 'border-warning-600 text-warning-600',
-      subtle: 'bg-warning-50 text-warning-700 border border-warning-200',
+      subtle: 'bg-gradient-to-r from-yellow-50 to-orange-50 text-warning-700 border border-warning-200',
     },
     danger: {
-      solid: 'bg-danger-600 text-white',
+      solid: 'gradient-danger text-white',
       outline: 'border-danger-600 text-danger-600',
-      subtle: 'bg-danger-50 text-danger-700 border border-danger-200',
+      subtle: 'gradient-subtle text-danger-700 border border-danger-200',
     },
     neutral: {
-      solid: 'bg-gray-600 text-white',
+      solid: 'bg-gradient-to-r from-gray-600 to-gray-700 text-white',
       outline: 'border-gray-600 text-gray-600',
-      subtle: 'bg-gray-50 text-gray-700 border border-gray-200',
+      subtle: 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border border-gray-200',
     },
   },
   size: {

@@ -23,6 +23,9 @@ import WorkspaceBilling from "./pages/WorkspaceBilling.jsx";
 import WorkspaceSearchMemory from "./pages/WorkspaceSearchMemory.jsx";
 import UserProfile from "./pages/UserProfile.jsx";
 
+// ---- Gradient Demo (Development) ----
+import { GradientDemo } from "./components/ui/GradientDemo";
+
 // ---- Intelligence pages (NEW) ----
 import UserPerformance from "./pages/intelligence/UserPerformance.jsx";
 import AdminIntelligence from "./pages/intelligence/AdminIntelligence.jsx";
@@ -86,6 +89,7 @@ export default function App() {
         <Route path="/auth/magic" element={<AuthCallback />} />
         <Route path="/superadmin/login" element={<SuperadminLogin />} />
         <Route path="/sla" element={<SLA />} />
+        <Route path="/gradient-demo" element={<GradientDemo />} />
 
         {/* ============================
             USER APP (PROTECTED)

@@ -48,9 +48,15 @@ function humanizeActionType(type) {
 }
 
 function StatusPill({ status }) {
-  const cls = { executed: "bg-green-100 text-green-700", rejected: "bg-red-100 text-red-700", auto_approved: "bg-purple-100 text-purple-700", approved: "bg-blue-100 text-blue-700", pending: "bg-yellow-100 text-yellow-700" };
+  const cls = { 
+    executed: "bg-[color:var(--gradient-success-from)]/20 text-[color:var(--gradient-success-from)]", 
+    rejected: "bg-[color:var(--gradient-danger-from)]/20 text-[color:var(--gradient-danger-from)]", 
+    auto_approved: "bg-[color:var(--gradient-from)]/20 text-[color:var(--gradient-from)]", 
+    approved: "bg-[color:var(--primary)]/20 text-[color:var(--primary)]", 
+    pending: "bg-[color:var(--gradient-from)]/20 text-[color:var(--gradient-from)]" 
+  };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls[status] || "bg-slate-100 text-slate-600"}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls[status] || "bg-[var(--surface-soft)] theme-text-muted"}`}>
       {status === "auto_approved" ? "auto-approved" : status}
     </span>
   );
@@ -78,13 +84,13 @@ function StandupMarkdown({ content }) {
     const line = raw.trimEnd();
     if (/^# (.+)/.test(line)) elements.push(<h1 key={key++} className="text-sm font-bold theme-text mt-1 mb-1">{renderInline(line.replace(/^# /, ""))}</h1>);
     else if (/^## (.+)/.test(line)) elements.push(<h2 key={key++} className="text-xs font-bold theme-text mt-3 mb-1 border-b theme-border pb-0.5">{renderInline(line.replace(/^## /, ""))}</h2>);
-    else if (/^> (.+)/.test(line)) elements.push(<div key={key++} className="text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 my-1 border-l-2 border-indigo-300">{renderInline(line.replace(/^> /, ""))}</div>);
+    else if (/^> (.+)/.test(line)) elements.push(<div key={key++} className="text-xs text-[color:var(--primary)] bg-[color:var(--primary)]/10 rounded px-2 py-1 my-1 border-l-2 border-[color:var(--primary)]/30">{renderInline(line.replace(/^> /, ""))}</div>);
     else if (/^---+$/.test(line)) elements.push(<hr key={key++} className="border-[var(--border)] my-2" />);
     else if (/^[\-•] (.+)/.test(line)) {
       const text = line.replace(/^[\-•] /, "");
       const isBlocked = text.includes("⚠") || text.toLowerCase().includes("overdue");
       const isGood = text.includes("✅");
-      elements.push(<div key={key++} className={`flex gap-2 text-xs py-0.5 pl-1 ${isBlocked ? "text-red-700" : isGood ? "text-green-700" : "theme-text"}`}><span className="theme-text-muted mt-0.5 shrink-0">•</span><span>{renderInline(text)}</span></div>);
+      elements.push(<div key={key++} className={`flex gap-2 text-xs py-0.5 pl-1 ${isBlocked ? "text-[color:var(--gradient-danger-from)]" : isGood ? "text-[color:var(--gradient-success-from)]" : "theme-text"}`}><span className="theme-text-muted mt-0.5 shrink-0">•</span><span>{renderInline(text)}</span></div>);
     } else if (line.trim() === "") elements.push(<div key={key++} className="h-1" />);
     else elements.push(<p key={key++} className="text-xs theme-text py-0.5">{renderInline(line)}</p>);
   }
@@ -258,7 +264,7 @@ export default function Autopilot() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[color:var(--gradient-from)]"></div>
       </div>
     );
   }
@@ -281,7 +287,7 @@ export default function Autopilot() {
       <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-blue-600">
+            <div className="p-2 rounded-lg gradient-primary">
               <Bot className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -290,12 +296,12 @@ export default function Autopilot() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${settings?.enabled ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${settings?.enabled ? "bg-[color:var(--gradient-success-from)]/20 text-[color:var(--gradient-success-from)]" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
               {settings?.enabled ? "Active" : "Disabled"}
             </span>
             <button
               onClick={() => toggleAutopilot(!settings?.enabled)}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${settings?.enabled ? "bg-red-100 text-red-700 active:bg-red-200" : "bg-primary-600 text-white active:bg-primary-700"}`}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${settings?.enabled ? "bg-[color:var(--gradient-danger-from)]/20 text-[color:var(--gradient-danger-from)] active:bg-[color:var(--gradient-danger-from)]/30" : "bg-[color:var(--gradient-from)] text-white active:bg-[color:var(--gradient-to)]"}`}
             >
               {settings?.enabled ? "Disable" : "Enable"}
             </button>
@@ -309,7 +315,7 @@ export default function Autopilot() {
             <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
               {RANGE_OPTIONS.map(({ key, label }) => (
                 <button key={key} onClick={() => setStatsRange(key)}
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${statsRange === key ? "bg-primary-600 text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
+                  className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${statsRange === key ? "bg-[color:var(--gradient-from)] text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
                   {label}
                 </button>
               ))}
@@ -336,7 +342,7 @@ export default function Autopilot() {
         <div className="flex gap-1 mt-3">
           {TABS.map(({ key, label }) => (
             <button key={key} onClick={() => setActiveTab(key)}
-              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === key ? "bg-primary-600 text-white" : "theme-text-muted bg-[var(--surface-soft)]"}`}>
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === key ? "bg-[color:var(--gradient-from)] text-white" : "theme-text-muted bg-[var(--surface-soft)]"}`}>
               {label}
             </button>
           ))}
@@ -360,18 +366,18 @@ export default function Autopilot() {
                   { key: "create_standup", label: `Standup (${actionTypeCounts.create_standup})` },
                 ].map(({ key, label }) => (
                   <button key={key} onClick={() => setActionFilter(key)}
-                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${actionFilter === key ? "bg-primary-600 text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${actionFilter === key ? "bg-[color:var(--gradient-from)] text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
                     {label}
                   </button>
                 ))}
               </div>
               <div className="flex gap-2">
                 <button onClick={approveVisibleActions} disabled={bulkApproving || filteredActions.length === 0}
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold active:bg-emerald-700 disabled:opacity-50">
+                  className="flex-1 py-2.5 rounded-xl bg-[color:var(--gradient-success-from)] text-white text-xs font-semibold active:bg-[color:var(--gradient-success-to)] disabled:opacity-50">
                   {bulkApproving ? "Approving…" : `Approve All (${filteredActions.length})`}
                 </button>
                 <button onClick={runAnalysis} disabled={runningAnalysis || !settings?.enabled}
-                  className="flex-1 py-2.5 rounded-xl bg-primary-600 text-white text-xs font-semibold active:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                  className="flex-1 py-2.5 rounded-xl bg-[color:var(--gradient-from)] text-white text-xs font-semibold active:bg-[color:var(--gradient-to)] disabled:opacity-50 flex items-center justify-center gap-1.5">
                   {runningAnalysis ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Running…</> : <><Play className="w-3.5 h-3.5" />Run Analysis</>}
                 </button>
               </div>
@@ -494,7 +500,13 @@ export default function Autopilot() {
 }
 
 function MiniStat({ label, value, color, icon: Icon }) {
-  const cls = { yellow: "bg-yellow-50 text-yellow-700", green: "bg-green-50 text-green-700", red: "bg-red-50 text-red-700", purple: "bg-purple-50 text-purple-700", blue: "bg-blue-50 text-blue-700" };
+  const cls = { 
+    yellow: "bg-[color:var(--gradient-from)]/20 text-[color:var(--gradient-from)]", 
+    green: "bg-[color:var(--gradient-success-from)]/20 text-[color:var(--gradient-success-from)]", 
+    red: "bg-[color:var(--gradient-danger-from)]/20 text-[color:var(--gradient-danger-from)]", 
+    purple: "bg-[color:var(--primary)]/20 text-[color:var(--primary)]", 
+    blue: "bg-[color:var(--primary)]/20 text-[color:var(--primary)]" 
+  };
   return (
     <div className={`rounded-xl p-2.5 flex items-center gap-2 ${cls[color]}`}>
       <Icon className="w-4 h-4 shrink-0" />
@@ -511,7 +523,7 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
 
   const actionIcons = { reassign: UserCheck, adjust_deadline: CalendarClock, escalate: AlertTriangle, create_standup: FileText };
   const actionLabels = { reassign: "Auto-Assignment", adjust_deadline: "Deadline Adjustment", escalate: "Escalation", create_standup: "Daily Standup" };
-  const confidenceColor = (s) => s >= 0.8 ? "text-green-600" : s >= 0.6 ? "text-yellow-600" : "text-red-600";
+  const confidenceColor = (s) => s >= 0.8 ? "text-[color:var(--gradient-success-from)]" : s >= 0.6 ? "text-[color:var(--gradient-from)]" : "text-[color:var(--gradient-danger-from)]";
   const Icon = actionIcons[action.action_type] || Bot;
   const isStandup = action.action_type === "create_standup";
   const cs = action.current_state || {};
@@ -521,15 +533,15 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
     <div className={`theme-surface border rounded-2xl overflow-hidden ${isStandup ? "border-blue-200" : "theme-border"}`}>
       {/* Header */}
       <div className="flex items-center gap-3 p-4">
-        <div className={`shrink-0 p-2 rounded-xl ${isStandup ? "bg-blue-100" : "bg-[var(--surface-soft)]"}`}>
-          <Icon className={`w-5 h-5 ${isStandup ? "text-blue-600" : "theme-text"}`} />
+        <div className={`shrink-0 p-2 rounded-xl ${isStandup ? "bg-[color:var(--primary)]/20" : "bg-[var(--surface-soft)]"}`}>
+          <Icon className={`w-5 h-5 ${isStandup ? "text-[color:var(--primary)]" : "theme-text"}`} />
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold theme-text text-sm leading-tight">
             {isStandup ? `Standup — ${pc.project_name || cs.project_name || "Project"}` : (actionLabels[action.action_type] || action.action_type)}
           </p>
           {action.task_title && <p className="text-xs theme-text-muted truncate">{action.task_title}</p>}
-          {isStandup && <p className="text-xs text-blue-600">→ #daily-standups</p>}
+          {isStandup && <p className="text-xs text-[color:var(--primary)]">→ #daily-standups</p>}
         </div>
         <span className={`shrink-0 text-xs font-semibold ${confidenceColor(action.confidence_score)}`}>
           {Math.round(action.confidence_score * 100)}%
@@ -539,10 +551,10 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
       {/* Standup stats */}
       {isStandup && (
         <div className="px-4 pb-2 flex gap-2 flex-wrap">
-          {cs.sprint_name && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Sprint: {cs.sprint_name}</span>}
-          {cs.status_changes != null && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{cs.status_changes} moves</span>}
-          {cs.stuck_tasks > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">{cs.stuck_tasks} stuck</span>}
-          {cs.overdue_count > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{cs.overdue_count} overdue</span>}
+          {cs.sprint_name && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[color:var(--primary)]/20 text-[color:var(--primary)]">Sprint: {cs.sprint_name}</span>}
+          {cs.status_changes != null && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[color:var(--primary)]/20 text-[color:var(--primary)]">{cs.status_changes} moves</span>}
+          {cs.stuck_tasks > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[color:var(--gradient-from)]/20 text-[color:var(--gradient-from)]">{cs.stuck_tasks} stuck</span>}
+          {cs.overdue_count > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[color:var(--gradient-danger-from)]/20 text-[color:var(--gradient-danger-from)]">{cs.overdue_count} overdue</span>}
         </div>
       )}
 
@@ -554,7 +566,7 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
       {/* Expand toggle */}
       <div className="px-4 pb-3">
         <button onClick={() => setExpanded(!expanded)}
-          className="inline-flex items-center gap-1 text-xs text-primary-600 font-semibold active:opacity-70">
+          className="inline-flex items-center gap-1 text-xs text-[color:var(--gradient-from)] font-semibold active:opacity-70">
           {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           {isStandup ? (expanded ? "Hide" : "Preview") + " content" : (expanded ? "Hide" : "Show") + " details"}
         </button>
@@ -581,7 +593,7 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
       {/* Action buttons */}
       <div className="flex items-center border-t theme-border px-3 py-2 gap-1">
         <button onClick={onApprove} disabled={processing}
-          className={`flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-white text-xs font-semibold active:opacity-80 disabled:opacity-50 ${isStandup ? "bg-blue-600" : "bg-emerald-600"}`}>
+          className={`flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-white text-xs font-semibold active:opacity-80 disabled:opacity-50 ${isStandup ? "bg-[color:var(--primary)]" : "bg-[color:var(--gradient-success-from)]"}`}>
           <Check className="w-3.5 h-3.5" />
           {processing ? (isStandup ? "Posting…" : "Processing…") : (isStandup ? "Post" : "Approve")}
         </button>
@@ -661,7 +673,7 @@ function SettingsPanel({ settings, onSave, apiClient }) {
       </div>
 
       <button onClick={handleSave} disabled={saving}
-        className="w-full py-3 rounded-2xl bg-primary-600 text-white font-semibold text-sm active:bg-primary-700 disabled:opacity-50">
+        className="w-full py-3 rounded-2xl bg-[color:var(--gradient-from)] text-white font-semibold text-sm active:bg-[color:var(--gradient-to)] disabled:opacity-50">
         {saving ? "Saving…" : "Save Settings"}
       </button>
     </div>

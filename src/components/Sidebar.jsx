@@ -139,7 +139,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   return (
     <div
       className={cn(
-        "theme-surface border-r theme-border fixed inset-y-0 left-0 flex flex-col overflow-hidden z-40",
+        "gradient-sidebar border-r theme-border fixed inset-y-0 left-0 flex flex-col overflow-hidden z-40",
         "transition-[width] duration-200 ease-in-out",
         collapsed ? "w-16" : "w-60"
       )}

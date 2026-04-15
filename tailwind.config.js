@@ -129,6 +129,13 @@ export default {
         '700': '700ms',
         '1000': '1000ms',
       },
+      // Gradient definitions for enhanced aesthetics
+      backgroundImage: {
+        'gradient-primary': 'linear-gradient(135deg, var(--gradient-from) 0%, var(--gradient-to) 100%)',
+        'gradient-subtle': 'linear-gradient(135deg, var(--gradient-subtle-from) 0%, var(--gradient-subtle-to) 100%)',
+        'gradient-card': 'linear-gradient(135deg, var(--gradient-card-from) 0%, var(--gradient-card-to) 100%)',
+        'gradient-sidebar': 'linear-gradient(180deg, var(--gradient-sidebar-from) 0%, var(--gradient-sidebar-to) 100%)',
+      },
     },
   },
   plugins: [],

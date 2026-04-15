@@ -183,8 +183,22 @@
   --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 16%, var(--surface));
   --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
   --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
-  --sidebar-toggle-off: var(--surface-strong);
-}
+   --sidebar-toggle-off: var(--surface-strong);
+    /* Gradient variables for light theme */
+    --gradient-from: #4f46e5;
+    --gradient-to: #8b5cf6;
+    --gradient-subtle-from: #f0f4ff;
+    --gradient-subtle-to: #e0e7ff;
+    --gradient-card-from: #ffffff;
+    --gradient-card-to: #f8fafc;
+    --gradient-sidebar-from: #f8fafc;
+    --gradient-sidebar-to: #f1f5f9;
+    /* Danger and success gradients for light theme */
+    --gradient-danger-from: #dc2626;
+    --gradient-danger-to: #ef4444;
+    --gradient-success-from: #16a34a;
+    --gradient-success-to: #22c55e;
+ }
 
 /* ─────────────────────────────────────────────────────────
    SYSTEM — CSS-native adaptive (no JS re-render needed)
@@ -223,6 +237,20 @@
     --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
     --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
     --sidebar-toggle-off: var(--surface-strong);
+    /* Gradient variables for system dark theme */
+    --gradient-from: #8b94ff;
+    --gradient-to: #a78bfa;
+    --gradient-subtle-from: #1a2742;
+    --gradient-subtle-to: #24365a;
+    --gradient-card-from: #111a2e;
+    --gradient-card-to: #1a2742;
+    --gradient-sidebar-from: #0b1020;
+    --gradient-sidebar-to: #111a2e;
+    /* Danger and success gradients for system dark theme */
+    --gradient-danger-from: #f87171;
+    --gradient-danger-to: #ef4444;
+    --gradient-success-from: #4ade80;
+    --gradient-success-to: #22c55e;
   }
 }
 
@@ -261,6 +289,20 @@ html[data-theme="dark"] {
   --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
   --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
   --sidebar-toggle-off: var(--surface-strong);
+  /* Gradient variables for dark theme */
+  --gradient-from: #a78bfa;
+  --gradient-to: #c4b5fd;
+  --gradient-subtle-from: #27272a;
+  --gradient-subtle-to: #3f3f46;
+  --gradient-card-from: #18181b;
+  --gradient-card-to: #27272a;
+  --gradient-sidebar-from: #0c0c0e;
+  --gradient-sidebar-to: #18181b;
+  /* Danger and success gradients for dark theme */
+  --gradient-danger-from: #f87171;
+  --gradient-danger-to: #ef4444;
+  --gradient-success-from: #4ade80;
+  --gradient-success-to: #22c55e;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -296,6 +338,20 @@ html[data-theme="ocean"] {
   --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
   --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
   --sidebar-toggle-off: var(--surface-strong);
+  /* Gradient variables for ocean theme */
+  --gradient-from: #0284c7;
+  --gradient-to: #0ea5e9;
+  --gradient-subtle-from: #e0f2fe;
+  --gradient-subtle-to: #bae6fd;
+  --gradient-card-from: #ffffff;
+  --gradient-card-to: #f0f9ff;
+  --gradient-sidebar-from: #f0f9ff;
+  --gradient-sidebar-to: #e0f2fe;
+  /* Danger and success gradients for ocean theme */
+  --gradient-danger-from: #dc2626;
+  --gradient-danger-to: #ef4444;
+  --gradient-success-from: #16a34a;
+  --gradient-success-to: #22c55e;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -331,27 +387,41 @@ html[data-theme="forest"] {
   --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
   --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
   --sidebar-toggle-off: var(--surface-strong);
+  /* Gradient variables for forest theme */
+  --gradient-from: #15803d;
+  --gradient-to: #16a34a;
+  --gradient-subtle-from: #e8f5ec;
+  --gradient-subtle-to: #cfe9d9;
+  --gradient-card-from: #ffffff;
+  --gradient-card-to: #f4fbf6;
+  --gradient-sidebar-from: #f4fbf6;
+  --gradient-sidebar-to: #e8f5ec;
+  /* Danger and success gradients for forest theme */
+  --gradient-danger-from: #dc2626;
+  --gradient-danger-to: #ef4444;
+  --gradient-success-from: #16a34a;
+  --gradient-success-to: #22c55e;
 }
 
 /* ─────────────────────────────────────────────────────────
-   SUNSET — warm orange/copper
+   SUNSET — warm, muted sunset tones (less vibrant)
 ───────────────────────────────────────────────────────── */
 html[data-theme="sunset"] {
-  --app-bg: #fff7ed;
+  --app-bg: #fef8f3;
   --surface: #ffffff;
-  --surface-soft: #ffedd5;
-  --surface-strong: #fed7aa;
-  --border: #fed7aa;
-  --text: #7c2d12;
-  --text-muted: #9a3412;
-  --text-soft: #c2410c;
-  --primary: #ea580c;
+  --surface-soft: #fef0e6;
+  --surface-strong: #fce0cc;
+  --border: #fce0cc;
+  --text: #5a2a0d;
+  --text-muted: #7c3a0e;
+  --text-soft: #a85507;
+  --primary: #c46205;
   --primary-contrast: #ffffff;
-  --ring: rgba(234, 88, 12, 0.28);
-  --overdue-bg: #fff1f2;
-  --overdue-border: #fda4af;
-  --overdue-text: #9f1239;
-  --overdue-soft: #be123c;
+  --ring: rgba(196, 98, 5, 0.18);
+  --overdue-bg: #fff5f5;
+  --overdue-border: #fecaca;
+  --overdue-text: #991b1b;
+  --overdue-soft: #b91c1c;
   --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
   --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
   --sidebar-text: var(--text-soft);
@@ -366,31 +436,42 @@ html[data-theme="sunset"] {
   --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
   --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
   --sidebar-toggle-off: var(--surface-strong);
+  /* Gradient variables for sunset theme - softer, more harmonious */
+  --gradient-from: #d97706;
+  --gradient-to: #f59e0b;
+  --gradient-subtle-from: #fce7d3;
+  --gradient-subtle-to: #f8d4b5;
+  --gradient-card-from: #ffffff;
+  --gradient-card-to: #fef6ee;
+  --gradient-sidebar-from: #fef6ee;
+  --gradient-sidebar-to: #fce7d3;
+  /* Danger and success gradients for sunset theme */
+  --gradient-danger-from: #dc2626;
+  --gradient-danger-to: #ef4444;
+  --gradient-success-from: #16a34a;
+  --gradient-success-to: #22c55e;
 }
 
 /* ─────────────────────────────────────────────────────────
-   YELLOW — golden amber, distinct from sunset
-   Key differences vs sunset:
-     · text is near-black warm (not red-brown)
-     · borders and surfaces are pure yellow (not orange-peach)
-     · primary is deep gold, not orange
+   YELLOW — soft golden tones (less vibrant, more harmonious)
+   Muted yellow theme with better color harmony
 ───────────────────────────────────────────────────────── */
 html[data-theme="yellow"] {
-  --app-bg: #fffbeb;
-  --surface: #fffef5;
-  --surface-soft: #fef9c3;
-  --surface-strong: #fef08a;
-  --border: #fde047;
-  --text: #1c1200;
-  --text-muted: #3d2c00;
-  --text-soft: #7c5a00;
-  --primary: #ca8a04;
+  --app-bg: #fefce8;
+  --surface: #fffef7;
+  --surface-soft: #fef9c8;
+  --surface-strong: #fef08e;
+  --border: #fde68a;
+  --text: #292524;
+  --text-muted: #57534e;
+  --text-soft: #854d0e;
+  --primary: #b45309;
   --primary-contrast: #ffffff;
-  --ring: rgba(202, 138, 4, 0.28);
-  --overdue-bg: #fff1f2;
-  --overdue-border: #fda4af;
-  --overdue-text: #9f1239;
-  --overdue-soft: #be123c;
+  --ring: rgba(180, 83, 9, 0.18);
+  --overdue-bg: #fff5f5;
+  --overdue-border: #fecaca;
+  --overdue-text: #991b1b;
+  --overdue-soft: #b91c1c;
   --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
   --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
   --sidebar-text: var(--text-soft);
@@ -405,6 +486,20 @@ html[data-theme="yellow"] {
   --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
   --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
   --sidebar-toggle-off: var(--surface-strong);
+  /* Gradient variables for yellow theme - softer, more harmonious */
+  --gradient-from: #d97706;
+  --gradient-to: #f59e0b;
+  --gradient-subtle-from: #fef9c8;
+  --gradient-subtle-to: #fef08e;
+  --gradient-card-from: #fffef7;
+  --gradient-card-to: #fefce8;
+  --gradient-sidebar-from: #fefce8;
+  --gradient-sidebar-to: #fef9c8;
+  /* Danger and success gradients for yellow theme */
+  --gradient-danger-from: #dc2626;
+  --gradient-danger-to: #ef4444;
+  --gradient-success-from: #16a34a;
+  --gradient-success-to: #22c55e;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -516,6 +611,116 @@ html[data-theme="yellow"] {
   .theme-placeholder::placeholder {
     color: var(--text-soft);
     opacity: 1;
+  }
+
+  /* Gradient utility classes */
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--gradient-from) 0%, color-mix(in srgb, var(--gradient-from) 70%, var(--gradient-to) 30%) 50%, var(--gradient-to) 100%);
+  }
+
+  .gradient-subtle {
+    background: linear-gradient(135deg, var(--gradient-subtle-from) 0%, color-mix(in srgb, var(--gradient-subtle-from) 60%, var(--gradient-subtle-to) 40%) 50%, var(--gradient-subtle-to) 100%);
+  }
+
+  .gradient-card {
+    background: linear-gradient(180deg, var(--gradient-card-from) 0%, color-mix(in srgb, var(--gradient-card-from) 80%, var(--gradient-card-to) 20%) 30%, color-mix(in srgb, var(--gradient-card-from) 40%, var(--gradient-card-to) 60%) 70%, var(--gradient-card-to) 100%);
+  }
+
+  .gradient-sidebar {
+    background: linear-gradient(180deg, var(--gradient-sidebar-from) 0%, color-mix(in srgb, var(--gradient-sidebar-from) 70%, var(--gradient-sidebar-to) 30%) 40%, color-mix(in srgb, var(--gradient-sidebar-from) 30%, var(--gradient-sidebar-to) 70%) 80%, var(--gradient-sidebar-to) 100%);
+  }
+
+  .gradient-danger {
+    background: linear-gradient(135deg, var(--gradient-danger-from) 0%, color-mix(in srgb, var(--gradient-danger-from) 70%, var(--gradient-danger-to) 30%) 50%, var(--gradient-danger-to) 100%);
+  }
+
+  .gradient-success {
+    background: linear-gradient(135deg, var(--gradient-success-from) 0%, color-mix(in srgb, var(--gradient-success-from) 70%, var(--gradient-success-to) 30%) 50%, var(--gradient-success-to) 100%);
+  }
+
+  .gradient-border {
+    border-image: linear-gradient(135deg, var(--gradient-from), var(--gradient-to)) 1;
+  }
+
+  /* Premium gradient variants */
+  .gradient-premium {
+    background: linear-gradient(135deg, 
+      var(--gradient-from) 0%, 
+      color-mix(in srgb, var(--gradient-from) 80%, white 20%) 25%,
+      color-mix(in srgb, var(--gradient-from) 50%, var(--gradient-to) 50%) 50%,
+      color-mix(in srgb, var(--gradient-to) 80%, white 20%) 75%,
+      var(--gradient-to) 100%
+    );
+  }
+
+  .gradient-shimmer {
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      color-mix(in srgb, var(--gradient-from) 20%, transparent 80%) 25%,
+      color-mix(in srgb, var(--gradient-from) 40%, transparent 60%) 50%,
+      color-mix(in srgb, var(--gradient-from) 20%, transparent 80%) 75%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  .gradient-radial {
+    background: radial-gradient(circle at 50% 0%, 
+      color-mix(in srgb, var(--gradient-from) 30%, transparent 70%) 0%,
+      color-mix(in srgb, var(--gradient-from) 10%, transparent 90%) 50%,
+      transparent 100%
+    );
+  }
+
+  .gradient-overlay {
+    position: relative;
+  }
+
+  .gradient-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, 
+      transparent 0%,
+      color-mix(in srgb, var(--gradient-from) 15%, transparent 85%) 50%,
+      transparent 100%
+    );
+    pointer-events: none;
+    border-radius: inherit;
+    z-index: 1;
+  }
+
+  /* Gradient animations */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .gradient-hover:hover {
+    background: linear-gradient(135deg, 
+      var(--gradient-from) 0%, 
+      color-mix(in srgb, var(--gradient-from) 70%, white 30%) 33%,
+      color-mix(in srgb, var(--gradient-from) 40%, var(--gradient-to) 60%) 66%,
+      var(--gradient-to) 100%
+    );
+    transition: background 0.3s ease;
+  }
+
+  /* Enhanced gradient borders */
+  .gradient-border-premium {
+    position: relative;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .gradient-border-premium::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(135deg, var(--gradient-from), var(--gradient-to));
+    border-radius: inherit;
+    z-index: -1;
   }
 }
 
