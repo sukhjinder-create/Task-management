@@ -323,7 +323,7 @@ export default function AppLayout({ children }) {
                               variant="secondary"
                               size="sm"
                               loading={awsLoading}
-                              className="bg-warning-50 text-warning-700 border-warning-200 hover:bg-warning-100"
+                              className="bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)] border-[color:var(--score-warning-border)] hover:opacity-90"
                             >
                               AWS
                             </Button>
@@ -358,7 +358,7 @@ export default function AppLayout({ children }) {
                       loading={lunchLoading}
                       variant="secondary"
                       size="sm"
-                      className="bg-warning-50 text-warning-700 border-warning-200 hover:bg-warning-100"
+                      className="bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)] border-[color:var(--score-warning-border)] hover:opacity-90"
                     >
                       Lunch
                     </Button>
@@ -394,10 +394,10 @@ export default function AppLayout({ children }) {
         {(onTrial || trialExpired) && (
           <div className={`px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 ${
             trialExpired
-              ? "bg-red-500 text-white"
+              ? "bg-[color:var(--score-danger)] text-white"
               : trialDaysLeft <= 2
-                ? "bg-amber-500 text-white"
-                : "bg-indigo-500 text-white"
+                ? "bg-[color:var(--score-warning)] text-white"
+                : "bg-[color:var(--primary)] text-[color:var(--primary-contrast)]"
           }`}>
             {trialExpired
               ? "⚠️ Your free trial has expired. Contact your administrator to upgrade the workspace plan."
@@ -416,7 +416,7 @@ export default function AppLayout({ children }) {
           {isChatRoute ? (
             <Outlet />
           ) : (
-            <div className="min-h-full rounded-2xl border theme-border gradient-card shadow-lg p-3 md:p-4">
+            <div className="min-h-full rounded-lg border app-content-shell p-3 md:p-4">
               <Outlet />
             </div>
           )}

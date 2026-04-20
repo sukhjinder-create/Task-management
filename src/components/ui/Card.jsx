@@ -4,7 +4,7 @@ export function Card({ children, className, hover = false, clickable = false, ..
   return (
     <div
       className={cn(
-        'gradient-card rounded-xl shadow border theme-border',
+        'gradient-card rounded-lg shadow border theme-border overflow-hidden',
         'transition-all duration-200',
         hover && 'hover:shadow-md hover:-translate-y-0.5 hover:gradient-primary',
         clickable && 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:gradient-primary',

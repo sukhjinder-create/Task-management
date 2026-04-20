@@ -14,18 +14,18 @@ const badgeVariants = {
     },
     success: {
       solid: 'gradient-success text-white',
-      outline: 'border-success-600 text-success-600',
-      subtle: 'gradient-subtle text-success-700 border border-success-200',
+      outline: 'border-[color:var(--score-good)] text-[color:var(--score-good)]',
+      subtle: 'bg-[color:var(--score-good-bg)] text-[color:var(--score-good)] border border-[color:var(--score-good-border)]',
     },
     warning: {
-      solid: 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white',
-      outline: 'border-warning-600 text-warning-600',
-      subtle: 'bg-gradient-to-r from-yellow-50 to-orange-50 text-warning-700 border border-warning-200',
+      solid: 'bg-[color:var(--score-warning)] text-white',
+      outline: 'border-[color:var(--score-warning)] text-[color:var(--score-warning)]',
+      subtle: 'bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)] border border-[color:var(--score-warning-border)]',
     },
     danger: {
       solid: 'gradient-danger text-white',
-      outline: 'border-danger-600 text-danger-600',
-      subtle: 'gradient-subtle text-danger-700 border border-danger-200',
+      outline: 'border-[color:var(--score-danger)] text-[color:var(--score-danger)]',
+      subtle: 'bg-[color:var(--score-danger-bg)] text-[color:var(--score-danger)] border border-[color:var(--score-danger-border)]',
     },
     neutral: {
       solid: 'bg-gradient-to-r from-gray-600 to-gray-700 text-white',

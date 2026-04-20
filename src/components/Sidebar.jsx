@@ -139,7 +139,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   return (
     <div
       className={cn(
-        "gradient-sidebar border-r theme-border fixed inset-y-0 left-0 flex flex-col overflow-hidden z-40",
+        "app-sidebar gradient-sidebar border-r theme-border fixed inset-y-0 left-0 flex flex-col overflow-hidden z-40",
         "transition-[width] duration-200 ease-in-out",
         collapsed ? "w-16" : "w-60"
       )}
@@ -176,7 +176,7 @@ export default function Sidebar({ collapsed, onToggle }) {
               )}
               {/* Dot badge in collapsed mode */}
               {badge > 0 && collapsed && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-[color:var(--score-danger)] rounded-full" />
               )}
             </div>
             {!collapsed && (

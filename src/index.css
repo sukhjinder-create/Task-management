@@ -166,10 +166,22 @@
   --primary: #4f46e5;
   --primary-contrast: #ffffff;
   --ring: rgba(79, 70, 229, 0.25);
-  --overdue-bg: #fef2f2;
-  --overdue-border: #fecaca;
-  --overdue-text: #b91c1c;
-  --overdue-soft: #7f1d1d;
+  --score-good: #059669;
+  --score-good-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-good-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --score-warning: #d97706;
+  --score-warning-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --score-warning-border: color-mix(in srgb, var(--primary) 20%, var(--border));
+  --score-danger: #dc2626;
+  --score-danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --danger-text: var(--score-danger);
+  --danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --overdue-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-text: var(--score-danger);
+  --overdue-soft: var(--score-danger);
   --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
   --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
   --sidebar-text: var(--text-soft);
@@ -219,10 +231,18 @@
     --primary: #8b94ff;
     --primary-contrast: #0b1020;
     --ring: rgba(124, 131, 255, 0.35);
-    --overdue-bg: #2a1a27;
-    --overdue-border: #6b2f4d;
-    --overdue-text: #fecdd3;
-    --overdue-soft: #fda4af;
+    --score-good-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+    --score-good-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+    --score-warning-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+    --score-warning-border: color-mix(in srgb, var(--primary) 20%, var(--border));
+    --score-danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+    --score-danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+    --danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+    --danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+    --overdue-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+    --overdue-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+    --overdue-text: var(--score-danger);
+    --overdue-soft: var(--score-danger);
     --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
     --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
     --sidebar-text: var(--text-soft);
@@ -271,10 +291,18 @@ html[data-theme="dark"] {
   --primary: #a78bfa;
   --primary-contrast: #0c0c0e;
   --ring: rgba(167, 139, 250, 0.35);
-  --overdue-bg: #200a14;
-  --overdue-border: #6b1f3f;
-  --overdue-text: #fecdd3;
-  --overdue-soft: #fda4af;
+  --score-good-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-good-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --score-warning-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --score-warning-border: color-mix(in srgb, var(--primary) 20%, var(--border));
+  --score-danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --overdue-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-text: var(--score-danger);
+  --overdue-soft: var(--score-danger);
   --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
   --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
   --sidebar-text: var(--text-soft);
@@ -306,53 +334,60 @@ html[data-theme="dark"] {
 }
 
 /* ─────────────────────────────────────────────────────────
-   OCEAN
+   OCEAN — clean white base, ocean blue accent only
 ───────────────────────────────────────────────────────── */
 html[data-theme="ocean"] {
-  --app-bg: #f0f9ff;
+  --app-bg: #f8fbfe;
   --surface: #ffffff;
-  --surface-soft: #e0f2fe;
-  --surface-strong: #bae6fd;
-  --border: #bae6fd;
-  --text: #0c4a6e;
-  --text-muted: #075985;
+  --surface-soft: #f0f6fc;
+  --surface-strong: #ddeaf6;
+  --border: #c8ddef;
+  --text: #0f2840;
+  --text-muted: #3a5f7a;
   --text-soft: #0284c7;
   --primary: #0284c7;
   --primary-contrast: #ffffff;
-  --ring: rgba(2, 132, 199, 0.28);
-  --overdue-bg: #fff3f3;
-  --overdue-border: #fecaca;
-  --overdue-text: #9f1239;
-  --overdue-soft: #be123c;
-  --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
-  --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
+  --ring: rgba(2, 132, 199, 0.22);
+  --score-good-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-good-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --score-warning-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --score-warning-border: color-mix(in srgb, var(--primary) 20%, var(--border));
+  --score-danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --overdue-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-text: var(--score-danger);
+  --overdue-soft: var(--score-danger);
+  --sidebar-bg: color-mix(in srgb, var(--surface) 92%, var(--app-bg));
+  --sidebar-border: color-mix(in srgb, var(--border) 70%, transparent);
   --sidebar-text: var(--text-soft);
   --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text);
-  --sidebar-hover: color-mix(in srgb, var(--primary) 10%, var(--surface));
-  --sidebar-active: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  --sidebar-hover: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  --sidebar-active: color-mix(in srgb, var(--primary) 14%, var(--surface));
   --sidebar-badge: var(--primary);
   --sidebar-badge-text: var(--primary-contrast);
-  --sidebar-icon-bg: color-mix(in srgb, var(--primary) 8%, var(--surface));
-  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 16%, var(--surface));
-  --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
-  --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
+  --sidebar-icon-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  --sidebar-input-bg: color-mix(in srgb, var(--surface) 90%, var(--surface-soft));
+  --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 60%, var(--surface));
   --sidebar-toggle-off: var(--surface-strong);
-  /* Gradient variables for ocean theme */
   --gradient-from: #0284c7;
   --gradient-to: #0ea5e9;
-  --gradient-subtle-from: #e0f2fe;
-  --gradient-subtle-to: #bae6fd;
+  --gradient-subtle-from: #f0f6fc;
+  --gradient-subtle-to: #ddeaf6;
   --gradient-card-from: #ffffff;
-  --gradient-card-to: #f0f9ff;
-  --gradient-sidebar-from: #f0f9ff;
-  --gradient-sidebar-to: #e0f2fe;
-  /* Danger and success gradients for ocean theme */
+  --gradient-card-to: #f8fbfe;
+  --gradient-sidebar-from: #f8fbfe;
+  --gradient-sidebar-to: #f0f6fc;
   --gradient-danger-from: #dc2626;
   --gradient-danger-to: #ef4444;
   --gradient-success-from: #16a34a;
   --gradient-success-to: #22c55e;
 }
+
 
 /* ─────────────────────────────────────────────────────────
    FOREST
@@ -369,10 +404,18 @@ html[data-theme="forest"] {
   --primary: #15803d;
   --primary-contrast: #ffffff;
   --ring: rgba(21, 128, 61, 0.28);
-  --overdue-bg: #fff4f4;
-  --overdue-border: #fca5a5;
-  --overdue-text: #9f1239;
-  --overdue-soft: #be123c;
+  --score-good-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-good-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --score-warning-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --score-warning-border: color-mix(in srgb, var(--primary) 20%, var(--border));
+  --score-danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --overdue-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-text: var(--score-danger);
+  --overdue-soft: var(--score-danger);
   --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
   --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
   --sidebar-text: var(--text-soft);
@@ -418,10 +461,18 @@ html[data-theme="sunset"] {
   --primary: #c46205;
   --primary-contrast: #ffffff;
   --ring: rgba(196, 98, 5, 0.18);
-  --overdue-bg: #fff5f5;
-  --overdue-border: #fecaca;
-  --overdue-text: #991b1b;
-  --overdue-soft: #b91c1c;
+  --score-good-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-good-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --score-warning-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --score-warning-border: color-mix(in srgb, var(--primary) 20%, var(--border));
+  --score-danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --overdue-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-text: var(--score-danger);
+  --overdue-soft: var(--score-danger);
   --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
   --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
   --sidebar-text: var(--text-soft);
@@ -453,49 +504,54 @@ html[data-theme="sunset"] {
 }
 
 /* ─────────────────────────────────────────────────────────
-   YELLOW — soft golden tones (less vibrant, more harmonious)
-   Muted yellow theme with better color harmony
+   YELLOW — cream / ivory palette, warm golden accent
 ───────────────────────────────────────────────────────── */
 html[data-theme="yellow"] {
-  --app-bg: #fefce8;
-  --surface: #fffef7;
-  --surface-soft: #fef9c8;
-  --surface-strong: #fef08e;
-  --border: #fde68a;
-  --text: #292524;
-  --text-muted: #57534e;
-  --text-soft: #854d0e;
-  --primary: #b45309;
+  --app-bg: #fefdf0;
+  --surface: #ffffff;
+  --surface-soft: #fef9d6;
+  --surface-strong: #faeeb0;
+  --border: #edd888;
+  --text: #2d2106;
+  --text-muted: #5a4a20;
+  --text-soft: #a08a00;
+  --primary: #d4b400;
   --primary-contrast: #ffffff;
-  --ring: rgba(180, 83, 9, 0.18);
-  --overdue-bg: #fff5f5;
-  --overdue-border: #fecaca;
-  --overdue-text: #991b1b;
-  --overdue-soft: #b91c1c;
+  --ring: rgba(212, 180, 0, 0.24);
+  --score-good-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-good-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --score-warning-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --score-warning-border: color-mix(in srgb, var(--primary) 20%, var(--border));
+  --score-danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --score-danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --danger-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-bg: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  --overdue-border: color-mix(in srgb, var(--primary) 26%, var(--border));
+  --overdue-text: var(--score-danger);
+  --overdue-soft: var(--score-danger);
   --sidebar-bg: color-mix(in srgb, var(--surface) 90%, var(--app-bg));
-  --sidebar-border: color-mix(in srgb, var(--border) 88%, transparent);
+  --sidebar-border: color-mix(in srgb, var(--border) 70%, transparent);
   --sidebar-text: var(--text-soft);
   --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text);
-  --sidebar-hover: color-mix(in srgb, var(--primary) 10%, var(--surface));
-  --sidebar-active: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  --sidebar-hover: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  --sidebar-active: color-mix(in srgb, var(--primary) 14%, var(--surface));
   --sidebar-badge: var(--primary);
   --sidebar-badge-text: var(--primary-contrast);
-  --sidebar-icon-bg: color-mix(in srgb, var(--primary) 8%, var(--surface));
-  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 16%, var(--surface));
-  --sidebar-input-bg: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
-  --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
+  --sidebar-icon-bg: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  --sidebar-input-bg: color-mix(in srgb, var(--surface) 88%, var(--surface-soft));
+  --sidebar-footer-bg: color-mix(in srgb, var(--surface-soft) 60%, var(--surface));
   --sidebar-toggle-off: var(--surface-strong);
-  /* Gradient variables for yellow theme - softer, more harmonious */
-  --gradient-from: #d97706;
-  --gradient-to: #f59e0b;
-  --gradient-subtle-from: #fef9c8;
-  --gradient-subtle-to: #fef08e;
-  --gradient-card-from: #fffef7;
-  --gradient-card-to: #fefce8;
-  --gradient-sidebar-from: #fefce8;
-  --gradient-sidebar-to: #fef9c8;
-  /* Danger and success gradients for yellow theme */
+  --gradient-from: #d4b400;
+  --gradient-to: #f0cc20;
+  --gradient-subtle-from: #fef9d6;
+  --gradient-subtle-to: #faeeb0;
+  --gradient-card-from: #ffffff;
+  --gradient-card-to: #fefdf0;
+  --gradient-sidebar-from: #fefdf0;
+  --gradient-sidebar-to: #fef9d6;
   --gradient-danger-from: #dc2626;
   --gradient-danger-to: #ef4444;
   --gradient-success-from: #16a34a;
@@ -600,6 +656,30 @@ html[data-theme="yellow"] {
     color: var(--overdue-soft);
   }
 
+  .score-good-text {
+    color: var(--score-good);
+  }
+
+  .score-warning-text {
+    color: var(--score-warning);
+  }
+
+  .score-danger-text {
+    color: var(--score-danger);
+  }
+
+  .score-good-bg {
+    background-color: var(--score-good);
+  }
+
+  .score-warning-bg {
+    background-color: var(--score-warning);
+  }
+
+  .score-danger-bg {
+    background-color: var(--score-danger);
+  }
+
   /* Active sidebar / nav link — adapts to every theme automatically */
   .nav-link-active {
     background-color: color-mix(in srgb, var(--primary) 12%, var(--surface));
@@ -614,28 +694,91 @@ html[data-theme="yellow"] {
   }
 
   /* Gradient utility classes */
+  .gradient-bg {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--gradient-from) 13%, transparent) 0%, transparent 34%),
+      linear-gradient(315deg, color-mix(in srgb, var(--gradient-to) 12%, transparent) 0%, transparent 38%),
+      linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 88%, var(--gradient-from) 12%) 0%, var(--app-bg) 52%, color-mix(in srgb, var(--app-bg) 86%, var(--gradient-to) 14%) 100%);
+  }
+
   .gradient-primary {
-    background: linear-gradient(135deg, var(--gradient-from) 0%, color-mix(in srgb, var(--gradient-from) 70%, var(--gradient-to) 30%) 50%, var(--gradient-to) 100%);
+    background: linear-gradient(135deg, var(--gradient-from) 0%, color-mix(in srgb, var(--gradient-from) 52%, var(--gradient-to) 48%) 42%, var(--gradient-to) 74%, color-mix(in srgb, var(--gradient-to) 78%, white 22%) 100%);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--gradient-from) 22%, transparent);
   }
 
   .gradient-subtle {
-    background: linear-gradient(135deg, var(--gradient-subtle-from) 0%, color-mix(in srgb, var(--gradient-subtle-from) 60%, var(--gradient-subtle-to) 40%) 50%, var(--gradient-subtle-to) 100%);
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--gradient-from) 12%, var(--gradient-subtle-from)) 0%, color-mix(in srgb, var(--gradient-subtle-from) 48%, var(--gradient-subtle-to) 52%) 52%, color-mix(in srgb, var(--gradient-to) 14%, var(--gradient-subtle-to)) 100%);
   }
 
   .gradient-card {
-    background: linear-gradient(180deg, var(--gradient-card-from) 0%, color-mix(in srgb, var(--gradient-card-from) 80%, var(--gradient-card-to) 20%) 30%, color-mix(in srgb, var(--gradient-card-from) 40%, var(--gradient-card-to) 60%) 70%, var(--gradient-card-to) 100%);
+    background:
+      linear-gradient(145deg, color-mix(in srgb, var(--gradient-from) 9%, var(--gradient-card-from)) 0%, var(--gradient-card-from) 46%, color-mix(in srgb, var(--gradient-to) 12%, var(--gradient-card-to)) 100%);
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--gradient-from) 9%, transparent), 0 1px 0 color-mix(in srgb, white 55%, transparent) inset;
   }
 
   .gradient-sidebar {
-    background: linear-gradient(180deg, var(--gradient-sidebar-from) 0%, color-mix(in srgb, var(--gradient-sidebar-from) 70%, var(--gradient-sidebar-to) 30%) 40%, color-mix(in srgb, var(--gradient-sidebar-from) 30%, var(--gradient-sidebar-to) 70%) 80%, var(--gradient-sidebar-to) 100%);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--gradient-from) 10%, var(--gradient-sidebar-from)) 0%, color-mix(in srgb, var(--gradient-sidebar-from) 45%, var(--gradient-sidebar-to) 55%) 58%, color-mix(in srgb, var(--gradient-to) 12%, var(--gradient-sidebar-to)) 100%);
+  }
+
+  .app-sidebar {
+    border-right-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+    box-shadow: 10px 0 28px color-mix(in srgb, var(--primary) 13%, transparent);
+  }
+
+  .app-content-shell {
+    background:
+      linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, var(--gradient-from) 6%) 0%, var(--surface) 48%, color-mix(in srgb, var(--surface) 92%, var(--gradient-to) 8%) 100%);
+    border-color: color-mix(in srgb, var(--primary) 16%, var(--border));
+    box-shadow: 0 18px 42px color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  .dashboard-card {
+    background:
+      linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, var(--gradient-from) 6%) 0%, var(--surface) 54%, color-mix(in srgb, var(--surface) 92%, var(--gradient-to) 8%) 100%);
+    border-color: color-mix(in srgb, var(--primary) 14%, var(--border));
+    box-shadow: 0 14px 34px color-mix(in srgb, var(--primary) 9%, transparent), 0 1px 0 color-mix(in srgb, white 48%, transparent) inset;
+    overflow: hidden;
+  }
+
+  .dashboard-danger-card {
+    position: relative;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--primary) 12%, var(--surface)) 0%, color-mix(in srgb, var(--primary) 6%, var(--surface)) 50%, var(--surface) 100%);
+    border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+    box-shadow: 0 14px 34px color-mix(in srgb, var(--primary) 10%, transparent);
+    overflow: hidden;
+  }
+
+  .dashboard-danger-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 8px;
+    background: var(--score-danger);
+  }
+
+  .dashboard-executive-card {
+    position: relative;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--surface) 90%, var(--gradient-from) 10%) 0%, var(--surface) 48%, color-mix(in srgb, var(--surface) 88%, var(--gradient-to) 12%) 100%);
+    border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+  }
+
+  .dashboard-performance-card {
+    background:
+      linear-gradient(145deg, color-mix(in srgb, var(--primary) 8%, var(--surface)) 0%, var(--surface) 42%, color-mix(in srgb, var(--primary) 6%, var(--surface)) 100%);
   }
 
   .gradient-danger {
-    background: linear-gradient(135deg, var(--gradient-danger-from) 0%, color-mix(in srgb, var(--gradient-danger-from) 70%, var(--gradient-danger-to) 30%) 50%, var(--gradient-danger-to) 100%);
+    background: linear-gradient(135deg, var(--score-danger) 0%, color-mix(in srgb, var(--score-danger) 74%, #fb7185 26%) 48%, #ef4444 100%);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--score-danger) 22%, transparent);
   }
 
   .gradient-success {
-    background: linear-gradient(135deg, var(--gradient-success-from) 0%, color-mix(in srgb, var(--gradient-success-from) 70%, var(--gradient-success-to) 30%) 50%, var(--gradient-success-to) 100%);
+    background: linear-gradient(135deg, var(--score-good) 0%, color-mix(in srgb, var(--score-good) 72%, #34d399 28%) 48%, #22c55e 100%);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--score-good) 20%, transparent);
   }
 
   .gradient-border {
@@ -651,6 +794,7 @@ html[data-theme="yellow"] {
       color-mix(in srgb, var(--gradient-to) 80%, white 20%) 75%,
       var(--gradient-to) 100%
     );
+    box-shadow: 0 18px 42px color-mix(in srgb, var(--gradient-to) 24%, transparent);
   }
 
   .gradient-shimmer {
@@ -907,4 +1051,33 @@ html[data-theme="yellow"] {
   html[data-theme="yellow"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
     border-color: var(--border) !important;
   }
+}
+
+/* ─────────────────────────────────────────────────────────
+   CARD & SHELL RADIUS — outside @layer to override Tailwind
+   utilities (rounded-lg etc.) for softer, consistent corners
+───────────────────────────────────────────────────────── */
+.dashboard-card,
+.dashboard-danger-card,
+.dashboard-executive-card,
+.dashboard-performance-card {
+  border-radius: 1rem !important;
+  overflow: clip !important;
+}
+
+.dashboard-danger-card::before {
+  border-top-left-radius: 1rem;
+  border-bottom-left-radius: 1rem;
+}
+
+.app-content-shell {
+  border-radius: 1.5rem !important;
+  overflow: clip !important;
+}
+
+/* Modal / panel footers — ensure they inherit parent radius */
+.theme-dialog-panel > :last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+  overflow: hidden;
 }
