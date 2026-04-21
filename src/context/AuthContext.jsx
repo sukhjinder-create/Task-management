@@ -21,19 +21,27 @@ export function AuthProvider({ children }) {
       const urlToken = params.get("_t");
       const urlUser = params.get("_u");
 
-      if (urlToken && urlUser) {
-        const user = JSON.parse(decodeURIComponent(urlUser));
-        const authData = { token: urlToken, user, refreshToken: null };
-        localStorage.setItem("auth", JSON.stringify(authData));
+      if (urlToken) {
         window.__AUTH_TOKEN__ = urlToken;
-        window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || null;
-        // Clean token from URL
+        // Clean token from URL immediately
         params.delete("_t");
         params.delete("_u");
         const newSearch = params.toString();
         const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
         window.history.replaceState({}, "", newUrl);
-        setAuth({ user, token: urlToken, isReady: true });
+
+        // Fetch user from API using the token
+        fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/users/me`, {
+          headers: { Authorization: `Bearer ${urlToken}` },
+        })
+          .then((r) => r.json())
+          .then((user) => {
+            const authData = { token: urlToken, user, refreshToken: null };
+            localStorage.setItem("auth", JSON.stringify(authData));
+            window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || null;
+            setAuth({ user, token: urlToken, isReady: true });
+          })
+          .catch(() => setAuth((prev) => ({ ...prev, isReady: true })));
         return;
       }
 
@@ -49,8 +57,7 @@ export function AuthProvider({ children }) {
         const slug = user?.workspace_slug;
         const hostname = window.location.hostname;
         if (slug && hostname === "app.asystence.com") {
-          const encodedUser = encodeURIComponent(JSON.stringify(user));
-          window.location.href = `https://${slug}.asystence.com${window.location.pathname}?_t=${parsed.token}&_u=${encodedUser}`;
+          window.location.href = `https://${slug}.asystence.com${window.location.pathname}?_t=${parsed.token}`;
           return;
         }
 

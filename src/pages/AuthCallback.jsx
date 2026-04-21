@@ -29,8 +29,7 @@ export default function AuthCallback() {
     const slug = user?.workspace_slug;
     const isProduction = window.location.hostname.endsWith("asystence.com");
     if (slug && isProduction) {
-      const encodedUser = encodeURIComponent(JSON.stringify(user));
-      window.location.href = `https://${slug}.asystence.com/projects?_t=${token}&_u=${encodedUser}`;
+      window.location.href = `https://${slug}.asystence.com/projects?_t=${token}`;
     } else {
       navigate("/projects", { replace: true });
     }

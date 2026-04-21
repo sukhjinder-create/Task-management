@@ -26,7 +26,7 @@ function createSocket() {
 
   socket = io(BACKEND_URL, {
     auth: { token: window.__AUTH_TOKEN__ },
-    transports: ["websocket"],
+    transports: ["websocket", "polling"],
     withCredentials: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 700,
