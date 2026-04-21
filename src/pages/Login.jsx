@@ -58,7 +58,8 @@ export default function Login() {
     const slug = user?.workspace_slug;
     const isProduction = window.location.hostname.endsWith("asystence.com");
     if (slug && isProduction) {
-      window.location.href = `https://${slug}.asystence.com/projects`;
+      const encodedUser = encodeURIComponent(JSON.stringify(user));
+      window.location.href = `https://${slug}.asystence.com/projects?_t=${token}&_u=${encodedUser}`;
     } else {
       navigate("/projects", { replace: true });
     }

@@ -25,11 +25,12 @@ export default function AuthCallback() {
     } catch (_) {}
   };
 
-  const redirectToWorkspace = (user) => {
+  const redirectToWorkspace = (user, token) => {
     const slug = user?.workspace_slug;
     const isProduction = window.location.hostname.endsWith("asystence.com");
     if (slug && isProduction) {
-      window.location.href = `https://${slug}.asystence.com/projects`;
+      const encodedUser = encodeURIComponent(JSON.stringify(user));
+      window.location.href = `https://${slug}.asystence.com/projects?_t=${token}&_u=${encodedUser}`;
     } else {
       navigate("/projects", { replace: true });
     }
@@ -48,7 +49,7 @@ export default function AuthCallback() {
           safePersistAuth(user, urlToken, null);
           login(user, urlToken, null);
           toast.success(`Welcome, ${user.username}!`);
-          redirectToWorkspace(user);
+          redirectToWorkspace(user, urlToken);
           return;
         }
 
@@ -62,7 +63,7 @@ export default function AuthCallback() {
           safePersistAuth(user, token, refreshToken);
           login(user, token, refreshToken);
           toast.success(`Welcome, ${user.username}! You're now logged in.`);
-          redirectToWorkspace(user);
+          redirectToWorkspace(user, token);
           return;
         }
 

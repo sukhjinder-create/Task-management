@@ -12,9 +12,31 @@ export function AuthProvider({ children }) {
 
   /* ---------------------------------------------
      1. Restore from localStorage on page load
+        Also handles ?_t=TOKEN from workspace subdomain redirects
   --------------------------------------------- */
   useEffect(() => {
     try {
+      // Check for token passed via URL (cross-subdomain redirect)
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get("_t");
+      const urlUser = params.get("_u");
+
+      if (urlToken && urlUser) {
+        const user = JSON.parse(decodeURIComponent(urlUser));
+        const authData = { token: urlToken, user, refreshToken: null };
+        localStorage.setItem("auth", JSON.stringify(authData));
+        window.__AUTH_TOKEN__ = urlToken;
+        window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || null;
+        // Clean token from URL
+        params.delete("_t");
+        params.delete("_u");
+        const newSearch = params.toString();
+        const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
+        window.history.replaceState({}, "", newUrl);
+        setAuth({ user, token: urlToken, isReady: true });
+        return;
+      }
+
       const stored = localStorage.getItem("auth");
       if (stored) {
         const parsed = JSON.parse(stored);
