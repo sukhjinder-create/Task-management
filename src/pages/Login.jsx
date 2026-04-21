@@ -55,7 +55,13 @@ export default function Login() {
     safePersistAuth(user, token, refreshToken);
     try { login(user, token, refreshToken); } catch (err) { console.warn("AuthContext.login threw:", err); }
     toast.success(`Logged in as ${user.username}`);
-    navigate("/projects", { replace: true });
+    const slug = user?.workspace_slug;
+    const isProduction = window.location.hostname.endsWith("asystence.com");
+    if (slug && isProduction) {
+      window.location.href = `https://${slug}.asystence.com/projects`;
+    } else {
+      navigate("/projects", { replace: true });
+    }
   };
 
   const handleSubmit = async (e) => {

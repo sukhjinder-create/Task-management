@@ -25,6 +25,16 @@ export default function AuthCallback() {
     } catch (_) {}
   };
 
+  const redirectToWorkspace = (user) => {
+    const slug = user?.workspace_slug;
+    const isProduction = window.location.hostname.endsWith("asystence.com");
+    if (slug && isProduction) {
+      window.location.href = `https://${slug}.asystence.com/projects`;
+    } else {
+      navigate("/projects", { replace: true });
+    }
+  };
+
   useEffect(() => {
     async function handle() {
       try {
@@ -38,7 +48,7 @@ export default function AuthCallback() {
           safePersistAuth(user, urlToken, null);
           login(user, urlToken, null);
           toast.success(`Welcome, ${user.username}!`);
-          navigate("/projects", { replace: true });
+          redirectToWorkspace(user);
           return;
         }
 
@@ -52,7 +62,7 @@ export default function AuthCallback() {
           safePersistAuth(user, token, refreshToken);
           login(user, token, refreshToken);
           toast.success(`Welcome, ${user.username}! You're now logged in.`);
-          navigate("/projects", { replace: true });
+          redirectToWorkspace(user);
           return;
         }
 
