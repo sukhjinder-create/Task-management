@@ -44,6 +44,16 @@ export function AuthProvider({ children }) {
         // 🔥 Global token so axios & socket use it automatically
         window.__AUTH_TOKEN__ = parsed?.token || null;
 
+        // Redirect to workspace subdomain if on app.asystence.com
+        const user = parsed?.user;
+        const slug = user?.workspace_slug;
+        const hostname = window.location.hostname;
+        if (slug && hostname === "app.asystence.com") {
+          const encodedUser = encodeURIComponent(JSON.stringify(user));
+          window.location.href = `https://${slug}.asystence.com${window.location.pathname}?_t=${parsed.token}&_u=${encodedUser}`;
+          return;
+        }
+
         setAuth({
           user: parsed?.user || null,
           token: parsed?.token || null,
