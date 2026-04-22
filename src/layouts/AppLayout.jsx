@@ -13,11 +13,14 @@ import { usePlan } from "../context/PlanContext";
 import { cn } from "../utils/cn";
 import { useIsMobile } from "../hooks/useIsMobile";
 import MobileLayout from "./MobileLayout";
+import { useAppUpdate } from "../hooks/useAppUpdate";
+import AppUpdateModal from "../components/AppUpdateModal";
 
 const SIDEBAR_KEY = "sidebarCollapsed";
 
 export default function AppLayout({ children }) {
   const isMobile = useIsMobile();
+  const { updateInfo, dismissUpdate } = useAppUpdate();
   // On mobile, hand off entirely to MobileLayout
   if (isMobile) return <MobileLayout />;
 
@@ -283,6 +286,13 @@ export default function AppLayout({ children }) {
 
   return (
     <div className="flex h-screen overflow-hidden theme-bg theme-text">
+      {updateInfo && (
+        <AppUpdateModal
+          version={updateInfo.version}
+          apkUrl={updateInfo.apkUrl}
+          onDismiss={dismissUpdate}
+        />
+      )}
       <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
       <div

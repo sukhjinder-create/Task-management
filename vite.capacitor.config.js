@@ -23,6 +23,17 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "dist-mobile",
       emptyOutDir: true,
+      rollupOptions: {
+        external: [
+          "@capacitor/local-notifications",
+          "@capacitor/haptics",
+          "@capacitor/status-bar",
+          "@capacitor/splash-screen",
+          "@capacitor/preferences",
+          "@capacitor/app",
+          "@capacitor/push-notifications",
+        ],
+      },
     },
     define: {
       "import.meta.env.VITE_API_URL":     JSON.stringify(env.VITE_API_URL     || "http://10.0.2.2:3000"),
