@@ -13,6 +13,8 @@ import { useApi } from "../api";
 import toast from "react-hot-toast";
 import MobileBottomNav from "../components/MobileBottomNav";
 import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow";
+import HuddleIncomingCall from "../components/HuddleIncomingCall";
+import { useHuddle } from "../context/HuddleContext";
 import { Avatar, Badge, Button } from "../components/ui";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { subscribeToUnreadCount } from "../notificationBus";
@@ -21,6 +23,7 @@ import { cn } from "../utils/cn";
 
 export default function MobileLayout() {
   const { auth, logout, updateUser } = useAuth();
+  const { incomingHuddle, acceptHuddle, declineHuddle } = useHuddle();
   const navigate = useNavigate();
   const api = useApi();
   const user = auth?.user;
@@ -207,6 +210,13 @@ export default function MobileLayout() {
       className="flex flex-col theme-bg theme-text overflow-hidden mobile-root"
       style={{ height: "calc(var(--vh, 1svh) * 100)" }}
     >
+      {incomingHuddle && (
+        <HuddleIncomingCall
+          invite={incomingHuddle}
+          onAccept={acceptHuddle}
+          onDecline={declineHuddle}
+        />
+      )}
 
       {/* ── Top header ────────────────────────────────────── */}
       <header

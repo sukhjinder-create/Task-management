@@ -13,6 +13,7 @@ export function HuddleProvider({ children }) {
   const user = auth?.user;
 
   const [activeHuddle, setActiveHuddle] = useState(null);
+  const [incomingHuddle, setIncomingHuddle] = useState(null); // pending invite
 
   // ---------------------------
   // Load persistent huddle at startup
@@ -68,6 +69,22 @@ export function HuddleProvider({ children }) {
   }, [activeHuddle]);
 
   // ---------------------------
+  // Accept incoming huddle invite
+  // ---------------------------
+  const acceptHuddle = useCallback(() => {
+    if (!incomingHuddle) return;
+    setActiveHuddle(incomingHuddle);
+    setIncomingHuddle(null);
+  }, [incomingHuddle]);
+
+  // ---------------------------
+  // Decline incoming huddle invite
+  // ---------------------------
+  const declineHuddle = useCallback(() => {
+    setIncomingHuddle(null);
+  }, []);
+
+  // ---------------------------
   // End huddle for all (host action)
   // ---------------------------
   const endHuddleForAll = useCallback(() => {
@@ -114,12 +131,21 @@ export function HuddleProvider({ children }) {
     if (!socket) return;
 
     const onStarted = (payload) => {
-      setActiveHuddle({
+      const startedById = payload.startedBy?.userId || payload.startedBy;
+      const startedByName = payload.startedBy?.username || payload.startedByName || "Someone";
+      const huddleData = {
         huddleId: payload.huddleId,
         channelId: payload.channelId,
-        startedBy: payload.startedBy,
+        startedBy: startedById,
+        startedByName,
         at: payload.at,
-      });
+      };
+      // If current user started it, join immediately; otherwise show invite
+      if (String(startedById) === String(user?.id)) {
+        setActiveHuddle(huddleData);
+      } else {
+        setIncomingHuddle(huddleData);
+      }
     };
 
     const onEnded = (payload) => {
@@ -149,6 +175,9 @@ export function HuddleProvider({ children }) {
       value={{
         activeHuddle,
         setActiveHuddle,
+        incomingHuddle,
+        acceptHuddle,
+        declineHuddle,
         rtc,
         currentUser: user,
       }}
