@@ -72,6 +72,34 @@ async function subscribeCapacitorPush(authToken) {
     const { receive } = await PushNotifications.requestPermissions();
     if (receive !== "granted") return;
 
+    // Create notification channels with sound + vibration (Android 8+)
+    if (window.Capacitor?.getPlatform() === "android") {
+      await PushNotifications.createChannel({
+        id: "default",
+        name: "General Notifications",
+        importance: 5,
+        sound: "default",
+        vibration: true,
+        visibility: 1,
+      }).catch(() => {});
+      await PushNotifications.createChannel({
+        id: "chat",
+        name: "Chat Messages",
+        importance: 5,
+        sound: "default",
+        vibration: true,
+        visibility: 1,
+      }).catch(() => {});
+      await PushNotifications.createChannel({
+        id: "tasks",
+        name: "Task Updates",
+        importance: 4,
+        sound: "default",
+        vibration: true,
+        visibility: 1,
+      }).catch(() => {});
+    }
+
     await PushNotifications.register();
 
     PushNotifications.addListener("registration", async ({ value: fcmToken }) => {
@@ -97,14 +125,21 @@ async function subscribeCapacitorPush(authToken) {
       });
     });
 
-    // Handle notification tap → navigate
+    // Handle notification tap → navigate (app in foreground/background)
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
       const url = action.notification?.data?.url;
-      if (url && typeof window !== "undefined") {
+      if (url) {
         window.__PUSH_NAVIGATE__ = url;
         window.dispatchEvent(new CustomEvent("push:navigate", { detail: { url } }));
       }
     });
+
+    // Handle notification tap when app was killed (opened from scratch)
+    PushNotifications.getDeliveredNotifications().catch(() => {});
+    const launched = await PushNotifications.getLaunchNotification().catch(() => null);
+    if (launched?.data?.url) {
+      window.__PUSH_NAVIGATE__ = launched.data.url;
+    }
   } catch (err) {
     console.warn("[push] Capacitor push setup failed:", err.message);
   }

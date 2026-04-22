@@ -42,6 +42,20 @@ export default function MobileLayout() {
     };
   }, []);
 
+  // Handle push notification tap → navigate to correct route
+  useEffect(() => {
+    const handler = (e) => {
+      const url = e.detail?.url;
+      if (url) navigate(url);
+    };
+    window.addEventListener("push:navigate", handler);
+    if (window.__PUSH_NAVIGATE__) {
+      navigate(window.__PUSH_NAVIGATE__);
+      window.__PUSH_NAVIGATE__ = null;
+    }
+    return () => window.removeEventListener("push:navigate", handler);
+  }, [navigate]);
+
   // Refresh stale auth.user on mount
   const refreshedRef = useRef(false);
   useEffect(() => {
