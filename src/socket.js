@@ -87,6 +87,21 @@ window.addEventListener("auth:logout", () => {
   window.__WORKSPACE_ID__ = null;
 });
 
+// On mobile: reconnect socket when app comes back to foreground
+if (window.Capacitor) {
+  import("@capacitor/app").then(({ App }) => {
+    App.addListener("appStateChange", ({ isActive }) => {
+      if (isActive && window.__AUTH_TOKEN__) {
+        if (!socket?.connected) {
+          createSocket();
+        } else {
+          socket.emit("ping");
+        }
+      }
+    });
+  }).catch(() => {});
+}
+
 export function getSocket() {
   return socket;
 }
