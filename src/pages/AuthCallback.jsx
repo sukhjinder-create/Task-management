@@ -38,13 +38,14 @@ export default function AuthCallback() {
   useEffect(() => {
     async function handle() {
       try {
-        // ── Flow 1: Google SSO (token passed in URL by backend redirect) ──
+        // ── Flow 1: Google SSO (only token passed in URL, fetch user from API) ──
         const urlToken = searchParams.get("token");
-        const urlUser  = searchParams.get("user");
 
-        if (urlToken && urlUser) {
-          const user = JSON.parse(decodeURIComponent(urlUser));
-          // Google SSO: no refresh token (can't put it in URL safely)
+        if (urlToken) {
+          const meRes = await axios.get(`${API_BASE_URL}/users/me`, {
+            headers: { Authorization: `Bearer ${urlToken}` },
+          });
+          const user = meRes.data;
           safePersistAuth(user, urlToken, null);
           login(user, urlToken, null);
           toast.success(`Welcome, ${user.username}!`);
