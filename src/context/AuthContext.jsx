@@ -1,5 +1,6 @@
 // src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
+import { initPush, teardownPush } from "../utils/pushNotifications";
 
 const AuthContext = createContext(null);
 
@@ -117,6 +118,9 @@ export function AuthProvider({ children }) {
     window.dispatchEvent(
       new CustomEvent("auth:updated", { detail: { user, token } })
     );
+
+    // Initialize push notifications in background (non-blocking)
+    initPush(token).catch(() => {});
   };
 
   /* ---------------------------------------------
@@ -128,6 +132,7 @@ export function AuthProvider({ children }) {
     try { stored = JSON.parse(localStorage.getItem("auth")); } catch {}
 
     if (stored?.token) {
+      teardownPush(stored.token).catch(() => {});
       fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"}/auth/logout`, {
         method: "POST",
         headers: {

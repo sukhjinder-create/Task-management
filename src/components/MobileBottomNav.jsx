@@ -26,6 +26,8 @@ import {
   Star,
   Shield,
   Lock,
+  CreditCard,
+  Brain,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useFeature } from "../context/PlanContext";
@@ -78,6 +80,8 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
     { to: "/admin/attendance", icon: Clock,    label: "Attendance",       show: isAdmin,               locked: !hasAttendance },
     { to: "/admin/users",  icon: Users,        label: "Admin Panel",      show: isAdmin },
     { to: "/admin/migrations", icon: Hash,     label: "Migrations",       show: isAdmin,               locked: !hasMigrations },
+    { to: "/admin/billing",   icon: CreditCard, label: "Billing",         show: isAdmin },
+    { to: "/enterprise-intel", icon: Brain,    label: "Workspace AI",     show: isAdmin },
   ].filter((i) => i.show);
 
   const tabClass = ({ isActive }) =>

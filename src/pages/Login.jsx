@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { Eye, EyeOff } from "lucide-react";
+import { isCapacitor } from "../utils/native";
 
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
@@ -211,8 +212,8 @@ export default function Login() {
         </form>
         )} {/* end mfaRequired conditional */}
 
-        {/* ── Divider + Google SSO shown only on password step ── */}
-        {!mfaRequired && (<>
+        {/* ── Divider + Google SSO shown only on password step (not in native app) ── */}
+        {!mfaRequired && !isCapacitor && (<>
         {/* ── Divider ── */}
         <div className="flex items-center gap-3 my-4">
           <div className="flex-1 h-px theme-border border-t" />
@@ -233,12 +234,14 @@ export default function Login() {
           </svg>
           Continue with Google
         </a>
+        </>)}
 
+        {!mfaRequired && (
         <p className="text-center text-xs theme-text-muted mt-3">
           Imported via Slack or another tool?{" "}
           <span className="text-indigo-500">Check your email for your access link.</span>
         </p>
-        </>)} {/* end !mfaRequired */}
+        )}
       </div>
     </div>
   );

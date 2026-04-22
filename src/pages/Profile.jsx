@@ -6,6 +6,7 @@ import { getSocket, initSocket } from "../socket";
 import toast from "react-hot-toast";
 import { Avatar } from "../components/ui";
 import { Camera, User, Mail, Shield, FolderKanban, Building2, Lock, Eye, EyeOff } from "lucide-react";
+import NotificationPreferences from "../components/NotificationPreferences";
 
 const BACKEND = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 function resolveUrl(src) {
@@ -332,6 +333,13 @@ export default function Profile() {
 
         {/* Change password */}
         {!loading && profile && <ChangePassword />}
+
+        {/* Notification preferences */}
+        {!loading && profile && (
+          <div className="theme-surface border theme-border rounded-2xl p-4">
+            <NotificationPreferences />
+          </div>
+        )}
 
       </div>
     </div>

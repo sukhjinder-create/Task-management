@@ -33,6 +33,21 @@ export default function AppLayout({ children }) {
 
   const user = auth?.user;
 
+  // Handle push notification tap → navigate to the right route
+  useEffect(() => {
+    const handler = (e) => {
+      const url = e.detail?.url;
+      if (url) navigate(url);
+    };
+    window.addEventListener("push:navigate", handler);
+    // Also handle any pending navigation set before React mounted
+    if (window.__PUSH_NAVIGATE__) {
+      navigate(window.__PUSH_NAVIGATE__);
+      window.__PUSH_NAVIGATE__ = null;
+    }
+    return () => window.removeEventListener("push:navigate", handler);
+  }, [navigate]);
+
   // Refresh stale auth.user from server on mount (avatar_url etc. may have changed since last login)
   const refreshedRef = useRef(false);
   useEffect(() => {
