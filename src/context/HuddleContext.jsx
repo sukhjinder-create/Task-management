@@ -13,7 +13,15 @@ export function HuddleProvider({ children }) {
   const user = auth?.user;
 
   const [activeHuddle, setActiveHuddle] = useState(null);
-  const [incomingHuddle, setIncomingHuddle] = useState(null); // pending invite
+  const [incomingHuddle, setIncomingHuddle] = useState(() => {
+    // Restore pending huddle invite if app was opened from a killed-state notification
+    if (window.__PENDING_HUDDLE_INVITE__) {
+      const invite = window.__PENDING_HUDDLE_INVITE__;
+      window.__PENDING_HUDDLE_INVITE__ = null;
+      return invite;
+    }
+    return null;
+  });
 
   // ---------------------------
   // Load persistent huddle at startup
@@ -124,12 +132,40 @@ export function HuddleProvider({ children }) {
   };
 
   // ---------------------------
+  // Listen for huddle:incoming from push notification (foreground/background)
+  // ---------------------------
+  useEffect(() => {
+    const handler = (e) => {
+      const data = e.detail;
+      if (!data?.huddleId || !data?.channelId) return;
+      if (String(data.startedBy) === String(user?.id)) return; // ignore self
+      setIncomingHuddle({
+        huddleId: data.huddleId,
+        channelId: data.channelId,
+        startedByName: data.startedByName || "Someone",
+        startedBy: data.startedBy,
+      });
+    };
+    window.addEventListener("huddle:incoming", handler);
+    return () => window.removeEventListener("huddle:incoming", handler);
+  }, [user?.id]);
+
+  // ---------------------------
   // SOCKET: listen for huddle start/end
   // ---------------------------
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
+    let socket = getSocket();
+    // Retry if socket not ready yet (race with auth init)
+    if (!socket) {
+      const t = setTimeout(() => {
+        socket = getSocket();
+        if (socket) attach(socket);
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+    return attach(socket);
 
+    function attach(socket) {
     const onStarted = (payload) => {
       const startedById = payload.startedBy?.userId || payload.startedBy;
       const startedByName = payload.startedBy?.username || payload.startedByName || "Someone";
@@ -165,6 +201,7 @@ export function HuddleProvider({ children }) {
       socket.off("huddle:started", onStarted);
       socket.off("huddle:ended", onEnded);
     };
+    } // end attach
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------

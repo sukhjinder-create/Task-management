@@ -98,6 +98,14 @@ async function subscribeCapacitorPush(authToken) {
         vibration: true,
         visibility: 1,
       }).catch(() => {});
+      await PushNotifications.createChannel({
+        id: "huddle",
+        name: "Huddle Calls",
+        importance: 5,
+        sound: "default",
+        vibration: true,
+        visibility: 1,
+      }).catch(() => {});
     }
 
     await PushNotifications.register();
@@ -118,8 +126,21 @@ async function subscribeCapacitorPush(authToken) {
       } catch {}
     });
 
-    // Handle foreground notifications (show local notification)
+    // Handle foreground notifications
     PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      const data = notification.data || {};
+      if (data.type === "huddle") {
+        // Show incoming call UI inside the app
+        window.dispatchEvent(new CustomEvent("huddle:incoming", {
+          detail: {
+            huddleId: data.huddleId,
+            channelId: data.channelId,
+            startedByName: data.startedByName || "Someone",
+            startedBy: data.startedBy,
+          },
+        }));
+        return;
+      }
       import("./native").then(({ showNotification }) => {
         showNotification(notification.title || "Asystence", notification.body || "");
       });
@@ -127,7 +148,19 @@ async function subscribeCapacitorPush(authToken) {
 
     // Handle notification tap → navigate (app in foreground/background)
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-      const url = action.notification?.data?.url;
+      const data = action.notification?.data || {};
+      if (data.type === "huddle") {
+        window.dispatchEvent(new CustomEvent("huddle:incoming", {
+          detail: {
+            huddleId: data.huddleId,
+            channelId: data.channelId,
+            startedByName: data.startedByName || "Someone",
+            startedBy: data.startedBy,
+          },
+        }));
+        return;
+      }
+      const url = data.url;
       if (url) {
         window.__PUSH_NAVIGATE__ = url;
         window.dispatchEvent(new CustomEvent("push:navigate", { detail: { url } }));
@@ -137,8 +170,18 @@ async function subscribeCapacitorPush(authToken) {
     // Handle notification tap when app was killed (opened from scratch)
     PushNotifications.getDeliveredNotifications().catch(() => {});
     const launched = await PushNotifications.getLaunchNotification().catch(() => null);
-    if (launched?.data?.url) {
-      window.__PUSH_NAVIGATE__ = launched.data.url;
+    if (launched?.data) {
+      const data = launched.data;
+      if (data.type === "huddle") {
+        window.__PENDING_HUDDLE_INVITE__ = {
+          huddleId: data.huddleId,
+          channelId: data.channelId,
+          startedByName: data.startedByName || "Someone",
+          startedBy: data.startedBy,
+        };
+      } else if (data.url) {
+        window.__PUSH_NAVIGATE__ = data.url;
+      }
     }
   } catch (err) {
     console.warn("[push] Capacitor push setup failed:", err.message);
