@@ -1070,6 +1070,33 @@ html[data-theme="yellow"] {
   border-bottom-left-radius: 1rem;
 }
 
+/* ── Per-theme danger/performance card backgrounds ─────────
+   These sit outside @layer so they beat @layer components.
+   Every theme gets a primary-tinted background; red is only
+   the ::before left bar and score text/bars.
+──────────────────────────────────────────────────────────── */
+html[data-theme="dark"] .dashboard-danger-card,
+html[data-theme="dark"] .dashboard-performance-card {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--primary) 14%, var(--surface)) 0%,
+    color-mix(in srgb, var(--primary) 7%, var(--surface)) 55%,
+    var(--surface) 100%) !important;
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border)) !important;
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--primary) 12%, transparent) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] .dashboard-danger-card,
+  html[data-theme="system"] .dashboard-performance-card {
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--primary) 14%, var(--surface)) 0%,
+      color-mix(in srgb, var(--primary) 7%, var(--surface)) 55%,
+      var(--surface) 100%) !important;
+    border-color: color-mix(in srgb, var(--primary) 32%, var(--border)) !important;
+    box-shadow: 0 14px 34px color-mix(in srgb, var(--primary) 12%, transparent) !important;
+  }
+}
+
 .app-content-shell {
   border-radius: 1.5rem !important;
   overflow: clip !important;

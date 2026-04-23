@@ -47,6 +47,8 @@ dmg:
 # ─── Windows ─────────────────────────────────────────────────────────────────
 win:
   icon: public/icon.ico
+  signAndEditExecutable: false
+  forceCodeSigning: false
   target:
     - target: nsis       # Full installer (.exe)
       arch: [x64]
