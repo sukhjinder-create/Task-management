@@ -12,6 +12,9 @@ export function HuddleProvider({ children }) {
   const { auth } = useAuth();
   const user = auth?.user;
 
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+
   const [activeHuddle, setActiveHuddle] = useState(null);
   const [incomingHuddle, setIncomingHuddle] = useState(() => {
     // Restore pending huddle invite if app was opened from a killed-state notification
@@ -138,7 +141,7 @@ export function HuddleProvider({ children }) {
     const handler = (e) => {
       const data = e.detail;
       if (!data?.huddleId || !data?.channelId) return;
-      if (String(data.startedBy) === String(user?.id)) return; // ignore self
+      if (String(data.startedBy) === String(userRef.current?.id)) return; // ignore self
       setIncomingHuddle({
         huddleId: data.huddleId,
         channelId: data.channelId,
@@ -177,7 +180,7 @@ export function HuddleProvider({ children }) {
         at: payload.at,
       };
       // If current user started it, join immediately; otherwise show invite
-      if (String(startedById) === String(user?.id)) {
+      if (String(startedById) === String(userRef.current?.id)) {
         setActiveHuddle(huddleData);
       } else {
         setIncomingHuddle(huddleData);
