@@ -173,12 +173,17 @@ async function subscribeCapacitorPush(authToken) {
     if (launched?.data) {
       const data = launched.data;
       if (data.type === "huddle") {
-        window.__PENDING_HUDDLE_INVITE__ = {
-          huddleId: data.huddleId,
-          channelId: data.channelId,
-          startedByName: data.startedByName || "Someone",
-          startedBy: data.startedBy,
-        };
+        // Delay so React tree (HuddleContext) is mounted and listening
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("huddle:incoming", {
+            detail: {
+              huddleId: data.huddleId,
+              channelId: data.channelId,
+              startedByName: data.startedByName || "Someone",
+              startedBy: data.startedBy,
+            },
+          }));
+        }, 2000);
       } else if (data.url) {
         window.__PUSH_NAVIGATE__ = data.url;
       }
