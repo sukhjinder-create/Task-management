@@ -161,6 +161,9 @@ export function useHuddleCall({ currentUser }) {
   }, []);
 
   // ---- Start call ----
+  // Emit huddle:join FIRST so signaling starts immediately, then acquire
+  // media. This prevents a stalled permission dialog from blocking the
+  // WebRTC handshake (the offer/answer exchange happens before camera is ready).
   const startCall = useCallback(async () => {
     if (!channelIdRef.current || !userRef.current) return;
     if (inCall || connecting) return;
@@ -168,21 +171,23 @@ export function useHuddleCall({ currentUser }) {
     const socket = getSocketSafe();
     if (!socket) return;
 
+    setConnecting(true);
+
+    // Signal join immediately — peer on the other side can start offer/answer
+    socket.emit("huddle:join", {
+      channelId: channelIdRef.current,
+      huddleId: huddleIdRef.current,
+    });
+    setInCall(true);
+
+    // Acquire camera/mic in the background — non-fatal if slow or denied
     try {
-      setConnecting(true);
       await initLocalMedia();
-
-      socket.emit("huddle:join", {
-        channelId: channelIdRef.current,
-        huddleId: huddleIdRef.current,
-      });
-
-      setInCall(true);
-      setConnecting(false);
     } catch (err) {
-      console.error("startCall error:", err);
-      setConnecting(false);
+      console.error("[huddle] media access failed:", err.message);
     }
+
+    setConnecting(false);
   }, [connecting, inCall, initLocalMedia]);
 
   // ---- Leave call ----
