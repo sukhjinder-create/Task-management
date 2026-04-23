@@ -36,8 +36,10 @@ export function useHuddleCall({ currentUser }) {
   const channelIdRef = useRef(null);
   const huddleIdRef = useRef(null);
   const userRef = useRef(currentUser);
+  const inCallRef = useRef(false);
 
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
+  useEffect(() => { inCallRef.current = inCall; }, [inCall]);
 
   const setChannelId = useCallback((id) => { channelIdRef.current = id; }, []);
   const setHuddleId = useCallback((id) => { huddleIdRef.current = id; }, []);
@@ -406,7 +408,7 @@ export function useHuddleCall({ currentUser }) {
     const handleUserJoined = async ({ channelId, userId, username }) => {
       if (channelId !== channelIdRef.current) return;
       if (String(userId) === String(userRef.current?.id)) return;
-      if (!inCall) return;
+      if (!inCallRef.current) return;
 
       try {
         await initLocalMedia();
@@ -445,11 +447,14 @@ export function useHuddleCall({ currentUser }) {
       const { type } = data;
 
       try {
+        // Init local media BEFORE creating the PC for offers so tracks are
+        // added to the peer connection immediately (not after the fact).
+        if (type === "offer") await initLocalMedia();
+
         const pc = createPeerConnection(fromUserId);
         if (!pc) return;
 
         if (type === "offer") {
-          await initLocalMedia();
           await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: data.sdp }));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -502,7 +507,7 @@ export function useHuddleCall({ currentUser }) {
       socket.off("huddle:screen-stop", handleScreenStop);
       socket.off("huddle:muted", handleMuted);
     };
-  }, [createPeerConnection, initLocalMedia, inCall, removeRemotePeer, updateRemotePeerMeta]);
+  }, [createPeerConnection, initLocalMedia, removeRemotePeer, updateRemotePeerMeta]);
 
   // Network quality monitor
   useEffect(() => {

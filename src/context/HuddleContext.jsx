@@ -239,6 +239,11 @@ export function HuddleProvider({ children }) {
         }
         return prev;
       });
+      // Also dismiss any pending invite for this huddle (caller cancelled)
+      setIncomingHuddle((prev) => {
+        if (prev && payload.huddleId === prev.huddleId) return null;
+        return prev;
+      });
     };
 
     socket.on("huddle:started", onStarted);
