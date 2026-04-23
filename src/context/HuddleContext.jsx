@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { useHuddleCall } from "../hooks/useHuddleCall";
 import { getSocket } from "../socket";
 import { useAuth } from "./AuthContext";
+import toast from "react-hot-toast";
 
 const HuddleContext = createContext(null);
 
@@ -89,11 +90,19 @@ export function HuddleProvider({ children }) {
   }, [incomingHuddle]);
 
   // ---------------------------
-  // Decline incoming huddle invite
+  // Decline incoming huddle invite — notify initiator via socket
   // ---------------------------
   const declineHuddle = useCallback(() => {
+    if (incomingHuddle) {
+      const socket = getSocket();
+      socket?.emit("huddle:decline", {
+        channelId: incomingHuddle.channelId,
+        huddleId: incomingHuddle.huddleId,
+        initiatorUserId: incomingHuddle.startedBy,
+      });
+    }
     setIncomingHuddle(null);
-  }, []);
+  }, [incomingHuddle]);
 
   // ---------------------------
   // End huddle for all (host action)
@@ -108,6 +117,41 @@ export function HuddleProvider({ children }) {
     setActiveHuddle(null);
     call.leaveCall();
   }, [activeHuddle, call]);
+
+  // ---------------------------
+  // Listen for huddle:declined — the person we called declined the invite.
+  // Show a toast and, since this is a 1-on-1 (no other participants joined),
+  // end the huddle for the initiator automatically.
+  // ---------------------------
+  useEffect(() => {
+    let socket = getSocket();
+    if (!socket) return;
+    const onDeclined = (payload) => {
+      const name = payload.declinedBy?.username || "Someone";
+      toast.error(`${name} declined the call`);
+      // If no remote peers have joined, end for self
+      if (call.remotePeers.length === 0) {
+        setActiveHuddle(null);
+        call.leaveCall();
+      }
+    };
+    socket.on("huddle:declined", onDeclined);
+    return () => socket.off("huddle:declined", onDeclined);
+  }, [call]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---------------------------
+  // Auto-end 1-on-1: when the last remote peer leaves, close for self too.
+  // ---------------------------
+  const hadPeersRef = useRef(false);
+  useEffect(() => {
+    if (!call.inCall) { hadPeersRef.current = false; return; }
+    if (call.remotePeers.length > 0) { hadPeersRef.current = true; return; }
+    if (hadPeersRef.current) {
+      hadPeersRef.current = false;
+      setActiveHuddle(null);
+      call.leaveCall();
+    }
+  }, [call.inCall, call.remotePeers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
   // rtc object exposed to UI
