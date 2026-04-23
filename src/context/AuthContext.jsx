@@ -16,6 +16,25 @@ export function AuthProvider({ children }) {
         Also handles ?_t=TOKEN from workspace subdomain redirects
   --------------------------------------------- */
   useEffect(() => {
+    // On Capacitor (mobile), detect a fresh install and clear any auth
+    // that Android Auto Backup may have restored from a previous install.
+    // We mark the install via Preferences (native storage). If the marker
+    // is absent we know the app data was never initialised by THIS install.
+    async function clearAuthIfFreshInstall() {
+      if (!window.Capacitor) return;
+      try {
+        const { Preferences } = await import("@capacitor/preferences");
+        const { value } = await Preferences.get({ key: "install_v1" });
+        if (!value) {
+          localStorage.removeItem("auth");
+          await Preferences.set({ key: "install_v1", value: "1" });
+        }
+      } catch {
+        // Preferences not available — ignore
+      }
+    }
+
+    clearAuthIfFreshInstall().then(() => {
     try {
       // Check for token passed via URL (cross-subdomain redirect)
       const params = new URLSearchParams(window.location.search);
@@ -74,6 +93,7 @@ export function AuthProvider({ children }) {
       console.warn("Unable to restore auth", e);
       setAuth((prev) => ({ ...prev, isReady: true }));
     }
+    }); // end clearAuthIfFreshInstall().then
   }, []);
 
   /* ---------------------------------------------
