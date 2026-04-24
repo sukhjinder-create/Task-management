@@ -324,8 +324,11 @@ export default function MobileLayout() {
       <main className="flex-1 overflow-y-auto overflow-x-hidden mobile-scroll"
             style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}>
         <Outlet />
-        <GlobalHuddleWindow />
       </main>
+
+      {/* GlobalHuddleWindow must be outside any overflow container so fixed
+          positioning and z-index work correctly on Android WebView */}
+      <GlobalHuddleWindow />
 
       {/* ── Bottom navigation ─────────────────────────────── */}
       <MobileBottomNav unreadCount={unreadCount} />

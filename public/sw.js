@@ -15,8 +15,6 @@ self.addEventListener("push", (event) => {
   const title   = data.title || "Asystence";
   const options = {
     body:  data.body  || "",
-    icon:  "/icons/icon-192.png",
-    badge: "/icons/icon-72.png",
     data:  { url: data.url || "/" },
     tag:   data.type || "general",
     renotify: true,

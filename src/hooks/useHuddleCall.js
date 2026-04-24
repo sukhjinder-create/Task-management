@@ -521,12 +521,13 @@ export function useHuddleCall({ currentUser }) {
 
   // ── Socket event handlers ───────────────────────────────────────────────────
   useEffect(() => {
-    let socketHandlerCleanup = null;
-    let authUpdatedListener = null;
+    let cleanup = () => {};
 
     function attachSocketHandlers() {
       const socket = getSocket();
-      if (!socket || socketHandlerCleanup) return; // already attached or no socket
+      cleanup(); // detach from previous socket before re-attaching
+      cleanup = () => {};
+      if (!socket) return;
 
     const handleUserJoined = async ({ channelId, userId, username }) => {
       if (channelId !== channelIdRef.current) return;
@@ -663,7 +664,7 @@ export function useHuddleCall({ currentUser }) {
     socket.on("huddle:muted", handleMuted);
     socket.on("huddle:subtitle", handleSubtitle);
 
-    socketHandlerCleanup = () => {
+    cleanup = () => {
       socket.off("huddle:user-joined", handleUserJoined);
       socket.off("huddle:user-left", handleUserLeft);
       socket.off("huddle:signal", handleSignal);
@@ -678,16 +679,14 @@ export function useHuddleCall({ currentUser }) {
     };
     }
 
-    // Try immediately; fall back to auth:updated event if socket not yet ready
-    attachSocketHandlers();
-    if (!socketHandlerCleanup) {
-      authUpdatedListener = () => attachSocketHandlers();
-      window.addEventListener("auth:updated", authUpdatedListener);
-    }
+    // Re-attach every time auth:updated fires (socket.js replaces the socket instance)
+    const onAuthUpdated = () => setTimeout(attachSocketHandlers, 0);
+    window.addEventListener("auth:updated", onAuthUpdated);
+    attachSocketHandlers(); // attach immediately for the current socket
 
     return () => {
-      if (authUpdatedListener) window.removeEventListener("auth:updated", authUpdatedListener);
-      if (socketHandlerCleanup) socketHandlerCleanup();
+      window.removeEventListener("auth:updated", onAuthUpdated);
+      cleanup();
     };
   }, [createPeerConnection, flushIceCandidates, initLocalMedia, removeRemotePeer, updateRemotePeerMeta]);
 
