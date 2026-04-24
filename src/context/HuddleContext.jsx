@@ -1,13 +1,11 @@
 // src/context/HuddleContext.jsx
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useHuddleCall } from "../hooks/useHuddleCall";
 import { getSocket } from "../socket";
 import { useAuth } from "./AuthContext";
 import toast from "react-hot-toast";
 
 const HuddleContext = createContext(null);
-
-const HUDDLE_STATE_KEY = "activeHuddleState";
 
 export function HuddleProvider({ children }) {
   const { auth } = useAuth();
@@ -18,7 +16,6 @@ export function HuddleProvider({ children }) {
 
   const [activeHuddle, setActiveHuddle] = useState(null);
   const [incomingHuddle, setIncomingHuddle] = useState(() => {
-    // Restore pending huddle invite if app was opened from a killed-state notification
     if (window.__PENDING_HUDDLE_INVITE__) {
       const invite = window.__PENDING_HUDDLE_INVITE__;
       window.__PENDING_HUDDLE_INVITE__ = null;
@@ -27,22 +24,9 @@ export function HuddleProvider({ children }) {
     return null;
   });
 
-  // ---------------------------
-  // Load persistent huddle at startup
-  // ---------------------------
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(HUDDLE_STATE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.huddleId && parsed?.channelId) {
-          setActiveHuddle(parsed);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to restore huddle:", e);
-    }
-  }, []);
+  // Track active huddle in a ref so socket handlers always see the current value
+  const activeHuddleRef = useRef(null);
+  useEffect(() => { activeHuddleRef.current = activeHuddle; }, [activeHuddle]);
 
   // ---------------------------
   // WebRTC Hook
@@ -51,43 +35,53 @@ export function HuddleProvider({ children }) {
 
   // Keep channelId and huddleId refs in sync with active huddle
   useEffect(() => {
-    if (activeHuddle?.channelId) {
-      call.setChannelId(activeHuddle.channelId);
-    }
-    if (activeHuddle?.huddleId) {
-      call.setHuddleId(activeHuddle.huddleId);
-    }
+    if (activeHuddle?.channelId) call.setChannelId(activeHuddle.channelId);
+    if (activeHuddle?.huddleId) call.setHuddleId(activeHuddle.huddleId);
   }, [activeHuddle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Join call when a huddle becomes active — only once per huddleId
   const joinedHuddleRef = useRef(null);
   useEffect(() => {
-    if (!activeHuddle?.huddleId) return;
+    if (!activeHuddle?.huddleId) {
+      joinedHuddleRef.current = null;
+      return;
+    }
     if (joinedHuddleRef.current === activeHuddle.huddleId) return;
     joinedHuddleRef.current = activeHuddle.huddleId;
     call.startCall();
   }, [activeHuddle?.huddleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
-  // Persist huddle state
+  // 45-second ring timeout: auto-end if no one joins
   // ---------------------------
+  const ringTimeoutRef = useRef(null);
   useEffect(() => {
-    if (activeHuddle?.huddleId) {
-      localStorage.setItem(HUDDLE_STATE_KEY, JSON.stringify(activeHuddle));
-    } else {
-      localStorage.removeItem(HUDDLE_STATE_KEY);
-      joinedHuddleRef.current = null;
-    }
-  }, [activeHuddle]);
+    clearTimeout(ringTimeoutRef.current);
+    if (!call.inCall || call.remotePeers.length > 0) return;
+
+    ringTimeoutRef.current = setTimeout(() => {
+      if (activeHuddleRef.current && call.remotePeers.length === 0) {
+        toast.error("No one answered the call");
+        setActiveHuddle(null);
+        call.leaveCall();
+      }
+    }, 45000);
+
+    return () => clearTimeout(ringTimeoutRef.current);
+  }, [call.inCall, call.remotePeers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
   // Accept incoming huddle invite
   // ---------------------------
   const acceptHuddle = useCallback(() => {
     if (!incomingHuddle) return;
+    // Leave any existing active huddle before joining a new one
+    if (activeHuddleRef.current) {
+      call.leaveCall();
+    }
     setActiveHuddle(incomingHuddle);
     setIncomingHuddle(null);
-  }, [incomingHuddle]);
+  }, [incomingHuddle, call]);
 
   // ---------------------------
   // Decline incoming huddle invite — notify initiator via socket
@@ -95,11 +89,13 @@ export function HuddleProvider({ children }) {
   const declineHuddle = useCallback(() => {
     if (incomingHuddle) {
       const socket = getSocket();
-      socket?.emit("huddle:decline", {
-        channelId: incomingHuddle.channelId,
-        huddleId: incomingHuddle.huddleId,
-        initiatorUserId: incomingHuddle.startedBy,
-      });
+      if (socket?.connected) {
+        socket.emit("huddle:decline", {
+          channelId: incomingHuddle.channelId,
+          huddleId: incomingHuddle.huddleId,
+          initiatorUserId: incomingHuddle.startedBy?.userId || incomingHuddle.startedBy,
+        });
+      }
     }
     setIncomingHuddle(null);
   }, [incomingHuddle]);
@@ -109,38 +105,42 @@ export function HuddleProvider({ children }) {
   // ---------------------------
   const endHuddleForAll = useCallback(() => {
     const socket = getSocket();
-    if (!socket || !activeHuddle) return;
+    const huddle = activeHuddleRef.current;
+    if (!socket || !huddle) return;
     socket.emit("huddle:end", {
-      channelId: activeHuddle.channelId,
-      huddleId: activeHuddle.huddleId,
+      channelId: huddle.channelId,
+      huddleId: huddle.huddleId,
     });
     setActiveHuddle(null);
     call.leaveCall();
-  }, [activeHuddle, call]);
+  }, [call]);
 
   // ---------------------------
-  // Listen for huddle:declined — the person we called declined the invite.
-  // Show a toast and, since this is a 1-on-1 (no other participants joined),
-  // end the huddle for the initiator automatically.
+  // Stable ref for remotePeers count — avoids stale closures in socket handlers
+  // ---------------------------
+  const remotePeersLengthRef = useRef(0);
+  useEffect(() => { remotePeersLengthRef.current = call.remotePeers.length; }, [call.remotePeers.length]);
+
+  // ---------------------------
+  // Listen for huddle:declined — the person we called declined the invite
   // ---------------------------
   useEffect(() => {
-    let socket = getSocket();
+    const socket = getSocket();
     if (!socket) return;
     const onDeclined = (payload) => {
       const name = payload.declinedBy?.username || "Someone";
       toast.error(`${name} declined the call`);
-      // If no remote peers have joined, end for self
-      if (call.remotePeers.length === 0) {
+      if (remotePeersLengthRef.current === 0) {
         setActiveHuddle(null);
         call.leaveCall();
       }
     };
     socket.on("huddle:declined", onDeclined);
     return () => socket.off("huddle:declined", onDeclined);
-  }, [call]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
-  // Auto-end 1-on-1: when the last remote peer leaves, close for self too.
+  // Auto-end 1-on-1: when the last remote peer leaves, close for self too
   // ---------------------------
   const hadPeersRef = useRef(false);
   useEffect(() => {
@@ -154,9 +154,9 @@ export function HuddleProvider({ children }) {
   }, [call.inCall, call.remotePeers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
-  // rtc object exposed to UI
+  // Memoized rtc object exposed to UI — stable reference reduces re-renders
   // ---------------------------
-  const rtc = {
+  const rtc = useMemo(() => ({
     localStream: call.localStream,
     remotePeers: call.remotePeers,
     isMuted: !call.micEnabled,
@@ -176,7 +176,21 @@ export function HuddleProvider({ children }) {
     leaveHuddle: call.leaveCall,
     muteAll: call.muteAll,
     endHuddleForAll,
-  };
+    // Subtitles
+    subtitlesEnabled: call.subtitlesEnabled,
+    subtitles: call.subtitles,
+    toggleSubtitles: call.toggleSubtitles,
+  }), [
+    call.localStream, call.remotePeers,
+    call.micEnabled, call.camEnabled, call.screenSharing,
+    call.activeSpeakerId, call.networkQuality,
+    call.inCall, call.connecting,
+    call.toggleMic, call.toggleCamera,
+    call.startScreenShare, call.stopScreenShare,
+    call.startCall, call.leaveCall, call.muteAll,
+    call.subtitlesEnabled, call.subtitles, call.toggleSubtitles,
+    endHuddleForAll,
+  ]);
 
   // ---------------------------
   // Listen for huddle:incoming from push notification (foreground/background)
@@ -185,12 +199,12 @@ export function HuddleProvider({ children }) {
     const handler = (e) => {
       const data = e.detail;
       if (!data?.huddleId || !data?.channelId) return;
-      if (String(data.startedBy) === String(userRef.current?.id)) return; // ignore self
+      if (String(data.startedBy) === String(userRef.current?.id)) return;
       setIncomingHuddle({
         huddleId: data.huddleId,
         channelId: data.channelId,
         startedByName: data.startedByName || "Someone",
-        startedBy: data.startedBy,
+        startedBy: { userId: data.startedBy, username: data.startedByName || "Someone" },
       });
     };
     window.addEventListener("huddle:incoming", handler);
@@ -202,7 +216,6 @@ export function HuddleProvider({ children }) {
   // ---------------------------
   useEffect(() => {
     let socket = getSocket();
-    // Retry if socket not ready yet (race with auth init)
     if (!socket) {
       const t = setTimeout(() => {
         socket = getSocket();
@@ -213,47 +226,47 @@ export function HuddleProvider({ children }) {
     return attach(socket);
 
     function attach(socket) {
-    const onStarted = (payload) => {
-      const startedById = payload.startedBy?.userId || payload.startedBy;
-      const startedByName = payload.startedBy?.username || payload.startedByName || "Someone";
-      const huddleData = {
-        huddleId: payload.huddleId,
-        channelId: payload.channelId,
-        startedBy: startedById,
-        startedByName,
-        at: payload.at,
-      };
-      // If current user started it, join immediately; otherwise show invite
-      if (String(startedById) === String(userRef.current?.id)) {
-        setActiveHuddle(huddleData);
-      } else {
-        setIncomingHuddle(huddleData);
-      }
-    };
+      const onStarted = (payload) => {
+        const startedById = payload.startedBy?.userId || payload.startedBy;
+        const startedByName = payload.startedBy?.username || payload.startedByName || "Someone";
+        const huddleData = {
+          huddleId: payload.huddleId,
+          channelId: payload.channelId,
+          startedBy: { userId: startedById, username: startedByName },
+          at: payload.at,
+        };
 
-    const onEnded = (payload) => {
-      setActiveHuddle((prev) => {
-        if (prev && payload.huddleId === prev.huddleId) {
-          call.leaveCall();
-          return null;
+        if (String(startedById) === String(userRef.current?.id)) {
+          setActiveHuddle(huddleData);
+        } else if (!activeHuddleRef.current) {
+          // Only show invite if not already in a different huddle
+          setIncomingHuddle(huddleData);
         }
-        return prev;
-      });
-      // Also dismiss any pending invite for this huddle (caller cancelled)
-      setIncomingHuddle((prev) => {
-        if (prev && payload.huddleId === prev.huddleId) return null;
-        return prev;
-      });
-    };
+      };
 
-    socket.on("huddle:started", onStarted);
-    socket.on("huddle:ended", onEnded);
+      const onEnded = (payload) => {
+        setActiveHuddle((prev) => {
+          if (prev && payload.huddleId === prev.huddleId) {
+            call.leaveCall();
+            return null;
+          }
+          return prev;
+        });
+        // Dismiss pending invite for this huddle (caller cancelled)
+        setIncomingHuddle((prev) => {
+          if (prev && payload.huddleId === prev.huddleId) return null;
+          return prev;
+        });
+      };
 
-    return () => {
-      socket.off("huddle:started", onStarted);
-      socket.off("huddle:ended", onEnded);
-    };
-    } // end attach
+      socket.on("huddle:started", onStarted);
+      socket.on("huddle:ended", onEnded);
+
+      return () => {
+        socket.off("huddle:started", onStarted);
+        socket.off("huddle:ended", onEnded);
+      };
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------

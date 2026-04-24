@@ -384,7 +384,7 @@ function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys
 
   if (failed || !objectUrl) return (
     <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
-      🔒 Encrypted file (key unavailable)
+      🔒 {att.name || "Encrypted file"} — key not available on this device
     </span>
   );
 
@@ -2083,27 +2083,18 @@ useEffect(() => {
     try {
       const uploaded = await Promise.all(
         files.map(async (file) => {
-          // 🔐 E2E: encrypt file bytes before upload — server never sees plaintext
-          const { encryptedBlob, rawKey, iv: fileIv } = await encryptFileForUpload(file);
-          const localUrl = URL.createObjectURL(file); // local preview only, never sent
-
+          const localUrl = URL.createObjectURL(file);
           const formData = new FormData();
-          // Upload encrypted bytes; use .enc suffix to mark as opaque blob
-          formData.append("file", new File([encryptedBlob], file.name + ".enc", {
-            type: "application/octet-stream",
-          }));
+          formData.append("file", file);
           const res = await api.post("/upload/chat-attachment", formData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
           return {
             ...res.data,
-            name: file.name,    // original filename (not .enc)
-            type: file.type,    // original MIME type
-            size: file.size,    // original size
-            encrypted: true,
-            fileIv,
-            _rawKey: rawKey,    // stays in memory only — stripped before send
-            _localUrl: localUrl, // for pre-send preview — stripped before send
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            _localUrl: localUrl,
           };
         })
       );
@@ -2262,7 +2253,6 @@ useEffect(() => {
       });
     }
 
-    rtc.joinHuddle();
   };
 
   const handleToggleReaction = (messageId, emoji) => {

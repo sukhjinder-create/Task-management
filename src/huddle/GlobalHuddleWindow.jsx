@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useHuddle } from "../context/HuddleContext";
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
-  PhoneOff, Maximize2, Minimize2, VolumeX,
+  PhoneOff, Maximize2, Minimize2, VolumeX, Captions,
 } from "lucide-react";
 
 // ── Call timer ──────────────────────────────────────────────────────────────
@@ -172,11 +172,11 @@ export default function GlobalHuddleWindow() {
   // 1-on-1 mode: one remote peer — use WhatsApp-style layout
   const isOneOnOne = remotePeers.length === 1;
   const remoteParticipant = isOneOnOne
-    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, isMuted: remotePeers[0].isMuted, isCameraOff: false, isLocal: false }
+    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, isMuted: remotePeers[0].isMuted, isCameraOff: remotePeers[0].isCameraOff, isLocal: false }
     : null;
 
   // Grid layout for group calls
-  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, isMuted: p.isMuted, isCameraOff: false, isLocal: false }))];
+  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, isMuted: p.isMuted, isCameraOff: p.isCameraOff, isLocal: false }))];
   const count = participants.length;
   const gridCols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
 
@@ -358,6 +358,24 @@ export default function GlobalHuddleWindow() {
         )}
       </div>
 
+      {/* ── SUBTITLE OVERLAY ─────────────────────────────────────────────── */}
+      {rtc?.subtitlesEnabled && rtc?.subtitles && (
+        <div className="absolute bottom-2 left-0 right-0 z-30 flex flex-col items-center gap-1 px-4 pointer-events-none">
+          {Object.entries(rtc.subtitles).map(([uid, entry]) => {
+            if (!entry?.text || Date.now() - entry.at > 4000) return null;
+            const name = uid === "local"
+              ? (currentUser?.username || "You")
+              : (remotePeers.find((p) => String(p.userId) === String(uid))?.username || "User");
+            return (
+              <div key={uid} className="bg-black/75 text-white text-sm px-3 py-1 rounded-lg max-w-[80%] text-center">
+                <span className="text-slate-400 text-xs mr-1">{name}:</span>
+                {entry.text}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
       <div
         className="w-full bg-[#1b1e27] py-4 px-6 flex justify-center items-center gap-4 shrink-0"
@@ -400,6 +418,15 @@ export default function GlobalHuddleWindow() {
             {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
           </CtrlBtn>
         )}
+
+        {/* CC / Live subtitles */}
+        <CtrlBtn
+          onClick={() => rtc?.toggleSubtitles?.()}
+          title={rtc?.subtitlesEnabled ? "Turn off subtitles" : "Turn on live subtitles"}
+          active={rtc?.subtitlesEnabled}
+        >
+          <Captions size={18} />
+        </CtrlBtn>
 
         {/* Mute all — host only */}
         {isHost && (
