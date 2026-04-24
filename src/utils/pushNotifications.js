@@ -150,14 +150,15 @@ async function subscribeCapacitorPush(authToken) {
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
       const data = action.notification?.data || {};
       if (data.type === "huddle") {
-        window.dispatchEvent(new CustomEvent("huddle:incoming", {
-          detail: {
-            huddleId: data.huddleId,
-            channelId: data.channelId,
-            startedByName: data.startedByName || "Someone",
-            startedBy: data.startedBy,
-          },
-        }));
+        const inviteData = {
+          huddleId: data.huddleId,
+          channelId: data.channelId,
+          startedByName: data.startedByName || "Someone",
+          startedBy: data.startedBy,
+        };
+        // Set synchronously in case HuddleContext hasn't mounted yet
+        window.__PENDING_HUDDLE_INVITE__ = inviteData;
+        window.dispatchEvent(new CustomEvent("huddle:incoming", { detail: inviteData }));
         return;
       }
       const url = data.url;
@@ -173,16 +174,17 @@ async function subscribeCapacitorPush(authToken) {
     if (launched?.data) {
       const data = launched.data;
       if (data.type === "huddle") {
-        // Delay so React tree (HuddleContext) is mounted and listening
+        const inviteData = {
+          huddleId: data.huddleId,
+          channelId: data.channelId,
+          startedByName: data.startedByName || "Someone",
+          startedBy: data.startedBy,
+        };
+        // Set synchronously so HuddleContext reads it on initial mount (useState initializer)
+        window.__PENDING_HUDDLE_INVITE__ = inviteData;
+        // Also dispatch the event after React has fully mounted (fallback for late listeners)
         setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("huddle:incoming", {
-            detail: {
-              huddleId: data.huddleId,
-              channelId: data.channelId,
-              startedByName: data.startedByName || "Someone",
-              startedBy: data.startedBy,
-            },
-          }));
+          window.dispatchEvent(new CustomEvent("huddle:incoming", { detail: inviteData }));
         }, 2000);
       } else if (data.url) {
         window.__PUSH_NAVIGATE__ = data.url;

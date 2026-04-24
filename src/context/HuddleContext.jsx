@@ -24,9 +24,13 @@ export function HuddleProvider({ children }) {
     return null;
   });
 
-  // Track active huddle in a ref so socket handlers always see the current value
+  // Keep refs in sync so socket handlers always see the latest state
+  // (avoids stale closures and race conditions between state update and next event)
   const activeHuddleRef = useRef(null);
   useEffect(() => { activeHuddleRef.current = activeHuddle; }, [activeHuddle]);
+
+  const incomingHuddleRef = useRef(incomingHuddle);
+  useEffect(() => { incomingHuddleRef.current = incomingHuddle; }, [incomingHuddle]);
 
   // ---------------------------
   // WebRTC Hook
@@ -63,11 +67,11 @@ export function HuddleProvider({ children }) {
       const huddle = activeHuddleRef.current;
       if (huddle && call.remotePeers.length === 0) {
         toast.error("No one answered the call");
-        // Properly end the huddle in DB so the next call can start
         const socket = getSocket();
         if (socket?.connected) {
           socket.emit("huddle:end", { channelId: huddle.channelId, huddleId: huddle.huddleId });
         }
+        activeHuddleRef.current = null;
         setActiveHuddle(null);
         call.leaveCall();
       }
@@ -81,10 +85,12 @@ export function HuddleProvider({ children }) {
   // ---------------------------
   const acceptHuddle = useCallback(() => {
     if (!incomingHuddle) return;
-    // Leave any existing active huddle before joining a new one
     if (activeHuddleRef.current) {
       call.leaveCall();
     }
+    // Immediately update refs so any concurrent socket events see correct state
+    activeHuddleRef.current = incomingHuddle;
+    incomingHuddleRef.current = null;
     setActiveHuddle(incomingHuddle);
     setIncomingHuddle(null);
   }, [incomingHuddle, call]);
@@ -102,6 +108,7 @@ export function HuddleProvider({ children }) {
           initiatorUserId: incomingHuddle.startedBy?.userId || incomingHuddle.startedBy,
         });
       }
+      incomingHuddleRef.current = null;
     }
     setIncomingHuddle(null);
   }, [incomingHuddle]);
@@ -117,6 +124,7 @@ export function HuddleProvider({ children }) {
       channelId: huddle.channelId,
       huddleId: huddle.huddleId,
     });
+    activeHuddleRef.current = null;
     setActiveHuddle(null);
     call.leaveCall();
   }, [call]);
@@ -137,6 +145,7 @@ export function HuddleProvider({ children }) {
       const name = payload.declinedBy?.username || "Someone";
       toast.error(`${name} declined the call`);
       if (remotePeersLengthRef.current === 0) {
+        activeHuddleRef.current = null;
         setActiveHuddle(null);
         call.leaveCall();
       }
@@ -154,12 +163,12 @@ export function HuddleProvider({ children }) {
     if (call.remotePeers.length > 0) { hadPeersRef.current = true; return; }
     if (hadPeersRef.current) {
       hadPeersRef.current = false;
-      // Emit huddle:end so the DB record is cleared (prevents stale huddle on next start)
       const huddle = activeHuddleRef.current;
       const socket = getSocket();
       if (huddle && socket?.connected) {
         socket.emit("huddle:end", { channelId: huddle.channelId, huddleId: huddle.huddleId });
       }
+      activeHuddleRef.current = null;
       setActiveHuddle(null);
       call.leaveCall();
     }
@@ -176,7 +185,6 @@ export function HuddleProvider({ children }) {
     isScreenSharing: call.screenSharing,
     activeSpeakerId: call.activeSpeakerId,
     networkQuality: call.networkQuality,
-    // Legacy Chat.jsx fields
     joined: call.inCall,
     connecting: call.connecting,
     error: "",
@@ -188,7 +196,6 @@ export function HuddleProvider({ children }) {
     leaveHuddle: call.leaveCall,
     muteAll: call.muteAll,
     endHuddleForAll,
-    // Subtitles
     subtitlesEnabled: call.subtitlesEnabled,
     subtitles: call.subtitles,
     toggleSubtitles: call.toggleSubtitles,
@@ -212,19 +219,24 @@ export function HuddleProvider({ children }) {
       const data = e.detail;
       if (!data?.huddleId || !data?.channelId) return;
       if (String(data.startedBy) === String(userRef.current?.id)) return;
-      setIncomingHuddle({
+      // Skip if we're already in this exact huddle or already showing this invite
+      if (data.huddleId === activeHuddleRef.current?.huddleId) return;
+      if (data.huddleId === incomingHuddleRef.current?.huddleId) return;
+      const invite = {
         huddleId: data.huddleId,
         channelId: data.channelId,
         startedByName: data.startedByName || "Someone",
         startedBy: { userId: data.startedBy, username: data.startedByName || "Someone" },
-      });
+      };
+      incomingHuddleRef.current = invite;
+      setIncomingHuddle(invite);
     };
     window.addEventListener("huddle:incoming", handler);
     return () => window.removeEventListener("huddle:incoming", handler);
   }, [user?.id]);
 
   // ---------------------------
-  // SOCKET: listen for huddle start/end
+  // SOCKET: listen for huddle start/end + chat notifications + huddle:sync on reconnect
   // ---------------------------
   useEffect(() => {
     let detach = null;
@@ -241,33 +253,74 @@ export function HuddleProvider({ children }) {
           at: payload.at,
         };
 
-        if (String(startedById) === String(userRef.current?.id)) {
+        // Skip if we're already in this exact call or already showing this invite
+        if (huddleData.huddleId === activeHuddleRef.current?.huddleId) return;
+        if (huddleData.huddleId === incomingHuddleRef.current?.huddleId) return;
+
+        if (startedById && String(startedById) === String(userRef.current?.id)) {
+          // We started this call — show video tiles
+          activeHuddleRef.current = huddleData;
           setActiveHuddle(huddleData);
         } else if (!activeHuddleRef.current) {
-          setIncomingHuddle({ ...huddleData, startedByName: startedByName });
+          // Someone else started — show invitation modal
+          incomingHuddleRef.current = { ...huddleData, startedByName };
+          setIncomingHuddle({ ...huddleData, startedByName });
         }
       };
 
       const onEnded = (payload) => {
         setActiveHuddle((prev) => {
           if (prev && payload.huddleId === prev.huddleId) {
+            // Immediately clear the ref so subsequent onStarted events aren't blocked
+            activeHuddleRef.current = null;
             call.leaveCall();
             return null;
           }
           return prev;
         });
         setIncomingHuddle((prev) => {
-          if (prev && payload.huddleId === prev.huddleId) return null;
+          if (prev && payload.huddleId === prev.huddleId) {
+            incomingHuddleRef.current = null;
+            return null;
+          }
           return prev;
+        });
+      };
+
+      // Emit huddle:sync immediately (backend will re-send any active invitation)
+      const syncHuddle = () => { if (socket.connected) socket.emit("huddle:sync"); };
+      syncHuddle();
+      socket.on("connect", syncHuddle);
+
+      // Global chat:message toast — only fires when NOT on the chat page
+      // (Chat.jsx handles its own toasts for active-page use)
+      const onChatMessage = (data) => {
+        if (window.location.pathname.startsWith("/chat")) return;
+        const senderId = data.userId || data.user_id;
+        if (!senderId || String(senderId) === String(userRef.current?.id)) return;
+        if (data.system) return;
+        const channelId = data.channelId;
+        if (!channelId) return;
+        const senderName = data.username || "Someone";
+        const label = channelId.startsWith("dm:") ? senderName : `#${channelId}`;
+        const preview = typeof data.textHtml === "string"
+          ? data.textHtml.replace(/<[^>]*>/g, "").trim().slice(0, 60)
+          : "";
+        toast(`💬 ${senderName} in ${label}${preview ? `: ${preview}` : ""}`, {
+          duration: 4000,
+          id: `chat-notif-${channelId}`,
         });
       };
 
       socket.on("huddle:started", onStarted);
       socket.on("huddle:ended", onEnded);
+      socket.on("chat:message", onChatMessage);
 
       return () => {
+        socket.off("connect", syncHuddle);
         socket.off("huddle:started", onStarted);
         socket.off("huddle:ended", onEnded);
+        socket.off("chat:message", onChatMessage);
       };
     }
 

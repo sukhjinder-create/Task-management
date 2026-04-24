@@ -19,7 +19,7 @@ export default function HuddleIncomingCall({ invite, onAccept, onDecline }) {
   const channelLabel = invite.channelId?.startsWith("dm:") ? "Direct Message" : `#${invite.channelId}`;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70">
+    <div className="fixed inset-0 z-[9999999] flex items-center justify-center bg-black/70">
       <div className="w-80 rounded-2xl bg-gray-900 border border-gray-700 p-8 flex flex-col items-center gap-6 shadow-2xl animate-pulse-once">
         {/* Avatar */}
         <div className="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center text-3xl font-bold text-white">

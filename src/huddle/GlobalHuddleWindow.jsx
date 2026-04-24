@@ -126,6 +126,7 @@ function CtrlBtn({ onClick, title, active = false, danger = false, wide = false,
 export default function GlobalHuddleWindow() {
   const huddleCtx = useHuddle();
   const activeHuddle = huddleCtx?.activeHuddle || null;
+  const incomingHuddle = huddleCtx?.incomingHuddle || null;
   const rtc = huddleCtx?.rtc || null;
   const currentUser = huddleCtx?.currentUser || null;
 
@@ -249,7 +250,8 @@ export default function GlobalHuddleWindow() {
     return () => window.removeEventListener("resize", onResize);
   }, [isMaximized]);
 
-  if (!activeHuddle || !rtc) return null;
+  // Don't show video tiles while there is a pending incoming call to accept/decline
+  if (!activeHuddle || !rtc || incomingHuddle) return null;
 
   // Network quality badge
   const netColor = { good: "text-green-400", ok: "text-yellow-400", poor: "text-red-400" }[networkQuality];
