@@ -433,9 +433,10 @@ export function useHuddleCall({ currentUser }) {
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-      console.warn("[huddle] SpeechRecognition not supported in this browser");
-      subtitlesEnabledRef.current = false;
-      setSubtitlesEnabled(false);
+      // SpeechRecognition unavailable (e.g. Android WebView) — still enable
+      // the overlay so incoming subtitles from other participants are displayed.
+      subtitlesEnabledRef.current = true;
+      setSubtitlesEnabled(true);
       return;
     }
 
@@ -451,7 +452,17 @@ export function useHuddleCall({ currentUser }) {
         transcript += event.results[i][0].transcript;
         if (event.results[i].isFinal) isFinal = true;
       }
-      setSubtitles((prev) => ({ ...prev, local: { text: transcript, at: Date.now(), isFinal } }));
+      const at = Date.now();
+      setSubtitles((prev) => ({ ...prev, local: { text: transcript, at, isFinal } }));
+      if (isFinal) {
+        setTimeout(() => {
+          setSubtitles((prev) => {
+            const entry = prev.local;
+            if (entry && entry.at === at) { const next = { ...prev }; delete next.local; return next; }
+            return prev;
+          });
+        }, 4500);
+      }
       const socket = getSocketSafe();
       if (socket && channelIdRef.current) {
         socket.emit("huddle:subtitle", {
@@ -624,7 +635,20 @@ export function useHuddleCall({ currentUser }) {
     };
 
     const handleSubtitle = ({ fromUserId, text, isFinal }) => {
-      setSubtitles((prev) => ({ ...prev, [fromUserId]: { text, at: Date.now(), isFinal } }));
+      const at = Date.now();
+      setSubtitles((prev) => ({ ...prev, [fromUserId]: { text, at, isFinal } }));
+      // Auto-clear after 4.5s so the overlay actually disappears without needing a re-render
+      setTimeout(() => {
+        setSubtitles((prev) => {
+          const entry = prev[fromUserId];
+          if (entry && entry.at === at) {
+            const next = { ...prev };
+            delete next[fromUserId];
+            return next;
+          }
+          return prev;
+        });
+      }, 4500);
     };
 
     socket.on("huddle:user-joined", handleUserJoined);

@@ -60,8 +60,14 @@ export function HuddleProvider({ children }) {
     if (!call.inCall || call.remotePeers.length > 0) return;
 
     ringTimeoutRef.current = setTimeout(() => {
-      if (activeHuddleRef.current && call.remotePeers.length === 0) {
+      const huddle = activeHuddleRef.current;
+      if (huddle && call.remotePeers.length === 0) {
         toast.error("No one answered the call");
+        // Properly end the huddle in DB so the next call can start
+        const socket = getSocket();
+        if (socket?.connected) {
+          socket.emit("huddle:end", { channelId: huddle.channelId, huddleId: huddle.huddleId });
+        }
         setActiveHuddle(null);
         call.leaveCall();
       }
@@ -148,6 +154,12 @@ export function HuddleProvider({ children }) {
     if (call.remotePeers.length > 0) { hadPeersRef.current = true; return; }
     if (hadPeersRef.current) {
       hadPeersRef.current = false;
+      // Emit huddle:end so the DB record is cleared (prevents stale huddle on next start)
+      const huddle = activeHuddleRef.current;
+      const socket = getSocket();
+      if (huddle && socket?.connected) {
+        socket.emit("huddle:end", { channelId: huddle.channelId, huddleId: huddle.huddleId });
+      }
       setActiveHuddle(null);
       call.leaveCall();
     }
@@ -232,7 +244,7 @@ export function HuddleProvider({ children }) {
         if (String(startedById) === String(userRef.current?.id)) {
           setActiveHuddle(huddleData);
         } else if (!activeHuddleRef.current) {
-          setIncomingHuddle(huddleData);
+          setIncomingHuddle({ ...huddleData, startedByName: startedByName });
         }
       };
 
