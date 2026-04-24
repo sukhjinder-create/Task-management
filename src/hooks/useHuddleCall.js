@@ -5,17 +5,19 @@ import { getSocket } from "../socket";
 // TURN credentials via Vite env vars — set VITE_TURN_URL, VITE_TURN_USERNAME,
 // VITE_TURN_CREDENTIAL in production for symmetric-NAT traversal.
 function buildRTCConfig() {
+  const u = import.meta.env?.VITE_TURN_USERNAME || "";
+  const c = import.meta.env?.VITE_TURN_CREDENTIAL || "";
   const iceServers = [
     { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun.relay.metered.ca:80" },
   ];
-  const turnUrl = import.meta.env?.VITE_TURN_URL;
-  if (turnUrl) {
-    iceServers.push({
-      urls: turnUrl,
-      username: import.meta.env?.VITE_TURN_USERNAME || "",
-      credential: import.meta.env?.VITE_TURN_CREDENTIAL || "",
-    });
+  if (u && c) {
+    iceServers.push(
+      { urls: "turn:global.relay.metered.ca:80", username: u, credential: c },
+      { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: u, credential: c },
+      { urls: "turn:global.relay.metered.ca:443", username: u, credential: c },
+      { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: u, credential: c },
+    );
   }
   return { iceServers };
 }
