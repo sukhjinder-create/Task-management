@@ -510,8 +510,12 @@ export function useHuddleCall({ currentUser }) {
 
   // ── Socket event handlers ───────────────────────────────────────────────────
   useEffect(() => {
-    const socket = getSocketSafe();
-    if (!socket) return;
+    let socketHandlerCleanup = null;
+    let authUpdatedListener = null;
+
+    function attachSocketHandlers() {
+      const socket = getSocket();
+      if (!socket || socketHandlerCleanup) return; // already attached or no socket
 
     const handleUserJoined = async ({ channelId, userId, username }) => {
       if (channelId !== channelIdRef.current) return;
@@ -635,7 +639,7 @@ export function useHuddleCall({ currentUser }) {
     socket.on("huddle:muted", handleMuted);
     socket.on("huddle:subtitle", handleSubtitle);
 
-    return () => {
+    socketHandlerCleanup = () => {
       socket.off("huddle:user-joined", handleUserJoined);
       socket.off("huddle:user-left", handleUserLeft);
       socket.off("huddle:signal", handleSignal);
@@ -647,6 +651,19 @@ export function useHuddleCall({ currentUser }) {
       socket.off("huddle:screen-stop", handleScreenStop);
       socket.off("huddle:muted", handleMuted);
       socket.off("huddle:subtitle", handleSubtitle);
+    };
+    }
+
+    // Try immediately; fall back to auth:updated event if socket not yet ready
+    attachSocketHandlers();
+    if (!socketHandlerCleanup) {
+      authUpdatedListener = () => attachSocketHandlers();
+      window.addEventListener("auth:updated", authUpdatedListener);
+    }
+
+    return () => {
+      if (authUpdatedListener) window.removeEventListener("auth:updated", authUpdatedListener);
+      if (socketHandlerCleanup) socketHandlerCleanup();
     };
   }, [createPeerConnection, flushIceCandidates, initLocalMedia, removeRemotePeer, updateRemotePeerMeta]);
 

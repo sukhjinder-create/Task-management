@@ -215,15 +215,8 @@ export function HuddleProvider({ children }) {
   // SOCKET: listen for huddle start/end
   // ---------------------------
   useEffect(() => {
-    let socket = getSocket();
-    if (!socket) {
-      const t = setTimeout(() => {
-        socket = getSocket();
-        if (socket) attach(socket);
-      }, 1000);
-      return () => clearTimeout(t);
-    }
-    return attach(socket);
+    let detach = null;
+    let authUpdatedListener = null;
 
     function attach(socket) {
       const onStarted = (payload) => {
@@ -239,7 +232,6 @@ export function HuddleProvider({ children }) {
         if (String(startedById) === String(userRef.current?.id)) {
           setActiveHuddle(huddleData);
         } else if (!activeHuddleRef.current) {
-          // Only show invite if not already in a different huddle
           setIncomingHuddle(huddleData);
         }
       };
@@ -252,7 +244,6 @@ export function HuddleProvider({ children }) {
           }
           return prev;
         });
-        // Dismiss pending invite for this huddle (caller cancelled)
         setIncomingHuddle((prev) => {
           if (prev && payload.huddleId === prev.huddleId) return null;
           return prev;
@@ -267,6 +258,27 @@ export function HuddleProvider({ children }) {
         socket.off("huddle:ended", onEnded);
       };
     }
+
+    function tryAttach() {
+      const socket = getSocket();
+      if (!socket || detach) return;
+      detach = attach(socket);
+      if (authUpdatedListener) {
+        window.removeEventListener("auth:updated", authUpdatedListener);
+        authUpdatedListener = null;
+      }
+    }
+
+    tryAttach();
+    if (!detach) {
+      authUpdatedListener = () => tryAttach();
+      window.addEventListener("auth:updated", authUpdatedListener);
+    }
+
+    return () => {
+      if (authUpdatedListener) window.removeEventListener("auth:updated", authUpdatedListener);
+      if (detach) detach();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------

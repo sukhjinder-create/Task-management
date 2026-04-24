@@ -59,6 +59,7 @@ export function AuthProvider({ children }) {
             const authData = { token: urlToken, user, refreshToken: null };
             localStorage.setItem("auth", JSON.stringify(authData));
             window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || null;
+            window.dispatchEvent(new CustomEvent("auth:updated", { detail: { user, token: urlToken } }));
             setAuth({ user, token: urlToken, isReady: true });
           })
           .catch(() => setAuth((prev) => ({ ...prev, isReady: true })));
@@ -79,6 +80,11 @@ export function AuthProvider({ children }) {
         if (slug && hostname === "app.asystence.com") {
           window.location.href = `https://${slug}.asystence.com${window.location.pathname}?_t=${parsed.token}`;
           return;
+        }
+
+        // Initialize socket immediately so huddle/chat works on any page (not just Chat)
+        if (parsed?.token) {
+          window.dispatchEvent(new CustomEvent("auth:updated", { detail: { user: parsed?.user, token: parsed?.token } }));
         }
 
         setAuth({
