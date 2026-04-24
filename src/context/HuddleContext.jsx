@@ -237,12 +237,18 @@ export function HuddleProvider({ children }) {
 
   // ---------------------------
   // SOCKET: listen for huddle start/end + chat notifications + huddle:sync on reconnect
+  // Re-attaches on every auth:updated so a replaced socket is never orphaned.
   // ---------------------------
   useEffect(() => {
-    let detach = null;
-    let authUpdatedListener = null;
+    let cleanup = () => {};
 
-    function attach(socket) {
+    function attach() {
+      const socket = getSocket();
+      // Clean up previous socket's listeners before attaching to the new one
+      cleanup();
+      cleanup = () => {};
+      if (!socket) return;
+
       const onStarted = (payload) => {
         const startedById = payload.startedBy?.userId || payload.startedBy;
         const startedByName = payload.startedBy?.username || payload.startedByName || "Someone";
@@ -316,7 +322,7 @@ export function HuddleProvider({ children }) {
       socket.on("huddle:ended", onEnded);
       socket.on("chat:message", onChatMessage);
 
-      return () => {
+      cleanup = () => {
         socket.off("connect", syncHuddle);
         socket.off("huddle:started", onStarted);
         socket.off("huddle:ended", onEnded);
@@ -324,25 +330,14 @@ export function HuddleProvider({ children }) {
       };
     }
 
-    function tryAttach() {
-      const socket = getSocket();
-      if (!socket || detach) return;
-      detach = attach(socket);
-      if (authUpdatedListener) {
-        window.removeEventListener("auth:updated", authUpdatedListener);
-        authUpdatedListener = null;
-      }
-    }
-
-    tryAttach();
-    if (!detach) {
-      authUpdatedListener = () => tryAttach();
-      window.addEventListener("auth:updated", authUpdatedListener);
-    }
+    // Re-attach every time auth:updated fires (socket.js replaces the socket instance)
+    const onAuthUpdated = () => setTimeout(attach, 0);
+    window.addEventListener("auth:updated", onAuthUpdated);
+    attach(); // attach immediately for the current socket
 
     return () => {
-      if (authUpdatedListener) window.removeEventListener("auth:updated", authUpdatedListener);
-      if (detach) detach();
+      window.removeEventListener("auth:updated", onAuthUpdated);
+      cleanup();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

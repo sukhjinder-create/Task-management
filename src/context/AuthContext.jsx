@@ -85,6 +85,8 @@ export function AuthProvider({ children }) {
         // Initialize socket immediately so huddle/chat works on any page (not just Chat)
         if (parsed?.token) {
           window.dispatchEvent(new CustomEvent("auth:updated", { detail: { user: parsed?.user, token: parsed?.token } }));
+          // Register Capacitor push handlers on every app start (not just fresh login)
+          initPush(parsed.token).catch(() => {});
         }
 
         setAuth({
