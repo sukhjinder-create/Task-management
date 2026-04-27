@@ -1,9 +1,14 @@
 // src/utils/pushNotifications.js
 // Initializes web push (VAPID) and FCM (Capacitor Android).
-// Call initPush(token) after login.
+// Call initPush(token) after login or on app restore.
 
 import { isCapacitor, isWeb } from "./native";
 import { API_BASE_URL } from "../api";
+
+// Module-level: token always up-to-date for the registration callback
+let _currentAuthToken = null;
+// Only register Capacitor listeners once per app session
+let _capacitorSetupDone = false;
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -23,6 +28,20 @@ async function fetchVapidKey(authToken) {
   } catch {
     return null;
   }
+}
+
+async function registerFcmTokenWithBackend(fcmToken) {
+  if (!_currentAuthToken || !fcmToken) return;
+  try {
+    await fetch(`${API_BASE_URL}/push/subscribe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${_currentAuthToken}`,
+      },
+      body: JSON.stringify({ platform: "android", fcmToken }),
+    });
+  } catch {}
 }
 
 async function subscribeWebPush(authToken) {
@@ -74,130 +93,100 @@ async function subscribeCapacitorPush(authToken) {
 
     // Create notification channels with sound + vibration (Android 8+)
     if (window.Capacitor?.getPlatform() === "android") {
-      await PushNotifications.createChannel({
-        id: "default",
-        name: "General Notifications",
-        importance: 5,
-        sound: "default",
-        vibration: true,
-        visibility: 1,
-      }).catch(() => {});
-      await PushNotifications.createChannel({
-        id: "chat",
-        name: "Chat Messages",
-        importance: 5,
-        sound: "default",
-        vibration: true,
-        visibility: 1,
-      }).catch(() => {});
-      await PushNotifications.createChannel({
-        id: "tasks",
-        name: "Task Updates",
-        importance: 4,
-        sound: "default",
-        vibration: true,
-        visibility: 1,
-      }).catch(() => {});
-      await PushNotifications.createChannel({
-        id: "huddle",
-        name: "Huddle Calls",
-        importance: 5,
-        sound: "default",
-        vibration: true,
-        visibility: 1,
-      }).catch(() => {});
+      const channels = [
+        { id: "default", name: "General Notifications", importance: 5 },
+        { id: "chat",    name: "Chat Messages",          importance: 5 },
+        { id: "tasks",   name: "Task Updates",            importance: 4 },
+        { id: "huddle",  name: "Huddle Calls",            importance: 5 },
+      ];
+      for (const ch of channels) {
+        await PushNotifications.createChannel({ ...ch, sound: "default", vibration: true, visibility: 1 }).catch(() => {});
+      }
     }
 
-    await PushNotifications.register();
+    // Register listeners ONCE — they use _currentAuthToken via module closure
+    if (!_capacitorSetupDone) {
+      _capacitorSetupDone = true;
 
-    PushNotifications.addListener("registration", async ({ value: fcmToken }) => {
-      try {
-        await fetch(`${API_BASE_URL}/push/subscribe`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({
-            platform: "android",
-            fcmToken,
-          }),
+      // Token registration (called on register() and on FCM token refresh)
+      PushNotifications.addListener("registration", ({ value: fcmToken }) => {
+        registerFcmTokenWithBackend(fcmToken);
+      });
+
+      // Foreground: show UI for huddle or native notification for others
+      PushNotifications.addListener("pushNotificationReceived", (notification) => {
+        const data = notification.data || {};
+        if (data.type === "huddle") {
+          window.dispatchEvent(new CustomEvent("huddle:incoming", {
+            detail: {
+              huddleId: data.huddleId,
+              channelId: data.channelId,
+              startedByName: data.startedByName || "Someone",
+              startedBy: data.startedBy,
+            },
+          }));
+          return;
+        }
+        import("./native").then(({ showNotification }) => {
+          showNotification(notification.title || "Asystence", notification.body || "");
         });
-      } catch {}
-    });
+      });
 
-    // Handle foreground notifications
-    PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      const data = notification.data || {};
-      if (data.type === "huddle") {
-        // Show incoming call UI inside the app
-        window.dispatchEvent(new CustomEvent("huddle:incoming", {
-          detail: {
+      // Tap on notification → navigate or show huddle
+      PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+        const data = action.notification?.data || {};
+        if (data.type === "huddle") {
+          const inviteData = {
             huddleId: data.huddleId,
             channelId: data.channelId,
             startedByName: data.startedByName || "Someone",
             startedBy: data.startedBy,
-          },
-        }));
-        return;
-      }
-      import("./native").then(({ showNotification }) => {
-        showNotification(notification.title || "Asystence", notification.body || "");
-      });
-    });
-
-    // Handle notification tap → navigate (app in foreground/background)
-    PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-      const data = action.notification?.data || {};
-      if (data.type === "huddle") {
-        const inviteData = {
-          huddleId: data.huddleId,
-          channelId: data.channelId,
-          startedByName: data.startedByName || "Someone",
-          startedBy: data.startedBy,
-        };
-        // Set synchronously in case HuddleContext hasn't mounted yet
-        window.__PENDING_HUDDLE_INVITE__ = inviteData;
-        window.dispatchEvent(new CustomEvent("huddle:incoming", { detail: inviteData }));
-        return;
-      }
-      const url = data.url;
-      if (url) {
-        window.__PUSH_NAVIGATE__ = url;
-        window.dispatchEvent(new CustomEvent("push:navigate", { detail: { url } }));
-      }
-    });
-
-    // Handle notification tap when app was killed (opened from scratch)
-    PushNotifications.getDeliveredNotifications().catch(() => {});
-    const launched = await PushNotifications.getLaunchNotification().catch(() => null);
-    if (launched?.data) {
-      const data = launched.data;
-      if (data.type === "huddle") {
-        const inviteData = {
-          huddleId: data.huddleId,
-          channelId: data.channelId,
-          startedByName: data.startedByName || "Someone",
-          startedBy: data.startedBy,
-        };
-        // Set synchronously so HuddleContext reads it on initial mount (useState initializer)
-        window.__PENDING_HUDDLE_INVITE__ = inviteData;
-        // Also dispatch the event after React has fully mounted (fallback for late listeners)
-        setTimeout(() => {
+          };
+          window.__PENDING_HUDDLE_INVITE__ = inviteData;
           window.dispatchEvent(new CustomEvent("huddle:incoming", { detail: inviteData }));
-        }, 2000);
-      } else if (data.url) {
-        window.__PUSH_NAVIGATE__ = data.url;
+          return;
+        }
+        const url = data.url;
+        if (url) {
+          window.__PUSH_NAVIGATE__ = url;
+          window.dispatchEvent(new CustomEvent("push:navigate", { detail: { url } }));
+        }
+      });
+
+      // Launched from killed state
+      PushNotifications.getDeliveredNotifications().catch(() => {});
+      const launched = await PushNotifications.getLaunchNotification().catch(() => null);
+      if (launched?.data) {
+        const data = launched.data;
+        if (data.type === "huddle") {
+          const inviteData = {
+            huddleId: data.huddleId,
+            channelId: data.channelId,
+            startedByName: data.startedByName || "Someone",
+            startedBy: data.startedBy,
+          };
+          window.__PENDING_HUDDLE_INVITE__ = inviteData;
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("huddle:incoming", { detail: inviteData }));
+          }, 2000);
+        } else if (data.url) {
+          window.__PUSH_NAVIGATE__ = data.url;
+        }
       }
     }
+
+    // Always call register() so FCM refreshes/confirms the token
+    await PushNotifications.register();
+
   } catch (err) {
     console.warn("[push] Capacitor push setup failed:", err.message);
   }
 }
 
-/** Call once after login with the JWT auth token. */
+/** Call after login or on app restore with the current JWT auth token. */
 export async function initPush(authToken) {
   if (!authToken) return;
+  _currentAuthToken = authToken;
   if (isCapacitor) {
     await subscribeCapacitorPush(authToken);
   } else if (isWeb) {
@@ -207,7 +196,9 @@ export async function initPush(authToken) {
 
 /** Unsubscribe from push notifications on logout. */
 export async function teardownPush(authToken) {
-  if (isCapacitor) return; // Capacitor: token removed on backend via logout
+  _currentAuthToken = null;
+  _capacitorSetupDone = false;
+  if (isCapacitor) return;
   if (!("serviceWorker" in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.getRegistration("/sw.js");

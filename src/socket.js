@@ -28,8 +28,10 @@ function createSocket() {
     auth: { token: window.__AUTH_TOKEN__ },
     transports: ["websocket", "polling"],
     withCredentials: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 700,
+    timeout: 10000,
+    reconnectionAttempts: 15,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 4000,
   });
 
   // When superadmin changes this workspace's plan, re-fetch plan features
