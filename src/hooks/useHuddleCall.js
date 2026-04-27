@@ -2,27 +2,69 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { getSocket } from "../socket";
 
-// TURN credentials via Vite env vars — set VITE_TURN_URL, VITE_TURN_USERNAME,
-// VITE_TURN_CREDENTIAL in production for symmetric-NAT traversal.
-function buildRTCConfig() {
+const API_URL = import.meta.env.VITE_API_URL || "";
+
+// Fetch ICE servers (STUN + TURN) from backend once at module load.
+// This avoids rebuilding the APK when TURN credentials change.
+let cachedRtcConfig = null;
+let iceFetchPromise = null;
+
+function fetchIceConfig() {
+  if (cachedRtcConfig) return Promise.resolve(cachedRtcConfig);
+  if (iceFetchPromise) return iceFetchPromise;
+  if (!API_URL) return Promise.resolve(buildFallbackRtcConfig());
+
+  iceFetchPromise = fetch(`${API_URL}/ice-servers`, { cache: "no-store" })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (data?.iceServers?.length) {
+        cachedRtcConfig = { iceServers: data.iceServers };
+      } else {
+        cachedRtcConfig = buildFallbackRtcConfig();
+      }
+      iceFetchPromise = null;
+      return cachedRtcConfig;
+    })
+    .catch(() => {
+      iceFetchPromise = null;
+      cachedRtcConfig = buildFallbackRtcConfig();
+      return cachedRtcConfig;
+    });
+
+  return iceFetchPromise;
+}
+
+function buildFallbackRtcConfig() {
   const u = import.meta.env?.VITE_TURN_USERNAME || "";
   const c = import.meta.env?.VITE_TURN_CREDENTIAL || "";
   const iceServers = [
     { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun.relay.metered.ca:80" },
+    {
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+        "turn:openrelay.metered.ca:80?transport=tcp",
+      ],
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
   ];
   if (u && c) {
     iceServers.push(
-      { urls: "turn:global.relay.metered.ca:80", username: u, credential: c },
-      { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: u, credential: c },
-      { urls: "turn:global.relay.metered.ca:443", username: u, credential: c },
-      { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: u, credential: c },
+      { urls: "turn:global.relay.metered.ca:80",                  username: u, credential: c },
+      { urls: "turn:global.relay.metered.ca:80?transport=tcp",    username: u, credential: c },
+      { urls: "turn:global.relay.metered.ca:443",                 username: u, credential: c },
+      { urls: "turns:global.relay.metered.ca:443?transport=tcp",  username: u, credential: c },
     );
   }
   return { iceServers };
 }
 
-const RTC_CONFIG = buildRTCConfig();
+// Prefetch on module load so it's ready before the first call
+fetchIceConfig();
 
 export function useHuddleCall({ currentUser }) {
   const [inCall, setInCall] = useState(false);
@@ -35,7 +77,7 @@ export function useHuddleCall({ currentUser }) {
   const [networkQuality, setNetworkQuality] = useState("good");
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
-  const [subtitles, setSubtitles] = useState({}); // { userId|"local": { text, at, isFinal } }
+  const [subtitles, setSubtitles] = useState({});
 
   const peerConnectionsRef = useRef({});
   const remoteStreamsRef = useRef({});
@@ -44,7 +86,7 @@ export function useHuddleCall({ currentUser }) {
   const screenTrackRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const blackTrackRef = useRef(null);
-  const iceCandidateQueueRef = useRef({}); // { [userId]: RTCIceCandidate[] }
+  const iceCandidateQueueRef = useRef({});
   const recognitionRef = useRef(null);
   const subtitlesEnabledRef = useRef(false);
 
@@ -52,8 +94,8 @@ export function useHuddleCall({ currentUser }) {
   const huddleIdRef = useRef(null);
   const userRef = useRef(currentUser);
   const inCallRef = useRef(false);
-  const startingRef = useRef(false); // ref-based guard to prevent double startCall
-  const initLocalMediaPromiseRef = useRef(null); // deduplicates concurrent getUserMedia calls
+  const startingRef = useRef(false);
+  const initLocalMediaPromiseRef = useRef(null);
 
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
   useEffect(() => { inCallRef.current = inCall; }, [inCall]);
@@ -69,41 +111,50 @@ export function useHuddleCall({ currentUser }) {
 
   // ── Remote peer helpers ─────────────────────────────────────────────────────
   const updateRemotePeerStream = useCallback((userId, stream) => {
-    remoteStreamsRef.current[userId] = stream;
+    const uid = String(userId);
+    remoteStreamsRef.current[uid] = stream;
     setRemotePeers((prev) => {
-      const existing = prev.find((p) => p.userId === userId);
-      if (existing) return prev.map((p) => p.userId === userId ? { ...p, stream } : p);
+      const existing = prev.find((p) => String(p.userId) === uid);
+      if (existing) return prev.map((p) => String(p.userId) === uid ? { ...p, stream } : p);
       return [...prev, { userId, username: "", stream, isMuted: false, isCameraOff: false, isScreenSharing: false }];
     });
   }, []);
 
   const updateRemotePeerMeta = useCallback((userId, meta) => {
-    setRemotePeers((prev) => prev.map((p) => p.userId === userId ? { ...p, ...meta } : p));
+    const uid = String(userId);
+    setRemotePeers((prev) => prev.map((p) => String(p.userId) === uid ? { ...p, ...meta } : p));
   }, []);
 
   const removeRemotePeer = useCallback((userId) => {
-    setRemotePeers((prev) => prev.filter((p) => p.userId !== userId));
-    const pc = peerConnectionsRef.current[userId];
-    if (pc) { pc.close(); delete peerConnectionsRef.current[userId]; }
-    delete remoteStreamsRef.current[userId];
-    delete iceCandidateQueueRef.current[userId];
+    const uid = String(userId);
+    setRemotePeers((prev) => prev.filter((p) => String(p.userId) !== uid));
+    const pc = peerConnectionsRef.current[uid];
+    if (pc) { pc.close(); delete peerConnectionsRef.current[uid]; }
+    delete remoteStreamsRef.current[uid];
+    delete iceCandidateQueueRef.current[uid];
   }, []);
 
   // ── Create RTCPeerConnection ────────────────────────────────────────────────
   const createPeerConnection = useCallback((remoteUserId) => {
+    const uid = String(remoteUserId);
     const socket = getSocketSafe();
     if (!socket) return null;
 
-    const existing = peerConnectionsRef.current[remoteUserId];
-    if (existing) return existing;
+    const existing = peerConnectionsRef.current[uid];
+    if (existing && existing.connectionState !== "failed" && existing.connectionState !== "closed") {
+      return existing;
+    }
+    // Clean up a dead connection before creating a new one
+    if (existing) { existing.close(); delete peerConnectionsRef.current[uid]; }
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const rtcConfig = cachedRtcConfig || buildFallbackRtcConfig();
+    const pc = new RTCPeerConnection(rtcConfig);
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         socket.emit("huddle:signal", {
           channelId: channelIdRef.current,
-          targetUserId: remoteUserId,
+          targetUserId: uid,
           huddleId: huddleIdRef.current,
           data: { type: "candidate", candidate: event.candidate },
         });
@@ -112,20 +163,61 @@ export function useHuddleCall({ currentUser }) {
 
     pc.ontrack = (event) => {
       const [stream] = event.streams;
-      if (stream) updateRemotePeerStream(remoteUserId, stream);
+      if (stream) updateRemotePeerStream(uid, stream);
+    };
+
+    // ICE connection state monitoring — detect failure and auto-restart
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState;
+      console.log(`[huddle] ICE ${uid}: ${state}`);
+
+      if (state === "failed") {
+        // The lower userId is "impolite" — only they restart to avoid collision
+        const myId = String(userRef.current?.id || "");
+        if (myId <= uid && pc.signalingState === "stable") {
+          console.warn(`[huddle] Restarting ICE for ${uid}`);
+          pc.restartIce?.();
+          pc.createOffer({ iceRestart: true })
+            .then(offer => pc.setLocalDescription(offer))
+            .then(() => {
+              const s = getSocketSafe();
+              if (s && channelIdRef.current) {
+                s.emit("huddle:signal", {
+                  channelId: channelIdRef.current,
+                  targetUserId: uid,
+                  huddleId: huddleIdRef.current,
+                  data: { type: "offer", sdp: pc.localDescription.sdp, fromUsername: userRef.current?.username || "" },
+                });
+              }
+            })
+            .catch(e => console.error("[huddle] ICE restart failed:", e));
+        }
+      }
+
+      if (state === "disconnected") {
+        // Give it 6 s to self-recover before removing the peer
+        setTimeout(() => {
+          if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
+            removeRemotePeer(uid);
+          }
+        }, 6000);
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log(`[huddle] Connection ${uid}: ${pc.connectionState}`);
     };
 
     const local = localStreamRef.current;
     if (local) local.getTracks().forEach((track) => pc.addTrack(track, local));
 
-    peerConnectionsRef.current[remoteUserId] = pc;
+    peerConnectionsRef.current[uid] = pc;
     return pc;
-  }, [updateRemotePeerStream]);
+  }, [updateRemotePeerStream, removeRemotePeer]);
 
   // ── Init local media ────────────────────────────────────────────────────────
   const initLocalMedia = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
-    // Reuse in-flight promise to prevent concurrent getUserMedia calls
     if (initLocalMediaPromiseRef.current) return initLocalMediaPromiseRef.current;
 
     initLocalMediaPromiseRef.current = (async () => {
@@ -138,7 +230,6 @@ export function useHuddleCall({ currentUser }) {
       setLocalStream(stream);
       cameraVideoTrackRef.current = stream.getVideoTracks()[0] || null;
 
-      // Active speaker detection via audio analyser
       try {
         const audioCtx = new AudioContext();
         const analyser = audioCtx.createAnalyser();
@@ -168,29 +259,62 @@ export function useHuddleCall({ currentUser }) {
   }, []);
 
   // ── Flush queued ICE candidates after remote description is set ─────────────
-  const flushIceCandidates = useCallback(async (pc, remoteUserId) => {
-    const queued = iceCandidateQueueRef.current[remoteUserId] || [];
+  const flushIceCandidates = useCallback(async (pc, userId) => {
+    const uid = String(userId);
+    const queued = iceCandidateQueueRef.current[uid] || [];
     for (const candidate of queued) {
-      try { await pc.addIceCandidate(candidate); } catch (e) { /* stale, ignore */ }
+      try { await pc.addIceCandidate(candidate); } catch {}
     }
-    delete iceCandidateQueueRef.current[remoteUserId];
+    delete iceCandidateQueueRef.current[uid];
   }, []);
+
+  // ── Create and send an offer to a remote peer ───────────────────────────────
+  const sendOffer = useCallback(async (peerId, peerUsername) => {
+    const uid = String(peerId);
+    const socket = getSocketSafe();
+    if (!socket) return;
+
+    try {
+      await initLocalMedia();
+      const pc = createPeerConnection(uid);
+      if (!pc) return;
+      if (pc.signalingState !== "stable") return;
+
+      setRemotePeers(prev => {
+        if (prev.find(p => String(p.userId) === uid)) return prev;
+        return [...prev, { userId: uid, username: peerUsername || "", stream: remoteStreamsRef.current[uid] || null, isMuted: false, isCameraOff: false, isScreenSharing: false }];
+      });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      socket.emit("huddle:signal", {
+        channelId: channelIdRef.current,
+        targetUserId: uid,
+        huddleId: huddleIdRef.current,
+        data: { type: "offer", sdp: offer.sdp, fromUsername: userRef.current?.username || "" },
+      });
+    } catch (err) {
+      console.error("[huddle] sendOffer error for", uid, ":", err);
+    }
+  }, [createPeerConnection, initLocalMedia]);
 
   // ── Start call ──────────────────────────────────────────────────────────────
   const startCall = useCallback(async () => {
     if (!channelIdRef.current || !userRef.current) return;
-    // Use refs (not stale React state) to guard against double-calls
     if (inCallRef.current || startingRef.current) return;
     startingRef.current = true;
 
     const socket = getSocketSafe();
     if (!socket) { startingRef.current = false; return; }
 
+    // Prefetch ICE config (no-op if already cached)
+    await fetchIceConfig().catch(() => {});
+
     setConnecting(true);
     inCallRef.current = true;
     setInCall(true);
 
-    // Emit join before acquiring media — WebRTC handshake can start immediately
     socket.emit("huddle:join", {
       channelId: channelIdRef.current,
       huddleId: huddleIdRef.current,
@@ -208,7 +332,6 @@ export function useHuddleCall({ currentUser }) {
 
   // ── Leave call ──────────────────────────────────────────────────────────────
   const leaveCall = useCallback(() => {
-    // Sync refs immediately — don't wait for React state batch
     inCallRef.current = false;
     startingRef.current = false;
 
@@ -230,7 +353,6 @@ export function useHuddleCall({ currentUser }) {
       blackTrackRef.current.track.stop();
       blackTrackRef.current = null;
     }
-    // Stop screen share track so OS recording indicator disappears
     if (screenTrackRef.current) {
       screenTrackRef.current.stop();
       screenTrackRef.current = null;
@@ -240,13 +362,11 @@ export function useHuddleCall({ currentUser }) {
     setLocalStream(null);
     cameraVideoTrackRef.current = null;
 
-    // Reset media UI state so next call starts fresh
     setMicEnabled(true);
     setCamEnabled(true);
     setScreenSharing(false);
     setInCall(false);
 
-    // Stop subtitles
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
@@ -270,8 +390,6 @@ export function useHuddleCall({ currentUser }) {
   }, [micEnabled]);
 
   // ── Toggle camera ───────────────────────────────────────────────────────────
-  // Uses a black canvas track instead of track.enabled=false to prevent
-  // Android WebView from pausing the <video> element when frames stop.
   const toggleCamera = useCallback(async () => {
     const local = localStreamRef.current;
     if (!local) return;
@@ -308,7 +426,6 @@ export function useHuddleCall({ currentUser }) {
       return;
     }
 
-    // Camera ON
     const cameraTrack = cameraVideoTrackRef.current;
     const blackInfo = blackTrackRef.current;
 
@@ -332,7 +449,6 @@ export function useHuddleCall({ currentUser }) {
       return;
     }
 
-    // Camera track ended (some Android browsers stop it) — re-acquire
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
       const newTrack = newStream.getVideoTracks()[0];
@@ -433,8 +549,6 @@ export function useHuddleCall({ currentUser }) {
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-      // SpeechRecognition unavailable (e.g. Android WebView) — still enable
-      // the overlay so incoming subtitles from other participants are displayed.
       subtitlesEnabledRef.current = true;
       setSubtitlesEnabled(true);
       return;
@@ -465,11 +579,7 @@ export function useHuddleCall({ currentUser }) {
       }
       const socket = getSocketSafe();
       if (socket && channelIdRef.current) {
-        socket.emit("huddle:subtitle", {
-          channelId: channelIdRef.current,
-          text: transcript,
-          isFinal,
-        });
+        socket.emit("huddle:subtitle", { channelId: channelIdRef.current, text: transcript, isFinal });
       }
     };
 
@@ -480,10 +590,9 @@ export function useHuddleCall({ currentUser }) {
       }
     };
 
-    // Auto-restart on end for continuous recognition
     recognition.onend = () => {
       if (subtitlesEnabledRef.current && inCallRef.current) {
-        try { recognition.start(); } catch (e) { /* ignore if already started */ }
+        try { recognition.start(); } catch {}
       }
     };
 
@@ -525,170 +634,180 @@ export function useHuddleCall({ currentUser }) {
 
     function attachSocketHandlers() {
       const socket = getSocket();
-      cleanup(); // detach from previous socket before re-attaching
+      cleanup();
       cleanup = () => {};
       if (!socket) return;
 
-    const handleUserJoined = async ({ channelId, userId, username }) => {
-      if (channelId !== channelIdRef.current) return;
-      if (String(userId) === String(userRef.current?.id)) return;
-      if (!inCallRef.current) return;
+      // ── User joined the same huddle room (existing participant creates offer) ──
+      const handleUserJoined = async ({ channelId, userId, username }) => {
+        if (channelId !== channelIdRef.current) return;
+        if (String(userId) === String(userRef.current?.id)) return;
+        if (!inCallRef.current) return;
+        await sendOffer(userId, username);
+      };
 
-      try {
-        await initLocalMedia();
-        const pc = createPeerConnection(userId);
-        if (!pc) return;
-
-        // Guard: only create offer when in stable state to prevent InvalidStateError
-        if (pc.signalingState !== "stable") return;
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        socket.emit("huddle:signal", {
-          channelId: channelIdRef.current,
-          targetUserId: userId,
-          huddleId: huddleIdRef.current,
-          data: { type: "offer", sdp: offer.sdp, fromUsername: userRef.current?.username || "" },
-        });
-
-        setRemotePeers((prev) => {
-          const existing = prev.find((p) => p.userId === userId);
-          if (existing) return prev.map((p) => p.userId === userId ? { ...p, username } : p);
-          return [...prev, { userId, username, stream: remoteStreamsRef.current[userId] || null, isMuted: false, isCameraOff: false, isScreenSharing: false }];
-        });
-      } catch (err) {
-        console.error("[huddle] handleUserJoined error:", err);
-      }
-    };
-
-    const handleUserLeft = ({ channelId, userId }) => {
-      if (channelId !== channelIdRef.current) return;
-      removeRemotePeer(userId);
-      // Clear subtitles for this user
-      setSubtitles((prev) => {
-        const next = { ...prev };
-        delete next[userId];
-        return next;
-      });
-    };
-
-    const handleSignal = async ({ fromUserId, data, channelId }) => {
-      if (channelId !== channelIdRef.current) return;
-      if (String(fromUserId) === String(userRef.current?.id)) return;
-
-      const { type } = data;
-
-      try {
-        // Init local media BEFORE creating PC for offers so tracks are added immediately
-        if (type === "offer") await initLocalMedia();
-
-        const pc = createPeerConnection(fromUserId);
-        if (!pc) return;
-
-        if (type === "offer") {
-          // Add the offering peer to the list immediately so their tile renders before stream arrives
-          const fromUsername = data.fromUsername || "";
-          setRemotePeers((prev) => {
-            if (prev.find((p) => p.userId === fromUserId)) return prev;
-            return [...prev, { userId: fromUserId, username: fromUsername, stream: remoteStreamsRef.current[fromUserId] || null, isMuted: false, isCameraOff: false, isScreenSharing: false }];
-          });
-          await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: data.sdp }));
-          await flushIceCandidates(pc, fromUserId);
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit("huddle:signal", {
-            channelId: channelIdRef.current,
-            targetUserId: fromUserId,
-            huddleId: huddleIdRef.current,
-            data: { type: "answer", sdp: answer.sdp },
-          });
-        } else if (type === "answer") {
-          await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: data.sdp }));
-          await flushIceCandidates(pc, fromUserId);
-        } else if (type === "candidate" && data.candidate) {
-          const candidate = new RTCIceCandidate(data.candidate);
-          if (pc.remoteDescription) {
-            try { await pc.addIceCandidate(candidate); } catch (e) { /* stale */ }
-          } else {
-            // Queue until remote description is ready
-            if (!iceCandidateQueueRef.current[fromUserId]) iceCandidateQueueRef.current[fromUserId] = [];
-            iceCandidateQueueRef.current[fromUserId].push(candidate);
-          }
+      // ── Server sent us the list of participants already in the call ──────────
+      // This fires on the JOINER side and fixes the race condition where
+      // huddle:user-joined might be missed if the caller's socket wasn't in the
+      // channel room yet when this user joined.
+      const handleParticipants = async ({ channelId, participants }) => {
+        if (channelId !== channelIdRef.current) return;
+        if (!inCallRef.current) return;
+        for (const { userId: peerId, username } of (participants || [])) {
+          if (String(peerId) === String(userRef.current?.id)) continue;
+          await sendOffer(peerId, username);
         }
-      } catch (err) {
-        console.error("[huddle] handleSignal error:", err);
-      }
-    };
+      };
 
-    const handleMute = ({ userId }) => updateRemotePeerMeta(userId, { isMuted: true });
-    const handleUnmute = ({ userId }) => updateRemotePeerMeta(userId, { isMuted: false });
-    const handleCameraOff = ({ userId }) => updateRemotePeerMeta(userId, { isCameraOff: true });
-    const handleCameraOn = ({ userId }) => updateRemotePeerMeta(userId, { isCameraOff: false });
-    const handleScreenStart = ({ userId }) => updateRemotePeerMeta(userId, { isScreenSharing: true });
-    const handleScreenStop = ({ userId }) => updateRemotePeerMeta(userId, { isScreenSharing: false });
-
-    const handleMuted = () => {
-      const local = localStreamRef.current;
-      if (!local) return;
-      local.getAudioTracks().forEach((track) => { track.enabled = false; });
-      setMicEnabled(false);
-    };
-
-    const handleSubtitle = ({ fromUserId, text, isFinal }) => {
-      const at = Date.now();
-      setSubtitles((prev) => ({ ...prev, [fromUserId]: { text, at, isFinal } }));
-      // Auto-clear after 4.5s so the overlay actually disappears without needing a re-render
-      setTimeout(() => {
+      const handleUserLeft = ({ channelId, userId }) => {
+        if (channelId !== channelIdRef.current) return;
+        removeRemotePeer(userId);
         setSubtitles((prev) => {
-          const entry = prev[fromUserId];
-          if (entry && entry.at === at) {
-            const next = { ...prev };
-            delete next[fromUserId];
-            return next;
-          }
-          return prev;
+          const next = { ...prev };
+          delete next[String(userId)];
+          return next;
         });
-      }, 4500);
-    };
+      };
 
-    socket.on("huddle:user-joined", handleUserJoined);
-    socket.on("huddle:user-left", handleUserLeft);
-    socket.on("huddle:signal", handleSignal);
-    socket.on("huddle:mute", handleMute);
-    socket.on("huddle:unmute", handleUnmute);
-    socket.on("huddle:camera-off", handleCameraOff);
-    socket.on("huddle:camera-on", handleCameraOn);
-    socket.on("huddle:screen-start", handleScreenStart);
-    socket.on("huddle:screen-stop", handleScreenStop);
-    socket.on("huddle:muted", handleMuted);
-    socket.on("huddle:subtitle", handleSubtitle);
+      // ── WebRTC signaling with Perfect Negotiation ─────────────────────────────
+      // "Polite" peer = higher userId: yields when there's an offer collision.
+      // "Impolite" peer = lower userId: ignores colliding incoming offers.
+      const handleSignal = async ({ fromUserId, data, channelId }) => {
+        if (channelId !== channelIdRef.current) return;
+        if (String(fromUserId) === String(userRef.current?.id)) return;
 
-    cleanup = () => {
-      socket.off("huddle:user-joined", handleUserJoined);
-      socket.off("huddle:user-left", handleUserLeft);
-      socket.off("huddle:signal", handleSignal);
-      socket.off("huddle:mute", handleMute);
-      socket.off("huddle:unmute", handleUnmute);
-      socket.off("huddle:camera-off", handleCameraOff);
-      socket.off("huddle:camera-on", handleCameraOn);
-      socket.off("huddle:screen-start", handleScreenStart);
-      socket.off("huddle:screen-stop", handleScreenStop);
-      socket.off("huddle:muted", handleMuted);
-      socket.off("huddle:subtitle", handleSubtitle);
-    };
+        const { type } = data;
+        const myId   = String(userRef.current?.id || "");
+        const peerId = String(fromUserId);
+        const isPolite = myId > peerId; // higher userId is polite
+
+        try {
+          if (type === "offer") await initLocalMedia();
+
+          const pc = createPeerConnection(fromUserId);
+          if (!pc) return;
+
+          if (type === "offer") {
+            const offerCollision = pc.signalingState !== "stable";
+
+            if (!isPolite && offerCollision) {
+              // Impolite peer: ignore the incoming offer — our own offer wins
+              return;
+            }
+
+            // Polite peer: rollback our pending offer and process theirs
+            if (offerCollision && pc.signalingState !== "stable") {
+              await pc.setLocalDescription({ type: "rollback" });
+            }
+
+            // Add tile to UI immediately so the user sees the peer's placeholder
+            const fromUsername = data.fromUsername || "";
+            setRemotePeers((prev) => {
+              if (prev.find((p) => String(p.userId) === peerId)) return prev;
+              return [...prev, { userId: fromUserId, username: fromUsername, stream: remoteStreamsRef.current[peerId] || null, isMuted: false, isCameraOff: false, isScreenSharing: false }];
+            });
+
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: data.sdp }));
+            await flushIceCandidates(pc, fromUserId);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            socket.emit("huddle:signal", {
+              channelId: channelIdRef.current,
+              targetUserId: fromUserId,
+              huddleId: huddleIdRef.current,
+              data: { type: "answer", sdp: answer.sdp },
+            });
+
+          } else if (type === "answer") {
+            // Only accept an answer if we actually sent an offer
+            if (pc.signalingState === "have-local-offer") {
+              await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: data.sdp }));
+              await flushIceCandidates(pc, fromUserId);
+            }
+
+          } else if (type === "candidate" && data.candidate) {
+            const candidate = new RTCIceCandidate(data.candidate);
+            if (pc.remoteDescription) {
+              try { await pc.addIceCandidate(candidate); } catch {}
+            } else {
+              if (!iceCandidateQueueRef.current[peerId]) iceCandidateQueueRef.current[peerId] = [];
+              iceCandidateQueueRef.current[peerId].push(candidate);
+            }
+          }
+        } catch (err) {
+          console.error("[huddle] handleSignal error:", err);
+        }
+      };
+
+      const handleMute        = ({ userId }) => updateRemotePeerMeta(userId, { isMuted: true });
+      const handleUnmute      = ({ userId }) => updateRemotePeerMeta(userId, { isMuted: false });
+      const handleCameraOff   = ({ userId }) => updateRemotePeerMeta(userId, { isCameraOff: true });
+      const handleCameraOn    = ({ userId }) => updateRemotePeerMeta(userId, { isCameraOff: false });
+      const handleScreenStart = ({ userId }) => updateRemotePeerMeta(userId, { isScreenSharing: true });
+      const handleScreenStop  = ({ userId }) => updateRemotePeerMeta(userId, { isScreenSharing: false });
+
+      const handleMuted = () => {
+        const local = localStreamRef.current;
+        if (!local) return;
+        local.getAudioTracks().forEach((track) => { track.enabled = false; });
+        setMicEnabled(false);
+      };
+
+      const handleSubtitle = ({ fromUserId, text, isFinal }) => {
+        const at = Date.now();
+        setSubtitles((prev) => ({ ...prev, [fromUserId]: { text, at, isFinal } }));
+        setTimeout(() => {
+          setSubtitles((prev) => {
+            const entry = prev[fromUserId];
+            if (entry && entry.at === at) {
+              const next = { ...prev };
+              delete next[fromUserId];
+              return next;
+            }
+            return prev;
+          });
+        }, 4500);
+      };
+
+      socket.on("huddle:user-joined",  handleUserJoined);
+      socket.on("huddle:participants", handleParticipants);
+      socket.on("huddle:user-left",    handleUserLeft);
+      socket.on("huddle:signal",       handleSignal);
+      socket.on("huddle:mute",         handleMute);
+      socket.on("huddle:unmute",       handleUnmute);
+      socket.on("huddle:camera-off",   handleCameraOff);
+      socket.on("huddle:camera-on",    handleCameraOn);
+      socket.on("huddle:screen-start", handleScreenStart);
+      socket.on("huddle:screen-stop",  handleScreenStop);
+      socket.on("huddle:muted",        handleMuted);
+      socket.on("huddle:subtitle",     handleSubtitle);
+
+      cleanup = () => {
+        socket.off("huddle:user-joined",  handleUserJoined);
+        socket.off("huddle:participants", handleParticipants);
+        socket.off("huddle:user-left",    handleUserLeft);
+        socket.off("huddle:signal",       handleSignal);
+        socket.off("huddle:mute",         handleMute);
+        socket.off("huddle:unmute",       handleUnmute);
+        socket.off("huddle:camera-off",   handleCameraOff);
+        socket.off("huddle:camera-on",    handleCameraOn);
+        socket.off("huddle:screen-start", handleScreenStart);
+        socket.off("huddle:screen-stop",  handleScreenStop);
+        socket.off("huddle:muted",        handleMuted);
+        socket.off("huddle:subtitle",     handleSubtitle);
+      };
     }
 
-    // Re-attach every time auth:updated fires (socket.js replaces the socket instance)
     const onAuthUpdated = () => setTimeout(attachSocketHandlers, 0);
     window.addEventListener("auth:updated", onAuthUpdated);
-    attachSocketHandlers(); // attach immediately for the current socket
+    attachSocketHandlers();
 
     return () => {
       window.removeEventListener("auth:updated", onAuthUpdated);
       cleanup();
     };
-  }, [createPeerConnection, flushIceCandidates, initLocalMedia, removeRemotePeer, updateRemotePeerMeta]);
+  }, [createPeerConnection, flushIceCandidates, initLocalMedia, removeRemotePeer, updateRemotePeerMeta, sendOffer]);
 
   // Network quality monitor
   useEffect(() => {
@@ -705,7 +824,7 @@ export function useHuddleCall({ currentUser }) {
             else setNetworkQuality("good");
           }
         });
-      } catch (e) { /* ignore */ }
+      } catch {}
     }, 3000);
     return () => clearInterval(interval);
   }, []);
