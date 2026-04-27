@@ -81,6 +81,7 @@ export function useHuddleCall({ currentUser }) {
 
   const peerConnectionsRef = useRef({});
   const remoteStreamsRef = useRef({});
+  const inboundStreamsRef = useRef({}); // Android WebView: accumulate tracks when event.streams is empty
   const localStreamRef = useRef(null);
   const cameraVideoTrackRef = useRef(null);
   const screenTrackRef = useRef(null);
@@ -132,6 +133,7 @@ export function useHuddleCall({ currentUser }) {
     if (pc) { pc.close(); delete peerConnectionsRef.current[uid]; }
     delete remoteStreamsRef.current[uid];
     delete iceCandidateQueueRef.current[uid];
+    delete inboundStreamsRef.current[uid];
   }, []);
 
   // ── Create RTCPeerConnection ────────────────────────────────────────────────
@@ -162,7 +164,15 @@ export function useHuddleCall({ currentUser }) {
     };
 
     pc.ontrack = (event) => {
-      const [stream] = event.streams;
+      let stream = event.streams?.[0];
+      if (!stream && event.track) {
+        // Android WebView sends empty event.streams — accumulate tracks manually
+        if (!inboundStreamsRef.current[uid]) {
+          inboundStreamsRef.current[uid] = new MediaStream();
+        }
+        inboundStreamsRef.current[uid].addTrack(event.track);
+        stream = inboundStreamsRef.current[uid];
+      }
       if (stream) updateRemotePeerStream(uid, stream);
     };
 

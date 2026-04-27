@@ -123,6 +123,26 @@ export function AuthProvider({ children }) {
   }, []);
 
   /* ---------------------------------------------
+     2b. On Capacitor app resume: re-register FCM
+     token so it's always current in the DB.
+  --------------------------------------------- */
+  useEffect(() => {
+    if (!window.Capacitor) return;
+    let cleanup = () => {};
+    import("@capacitor/app").then(({ App }) => {
+      const listener = App.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) {
+          const stored = (() => { try { return JSON.parse(localStorage.getItem("auth")); } catch { return null; } })();
+          const token = stored?.token;
+          if (token) initPush(token).catch(() => {});
+        }
+      });
+      cleanup = () => listener.then?.(l => l.remove()).catch(() => {});
+    }).catch(() => {});
+    return () => cleanup();
+  }, []);
+
+  /* ---------------------------------------------
      3. Login handler → stores auth everywhere
         refreshToken is optional (Google SSO skips it)
   --------------------------------------------- */
