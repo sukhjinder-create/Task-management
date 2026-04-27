@@ -10,7 +10,10 @@ const config: CapacitorConfig = {
   webDir: "dist-mobile",
 
   server: {
-    cleartext: true,          // allow HTTP in dev (Android requires this for localhost)
+    // Load web assets from the production Vercel deployment so mobile always
+    // runs the latest web code without needing an APK rebuild.
+    url: "https://app.asystence.com",
+    cleartext: false,
     allowNavigation: ["*"],
   },
 

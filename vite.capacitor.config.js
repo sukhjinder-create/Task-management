@@ -24,15 +24,7 @@ export default defineConfig(({ mode }) => {
       outDir: "dist-mobile",
       emptyOutDir: true,
       rollupOptions: {
-        external: [
-          "@capacitor/local-notifications",
-          "@capacitor/haptics",
-          "@capacitor/status-bar",
-          "@capacitor/splash-screen",
-          "@capacitor/preferences",
-          "@capacitor/app",
-          "@capacitor/push-notifications",
-        ],
+        external: ["@capacitor/local-notifications"],
       },
     },
     define: {

@@ -384,7 +384,7 @@ function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys
 
   if (failed || !objectUrl) return (
     <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
-      🔒 Encrypted file (key unavailable)
+      🔒 {att.name || "Encrypted file"} — key not available on this device
     </span>
   );
 
@@ -1337,7 +1337,7 @@ if (
     return { ...prev, [channelId]: [...base, normalizedWithEmoji] };
   });
 
-  // 🔴 Track unread for non-active channels (not own messages)
+  // 🔴 Track unread + show in-app toast for non-active channels (not own messages)
   if (
     channelId !== activeChannelRef.current &&
     normalizedWithEmoji.userId !== user.id &&
@@ -1347,6 +1347,16 @@ if (
       ...prev,
       [channelId]: (prev[channelId] || 0) + 1,
     }));
+    // In-app notification toast
+    const senderName = normalizedWithEmoji.username || "Someone";
+    const label = channelId.startsWith("dm:") ? senderName : `#${channelId}`;
+    const preview = typeof normalizedWithEmoji.textHtml === "string"
+      ? normalizedWithEmoji.textHtml.replace(/<[^>]*>/g, "").trim().slice(0, 60)
+      : "";
+    toast(`💬 ${senderName} in ${label}${preview ? `: ${preview}` : ""}`, {
+      duration: 4000,
+      id: `chat-notif-${channelId}`, // deduplicate per channel
+    });
   }
 };
 
@@ -1450,35 +1460,6 @@ if (
             [readerId]: { at },
           },
         };
-      });
-    };
-
-    const handleHuddleStarted = (payload) => {
-      if (!payload || !payload.channelId || !payload.huddleId) return;
-      if (!setActiveHuddle) return;
-
-      setActiveHuddle({
-        channelId: payload.channelId,
-        huddleId: payload.huddleId,
-        startedBy: payload.startedBy,
-        at: payload.at,
-      });
-    };
-
-    const handleHuddleEnded = (payload) => {
-      if (!payload || !payload.channelId || !payload.huddleId) return;
-      if (!setActiveHuddle) return;
-
-      setActiveHuddle((prev) => {
-        if (
-          prev &&
-          prev.channelId === payload.channelId &&
-          prev.huddleId === payload.huddleId
-        ) {
-          if (rtc) rtc.leaveHuddle?.();
-          return null;
-        }
-        return prev;
       });
     };
 
@@ -1623,8 +1604,6 @@ if (
     socket.on("presence:update", handlePresenceUpdate);
     socket.on("chat:typing", handleTyping);
     socket.on("chat:read", handleRead);
-    socket.on("huddle:started", handleHuddleStarted);
-    socket.on("huddle:ended", handleHuddleEnded);
     socket.on("chat:reaction", handleReaction);
     socket.on("chat:messageEdited", handleMessageEdited);
     socket.on("chat:messageDeleted", handleMessageDeleted);
@@ -1643,8 +1622,6 @@ if (
       socket.off("presence:update", handlePresenceUpdate);
       socket.off("chat:typing", handleTyping);
       socket.off("chat:read", handleRead);
-      socket.off("huddle:started", handleHuddleStarted);
-      socket.off("huddle:ended", handleHuddleEnded);
       socket.off("chat:reaction", handleReaction);
       socket.off("chat:messageEdited", handleMessageEdited);
       socket.off("chat:messageDeleted", handleMessageDeleted);
@@ -2083,27 +2060,18 @@ useEffect(() => {
     try {
       const uploaded = await Promise.all(
         files.map(async (file) => {
-          // 🔐 E2E: encrypt file bytes before upload — server never sees plaintext
-          const { encryptedBlob, rawKey, iv: fileIv } = await encryptFileForUpload(file);
-          const localUrl = URL.createObjectURL(file); // local preview only, never sent
-
+          const localUrl = URL.createObjectURL(file);
           const formData = new FormData();
-          // Upload encrypted bytes; use .enc suffix to mark as opaque blob
-          formData.append("file", new File([encryptedBlob], file.name + ".enc", {
-            type: "application/octet-stream",
-          }));
+          formData.append("file", file);
           const res = await api.post("/upload/chat-attachment", formData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
           return {
             ...res.data,
-            name: file.name,    // original filename (not .enc)
-            type: file.type,    // original MIME type
-            size: file.size,    // original size
-            encrypted: true,
-            fileIv,
-            _rawKey: rawKey,    // stays in memory only — stripped before send
-            _localUrl: localUrl, // for pre-send preview — stripped before send
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            _localUrl: localUrl,
           };
         })
       );
@@ -2262,7 +2230,6 @@ useEffect(() => {
       });
     }
 
-    rtc.joinHuddle();
   };
 
   const handleToggleReaction = (messageId, emoji) => {

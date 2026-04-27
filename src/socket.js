@@ -92,8 +92,12 @@ if (window.Capacitor) {
   import("@capacitor/app").then(({ App }) => {
     App.addListener("appStateChange", ({ isActive }) => {
       if (isActive && window.__AUTH_TOKEN__) {
-        if (!socket?.connected) {
+        if (!socket) {
+          // No socket at all — create fresh
           createSocket();
+        } else if (!socket.connected) {
+          // Reconnect the SAME instance so existing listeners stay alive
+          socket.connect();
         } else {
           socket.emit("ping");
         }

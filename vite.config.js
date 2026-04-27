@@ -7,4 +7,9 @@ export default defineConfig({
   optimizeDeps: {
     include: ["react-quill"],
   },
+  build: {
+    rollupOptions: {
+      external: (id) => id.startsWith("@capacitor/"),
+    },
+  },
 })

@@ -455,9 +455,12 @@ export default function AppLayout({ children }) {
               <Outlet />
             </div>
           )}
-          <GlobalHuddleWindow />
         </main>
       </div>
+
+      {/* GlobalHuddleWindow must be outside any overflow container so fixed
+          positioning and z-index stack correctly above HuddleIncomingCall */}
+      <GlobalHuddleWindow />
     </div>
   );
 }

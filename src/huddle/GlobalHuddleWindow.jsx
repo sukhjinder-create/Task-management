@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useHuddle } from "../context/HuddleContext";
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
-  PhoneOff, Maximize2, Minimize2, VolumeX,
+  PhoneOff, Maximize2, Minimize2, VolumeX, Captions,
 } from "lucide-react";
 
 // ── Call timer ──────────────────────────────────────────────────────────────
@@ -64,41 +64,43 @@ function useMutedVideoRef(stream, shouldMute) {
 }
 
 // ── Single video tile ────────────────────────────────────────────────────────
-function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false }) {
+function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false, compact = false }) {
   const { setRef } = useMutedVideoRef(stream, isLocal);
   const initials = (name || "?")[0].toUpperCase();
   const showAvatar = !stream || isCameraOff;
 
   return (
     <div
-      className={`relative bg-[#1a1d27] rounded-xl overflow-hidden flex items-center justify-center w-full h-full transition-all ${
-        isActiveSpeaker ? "ring-2 ring-green-400 ring-offset-1 ring-offset-[#0f111a]" : ""
-      }`}
+      className={`relative bg-[#1a1d27] overflow-hidden flex items-center justify-center w-full h-full transition-all ${
+        isActiveSpeaker ? "ring-2 ring-green-400" : ""
+      } ${compact ? "rounded-xl" : "rounded-xl"}`}
     >
+      {/* Local video is mirrored (selfie-style); remote is natural */}
       <video
         ref={setRef}
         onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
         className="absolute inset-0 w-full h-full object-cover"
+        style={isLocal ? { transform: "scaleX(-1)" } : undefined}
       />
 
-      {/* Avatar overlay — covers the video when camera is off or no stream */}
       {showAvatar && (
         <div className="absolute inset-0 bg-[#1a1d27] flex flex-col items-center justify-center gap-2 select-none z-10">
-          <div className="w-16 h-16 rounded-full bg-slate-600 flex items-center justify-center text-2xl font-semibold text-white">
+          <div className={`rounded-full bg-slate-600 flex items-center justify-center font-semibold text-white ${compact ? "w-10 h-10 text-base" : "w-16 h-16 text-2xl"}`}>
             {initials}
           </div>
-          <span className="text-slate-400 text-xs">{name || "User"}</span>
+          {!compact && <span className="text-slate-400 text-xs">{name || "User"}</span>}
         </div>
       )}
 
-      {/* Bottom name bar — always on top */}
-      <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1 bg-black/60 rounded px-2 py-0.5 text-[11px] text-white pointer-events-none">
-        {isMuted
-          ? <MicOff size={10} className="text-red-400 shrink-0" />
-          : <Mic size={10} className="text-green-400 shrink-0" />
-        }
-        <span className="truncate max-w-[100px]">{isLocal ? `${name} (You)` : (name || "User")}</span>
-      </div>
+      {!compact && (
+        <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1 bg-black/60 rounded px-2 py-0.5 text-[11px] text-white pointer-events-none">
+          {isMuted
+            ? <MicOff size={10} className="text-red-400 shrink-0" />
+            : <Mic size={10} className="text-green-400 shrink-0" />
+          }
+          <span className="truncate max-w-[100px]">{isLocal ? `${name} (You)` : (name || "User")}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -124,6 +126,7 @@ function CtrlBtn({ onClick, title, active = false, danger = false, wide = false,
 export default function GlobalHuddleWindow() {
   const huddleCtx = useHuddle();
   const activeHuddle = huddleCtx?.activeHuddle || null;
+  const incomingHuddle = huddleCtx?.incomingHuddle || null;
   const rtc = huddleCtx?.rtc || null;
   const currentUser = huddleCtx?.currentUser || null;
 
@@ -158,27 +161,23 @@ export default function GlobalHuddleWindow() {
 
   const remotePeers = Array.isArray(rtc?.remotePeers) ? rtc.remotePeers : [];
 
-  // All participants: local first, then remotes
-  const participants = [
-    {
-      userId: "local",
-      username: currentUser?.username || "You",
-      stream: rtc?.localStream,
-      isMuted: rtc?.isMuted,
-      isCameraOff: rtc?.isCameraOff,
-      isLocal: true,
-    },
-    ...remotePeers.map((p) => ({
-      userId: p.userId,
-      username: p.username || "User",
-      stream: p.stream,
-      isMuted: p.isMuted,
-      isCameraOff: false,
-      isLocal: false,
-    })),
-  ];
+  const localParticipant = {
+    userId: "local",
+    username: currentUser?.username || "You",
+    stream: rtc?.localStream,
+    isMuted: rtc?.isMuted,
+    isCameraOff: rtc?.isCameraOff,
+    isLocal: true,
+  };
 
-  // Grid columns based on participant count
+  // 1-on-1 mode: one remote peer — use WhatsApp-style layout
+  const isOneOnOne = remotePeers.length === 1;
+  const remoteParticipant = isOneOnOne
+    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, isMuted: remotePeers[0].isMuted, isCameraOff: remotePeers[0].isCameraOff, isLocal: false }
+    : null;
+
+  // Grid layout for group calls
+  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, isMuted: p.isMuted, isCameraOff: p.isCameraOff, isLocal: false }))];
   const count = participants.length;
   const gridCols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
 
@@ -251,7 +250,8 @@ export default function GlobalHuddleWindow() {
     return () => window.removeEventListener("resize", onResize);
   }, [isMaximized]);
 
-  if (!activeHuddle || !rtc) return null;
+  // Don't show video tiles while there is a pending incoming call to accept/decline
+  if (!activeHuddle || !rtc || incomingHuddle) return null;
 
   // Network quality badge
   const netColor = { good: "text-green-400", ok: "text-yellow-400", poor: "text-red-400" }[networkQuality];
@@ -303,29 +303,80 @@ export default function GlobalHuddleWindow() {
         </div>
       </div>
 
-      {/* ── VIDEO GRID ────────────────────────────────────────────────────── */}
-      <div className="flex-1 bg-[#0f111a] p-2 overflow-hidden min-h-0" style={{ height: videoAreaH }}>
-        <div
-          className="w-full h-full gap-2"
-          style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-            gridTemplateRows: `repeat(${Math.ceil(count / gridCols)}, 1fr)`,
-          }}
-        >
-          {participants.map((p) => (
-            <VideoTile
-              key={p.userId}
-              stream={p.stream}
-              name={p.username}
-              isMuted={p.isMuted}
-              isCameraOff={p.isCameraOff}
-              isLocal={p.isLocal}
-              isActiveSpeaker={activeSpeakerId === (p.isLocal ? "local" : p.userId)}
-            />
-          ))}
-        </div>
+      {/* ── VIDEO AREA ────────────────────────────────────────────────────── */}
+      <div className="flex-1 relative bg-[#0f111a] overflow-hidden min-h-0" style={{ height: videoAreaH }}>
+        {isOneOnOne ? (
+          /* ── WhatsApp-style 1-on-1 ── */
+          <>
+            {/* Remote: full-screen background */}
+            <div className="absolute inset-0">
+              <VideoTile
+                stream={remoteParticipant.stream}
+                name={remoteParticipant.username}
+                isMuted={remoteParticipant.isMuted}
+                isCameraOff={remoteParticipant.isCameraOff}
+                isLocal={false}
+                isActiveSpeaker={activeSpeakerId === remoteParticipant.userId}
+              />
+            </div>
+
+            {/* Local: PIP corner (bottom-right, above controls) */}
+            <div
+              className="absolute z-20 rounded-xl overflow-hidden border-2 border-white/20 shadow-xl"
+              style={{ width: 100, height: 134, bottom: 12, right: 12 }}
+            >
+              <VideoTile
+                stream={localParticipant.stream}
+                name={localParticipant.username}
+                isMuted={localParticipant.isMuted}
+                isCameraOff={localParticipant.isCameraOff}
+                isLocal={true}
+                compact={true}
+              />
+            </div>
+          </>
+        ) : (
+          /* ── Grid layout for group calls ── */
+          <div
+            className="w-full h-full p-2 gap-2"
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+              gridTemplateRows: `repeat(${Math.ceil(count / gridCols)}, 1fr)`,
+            }}
+          >
+            {participants.map((p) => (
+              <VideoTile
+                key={p.userId}
+                stream={p.stream}
+                name={p.username}
+                isMuted={p.isMuted}
+                isCameraOff={p.isCameraOff}
+                isLocal={p.isLocal}
+                isActiveSpeaker={activeSpeakerId === (p.isLocal ? "local" : p.userId)}
+              />
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* ── SUBTITLE OVERLAY ─────────────────────────────────────────────── */}
+      {rtc?.subtitlesEnabled && rtc?.subtitles && (
+        <div className="absolute bottom-2 left-0 right-0 z-30 flex flex-col items-center gap-1 px-4 pointer-events-none">
+          {Object.entries(rtc.subtitles).map(([uid, entry]) => {
+            if (!entry?.text || Date.now() - entry.at > 4000) return null;
+            const name = uid === "local"
+              ? (currentUser?.username || "You")
+              : (remotePeers.find((p) => String(p.userId) === String(uid))?.username || "User");
+            return (
+              <div key={uid} className="bg-black/75 text-white text-sm px-3 py-1 rounded-lg max-w-[80%] text-center">
+                <span className="text-slate-400 text-xs mr-1">{name}:</span>
+                {entry.text}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
       <div
@@ -369,6 +420,15 @@ export default function GlobalHuddleWindow() {
             {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
           </CtrlBtn>
         )}
+
+        {/* CC / Live subtitles */}
+        <CtrlBtn
+          onClick={() => rtc?.toggleSubtitles?.()}
+          title={rtc?.subtitlesEnabled ? "Turn off subtitles" : "Turn on live subtitles"}
+          active={rtc?.subtitlesEnabled}
+        >
+          <Captions size={18} />
+        </CtrlBtn>
 
         {/* Mute all — host only */}
         {isHost && (

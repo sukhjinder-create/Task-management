@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { App } from "@capacitor/app";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -20,6 +19,7 @@ export function useAppUpdate() {
 
     async function check() {
       try {
+        const { App } = await import("@capacitor/app");
         const info = await App.getInfo();
         const res  = await fetch(`${API_URL}/app-version`);
         if (!res.ok) return;

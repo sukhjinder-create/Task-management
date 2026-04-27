@@ -9,6 +9,9 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",                  // ← critical for Electron file:// loading
+  define: {
+    "import.meta.env.VITE_API_URL": JSON.stringify("https://asystence-api-616077735050.asia-south1.run.app"),
+  },
   optimizeDeps: {
     include: ["react-quill"],
   },
