@@ -611,7 +611,6 @@ const [reportContext, setReportContext] = useState(null);
 
   const listRef = useRef(null);
   const activeChannelRef = useRef(null);
-  const isFirstChannelMount = useRef(true);
 
   const fileInputRef = useRef(null);
   const lastTypingSentRef = useRef(0);
@@ -681,23 +680,23 @@ const [reportContext, setReportContext] = useState(null);
     // Seed unread counts from backend (persisted across sessions)
     api.get("/chat/unread-counts").then((res) => {
       if (res.data && typeof res.data === "object") {
-        setUnreadByChannel((prev) => ({ ...prev, ...res.data }));
+        setUnreadByChannel((prev) => {
+          const merged = { ...prev, ...res.data };
+          // Zero out whichever channel is currently open — user is viewing it
+          if (activeChannelRef.current) merged[activeChannelRef.current] = 0;
+          return merged;
+        });
       }
     }).catch(() => {});
   }, []);
 
-  // persist active channel key; only mark-read on explicit channel switches (not on initial mount)
+  // persist active channel key + mark it read whenever it's active
   useEffect(() => {
     if (!activeChannelKey) return;
     try {
       localStorage.setItem("chat.activeChannel", activeChannelKey);
     } catch {
       // ignore storage errors
-    }
-    // Skip mark-read on first render (restoring from localStorage) — that would wipe unread counts
-    if (isFirstChannelMount.current) {
-      isFirstChannelMount.current = false;
-      return;
     }
     setUnreadByChannel((prev) => ({ ...prev, [activeChannelKey]: 0 }));
     api.post("/chat/mark-read", { channelKey: activeChannelKey }).catch(() => {});
@@ -744,6 +743,7 @@ const [reportContext, setReportContext] = useState(null);
         setThreadEditorHtml("");
       }
       setUnreadByChannel((prev) => ({ ...prev, [key]: 0 }));
+      api.post("/chat/mark-read", { channelKey: key }).catch(() => {});
     };
 
     // Check for a pending channel set before this component mounted (cold start)
@@ -1681,8 +1681,10 @@ if (
     socket.on("chat:messageDeleted", handleMessageDeleted);
 
     // Real-time unread badge bump (from server when a new message arrives in any channel)
-    const handleUnreadBump = ({ channelKey }) => {
+    const handleUnreadBump = ({ channelKey, fromUserId }) => {
       if (!channelKey || channelKey === activeChannelRef.current) return;
+      // Ignore workspace-broadcast bumps for messages sent by this user
+      if (fromUserId && String(fromUserId) === String(user.id)) return;
       setUnreadByChannel((prev) => ({ ...prev, [channelKey]: (prev[channelKey] || 0) + 1 }));
     };
     socket.on("chat:unread-bump", handleUnreadBump);

@@ -276,12 +276,12 @@ export async function decryptEnvelopeIfNeeded(
     messageMeta?.user_id ||
     null;
 
-  // Plaintext fallback if anything goes bad
+  // Plaintext fallback if anything goes bad — never expose raw encrypted JSON
   const fallbackPlain =
     typeof envelope.fallbackText === "string" &&
     envelope.fallbackText.trim() !== ""
       ? envelope.fallbackText
-      : textHtml;
+      : "";
 
   // There might not even be an encrypted entry for this user
   const entry = envelope.enc?.[currentIdStr];

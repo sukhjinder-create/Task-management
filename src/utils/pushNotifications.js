@@ -164,7 +164,7 @@ async function subscribeCapacitorPush(authToken) {
         registerFcmTokenWithBackend(fcmToken);
       });
 
-      // Foreground: show UI for huddle or native notification for others
+      // Foreground: show UI for huddle; skip LocalNotification for chat (WebSocket handles toast)
       PushNotifications.addListener("pushNotificationReceived", (notification) => {
         const data = notification.data || {};
         if (data.type === "huddle") {
@@ -178,6 +178,9 @@ async function subscribeCapacitorPush(authToken) {
           }));
           return;
         }
+        // Chat messages are already shown via WebSocket toast — skip LocalNotification
+        // For non-chat types (task updates, etc.), show a local notification
+        if (data.type === "chat") return;
         import("./native").then(({ showNotification }) => {
           const rawBody = notification.body || "";
           const looksLikeJson = rawBody.trim().startsWith("{") || rawBody.trim().startsWith("[");
@@ -203,6 +206,16 @@ async function subscribeCapacitorPush(authToken) {
         if (data.url) {
           _handlePushUrl(data.url, false);
         }
+        // Also dispatch chat:open-channel as a direct backup for Chat.jsx
+        if (data.channelId) {
+          window.dispatchEvent(new CustomEvent("chat:open-channel", { detail: { channelKey: data.channelId } }));
+        } else if (data.url) {
+          try {
+            const u = new URL(data.url, "https://app.asystence.com");
+            const ch = u.searchParams.get("channel");
+            if (ch) window.dispatchEvent(new CustomEvent("chat:open-channel", { detail: { channelKey: ch } }));
+          } catch {}
+        }
       });
 
       // Launched from killed state
@@ -224,6 +237,12 @@ async function subscribeCapacitorPush(authToken) {
         } else if (data.url) {
           // Cold start: React may not be mounted yet — use a delay so event listeners are ready
           _handlePushUrl(data.url, true);
+          // Also store channelKey for chat:open-channel fallback
+          try {
+            const u = new URL(data.url, "https://app.asystence.com");
+            const ch = u.searchParams.get("channel");
+            if (ch) window.__PENDING_CHAT_CHANNEL__ = ch;
+          } catch {}
         }
       }
     }
