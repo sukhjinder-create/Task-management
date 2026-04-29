@@ -31,9 +31,12 @@ async function fetchVapidKey(authToken) {
 }
 
 async function registerFcmTokenWithBackend(fcmToken) {
-  if (!_currentAuthToken || !fcmToken) return;
+  if (!_currentAuthToken || !fcmToken) {
+    console.warn("[push] registerFcmToken skipped — missing token or auth", { hasAuth: !!_currentAuthToken, hasFcm: !!fcmToken });
+    return;
+  }
   try {
-    await fetch(`${API_BASE_URL}/push/subscribe`, {
+    const res = await fetch(`${API_BASE_URL}/push/subscribe`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -41,7 +44,10 @@ async function registerFcmTokenWithBackend(fcmToken) {
       },
       body: JSON.stringify({ platform: "android", fcmToken }),
     });
-  } catch {}
+    console.log("[push] FCM token registered with backend, status:", res.status, "token:", fcmToken.slice(0, 20));
+  } catch (err) {
+    console.error("[push] FCM token registration failed:", err.message);
+  }
 }
 
 async function subscribeWebPush(authToken) {
@@ -51,7 +57,7 @@ async function subscribeWebPush(authToken) {
   if (!vapidKey) return;
 
   try {
-    const reg = await navigator.serviceWorker.register("/sw.js");
+    const reg = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
     await navigator.serviceWorker.ready;
 
     const permission = await Notification.requestPermission();
@@ -84,11 +90,56 @@ async function subscribeWebPush(authToken) {
   }
 }
 
+async function _pushDiag(authToken, msg) {
+  try {
+    await fetch(`${API_BASE_URL}/push/diag`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ msg, ts: Date.now() }),
+    });
+  } catch {}
+}
+
+// Parse a push notification URL and dispatch navigation.
+// Navigates to the full URL including ?channel= param so the Chat.jsx URL param
+// useEffect can switch the view immediately and reliably.
+// coldStart=true adds a delay so React has time to mount its event listeners.
+function _handlePushUrl(url, coldStart) {
+  const delay = coldStart ? 800 : 0;
+  let routePath = url;
+  let channelKey = null;
+  try {
+    const u = new URL(url, "https://app.asystence.com");
+    routePath = u.pathname;
+    channelKey = u.searchParams.get("channel");
+  } catch {}
+
+  // Build the navigation URL — always include ?channel= so React Router exposes it
+  const navUrl = (channelKey && routePath === "/chat")
+    ? `/chat?channel=${encodeURIComponent(channelKey)}`
+    : url;
+
+  window.__PUSH_NAVIGATE__ = navUrl;
+
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent("push:navigate", { detail: { url: navUrl } }));
+  }, delay);
+}
+
 async function subscribeCapacitorPush(authToken) {
   try {
-    const { PushNotifications } = await import("@capacitor/push-notifications");
+    await _pushDiag(authToken, "subscribeCapacitorPush: start");
+
+    // Access plugin via Capacitor bridge (works with remote URL without bundling)
+    const PushNotifications = window.Capacitor?.Plugins?.PushNotifications;
+    if (!PushNotifications) {
+      await _pushDiag(authToken, "subscribeCapacitorPush: ERROR plugin not in bridge");
+      return;
+    }
+    await _pushDiag(authToken, "subscribeCapacitorPush: plugin found in bridge");
 
     const { receive } = await PushNotifications.requestPermissions();
+    await _pushDiag(authToken, `subscribeCapacitorPush: permissions=${receive}`);
     if (receive !== "granted") return;
 
     // Create notification channels with sound + vibration (Android 8+)
@@ -128,7 +179,10 @@ async function subscribeCapacitorPush(authToken) {
           return;
         }
         import("./native").then(({ showNotification }) => {
-          showNotification(notification.title || "Asystence", notification.body || "");
+          const rawBody = notification.body || "";
+          const looksLikeJson = rawBody.trim().startsWith("{") || rawBody.trim().startsWith("[");
+          const safeBody = looksLikeJson ? "Sent a message" : rawBody;
+          showNotification(notification.title || "Asystence", safeBody);
         });
       });
 
@@ -146,10 +200,8 @@ async function subscribeCapacitorPush(authToken) {
           window.dispatchEvent(new CustomEvent("huddle:incoming", { detail: inviteData }));
           return;
         }
-        const url = data.url;
-        if (url) {
-          window.__PUSH_NAVIGATE__ = url;
-          window.dispatchEvent(new CustomEvent("push:navigate", { detail: { url } }));
+        if (data.url) {
+          _handlePushUrl(data.url, false);
         }
       });
 
@@ -170,15 +222,19 @@ async function subscribeCapacitorPush(authToken) {
             window.dispatchEvent(new CustomEvent("huddle:incoming", { detail: inviteData }));
           }, 2000);
         } else if (data.url) {
-          window.__PUSH_NAVIGATE__ = data.url;
+          // Cold start: React may not be mounted yet — use a delay so event listeners are ready
+          _handlePushUrl(data.url, true);
         }
       }
     }
 
     // Always call register() so FCM refreshes/confirms the token
+    await _pushDiag(authToken, "subscribeCapacitorPush: calling register()");
     await PushNotifications.register();
+    await _pushDiag(authToken, "subscribeCapacitorPush: register() done");
 
   } catch (err) {
+    await _pushDiag(authToken, `subscribeCapacitorPush: ERROR ${err.message}`);
     console.warn("[push] Capacitor push setup failed:", err.message);
   }
 }

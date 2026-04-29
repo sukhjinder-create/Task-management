@@ -319,6 +319,7 @@ function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys
   const [objectUrl, setObjectUrl] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [failed, setFailed]       = useState(false);
+  const [failReason, setFailReason] = useState("crypto");
 
   useEffect(() => {
     let cancelled = false;
@@ -345,7 +346,18 @@ function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys
         const encKeyEntry = att.encryptedKeys?.[String(currentUserId)];
         if (!encKeyEntry) throw new Error("No key for current user");
 
-        const res = await fetch(resolveUrl(att.url));
+        const token = window.__AUTH_TOKEN__;
+        const fetchUrl = att.url
+          ? `${_BACKEND}/upload/proxy?url=${encodeURIComponent(att.url)}`
+          : null;
+        if (!fetchUrl) throw new Error("No attachment URL");
+        const res = await fetch(fetchUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.status === 410 || res.status === 404) {
+          setFailReason("gone");
+          throw new Error(`Fetch ${res.status}`);
+        }
         if (!res.ok) throw new Error(`Fetch ${res.status}`);
         const encBuf = await res.arrayBuffer();
 
@@ -384,7 +396,9 @@ function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys
 
   if (failed || !objectUrl) return (
     <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
-      🔒 {att.name || "Encrypted file"} — key not available on this device
+      {failReason === "gone"
+        ? `📎 ${att.name || "File"} — no longer available`
+        : `🔒 ${att.name || "Encrypted file"} — key not available on this device`}
     </span>
   );
 
@@ -597,6 +611,7 @@ const [reportContext, setReportContext] = useState(null);
 
   const listRef = useRef(null);
   const activeChannelRef = useRef(null);
+  const isFirstChannelMount = useRef(true);
 
   const fileInputRef = useRef(null);
   const lastTypingSentRef = useRef(0);
@@ -659,14 +674,19 @@ const [reportContext, setReportContext] = useState(null);
     }
   }
 
-  // Initial load: channels & users & keys (superadmin/global)
+  // Initial load: channels & users & unread counts
   useEffect(() => {
-    // keep loading workspaces for compatibility but we don't show selector
     loadChannels();
     loadUsers();
+    // Seed unread counts from backend (persisted across sessions)
+    api.get("/chat/unread-counts").then((res) => {
+      if (res.data && typeof res.data === "object") {
+        setUnreadByChannel((prev) => ({ ...prev, ...res.data }));
+      }
+    }).catch(() => {});
   }, []);
 
-  // persist active channel key so refresh keeps you in same channel / DM
+  // persist active channel key; only mark-read on explicit channel switches (not on initial mount)
   useEffect(() => {
     if (!activeChannelKey) return;
     try {
@@ -674,23 +694,69 @@ const [reportContext, setReportContext] = useState(null);
     } catch {
       // ignore storage errors
     }
+    // Skip mark-read on first render (restoring from localStorage) — that would wipe unread counts
+    if (isFirstChannelMount.current) {
+      isFirstChannelMount.current = false;
+      return;
+    }
+    setUnreadByChannel((prev) => ({ ...prev, [activeChannelKey]: 0 }));
+    api.post("/chat/mark-read", { channelKey: activeChannelKey }).catch(() => {});
   }, [activeChannelKey]);
 
+  // Switch channel from URL param (web deep-links + push notification taps)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const requestedChannel = params.get("channel");
     if (!requestedChannel) return;
-    if (requestedChannel === activeChannelKey) return;
+    // Always switch to conversation view when a channel param is present (push tap fix)
+    setMobileView("chat");
+    if (requestedChannel === activeChannelKey) {
+      // Channel already active — just clear unread and persist mark-read
+      setUnreadByChannel((prev) => ({ ...prev, [requestedChannel]: 0 }));
+      api.post("/chat/mark-read", { channelKey: requestedChannel }).catch(() => {});
+      return;
+    }
+    // For non-DM channels, wait until channels list is loaded to verify existence
     const exists = channels.some((channel) => channel.key === requestedChannel) || requestedChannel.startsWith("dm:");
     if (!exists) return;
-
     setActiveChannelKey(requestedChannel);
     setActiveDmUser(null);
     setActiveThreadKey(null);
     setThreadRootMessage(null);
     setThreadEditorHtml("");
     setUnreadByChannel((prev) => ({ ...prev, [requestedChannel]: 0 }));
+    api.post("/chat/mark-read", { channelKey: requestedChannel }).catch(() => {});
   }, [channels, location.search, activeChannelKey]);
+
+  // Switch channel from push notification tap (native app)
+  useEffect(() => {
+    const openChannel = (key) => {
+      if (!key) return;
+      // Always switch mobile view to show the conversation
+      setMobileView("chat");
+      setMobileSidebarOpen(false);
+      // Only update channel state if it's actually different
+      if (key !== activeChannelRef.current) {
+        setActiveChannelKey(key);
+        setActiveDmUser(null);
+        setActiveThreadKey(null);
+        setThreadRootMessage(null);
+        setThreadEditorHtml("");
+      }
+      setUnreadByChannel((prev) => ({ ...prev, [key]: 0 }));
+    };
+
+    // Check for a pending channel set before this component mounted (cold start)
+    if (window.__PENDING_CHAT_CHANNEL__) {
+      const key = window.__PENDING_CHAT_CHANNEL__;
+      window.__PENDING_CHAT_CHANNEL__ = null;
+      openChannel(key);
+    }
+
+    const handler = (e) => openChannel(e.detail?.channelKey);
+    window.addEventListener("chat:open-channel", handler);
+    return () => window.removeEventListener("chat:open-channel", handler);
+  }, []);
 
   // ----- DERIVED -----
   const activeMessages = messagesByChannel[activeChannelKey] || [];
@@ -1350,12 +1416,18 @@ if (
     // In-app notification toast
     const senderName = normalizedWithEmoji.username || "Someone";
     const label = channelId.startsWith("dm:") ? senderName : `#${channelId}`;
-    const preview = typeof normalizedWithEmoji.textHtml === "string"
-      ? normalizedWithEmoji.textHtml.replace(/<[^>]*>/g, "").trim().slice(0, 60)
+    const rawText = typeof normalizedWithEmoji.textHtml === "string"
+      ? normalizedWithEmoji.textHtml.replace(/<[^>]*>/g, "").trim()
       : "";
+    // Never show encrypted JSON or blank content as preview
+    let isEncryptedContent = rawText.startsWith("{") || rawText.startsWith("[");
+    if (!isEncryptedContent) {
+      try { JSON.parse(rawText); isEncryptedContent = true; } catch {}
+    }
+    const preview = (isEncryptedContent || !rawText) ? "" : rawText.slice(0, 60);
     toast(`💬 ${senderName} in ${label}${preview ? `: ${preview}` : ""}`, {
       duration: 4000,
-      id: `chat-notif-${channelId}`, // deduplicate per channel
+      id: `chat-notif-${channelId}`,
     });
   }
 };
@@ -1608,6 +1680,13 @@ if (
     socket.on("chat:messageEdited", handleMessageEdited);
     socket.on("chat:messageDeleted", handleMessageDeleted);
 
+    // Real-time unread badge bump (from server when a new message arrives in any channel)
+    const handleUnreadBump = ({ channelKey }) => {
+      if (!channelKey || channelKey === activeChannelRef.current) return;
+      setUnreadByChannel((prev) => ({ ...prev, [channelKey]: (prev[channelKey] || 0) + 1 }));
+    };
+    socket.on("chat:unread-bump", handleUnreadBump);
+
     if (socket.connected) {
       handleConnect();
     }
@@ -1625,6 +1704,7 @@ if (
       socket.off("chat:reaction", handleReaction);
       socket.off("chat:messageEdited", handleMessageEdited);
       socket.off("chat:messageDeleted", handleMessageDeleted);
+      socket.off("chat:unread-bump", handleUnreadBump);
     };
   }, [auth.token, user.id, setActiveHuddle, rtc, usersWithKeys]);
 
@@ -2020,6 +2100,7 @@ useEffect(() => {
     setUnreadByChannel((prev) => ({ ...prev, [key]: 0 }));
     setMobileSidebarOpen(false);
     setMobileView("chat");
+    api.post("/chat/mark-read", { channelKey: key }).catch(() => {});
   };
 
   const handleSelectGeneral = () => {
@@ -2031,6 +2112,7 @@ useEffect(() => {
     setUnreadByChannel((prev) => ({ ...prev, [GENERAL_CHANNEL_KEY]: 0 }));
     setMobileSidebarOpen(false);
     setMobileView("chat");
+    api.post("/chat/mark-read", { channelKey: GENERAL_CHANNEL_KEY }).catch(() => {});
   };
 
   const handleSelectChannel = (channelKey) => {
@@ -2042,6 +2124,7 @@ useEffect(() => {
     setUnreadByChannel((prev) => ({ ...prev, [channelKey]: 0 }));
     setMobileSidebarOpen(false);
     setMobileView("chat");
+    api.post("/chat/mark-read", { channelKey }).catch(() => {});
   };
 
   const handleAttachmentClick = () => {
