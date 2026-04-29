@@ -678,7 +678,7 @@ const [reportContext, setReportContext] = useState(null);
     loadChannels();
     loadUsers();
     // Seed unread counts from backend (persisted across sessions)
-    api.get("/chat/unread-counts").then((res) => {
+    api.get("/chat/messages/unread-counts").then((res) => {
       if (res.data && typeof res.data === "object") {
         setUnreadByChannel((prev) => {
           const merged = { ...prev, ...res.data };
@@ -699,7 +699,7 @@ const [reportContext, setReportContext] = useState(null);
       // ignore storage errors
     }
     setUnreadByChannel((prev) => ({ ...prev, [activeChannelKey]: 0 }));
-    api.post("/chat/mark-read", { channelKey: activeChannelKey }).catch(() => {});
+    api.post("/chat/messages/mark-read", { channelKey: activeChannelKey }).catch(() => {});
   }, [activeChannelKey]);
 
   // Switch channel from URL param (web deep-links + push notification taps)
@@ -712,7 +712,7 @@ const [reportContext, setReportContext] = useState(null);
     if (requestedChannel === activeChannelKey) {
       // Channel already active — just clear unread and persist mark-read
       setUnreadByChannel((prev) => ({ ...prev, [requestedChannel]: 0 }));
-      api.post("/chat/mark-read", { channelKey: requestedChannel }).catch(() => {});
+      api.post("/chat/messages/mark-read", { channelKey: requestedChannel }).catch(() => {});
       return;
     }
     // For non-DM channels, wait until channels list is loaded to verify existence
@@ -724,7 +724,7 @@ const [reportContext, setReportContext] = useState(null);
     setThreadRootMessage(null);
     setThreadEditorHtml("");
     setUnreadByChannel((prev) => ({ ...prev, [requestedChannel]: 0 }));
-    api.post("/chat/mark-read", { channelKey: requestedChannel }).catch(() => {});
+    api.post("/chat/messages/mark-read", { channelKey: requestedChannel }).catch(() => {});
   }, [channels, location.search, activeChannelKey]);
 
   // Switch channel from push notification tap (native app)
@@ -743,7 +743,7 @@ const [reportContext, setReportContext] = useState(null);
         setThreadEditorHtml("");
       }
       setUnreadByChannel((prev) => ({ ...prev, [key]: 0 }));
-      api.post("/chat/mark-read", { channelKey: key }).catch(() => {});
+      api.post("/chat/messages/mark-read", { channelKey: key }).catch(() => {});
     };
 
     // Check for a pending channel set before this component mounted (cold start)
@@ -2102,7 +2102,7 @@ useEffect(() => {
     setUnreadByChannel((prev) => ({ ...prev, [key]: 0 }));
     setMobileSidebarOpen(false);
     setMobileView("chat");
-    api.post("/chat/mark-read", { channelKey: key }).catch(() => {});
+    api.post("/chat/messages/mark-read", { channelKey: key }).catch(() => {});
   };
 
   const handleSelectGeneral = () => {
@@ -2114,7 +2114,7 @@ useEffect(() => {
     setUnreadByChannel((prev) => ({ ...prev, [GENERAL_CHANNEL_KEY]: 0 }));
     setMobileSidebarOpen(false);
     setMobileView("chat");
-    api.post("/chat/mark-read", { channelKey: GENERAL_CHANNEL_KEY }).catch(() => {});
+    api.post("/chat/messages/mark-read", { channelKey: GENERAL_CHANNEL_KEY }).catch(() => {});
   };
 
   const handleSelectChannel = (channelKey) => {
@@ -2126,7 +2126,7 @@ useEffect(() => {
     setUnreadByChannel((prev) => ({ ...prev, [channelKey]: 0 }));
     setMobileSidebarOpen(false);
     setMobileView("chat");
-    api.post("/chat/mark-read", { channelKey }).catch(() => {});
+    api.post("/chat/messages/mark-read", { channelKey }).catch(() => {});
   };
 
   const handleAttachmentClick = () => {

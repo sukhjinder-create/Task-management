@@ -80,7 +80,7 @@ export default function ChannelView({ channelKey, channel, currentUserId }) {
     (async () => {
       try {
         const res = await api.get(
-          `/chat/for-channel/${encodeURIComponent(channelKey)}`
+          `/chat/messages/for-channel/${encodeURIComponent(channelKey)}`
         );
         const normalized = (res.data || []).map(normalizeMessage).filter(Boolean);
         setMessages(normalized);
