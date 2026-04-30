@@ -90,7 +90,6 @@ export default function Notifications() {
         if (prev.some((n) => n.id === notif.id)) return prev;
         return [notif, ...prev];
       });
-      toast(`🔔 ${notif.message}`, { duration: 4000 });
     };
 
     socket.on("connect", onConnect);
