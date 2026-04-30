@@ -1403,23 +1403,6 @@ if (
     return { ...prev, [channelId]: [...base, normalizedWithEmoji] };
   });
 
-  // 🔴 Show in-app toast for non-active channels (not own messages)
-  // NOTE: unread count is tracked solely by chat:unread-bump to avoid double-counting
-  if (
-    channelId !== activeChannelRef.current &&
-    normalizedWithEmoji.userId !== user.id &&
-    !normalizedWithEmoji.system
-  ) {
-    const senderName = normalizedWithEmoji.username || "Someone";
-    const isDMToast = channelId.startsWith("dm:");
-    const toastMsg = isDMToast
-      ? `💬 ${senderName}`
-      : `💬 ${senderName} in #${channelId}`;
-    toast(toastMsg, {
-      duration: 4000,
-      id: `chat-notif-${channelId}`,
-    });
-  }
 };
 
     const handleSystem = (payload) => {

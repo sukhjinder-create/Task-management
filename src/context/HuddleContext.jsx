@@ -298,35 +298,13 @@ export function HuddleProvider({ children }) {
       syncHuddle();
       socket.on("connect", syncHuddle);
 
-      // Global chat:message toast — only fires when NOT on the chat page
-      // (Chat.jsx handles its own toasts for active-page use)
-      const onChatMessage = (data) => {
-        if (window.location.pathname.startsWith("/chat")) return;
-        const senderId = data.userId || data.user_id;
-        if (!senderId || String(senderId) === String(userRef.current?.id)) return;
-        if (data.system) return;
-        const channelId = data.channelId;
-        if (!channelId) return;
-        const senderName = data.username || "Someone";
-        const label = channelId.startsWith("dm:") ? senderName : `#${channelId}`;
-        const preview = typeof data.textHtml === "string"
-          ? data.textHtml.replace(/<[^>]*>/g, "").trim().slice(0, 60)
-          : "";
-        toast(`💬 ${senderName} in ${label}${preview ? `: ${preview}` : ""}`, {
-          duration: 4000,
-          id: `chat-notif-${channelId}`,
-        });
-      };
-
       socket.on("huddle:started", onStarted);
       socket.on("huddle:ended", onEnded);
-      socket.on("chat:message", onChatMessage);
 
       cleanup = () => {
         socket.off("connect", syncHuddle);
         socket.off("huddle:started", onStarted);
         socket.off("huddle:ended", onEnded);
-        socket.off("chat:message", onChatMessage);
       };
     }
 
