@@ -1415,7 +1415,6 @@ if (
     }));
     // In-app notification toast
     const senderName = normalizedWithEmoji.username || "Someone";
-    const label = channelId.startsWith("dm:") ? senderName : `#${channelId}`;
     const rawText = typeof normalizedWithEmoji.textHtml === "string"
       ? normalizedWithEmoji.textHtml.replace(/<[^>]*>/g, "").trim()
       : "";
@@ -1425,7 +1424,12 @@ if (
       try { JSON.parse(rawText); isEncryptedContent = true; } catch {}
     }
     const preview = (isEncryptedContent || !rawText) ? "" : rawText.slice(0, 60);
-    toast(`💬 ${senderName} in ${label}${preview ? `: ${preview}` : ""}`, {
+    // DMs: "Amrinder: hi"  — Channels: "Amrinder in #daily-standups: hi"
+    const isDMToast = channelId.startsWith("dm:");
+    const toastMsg = isDMToast
+      ? `💬 ${senderName}${preview ? `: ${preview}` : ""}`
+      : `💬 ${senderName} in #${channelId}${preview ? `: ${preview}` : ""}`;
+    toast(toastMsg, {
       duration: 4000,
       id: `chat-notif-${channelId}`,
     });
@@ -3567,21 +3571,23 @@ useEffect(() => {
                 <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
                   <Hash size={12} className="shrink-0 opacity-60" />
                   <span className="truncate">{ch.name}</span>
+                </span>
+                <span className="flex items-center gap-1 shrink-0">
                   {(unreadByChannel[ch.key] || 0) > 0 && (
-                    <span className="chat-sidebar-badge ml-1 text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                    <span className="chat-sidebar-badge text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
                       {unreadByChannel[ch.key]}
                     </span>
                   )}
-                </span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => { e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); }}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); } }}
-                  className="opacity-0 group-hover/ch:opacity-100 transition-opacity shrink-0 ml-1 chat-sidebar-label"
-                  title={`Settings for ${ch.name}`}
-                >
-                  <Settings size={11} />
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); } }}
+                    className="opacity-0 group-hover/ch:opacity-100 transition-opacity chat-sidebar-label"
+                    title={`Settings for ${ch.name}`}
+                  >
+                    <Settings size={11} />
+                  </span>
                 </span>
               </button>
             );
@@ -3623,12 +3629,12 @@ useEffect(() => {
                           <span className="flex items-center gap-2 text-[12px] flex-1 min-w-0">
                             <Hash size={11} className="shrink-0 opacity-60" />
                             <span className="truncate">{ch.name}</span>
-                            {(unreadByChannel[ch.key] || 0) > 0 && (
-                              <span className="chat-sidebar-badge ml-1 text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
-                                {unreadByChannel[ch.key]}
-                              </span>
-                            )}
                           </span>
+                          {(unreadByChannel[ch.key] || 0) > 0 && (
+                            <span className="chat-sidebar-badge text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                              {unreadByChannel[ch.key]}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -3659,14 +3665,21 @@ useEffect(() => {
                       <Lock size={11} className="shrink-0 opacity-60" />
                       <span className="truncate">{ch.name}</span>
                     </span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); }}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); } }}
-                      className="opacity-0 group-hover/ch:opacity-100 transition-opacity shrink-0 ml-1 chat-sidebar-label"
-                    >
-                      <Settings size={11} />
+                    <span className="flex items-center gap-1 shrink-0">
+                      {(unreadByChannel[ch.key] || 0) > 0 && (
+                        <span className="chat-sidebar-badge text-[9px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                          {unreadByChannel[ch.key]}
+                        </span>
+                      )}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setSettingsChannel(ch); setOpenSettings(true); } }}
+                        className="opacity-0 group-hover/ch:opacity-100 transition-opacity chat-sidebar-label"
+                      >
+                        <Settings size={11} />
+                      </span>
                     </span>
                   </button>
                 );

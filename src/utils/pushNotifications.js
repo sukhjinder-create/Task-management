@@ -64,6 +64,11 @@ async function subscribeWebPush(authToken) {
     if (permission !== "granted") return;
 
     let sub = await reg.pushManager.getSubscription();
+    // Force resubscribe if subscription is expired or missing
+    if (sub && sub.expirationTime && sub.expirationTime < Date.now()) {
+      await sub.unsubscribe().catch(() => {});
+      sub = null;
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -72,6 +77,7 @@ async function subscribeWebPush(authToken) {
     }
 
     const json = sub.toJSON();
+    // Always re-register with backend to ensure token is current in DB
     await fetch(`${API_BASE_URL}/push/subscribe`, {
       method: "POST",
       headers: {
