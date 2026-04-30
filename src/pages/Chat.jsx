@@ -1403,32 +1403,18 @@ if (
     return { ...prev, [channelId]: [...base, normalizedWithEmoji] };
   });
 
-  // 🔴 Track unread + show in-app toast for non-active channels (not own messages)
+  // 🔴 Show in-app toast for non-active channels (not own messages)
+  // NOTE: unread count is tracked solely by chat:unread-bump to avoid double-counting
   if (
     channelId !== activeChannelRef.current &&
     normalizedWithEmoji.userId !== user.id &&
     !normalizedWithEmoji.system
   ) {
-    setUnreadByChannel((prev) => ({
-      ...prev,
-      [channelId]: (prev[channelId] || 0) + 1,
-    }));
-    // In-app notification toast
     const senderName = normalizedWithEmoji.username || "Someone";
-    const rawText = typeof normalizedWithEmoji.textHtml === "string"
-      ? normalizedWithEmoji.textHtml.replace(/<[^>]*>/g, "").trim()
-      : "";
-    // Never show encrypted JSON or blank content as preview
-    let isEncryptedContent = rawText.startsWith("{") || rawText.startsWith("[");
-    if (!isEncryptedContent) {
-      try { JSON.parse(rawText); isEncryptedContent = true; } catch {}
-    }
-    const preview = (isEncryptedContent || !rawText) ? "" : rawText.slice(0, 60);
-    // DMs: "Amrinder: hi"  — Channels: "Amrinder in #daily-standups: hi"
     const isDMToast = channelId.startsWith("dm:");
     const toastMsg = isDMToast
-      ? `💬 ${senderName}${preview ? `: ${preview}` : ""}`
-      : `💬 ${senderName} in #${channelId}${preview ? `: ${preview}` : ""}`;
+      ? `💬 ${senderName}`
+      : `💬 ${senderName} in #${channelId}`;
     toast(toastMsg, {
       duration: 4000,
       id: `chat-notif-${channelId}`,
@@ -2098,6 +2084,7 @@ useEffect(() => {
   // ----- CHANNEL / DM SELECT -----
   const handleSelectDm = (otherUser) => {
     const key = dmKeyFor(user.id, otherUser.id);
+    activeChannelRef.current = key;
     setActiveChannelKey(key);
     setActiveDmUser(otherUser);
     setActiveThreadKey(null);
@@ -2110,6 +2097,7 @@ useEffect(() => {
   };
 
   const handleSelectGeneral = () => {
+    activeChannelRef.current = GENERAL_CHANNEL_KEY;
     setActiveChannelKey(GENERAL_CHANNEL_KEY);
     setActiveDmUser(null);
     setActiveThreadKey(null);
@@ -2122,6 +2110,7 @@ useEffect(() => {
   };
 
   const handleSelectChannel = (channelKey) => {
+    activeChannelRef.current = channelKey;
     setActiveChannelKey(channelKey);
     setActiveDmUser(null);
     setActiveThreadKey(null);

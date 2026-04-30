@@ -15,6 +15,7 @@ self.addEventListener("push", (event) => {
   const title   = data.title || "Asystence";
   const options = {
     body:  data.body  || "",
+    icon:  "/vite.svg",
     data:  { url: data.url || "/" },
     tag:   data.type || "general",
     renotify: true,

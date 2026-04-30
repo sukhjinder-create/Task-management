@@ -14,18 +14,13 @@ export const isMobile     = isCapacitor;
 export const isDesktop    = isElectron;
 export const isWeb        = !isElectron && !isCapacitor;
 
-// ─── Lazy Capacitor plugin imports ────────────────────────────────────────────
-// We import lazily so the bundle doesn't break when running in Electron/browser
-// where Capacitor plugins are not present.
+// ─── Capacitor bridge helpers ────────────────────────────────────────────────
+// All Capacitor plugins accessed via window.Capacitor.Plugins (native bridge).
+// Dynamic import("@capacitor/...") won't work when packages are Vite-externalized
+// and the app loads from a remote URL in the WebView.
 
-async function cap(pluginName) {
-  if (!isCapacitor) return null;
-  try {
-    const { [pluginName]: plugin } = await import("@capacitor/" + pluginName.toLowerCase().replace(/([A-Z])/g, (m, c, i) => i ? "-" + c.toLowerCase() : c.toLowerCase()));
-    return plugin ?? null;
-  } catch {
-    return null;
-  }
+function capPlugin(name) {
+  return window.Capacitor?.Plugins?.[name] ?? null;
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────
@@ -40,17 +35,13 @@ export async function showNotification(title, body) {
     return;
   }
   if (isCapacitor) {
-    try {
-      const { LocalNotifications } = await import("@capacitor/local-notifications");
-      await LocalNotifications.schedule({
-        notifications: [{
-          id:    Math.floor(Math.random() * 100000),
-          title,
-          body,
-        }],
-      });
-    } catch {
-      // LocalNotifications not available — skip silently
+    const LocalNotifications = capPlugin("LocalNotifications");
+    if (LocalNotifications) {
+      try {
+        await LocalNotifications.schedule({
+          notifications: [{ id: Math.floor(Math.random() * 100000), title, body }],
+        });
+      } catch { /* ignore */ }
     }
     return;
   }
@@ -66,11 +57,14 @@ export async function showNotification(title, body) {
  */
 export async function requestNotificationPermission() {
   if (isCapacitor) {
-    try {
-      const { PushNotifications } = await import("@capacitor/push-notifications");
-      const result = await PushNotifications.requestPermissions();
-      return result.receive === "granted";
-    } catch { return false; }
+    const PushNotifications = capPlugin("PushNotifications");
+    if (PushNotifications) {
+      try {
+        const result = await PushNotifications.requestPermissions();
+        return result.receive === "granted";
+      } catch { return false; }
+    }
+    return false;
   }
   if (typeof Notification !== "undefined") {
     const result = await Notification.requestPermission();
@@ -99,10 +93,10 @@ export function openExternal(url) {
  */
 export async function hapticTap() {
   if (!isCapacitor) return;
-  try {
-    const { Haptics, ImpactStyle } = await import("@capacitor/haptics");
-    await Haptics.impact({ style: ImpactStyle.Light });
-  } catch { /* ignore */ }
+  const Haptics = capPlugin("Haptics");
+  if (Haptics) {
+    try { await Haptics.impact({ style: "LIGHT" }); } catch { /* ignore */ }
+  }
 }
 
 /**
@@ -110,10 +104,10 @@ export async function hapticTap() {
  */
 export async function hapticMedium() {
   if (!isCapacitor) return;
-  try {
-    const { Haptics, ImpactStyle } = await import("@capacitor/haptics");
-    await Haptics.impact({ style: ImpactStyle.Medium });
-  } catch { /* ignore */ }
+  const Haptics = capPlugin("Haptics");
+  if (Haptics) {
+    try { await Haptics.impact({ style: "MEDIUM" }); } catch { /* ignore */ }
+  }
 }
 
 // ─── Status bar ───────────────────────────────────────────────────────────────
@@ -123,11 +117,13 @@ export async function hapticMedium() {
  */
 export async function initStatusBar() {
   if (!isCapacitor) return;
-  try {
-    const { StatusBar, Style } = await import("@capacitor/status-bar");
-    await StatusBar.setStyle({ style: Style.Dark });
-    await StatusBar.setBackgroundColor({ color: "#0f172a" });
-  } catch { /* ignore */ }
+  const StatusBar = capPlugin("StatusBar");
+  if (StatusBar) {
+    try {
+      await StatusBar.setStyle({ style: "DARK" });
+      await StatusBar.setBackgroundColor({ color: "#0f172a" });
+    } catch { /* ignore */ }
+  }
 }
 
 // ─── Splash screen ───────────────────────────────────────────────────────────
@@ -137,10 +133,10 @@ export async function initStatusBar() {
  */
 export async function hideSplash() {
   if (!isCapacitor) return;
-  try {
-    const { SplashScreen } = await import("@capacitor/splash-screen");
-    await SplashScreen.hide();
-  } catch { /* ignore */ }
+  const SplashScreen = capPlugin("SplashScreen");
+  if (SplashScreen) {
+    try { await SplashScreen.hide(); } catch { /* ignore */ }
+  }
 }
 
 // ─── Persistent storage (replaces localStorage for mobile reliability) ────────
@@ -150,11 +146,10 @@ export async function hideSplash() {
  */
 export async function storageSet(key, value) {
   if (isCapacitor) {
-    try {
-      const { Preferences } = await import("@capacitor/preferences");
-      await Preferences.set({ key, value: JSON.stringify(value) });
-      return;
-    } catch { /* fallthrough */ }
+    const Preferences = capPlugin("Preferences");
+    if (Preferences) {
+      try { await Preferences.set({ key, value: JSON.stringify(value) }); return; } catch { /* fallthrough */ }
+    }
   }
   localStorage.setItem(key, JSON.stringify(value));
 }
@@ -164,11 +159,13 @@ export async function storageSet(key, value) {
  */
 export async function storageGet(key) {
   if (isCapacitor) {
-    try {
-      const { Preferences } = await import("@capacitor/preferences");
-      const { value } = await Preferences.get({ key });
-      return value ? JSON.parse(value) : null;
-    } catch { /* fallthrough */ }
+    const Preferences = capPlugin("Preferences");
+    if (Preferences) {
+      try {
+        const { value } = await Preferences.get({ key });
+        return value ? JSON.parse(value) : null;
+      } catch { /* fallthrough */ }
+    }
   }
   const raw = localStorage.getItem(key);
   return raw ? JSON.parse(raw) : null;
@@ -179,11 +176,10 @@ export async function storageGet(key) {
  */
 export async function storageRemove(key) {
   if (isCapacitor) {
-    try {
-      const { Preferences } = await import("@capacitor/preferences");
-      await Preferences.remove({ key });
-      return;
-    } catch { /* fallthrough */ }
+    const Preferences = capPlugin("Preferences");
+    if (Preferences) {
+      try { await Preferences.remove({ key }); return; } catch { /* fallthrough */ }
+    }
   }
   localStorage.removeItem(key);
 }
@@ -197,13 +193,14 @@ export async function storageRemove(key) {
  */
 export async function onBackButton(callback) {
   if (!isCapacitor) return () => {};
-  try {
-    const { App } = await import("@capacitor/app");
-    const handle = await App.addListener("backButton", callback);
-    return () => handle.remove();
-  } catch {
-    return () => {};
+  const App = capPlugin("App");
+  if (App) {
+    try {
+      const handle = await App.addListener("backButton", callback);
+      return () => handle.remove();
+    } catch { /* ignore */ }
   }
+  return () => {};
 }
 
 // ─── Platform info ────────────────────────────────────────────────────────────

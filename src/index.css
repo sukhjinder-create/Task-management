@@ -70,6 +70,11 @@
 .chat-sidebar-badge {
   background: var(--sidebar-badge);
   color: var(--sidebar-badge-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-weight: 600;
 }
 
 .chat-sidebar-input {
