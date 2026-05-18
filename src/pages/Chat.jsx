@@ -2489,9 +2489,13 @@ useEffect(() => {
             {/* Header */}
             <div className="px-4 py-4 border-b chat-sidebar-divider shrink-0">
               <div className="flex items-center justify-between mb-3">
-                <h1 className="font-bold text-xl tracking-tight chat-sidebar-item is-active" style={{background:"none"}}>Messages</h1>
+                <h1 className="font-semibold text-xl tracking-tight chat-sidebar-item is-active" style={{background:"none"}}>Messages</h1>
                 <div className="flex items-center gap-2.5">
-                  <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: connected ? "var(--score-good)" : "var(--score-danger)" }}
+                    title={statusLabel}
+                  />
                   <button
                     type="button"
                     onClick={() => setOpenCreate(true)}
@@ -3421,7 +3425,7 @@ useEffect(() => {
   // ========================================================
 
   return (
-    <div className="h-full min-h-0 flex overflow-hidden rounded-2xl border theme-border theme-surface shadow-lg">
+    <div className="h-full min-h-0 flex overflow-hidden">
 
       {/* Mobile sidebar backdrop */}
       {mobileSidebarOpen && (
@@ -3439,11 +3443,15 @@ useEffect(() => {
         ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
         {/* App header */}
-        <div className="h-16 px-4 border-b chat-sidebar-divider shrink-0 flex items-center">
+        <div className="h-[52px] px-4 border-b chat-sidebar-divider shrink-0 flex items-center">
           <div className="flex items-center justify-between w-full">
-            <span className="text-[13px] font-bold tracking-tight chat-sidebar-item is-active" style={{background:"none"}}>Workspace</span>
+            <span className="text-[12px] font-semibold tracking-tight uppercase chat-sidebar-label" style={{letterSpacing:"0.14em"}}>Workspace</span>
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: connected ? "var(--score-good)" : "var(--score-danger)" }}
+                title={statusLabel}
+              />
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen(false)}

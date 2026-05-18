@@ -485,7 +485,35 @@ const autonomousInsight = useMemo(() => {
         };
 
   return (
-  <div className="space-y-6 px-4 py-4 md:px-2 md:py-2 gradient-bg">
+  <div className="max-w-[1400px] mx-auto w-full space-y-6">
+
+    {/* ── Page header ─────────────────────────────────────────── */}
+    <header className="flex items-end justify-between gap-4 flex-wrap">
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+          {isAdmin ? "Operations" : isManager ? "Team" : "Personal"}
+        </p>
+        <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">
+          Dashboard
+        </h1>
+        <p className="text-[13px] text-[color:var(--text-muted)] mt-1">
+          {isAdmin
+            ? "Workspace-wide signal — execution, intelligence, and forecast at a glance."
+            : isManager
+            ? "Your team's execution snapshot and active workload."
+            : "Your active work, performance, and signal for the month."}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        {healthScore != null && (
+          <div className="inline-flex items-center gap-2 px-3 h-9 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
+            <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-soft)] font-semibold">Health</span>
+            <span className={`text-[15px] font-semibold font-mono ${getScoreTextClass(healthScore)}`}>{healthScore}</span>
+            <span className="text-[11px] text-[color:var(--text-soft)]">/100</span>
+          </div>
+        )}
+      </div>
+    </header>
 
 {/* ======================================
    AUTONOMOUS AI INSIGHT CARD

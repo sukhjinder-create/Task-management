@@ -1,13 +1,22 @@
 import { cn } from '../../utils/cn';
 
-export function Card({ children, className, hover = false, clickable = false, ...props }) {
+/**
+ * Card — a real raised surface for modals, popovers, login form, etc.
+ * Dashboard "panels" that should sit flat on the canvas should NOT use
+ * this component; they should render directly with typography and
+ * spacing for hierarchy.
+ */
+export function Card({ children, className, hover = false, clickable = false, flat = false, ...props }) {
   return (
     <div
       className={cn(
-        'gradient-card rounded-lg shadow border theme-border overflow-hidden',
-        'transition-all duration-200',
-        hover && 'hover:shadow-md hover:-translate-y-0.5 hover:gradient-primary',
-        clickable && 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:gradient-primary',
+        flat
+          ? "bg-transparent border-0"
+          : "bg-[var(--surface)] border border-[color:var(--border)] rounded-[10px]",
+        "transition-colors duration-150",
+        (hover || clickable) && !flat &&
+          "hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-soft)]",
+        clickable && "cursor-pointer",
         className
       )}
       {...props}
@@ -19,7 +28,13 @@ export function Card({ children, className, hover = false, clickable = false, ..
 
 export function CardHeader({ children, className, ...props }) {
   return (
-    <div className={cn('px-6 py-4 border-b theme-border', className)} {...props}>
+    <div
+      className={cn(
+        "px-5 py-3.5 border-b border-[color:var(--border)] flex items-center justify-between gap-3",
+        className
+      )}
+      {...props}
+    >
       {children}
     </div>
   );
@@ -27,7 +42,13 @@ export function CardHeader({ children, className, ...props }) {
 
 export function CardTitle({ children, className, ...props }) {
   return (
-    <h3 className={cn('text-lg font-semibold theme-text', className)} {...props}>
+    <h3
+      className={cn(
+        "text-sm font-semibold text-[color:var(--text)] tracking-tight",
+        className
+      )}
+      {...props}
+    >
       {children}
     </h3>
   );
@@ -35,7 +56,10 @@ export function CardTitle({ children, className, ...props }) {
 
 export function CardDescription({ children, className, ...props }) {
   return (
-    <p className={cn('text-sm theme-text-muted mt-1', className)} {...props}>
+    <p
+      className={cn("text-xs text-[color:var(--text-muted)] mt-0.5", className)}
+      {...props}
+    >
       {children}
     </p>
   );
@@ -43,7 +67,7 @@ export function CardDescription({ children, className, ...props }) {
 
 export function CardContent({ children, className, ...props }) {
   return (
-    <div className={cn('px-6 py-4', className)} {...props}>
+    <div className={cn("px-5 py-4", className)} {...props}>
       {children}
     </div>
   );
@@ -51,13 +75,18 @@ export function CardContent({ children, className, ...props }) {
 
 export function CardFooter({ children, className, ...props }) {
   return (
-    <div className={cn('px-6 py-4 border-t theme-border gradient-subtle', className)} {...props}>
+    <div
+      className={cn(
+        "px-5 py-3 border-t border-[color:var(--border)] bg-[var(--surface-soft)] flex items-center justify-end gap-2",
+        className
+      )}
+      {...props}
+    >
       {children}
     </div>
   );
 }
 
-// Add subcomponents to Card for easy access
 Card.Header = CardHeader;
 Card.Title = CardTitle;
 Card.Description = CardDescription;

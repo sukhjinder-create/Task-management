@@ -1607,161 +1607,164 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card>
-        <Card.Content className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">
-                {loadingProject
-                  ? "Loading project..."
-                  : project?.name || "Project"}
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Manage tasks for this project and collaborate with your team
-              </p>
-              {tasks.length > 0 && (
-                <div className="flex items-center gap-3 mt-3">
-                  <Badge color="neutral" size="sm" variant="subtle">
-                    Total: {stats.total}
-                  </Badge>
-                  <Badge color="warning" size="sm" variant="subtle">
-                    Pending: {stats.pending}
-                  </Badge>
-                  <Badge color="primary" size="sm" variant="subtle">
-                    In Progress: {stats.inProgress}
-                  </Badge>
-                  <Badge color="success" size="sm" variant="subtle">
-                    Completed: {stats.completed}
-                  </Badge>
-                  {stats.overdue > 0 && (
-                    <Badge color="danger" size="sm" variant="solid">
-                      Overdue: {stats.overdue}
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </div>
-            {canEdit && (
-              <Button
-                onClick={() => setShowCreateModal(true)}
-                variant="primary"
-                size="md"
-                className="gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                New Task
-              </Button>
-            )}
-          </div>
-        </Card.Content>
-      </Card>
+    <div className="max-w-[1400px] mx-auto w-full space-y-5">
+      {/* ── Page header ───────────────────────────────────────── */}
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+            Project
+          </p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">
+            {loadingProject ? "Loading project…" : project?.name || "Project"}
+          </h1>
+          <p className="text-[13px] text-[color:var(--text-muted)] mt-1">
+            Track work, manage sprints, and collaborate with your team.
+          </p>
+        </div>
+        {canEdit && (
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            variant="primary"
+            size="md"
+            leftIcon={<Plus className="w-4 h-4" />}
+          >
+            New task
+          </Button>
+        )}
+      </header>
+
+      {/* Stats strip — denser, scannable */}
+      {tasks.length > 0 && (
+        <div className="flex items-center flex-wrap gap-x-5 gap-y-1 text-[11.5px] text-[color:var(--text-muted)]">
+          <span>
+            <span className="text-[color:var(--text-soft)] uppercase tracking-[0.12em] text-[10px] font-semibold mr-1.5">Total</span>
+            <span className="text-[color:var(--text)] font-semibold font-mono">{stats.total}</span>
+          </span>
+          <span>
+            <span className="text-[color:var(--text-soft)] uppercase tracking-[0.12em] text-[10px] font-semibold mr-1.5">Pending</span>
+            <span className="text-[color:var(--score-warning)] font-mono">{stats.pending}</span>
+          </span>
+          <span>
+            <span className="text-[color:var(--text-soft)] uppercase tracking-[0.12em] text-[10px] font-semibold mr-1.5">In progress</span>
+            <span className="text-[color:var(--primary)] font-mono">{stats.inProgress}</span>
+          </span>
+          <span>
+            <span className="text-[color:var(--text-soft)] uppercase tracking-[0.12em] text-[10px] font-semibold mr-1.5">Completed</span>
+            <span className="text-[color:var(--score-good)] font-mono">{stats.completed}</span>
+          </span>
+          {stats.overdue > 0 && (
+            <span>
+              <span className="text-[color:var(--text-soft)] uppercase tracking-[0.12em] text-[10px] font-semibold mr-1.5">Overdue</span>
+              <span className="text-[color:var(--score-danger)] font-semibold font-mono">{stats.overdue}</span>
+            </span>
+          )}
+        </div>
+      )}
 
       {canEdit && (
-        <Card>
-          <Card.Content className="p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">
-                  Project History
-                </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  Admin and manager activity for this project, including tasks, columns, sprints, and durable delete records.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowProjectHistory((value) => !value)}
-              >
-                {showProjectHistory ? "Hide History" : "Show History"}
-              </Button>
+        <section className="rounded-[10px] border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[13px] font-semibold tracking-tight text-[color:var(--text)]">
+                Project history
+              </h2>
+              <p className="text-[12px] text-[color:var(--text-muted)] mt-0.5 leading-relaxed">
+                Admin & manager activity — tasks, columns, sprints, and durable delete records.
+              </p>
             </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowProjectHistory((value) => !value)}
+            >
+              {showProjectHistory ? "Hide history" : "Show history"}
+            </Button>
+          </div>
 
-            {showProjectHistory && (
-              <div className="mt-4 space-y-3">
-                {loadingProjectHistory ? (
-                  <div className="text-sm text-gray-500">Loading history...</div>
-                ) : projectHistory.length === 0 ? (
-                  <div className="text-sm text-gray-500">No project history recorded yet.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {projectHistory.map((log) => {
-                      const changeText = formatHistoryChange(log);
-                      return (
-                        <div
-                          key={log.id}
-                          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
-                        >
-                          <div className="text-sm font-medium text-gray-900">
-                            {formatProjectHistoryMessage(log)}
-                          </div>
-                          {changeText && (
-                            <div className="mt-1 text-xs text-gray-600">{changeText}</div>
-                          )}
-                          <div className="mt-1 text-[11px] text-gray-500">
-                            {new Date(log.created_at).toLocaleString()}
-                          </div>
+          {showProjectHistory && (
+            <div className="mt-4 space-y-3">
+              {loadingProjectHistory ? (
+                <div className="text-[12px] text-[color:var(--text-muted)]">Loading history…</div>
+              ) : projectHistory.length === 0 ? (
+                <div className="text-[12px] text-[color:var(--text-muted)]">No project history recorded yet.</div>
+              ) : (
+                <div className="space-y-2">
+                  {projectHistory.map((log) => {
+                    const changeText = formatHistoryChange(log);
+                    return (
+                      <div
+                        key={log.id}
+                        className="rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)] px-3 py-2.5"
+                      >
+                        <div className="text-[12.5px] font-medium text-[color:var(--text)] leading-snug">
+                          {formatProjectHistoryMessage(log)}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        {changeText && (
+                          <div className="mt-1 text-[11.5px] text-[color:var(--text-muted)] leading-relaxed">
+                            {changeText}
+                          </div>
+                        )}
+                        <div className="mt-1 text-[10.5px] text-[color:var(--text-soft)] font-mono">
+                          {new Date(log.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-                <div className="flex items-center justify-between gap-3 pt-1">
-                  <div className="text-xs text-gray-500">
-                    {projectHistoryMeta.total} entries
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      disabled={projectHistoryPage <= 1 || loadingProjectHistory}
-                      onClick={() =>
-                        setProjectHistoryPage((page) => Math.max(1, page - 1))
-                      }
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-xs text-gray-500">
-                      Page {projectHistoryPage} of {projectHistoryMeta.totalPages}
-                    </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      disabled={
-                        loadingProjectHistory ||
-                        projectHistoryPage >= projectHistoryMeta.totalPages
-                      }
-                      onClick={() =>
-                        setProjectHistoryPage((page) =>
-                          Math.min(projectHistoryMeta.totalPages, page + 1)
-                        )
-                      }
-                    >
-                      Next
-                    </Button>
-                  </div>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="text-[11px] text-[color:var(--text-soft)]">
+                  {projectHistoryMeta.total} entries
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={projectHistoryPage <= 1 || loadingProjectHistory}
+                    onClick={() =>
+                      setProjectHistoryPage((page) => Math.max(1, page - 1))
+                    }
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-[11px] text-[color:var(--text-muted)] font-mono">
+                    {projectHistoryPage} / {projectHistoryMeta.totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={
+                      loadingProjectHistory ||
+                      projectHistoryPage >= projectHistoryMeta.totalPages
+                    }
+                    onClick={() =>
+                      setProjectHistoryPage((page) =>
+                        Math.min(projectHistoryMeta.totalPages, page + 1)
+                      )
+                    }
+                  >
+                    Next
+                  </Button>
                 </div>
               </div>
-            )}
-          </Card.Content>
-        </Card>
+            </div>
+          )}
+        </section>
       )}
 
 
       {/* ─── SPRINT PANEL ─────────────────────────────────── */}
-      <section className="bg-white rounded-xl shadow p-4">
+      <section className="rounded-[10px] border border-[color:var(--border)] bg-[var(--surface)] p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-indigo-500" />
-            <h2 className="text-sm font-semibold">Sprints</h2>
+            <Layers className="w-3.5 h-3.5 text-[color:var(--primary)]" />
+            <h2 className="text-[13px] font-semibold tracking-tight text-[color:var(--text)]">Sprints</h2>
             {project?.project_code && (
-              <span className="text-[10px] bg-indigo-50 text-indigo-600 font-mono px-1.5 py-0.5 rounded border border-indigo-200">
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-[4px] bg-[var(--primary-soft)] text-[color:var(--primary)] border border-[color:color-mix(in_srgb,var(--primary)_28%,var(--border))]">
                 {project.project_code}
               </span>
             )}

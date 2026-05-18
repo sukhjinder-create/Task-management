@@ -31,7 +31,8 @@ function readInitialTheme() {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && THEME_OPTIONS.includes(stored)) return stored;
   } catch {}
-  return "system";
+  // New product face — enterprise dark is the default for new users.
+  return "dark";
 }
 
 export function ThemeProvider({ children }) {

@@ -30,11 +30,9 @@ import { useFeature } from "../context/PlanContext";
 import { useApi } from "../api";
 import { getSocket, initSocket } from "../socket";
 import { subscribeToUnreadCount } from "../notificationBus";
-import { Avatar, Badge } from "./ui";
+import { Avatar } from "./ui";
 import { cn } from "../utils/cn";
 import AppBrand from "./AppBrand";
-
-const COLLAPSED_KEY = "sidebarCollapsed";
 
 export default function Sidebar({ collapsed, onToggle }) {
   const { auth } = useAuth();
@@ -44,7 +42,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   const tasksLabel = role === "user" ? "My Tasks" : "Tasks";
   const isAdmin = role === "admin";
 
-  // Plan feature gates — hide sidebar items the workspace plan doesn't include
+  // Feature gates
   const hasWiki            = useFeature("wiki_docs");
   const hasLeave           = useFeature("leave_management");
   const hasGoals           = useFeature("okr_goals");
@@ -100,21 +98,31 @@ export default function Sidebar({ collapsed, onToggle }) {
     return () => { cancelled = true; offSocket(); unsubscribeBus(); };
   }, [api, auth.token]);
 
-  const navItems = [
-    { to: "/dashboard",        label: "Dashboard",              icon: LayoutDashboard, show: true },
-    { to: "/projects",         label: "Projects",               icon: FolderKanban,    show: true },
-    { to: "/my-tasks",         label: tasksLabel,               icon: CheckSquare,     show: true },
-    { to: "/wiki",             label: "Wiki / Docs",            icon: BookOpen,        show: true,                           locked: !hasWiki },
-    { to: "/leave",            label: "Leave",                  icon: CalendarDays,    show: true,                           locked: !hasLeave },
-    { to: "/okr",              label: "Goals",                  icon: Target,          show: isAdmin,                        locked: !hasGoals },
-    { to: "/reviews",          label: "Reviews",                icon: Star,            show: true,                           locked: !hasReviews },
-    { to: "/reports",          label: "Reports",                icon: FileText,        show: isAdmin || role === "manager", locked: !hasReports },
-    { to: "/ai",               label: "AI Hub",                 icon: Sparkles,        show: isAdmin || role === "manager", locked: !hasAiHub },
-    { to: "/enterprise-intel", label: "Workspace Intelligence", icon: Brain,           show: isAdmin,                        locked: !hasWsIntel },
-    { to: "/chat",             label: "Team Chat",              icon: MessageSquare,   show: true,                           locked: !hasChat },
-    { to: "/notifications",    label: "Notifications",          icon: Bell,            show: true, badge: unreadCount },
+  /** Primary navigation (everyone) */
+  const workspaceItems = [
+    { to: "/dashboard",        label: "Dashboard",     icon: LayoutDashboard, show: true },
+    { to: "/projects",         label: "Projects",      icon: FolderKanban,    show: true },
+    { to: "/my-tasks",         label: tasksLabel,      icon: CheckSquare,     show: true },
+    { to: "/chat",             label: "Team Chat",     icon: MessageSquare,   show: true,                          locked: !hasChat },
+    { to: "/notifications",    label: "Notifications", icon: Bell,            show: true, badge: unreadCount },
   ];
 
+  /** Knowledge & people */
+  const orgItems = [
+    { to: "/wiki",             label: "Wiki / Docs",   icon: BookOpen,        show: true,                          locked: !hasWiki },
+    { to: "/leave",            label: "Leave",         icon: CalendarDays,    show: true,                          locked: !hasLeave },
+    { to: "/okr",              label: "Goals",         icon: Target,          show: isAdmin,                       locked: !hasGoals },
+    { to: "/reviews",          label: "Reviews",       icon: Star,            show: true,                          locked: !hasReviews },
+  ];
+
+  /** Insights & intelligence */
+  const intelligenceItems = [
+    { to: "/reports",          label: "Reports",                icon: FileText, show: isAdmin || role === "manager", locked: !hasReports },
+    { to: "/ai",               label: "AI Hub",                 icon: Sparkles, show: isAdmin || role === "manager", locked: !hasAiHub },
+    { to: "/enterprise-intel", label: "Workspace Intelligence", icon: Brain,    show: isAdmin,                        locked: !hasWsIntel },
+  ];
+
+  /** Admin controls */
   const adminItems = [
     { to: "/admin/workspace-search", label: "Workspace Search", icon: Search,    show: isAdmin, locked: !hasWorkspaceSearch },
     { to: "/admin/attendance",       label: "Attendance",       icon: Clock,     show: isAdmin, locked: !hasAttendance },
@@ -124,140 +132,151 @@ export default function Sidebar({ collapsed, onToggle }) {
     { to: "/admin/migrations",       label: "Migrations",       icon: Hash,      show: isAdmin, locked: !hasMigrations },
   ];
 
-  // Shared NavLink class builder
   const linkClass = ({ isActive }) =>
     cn(
-      "flex items-center rounded-lg text-sm font-medium transition-colors",
-      collapsed ? "justify-center px-0 py-2.5 mx-1" : "gap-3 px-3 py-2.5",
+      "group relative flex items-center text-[13px] font-medium tracking-tight",
+      "transition-colors duration-100 select-none",
+      collapsed
+        ? "justify-center h-9 w-9 mx-auto rounded-[8px]"
+        : "h-8 gap-2.5 px-2.5 rounded-[6px]",
       isActive
-        ? collapsed
-          ? "bg-[var(--primary-light,#eff6ff)] text-[var(--primary,#2563eb)]"
-          : "nav-link-active border-l-2 -ml-[2px] pl-[10px]"
-        : "theme-text-muted hover:bg-[var(--surface-soft)]"
+        ? "bg-[var(--sidebar-active)] text-[color:var(--text)]"
+        : "text-[color:var(--sidebar-text)] hover:bg-[var(--sidebar-hover)] hover:text-[color:var(--text)]"
     );
 
+  const renderItem = ({ to, label, icon: Icon, badge, locked }) => (
+    <NavLink key={to} to={to} title={collapsed ? label : undefined} className={linkClass}>
+      {({ isActive }) => (
+        <>
+          {/* Active accent rail */}
+          {isActive && !collapsed && (
+            <span
+              aria-hidden="true"
+              className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-[var(--primary)]"
+            />
+          )}
+          <div className="relative shrink-0">
+            <Icon
+              className={cn(
+                "w-[16px] h-[16px]",
+                isActive
+                  ? "text-[color:var(--primary)]"
+                  : "text-[color:var(--text-soft)] group-hover:text-[color:var(--text)]"
+              )}
+              strokeWidth={1.75}
+            />
+            {locked && (
+              <span className="absolute -bottom-1 -right-1 rounded-full bg-[var(--sidebar-bg)] p-[1px]">
+                <Lock className="w-2.5 h-2.5 text-[color:var(--text-soft)]" aria-hidden="true" />
+              </span>
+            )}
+            {badge > 0 && collapsed && (
+              <span className="absolute -top-1 -right-1 w-[7px] h-[7px] bg-[var(--primary)] rounded-full" />
+            )}
+          </div>
+          {!collapsed && (
+            <>
+              <span className="flex-1 truncate">{label}</span>
+              {locked && <Lock className="w-3 h-3 shrink-0 text-[color:var(--text-soft)]" aria-hidden="true" />}
+              {badge > 0 && (
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--primary)] text-[10px] font-semibold px-1.5 text-[color:var(--primary-contrast)]">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </NavLink>
+  );
+
+  const renderSection = (label, items) => {
+    const visible = items.filter((i) => i.show);
+    if (visible.length === 0) return null;
+    return (
+      <div className="px-1.5">
+        {!collapsed && (
+          <p className="px-2.5 mt-4 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-soft)]">
+            {label}
+          </p>
+        )}
+        {collapsed && <div className="my-2 mx-auto h-px w-6 bg-[color:var(--sidebar-border)]" />}
+        <div className="space-y-0.5">{visible.map(renderItem)}</div>
+      </div>
+    );
+  };
+
   return (
-    <div
+    <aside
       className={cn(
-        "app-sidebar gradient-sidebar border-r theme-border fixed inset-y-0 left-0 flex flex-col overflow-hidden z-40",
-        "transition-[width] duration-200 ease-in-out",
-        collapsed ? "w-16" : "w-60"
+        "fixed inset-y-0 left-0 z-40 flex flex-col overflow-hidden",
+        "bg-[var(--sidebar-bg)] border-r border-[color:var(--sidebar-border)]",
+        "transition-[width] duration-200 ease-out",
+        collapsed ? "w-[60px]" : "w-[240px]"
       )}
     >
-      {/* ── Brand + toggle ──────────────────────────────── */}
-      <div className={cn(
-        "border-b theme-border flex items-center shrink-0",
-        collapsed ? "h-16 px-2 justify-between" : "h-16 px-3 gap-2"
-      )}>
+      {/* Brand row */}
+      <div
+        className={cn(
+          "border-b border-[color:var(--sidebar-border)] flex items-center shrink-0",
+          collapsed ? "h-[52px] justify-center" : "h-[52px] px-3 gap-2"
+        )}
+      >
         <AppBrand collapsed={collapsed} className={cn("min-w-0", !collapsed && "flex-1")} />
         <button
           type="button"
           onClick={onToggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={cn(
-            "p-1.5 rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted transition-colors shrink-0",
-            !collapsed && "ml-auto"
+            "shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-[6px]",
+            "text-[color:var(--text-soft)] hover:text-[color:var(--text)] hover:bg-[var(--sidebar-hover)]",
+            "transition-colors",
+            collapsed && "absolute top-3 right-2"
           )}
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
       </div>
 
-      {/* ── Main nav ────────────────────────────────────── */}
-      <nav className="flex-1 px-2 py-4 pr-1 space-y-0.5 overflow-y-auto overflow-x-hidden sidebar-scroll">
-        {navItems.filter((i) => i.show).map(({ to, label, icon: Icon, badge, locked }) => (
-          <NavLink key={to} to={to} title={collapsed ? label : undefined} className={linkClass}>
-            <div className="relative shrink-0">
-              <Icon className="w-5 h-5" />
-              {locked && (
-                <span className="absolute -bottom-1 -right-1 rounded-full bg-[var(--surface)] p-0.5">
-                  <Lock className="w-2.5 h-2.5 theme-text-muted" aria-hidden="true" />
-                </span>
-              )}
-              {/* Dot badge in collapsed mode */}
-              {badge > 0 && collapsed && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-[color:var(--score-danger)] rounded-full" />
-              )}
-            </div>
-            {!collapsed && (
-              <>
-                <span className="flex-1 truncate">{label}</span>
-                {locked && <Lock className="w-3.5 h-3.5 shrink-0 theme-text-muted" aria-hidden="true" />}
-                {badge > 0 && (
-                  <Badge color="danger" size="sm" variant="solid">{badge}</Badge>
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
-
-        {/* Profile link */}
-        <div className="pt-3 pb-1">
-          <div className="h-px bg-[var(--border)]" />
-        </div>
-        <NavLink
-          to="/profile"
-          title={collapsed ? "Profile" : undefined}
-          className={linkClass}
-        >
-          <User className="w-5 h-5 shrink-0" />
-          {!collapsed && <span className="flex-1 truncate">Profile</span>}
-        </NavLink>
-
-        {/* Admin section */}
-        {adminItems.some((i) => i.show) && (
-          <>
-            <div className="pt-3 pb-1">
-              <div className="h-px theme-border" />
-            </div>
-            {!collapsed && (
-              <div className="px-3 pt-1 pb-1">
-                <p className="text-xs font-semibold theme-text-muted uppercase tracking-wider">
-                  Admin
-                </p>
-              </div>
-            )}
-            {adminItems.filter((i) => i.show).map(({ to, label, icon: Icon, locked }) => (
-              <NavLink key={to} to={to} title={collapsed ? label : undefined} className={linkClass}>
-                <div className="relative shrink-0">
-                  <Icon className="w-5 h-5 shrink-0" />
-                  {locked && (
-                    <span className="absolute -bottom-1 -right-1 rounded-full bg-[var(--surface)] p-0.5">
-                      <Lock className="w-2.5 h-2.5 theme-text-muted" aria-hidden="true" />
-                    </span>
-                  )}
-                </div>
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 truncate">{label}</span>
-                    {locked && <Lock className="w-3.5 h-3.5 shrink-0 theme-text-muted" aria-hidden="true" />}
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </>
-        )}
+      {/* Nav */}
+      <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden sidebar-scroll">
+        {renderSection("Workspace", workspaceItems)}
+        {renderSection("Organization", orgItems)}
+        {renderSection("Intelligence", intelligenceItems)}
+        {renderSection("Administration", adminItems)}
       </nav>
 
-      {/* ── User card ───────────────────────────────────── */}
-      <div className="p-3 border-t theme-border shrink-0">
+      {/* User card */}
+      <div className="border-t border-[color:var(--sidebar-border)] shrink-0">
         <Link
           to="/profile"
           title={collapsed ? auth.user?.username : undefined}
           className={cn(
-            "flex items-center rounded-lg hover:bg-[var(--surface-soft)] transition-colors p-2",
-            collapsed ? "justify-center" : "gap-3"
+            "flex items-center gap-2.5 px-3 py-2.5 hover:bg-[var(--sidebar-hover)] transition-colors",
+            collapsed && "justify-center px-0"
           )}
         >
-          <Avatar name={auth.user?.username} src={auth.user?.avatar_url} size="md" />
+          <Avatar
+            name={auth.user?.username}
+            src={auth.user?.avatar_url}
+            size="sm"
+            status="online"
+          />
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium theme-text truncate">{auth.user?.username}</p>
-              <p className="text-xs theme-text-muted truncate capitalize">{auth.user?.role}</p>
+              <p className="text-[13px] font-medium text-[color:var(--text)] truncate leading-tight">
+                {auth.user?.username || "—"}
+              </p>
+              <p className="text-[11px] text-[color:var(--text-soft)] truncate leading-tight capitalize mt-0.5">
+                {auth.user?.role || "member"}
+              </p>
             </div>
+          )}
+          {!collapsed && (
+            <User className="w-3.5 h-3.5 text-[color:var(--text-soft)] shrink-0" aria-hidden="true" />
           )}
         </Link>
       </div>
-    </div>
+    </aside>
   );
 }

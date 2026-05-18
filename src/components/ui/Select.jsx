@@ -1,47 +1,48 @@
 import { forwardRef } from 'react';
 import { cn } from '../../utils/cn';
 
-export const Select = forwardRef(
-  (
-    {
-      label,
-      error,
-      helperText,
-      options = [],
-      className,
-      containerClassName,
-      placeholder = 'Select an option',
-      ...props
-    },
-    ref
-  ) => {
-    const inputId = props.id || props.name;
+export const Select = forwardRef(function Select(
+  {
+    label,
+    error,
+    helperText,
+    options = [],
+    className,
+    containerClassName,
+    placeholder = "Select an option",
+    size = "md",
+    ...props
+  },
+  ref
+) {
+  const inputId = props.id || props.name;
+  const sizeClasses =
+    size === "sm" ? "h-8 pl-2.5 pr-8 text-xs" : size === "lg" ? "h-11 pl-3.5 pr-10 text-sm" : "h-9 pl-3 pr-9 text-sm";
 
-    return (
-      <div className={cn('w-full', containerClassName)}>
-        {label && (
-          <label
-            htmlFor={inputId}
-            className="block text-sm font-medium theme-text-muted mb-1.5"
-          >
-            {label}
-          </label>
-        )}
-
+  return (
+    <div className={cn("w-full", containerClassName)}>
+      {label && (
+        <label
+          htmlFor={inputId}
+          className="block text-xs font-medium text-[color:var(--text-muted)] mb-1.5 tracking-tight"
+        >
+          {label}
+        </label>
+      )}
+      <div className="relative">
         <select
           ref={ref}
           id={inputId}
           className={cn(
-            'w-full px-3 py-2 text-sm',
-            'theme-input border rounded-lg',
-            'transition-colors duration-200',
-            'disabled:opacity-60 disabled:cursor-not-allowed',
-            'appearance-none bg-no-repeat',
-            'bg-[url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")]',
-            'bg-[position:right_0.5rem_center] bg-[size:1.5em_1.5em] pr-10',
-            error
-              ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20'
-              : 'theme-border focus:border-[var(--primary)] focus:ring-[var(--ring)]',
+            "w-full bg-[var(--surface)] text-[color:var(--text)]",
+            "border border-[color:var(--border)] rounded-[8px]",
+            "appearance-none cursor-pointer",
+            "transition-[border-color,box-shadow] duration-150",
+            "focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]",
+            "disabled:opacity-60 disabled:cursor-not-allowed",
+            sizeClasses,
+            error &&
+              "border-[color:var(--score-danger)] focus:border-[color:var(--score-danger)]",
             className
           )}
           {...props}
@@ -57,17 +58,35 @@ export const Select = forwardRef(
             </option>
           ))}
         </select>
-
-        {error && (
-          <p className="mt-1.5 text-xs text-danger-600">{error}</p>
-        )}
-
-        {helperText && !error && (
-          <p className="mt-1.5 text-xs theme-text-muted">{helperText}</p>
-        )}
+        {/* Chevron */}
+        <svg
+          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--text-soft)]"
+          viewBox="0 0 20 20"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M6 8l4 4 4-4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </div>
-    );
-  }
-);
 
-Select.displayName = 'Select';
+      {error && (
+        <p className="mt-1.5 text-xs text-[color:var(--score-danger)]">
+          {error}
+        </p>
+      )}
+      {helperText && !error && (
+        <p className="mt-1.5 text-xs text-[color:var(--text-muted)]">
+          {helperText}
+        </p>
+      )}
+    </div>
+  );
+});
+
+Select.displayName = "Select";

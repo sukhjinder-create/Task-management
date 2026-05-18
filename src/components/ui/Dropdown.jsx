@@ -11,18 +11,13 @@ export function Dropdown({ children, className }) {
         setIsOpen(false);
       }
     };
-
     const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
+      if (event.key === 'Escape') setIsOpen(false);
     };
-
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleEscape);
     }
-
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
@@ -44,14 +39,23 @@ export function DropdownTrigger({ children, onClick, ...props }) {
   );
 }
 
-export function DropdownMenu({ isOpen, children, className, align = 'left', ...props }) {
+export function DropdownMenu({
+  isOpen,
+  children,
+  className,
+  align = 'left',
+  ...props
+}) {
   if (!isOpen) return null;
-
   return (
     <div
+      role="menu"
       className={cn(
-        'absolute z-50 mt-2 min-w-[12rem] rounded-lg bg-white shadow-lg border border-gray-200',
-        'animate-in fade-in-0 zoom-in-95 duration-100',
+        // Real raised surface, full theme awareness
+        "absolute z-50 mt-1.5 min-w-[12rem] max-w-[22rem]",
+        "bg-[var(--surface)] text-[color:var(--text)]",
+        "border border-[color:var(--border)] rounded-[10px]",
+        "shadow-[var(--shadow-lg)] overflow-hidden",
         align === 'left' && 'left-0',
         align === 'right' && 'right-0',
         className
@@ -63,29 +67,52 @@ export function DropdownMenu({ isOpen, children, className, align = 'left', ...p
   );
 }
 
-export function DropdownItem({ children, onClick, className, danger = false, ...props }) {
+export function DropdownItem({
+  children,
+  onClick,
+  className,
+  danger = false,
+  selected = false,
+  leftIcon,
+  rightIcon,
+  ...props
+}) {
   return (
     <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
       className={cn(
-        'w-full px-4 py-2 text-left text-sm transition-colors',
+        "w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-sm",
+        "transition-colors duration-100",
+        "focus:outline-none",
         danger
-          ? 'text-danger-700 hover:bg-danger-50'
-          : 'text-gray-700 hover:bg-gray-100',
+          ? "text-[color:var(--score-danger)] hover:bg-[color:var(--score-danger-bg)] focus:bg-[color:var(--score-danger-bg)]"
+          : "text-[color:var(--text)] hover:bg-[var(--surface-soft)] focus:bg-[var(--surface-soft)]",
+        selected && "bg-[var(--primary-soft)] text-[color:var(--primary)]",
         className
       )}
-      onClick={onClick}
       {...props}
     >
-      {children}
+      {leftIcon && (
+        <span className="shrink-0 inline-flex text-[color:var(--text-muted)]">
+          {leftIcon}
+        </span>
+      )}
+      <span className="flex-1 truncate">{children}</span>
+      {rightIcon && (
+        <span className="shrink-0 inline-flex text-[color:var(--text-soft)]">
+          {rightIcon}
+        </span>
+      )}
     </button>
   );
 }
 
 export function DropdownDivider() {
-  return <div className="my-1 border-t border-gray-200" />;
+  return <div className="my-1 h-px bg-[color:var(--border)]" />;
 }
 
-// Add subcomponents to Dropdown
 Dropdown.Trigger = DropdownTrigger;
 Dropdown.Menu = DropdownMenu;
 Dropdown.Item = DropdownItem;

@@ -11,6 +11,12 @@ function BrandMark({ className }) {
   );
 }
 
+/**
+ * Enterprise brand block.
+ * Flat on the sidebar canvas — no card chrome around the mark.
+ * Wordmark + small uppercase tagline read like a system identity, not
+ * a startup logo.
+ */
 export default function AppBrand({
   collapsed = false,
   className,
@@ -20,48 +26,32 @@ export default function AppBrand({
     return (
       <div
         className={cn(
-          "h-9 w-9 rounded-xl border shadow-sm flex items-center justify-center",
+          "h-8 w-8 flex items-center justify-center shrink-0",
           className
         )}
-        style={{
-          borderColor: "var(--border)",
-          background:
-            "linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, #ffffff), color-mix(in srgb, var(--surface-soft) 86%, #9ca3af 14%))",
-          color: "var(--text)",
-        }}
         title="Asystence"
       >
-        <BrandMark className="h-6 w-6" />
+        <BrandMark className="h-7 w-7" />
       </div>
     );
   }
 
   return (
-    <div className={cn("flex min-w-0 items-center gap-2", className)}>
-      <div
-        className="h-8 w-8 rounded-lg border shadow-sm flex items-center justify-center shrink-0"
-        style={{
-          borderColor: "var(--border)",
-          background:
-            "linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, #ffffff), color-mix(in srgb, var(--surface-soft) 86%, #9ca3af 14%))",
-          color: "var(--text)",
-        }}
-      >
-        <BrandMark className="h-6 w-6" />
+    <div className={cn("flex min-w-0 items-center gap-2.5", className)}>
+      <div className="h-8 w-8 flex items-center justify-center shrink-0">
+        <BrandMark className="h-7 w-7" />
       </div>
-
       <div className="min-w-0 leading-none">
-        <div className="flex min-w-0 items-center">
-          <p className="text-[16px] leading-[1.12] font-bold tracking-tight theme-text">Asystence</p>
-        </div>
-        {showTagline ? (
+        <p className="text-[15px] leading-[1.1] font-semibold tracking-tight text-[color:var(--text)]">
+          Asystence
+        </p>
+        {showTagline && (
           <p
-            className="mt-1 text-[8px] leading-[1] tracking-[0.09em] font-bold uppercase whitespace-nowrap"
-            style={{ color: "color-mix(in srgb, var(--text) 76%, var(--text-muted))" }}
+            className="mt-1.5 text-[9px] leading-none font-semibold uppercase tracking-[0.16em] whitespace-nowrap text-[color:var(--text-soft)]"
           >
-            A SYSTEM INTELLIGENCE
+            System Intelligence
           </p>
-        ) : null}
+        )}
       </div>
     </div>
   );
