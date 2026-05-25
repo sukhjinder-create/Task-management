@@ -34,7 +34,7 @@ export default function NotificationPreferences() {
 
   if (!prefs) return (
     <div className="h-24 flex items-center justify-center">
-      <div className="w-5 h-5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+      <div className="w-5 h-5 rounded-full border-2 border-[color:var(--primary)] border-t-transparent animate-spin" />
     </div>
   );
 
@@ -63,21 +63,21 @@ export default function NotificationPreferences() {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold theme-text flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-[color:var(--text)] flex items-center gap-2">
         <Bell size={16} /> Push Notifications
       </h3>
 
       {rows.map(({ key, icon: Icon, label, desc, disabled }) => (
         <div
           key={key}
-          className={`flex items-center justify-between p-3 rounded-lg border theme-border
+          className={`flex items-center justify-between p-3 rounded-lg border border-[color:var(--border)]
                       transition-opacity ${disabled ? "opacity-40 pointer-events-none" : ""}`}
         >
           <div className="flex items-start gap-3">
-            <Icon size={16} className="mt-0.5 theme-text-muted shrink-0" />
+            <Icon size={16} className="mt-0.5 text-[color:var(--text-muted)] shrink-0" />
             <div>
-              <p className="text-sm font-medium theme-text">{label}</p>
-              <p className="text-xs theme-text-muted">{desc}</p>
+              <p className="text-sm font-medium text-[color:var(--text)]">{label}</p>
+              <p className="text-xs text-[color:var(--text-muted)]">{desc}</p>
             </div>
           </div>
 
@@ -86,7 +86,9 @@ export default function NotificationPreferences() {
             disabled={saving || disabled}
             className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full
                         transition-colors focus:outline-none
-                        ${prefs[key] ? "bg-indigo-500" : "bg-gray-300 dark:bg-gray-600"}`}
+                        ${prefs[key]
+                          ? "bg-[color:var(--primary)]"
+                          : "bg-[var(--surface-strong)] border border-[color:var(--border)]"}`}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white shadow
@@ -96,7 +98,7 @@ export default function NotificationPreferences() {
         </div>
       ))}
 
-      <p className="text-xs theme-text-muted">
+      <p className="text-xs text-[color:var(--text-muted)]">
         Preferences apply to this browser / device. Notifications are sent when tasks are assigned to you or new chat messages arrive.
       </p>
     </div>

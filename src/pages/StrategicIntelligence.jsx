@@ -21,11 +21,11 @@ function avatarSrc(url) {
 
 function ScoreBadge({ score }) {
   const color =
-    score >= 80 ? 'bg-green-100 text-green-700' :
-    score >= 50 ? 'bg-yellow-100 text-yellow-700' :
-    'bg-red-100 text-red-700';
+    score >= 80 ? 'text-[color:var(--score-good)]' :
+    score >= 50 ? 'text-[color:var(--score-warning)]' :
+    'text-[color:var(--score-danger)]';
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${color}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded border border-[color:var(--border)] text-xs font-semibold ${color}`}>
       {score ?? '—'}
     </span>
   );
@@ -33,35 +33,35 @@ function ScoreBadge({ score }) {
 
 function RiskBadge({ level }) {
   const styles = {
-    low:      'bg-green-100 text-green-700',
-    medium:   'bg-yellow-100 text-yellow-700',
-    high:     'bg-red-100 text-red-700',
-    critical: 'bg-red-200 text-red-900',
+    low:      'text-[color:var(--score-good)]',
+    medium:   'text-[color:var(--score-warning)]',
+    high:     'text-[color:var(--score-danger)]',
+    critical: 'text-[color:var(--score-danger)]',
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold capitalize ${styles[level] || styles.medium}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded border border-[color:var(--border)] text-xs font-semibold capitalize ${styles[level] || styles.medium}`}>
       {level}
     </span>
   );
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'indigo' }) {
-  const colors = {
-    indigo: 'bg-indigo-50 text-indigo-600',
-    green:  'bg-green-50 text-green-600',
-    yellow: 'bg-yellow-50 text-yellow-600',
-    red:    'bg-red-50 text-red-600',
-    blue:   'bg-blue-50 text-blue-600',
+  const iconColor = {
+    indigo: 'text-[color:var(--primary)]',
+    green:  'text-[color:var(--score-good)]',
+    yellow: 'text-[color:var(--score-warning)]',
+    red:    'text-[color:var(--score-danger)]',
+    blue:   'text-[color:var(--primary)]',
   };
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-3">
-      <div className={`p-2 rounded-lg shrink-0 ${colors[color]}`}>
+    <div className="border border-[color:var(--border)] rounded-lg p-4 flex items-start gap-3">
+      <div className={`p-2 rounded-lg shrink-0 bg-[var(--surface-soft)] ${iconColor[color]}`}>
         <Icon className="w-4 h-4" />
       </div>
       <div className="min-w-0">
-        <p className="text-2xl font-bold text-gray-900">{value ?? '—'}</p>
-        <p className="text-xs font-medium text-gray-500">{label}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+        <p className="text-2xl font-bold text-[color:var(--text)]">{value ?? '—'}</p>
+        <p className="text-xs font-medium text-[color:var(--text-muted)]">{label}</p>
+        {sub && <p className="text-xs text-[color:var(--text-soft)] mt-0.5">{sub}</p>}
       </div>
     </div>
   );
@@ -70,7 +70,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'indigo' }) {
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary-500 border-t-transparent" />
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-[color:var(--primary)] border-t-transparent" />
     </div>
   );
 }
@@ -112,18 +112,18 @@ function DashboardTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${healthScore >= 75 ? 'bg-green-500' : healthScore >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} />
-          <span className="text-sm font-medium text-gray-700">
-            Workspace Health: <strong>{healthScore}</strong>/100
+          <div className={`w-3 h-3 rounded-full ${healthScore >= 75 ? 'bg-[var(--score-good)]' : healthScore >= 50 ? 'bg-[var(--score-warning)]' : 'bg-[var(--score-danger)]'}`} />
+          <span className="text-sm font-medium text-[color:var(--text-muted)]">
+            Workspace Health: <strong className="text-[color:var(--text)]">{healthScore}</strong>/100
           </span>
         </div>
-        <button onClick={load} className="text-xs text-gray-500 flex items-center gap-1 hover:text-gray-700 transition-colors">
+        <button onClick={load} className="text-xs text-[color:var(--text-muted)] flex items-center gap-1 hover:text-[color:var(--text)] transition-colors">
           <RefreshCw className="w-3 h-3" /> Refresh
         </button>
       </div>
 
       <div>
-        <h3 className="text-sm font-semibold text-gray-600 mb-3">Tasks</h3>
+        <h3 className="text-sm font-semibold text-[color:var(--text-muted)] mb-3">Tasks</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard icon={Activity}      label="Total"       value={tasks.total}         color="indigo" />
           <StatCard icon={CheckCircle2}  label="Completed"   value={tasks.completed}     color="green"  sub={`${tasks.completionRate}% rate`} />
@@ -135,7 +135,7 @@ function DashboardTab() {
 
       {(performance.avgScore !== null || performance.highPerformers > 0) && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-600 mb-3">Team Performance — {month}</h3>
+          <h3 className="text-sm font-semibold text-[color:var(--text-muted)] mb-3">Team Performance — {month}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <StatCard icon={TrendingUp}   label="Avg Score"      value={performance.avgScore ?? '—'} color="indigo" />
             <StatCard icon={CheckCircle2} label="High Performers" value={performance.highPerformers} color="green"  sub="score ≥ 80" />
@@ -145,7 +145,7 @@ function DashboardTab() {
       )}
 
       <div>
-        <h3 className="text-sm font-semibold text-gray-600 mb-3">Autopilot</h3>
+        <h3 className="text-sm font-semibold text-[color:var(--text-muted)] mb-3">Autopilot</h3>
         <div className="grid grid-cols-3 gap-3">
           <StatCard icon={Clock}         label="Pending Actions" value={autopilot.pendingActions}   color="yellow" />
           <StatCard icon={AlertTriangle} label="Overdue Actions" value={autopilot.overdueActions}   color="red"    />
@@ -180,51 +180,51 @@ function TeamTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-gray-600">Month:</label>
+        <label className="text-sm font-medium text-[color:var(--text-muted)]">Month:</label>
         <input
           type="month"
           value={month}
           onChange={e => setMonth(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-sm focus:border-primary-500"
+          className="border border-[color:var(--border)] rounded px-2 py-1 text-sm bg-transparent text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
         />
       </div>
 
       {loading ? <Spinner /> : (
-        <div className="overflow-hidden rounded-xl border border-gray-200">
+        <div className="overflow-hidden rounded-lg border border-[color:var(--border)]">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="border-b border-[color:var(--border)]">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Member</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">Score</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">Completed</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">Overdue</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">Risk</th>
+                <th className="text-left px-4 py-3 font-medium text-[color:var(--text-muted)]">Member</th>
+                <th className="text-center px-4 py-3 font-medium text-[color:var(--text-muted)]">Score</th>
+                <th className="text-center px-4 py-3 font-medium text-[color:var(--text-muted)]">Completed</th>
+                <th className="text-center px-4 py-3 font-medium text-[color:var(--text-muted)]">Overdue</th>
+                <th className="text-center px-4 py-3 font-medium text-[color:var(--text-muted)]">Risk</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-[color:var(--border)]">
               {team.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-gray-400 text-sm">
+                  <td colSpan={5} className="text-center py-8 text-[color:var(--text-soft)] text-sm">
                     No data for {month}
                   </td>
                 </tr>
-              ) : team.map((u, i) => (
-                <tr key={u.userId} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+              ) : team.map((u) => (
+                <tr key={u.userId}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {u.avatarUrl ? (
                         <img src={avatarSrc(u.avatarUrl)} alt="" className="w-7 h-7 rounded-full object-cover" />
                       ) : (
-                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-600">
+                        <div className="w-7 h-7 rounded-full bg-[var(--surface-soft)] flex items-center justify-center text-xs font-semibold text-[color:var(--primary)]">
                           {u.username?.[0]?.toUpperCase() || '?'}
                         </div>
                       )}
-                      <span className="font-medium text-gray-800">{u.username}</span>
+                      <span className="font-medium text-[color:var(--text)]">{u.username}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-center"><ScoreBadge score={u.score} /></td>
-                  <td className="px-4 py-3 text-center text-gray-700">{u.completedTasks}</td>
-                  <td className="px-4 py-3 text-center text-gray-700">{u.overdueTasks}</td>
+                  <td className="px-4 py-3 text-center text-[color:var(--text-muted)]">{u.completedTasks}</td>
+                  <td className="px-4 py-3 text-center text-[color:var(--text-muted)]">{u.overdueTasks}</td>
                   <td className="px-4 py-3 text-center"><RiskBadge level={u.riskLevel} /></td>
                 </tr>
               ))}
@@ -261,49 +261,53 @@ function ProjectsTab() {
   return (
     <div className="space-y-3">
       {projects.length === 0 ? (
-        <p className="text-center text-gray-400 py-8">No projects found.</p>
+        <p className="text-center text-[color:var(--text-soft)] py-8">No projects found.</p>
       ) : projects.map(p => {
-        const statusStyle =
-          p.status === 'healthy'  ? 'bg-green-100 text-green-700' :
-          p.status === 'at_risk'  ? 'bg-yellow-100 text-yellow-700' :
-          'bg-red-100 text-red-700';
+        const statusColorClass =
+          p.status === 'healthy'  ? 'text-[color:var(--score-good)]' :
+          p.status === 'at_risk'  ? 'text-[color:var(--score-warning)]' :
+          'text-[color:var(--score-danger)]';
+        const healthColorClass =
+          p.healthScore >= 75 ? 'text-[color:var(--score-good)]' :
+          p.healthScore >= 50 ? 'text-[color:var(--score-warning)]' :
+          'text-[color:var(--score-danger)]';
+        const barColorClass =
+          p.completionRate >= 75 ? 'bg-[var(--score-good)]' :
+          p.completionRate >= 40 ? 'bg-[var(--score-warning)]' : 'bg-[var(--score-danger)]';
 
         return (
-          <div key={p.projectId} className="bg-white rounded-xl border border-gray-200 p-4">
+          <div key={p.projectId} className="border border-[color:var(--border)] rounded-lg p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <FolderOpen className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="font-medium text-gray-900 truncate">{p.projectName}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded font-semibold capitalize shrink-0 ${statusStyle}`}>
+                  <FolderOpen className="w-4 h-4 text-[color:var(--text-soft)] shrink-0" />
+                  <span className="font-medium text-[color:var(--text)] truncate">{p.projectName}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded border border-[color:var(--border)] font-semibold capitalize shrink-0 ${statusColorClass}`}>
                     {p.status.replace('_', ' ')}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[color:var(--text-muted)]">
                   <span>Total: {p.totalTasks}</span>
-                  <span className="text-green-600">Done: {p.completedTasks}</span>
-                  <span className="text-blue-600">Active: {p.activeTasks}</span>
+                  <span className="text-[color:var(--score-good)]">Done: {p.completedTasks}</span>
+                  <span className="text-[color:var(--primary)]">Active: {p.activeTasks}</span>
                   {p.overdueTasks > 0 && (
-                    <span className="text-red-600 font-medium">Overdue: {p.overdueTasks}</span>
+                    <span className="text-[color:var(--score-danger)] font-medium">Overdue: {p.overdueTasks}</span>
                   )}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-2xl font-bold text-gray-900">{p.healthScore}</div>
-                <div className="text-xs text-gray-400">health</div>
+                <div className={`text-2xl font-bold ${healthColorClass}`}>{p.healthScore}</div>
+                <div className="text-xs text-[color:var(--text-soft)]">health</div>
               </div>
             </div>
             <div className="mt-3">
-              <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <div className="flex justify-between text-xs text-[color:var(--text-muted)] mb-1">
                 <span>Completion</span>
                 <span>{p.completionRate}%</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div className="w-full bg-[var(--surface-soft)] rounded-full h-1">
                 <div
-                  className={`h-1.5 rounded-full transition-all ${
-                    p.completionRate >= 75 ? 'bg-green-500' :
-                    p.completionRate >= 40 ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}
+                  className={`h-1 rounded-full transition-all ${barColorClass}`}
                   style={{ width: `${p.completionRate}%` }}
                 />
               </div>
@@ -431,15 +435,15 @@ function AskTab() {
               key={id}
               type="button"
               onClick={() => handleScopeChange(id)}
-              className={`p-4 border-2 rounded-lg transition-all text-center ${
+              className={`p-4 border rounded-lg transition-all text-center ${
                 scope === id
-                  ? 'border-primary-500 bg-primary-50 text-primary-700'
-                  : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  ? 'border-[color:var(--primary)] text-[color:var(--primary)]'
+                  : 'border-[color:var(--border)] text-[color:var(--text-muted)] hover:border-[color:var(--primary)]'
               }`}
             >
               <Icon className="w-5 h-5 mx-auto mb-1" />
-              <div className="text-sm font-medium">{label}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{sub}</div>
+              <div className="text-sm font-medium text-[color:var(--text)]">{label}</div>
+              <div className="text-xs text-[color:var(--text-soft)] mt-0.5">{sub}</div>
             </button>
           ))}
         </div>
@@ -449,7 +453,7 @@ function AskTab() {
           <select
             value={entityId}
             onChange={e => setEntityId(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:border-primary-500"
+            className="w-full border border-[color:var(--border)] rounded-lg px-4 py-2.5 text-sm bg-transparent text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
             disabled={loadingEntities}
             required
           >
@@ -462,7 +466,7 @@ function AskTab() {
             <select
               value={selectedProject}
               onChange={e => { setSelectedProject(e.target.value); setEntityId(''); }}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:border-primary-500"
+              className="w-full border border-[color:var(--border)] rounded-lg px-4 py-2.5 text-sm bg-transparent text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
               disabled={loadingEntities}
               required
             >
@@ -473,7 +477,7 @@ function AskTab() {
               <select
                 value={entityId}
                 onChange={e => setEntityId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:border-primary-500"
+                className="w-full border border-[color:var(--border)] rounded-lg px-4 py-2.5 text-sm bg-transparent text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                 disabled={loadingEntities}
                 required
               >
@@ -490,7 +494,7 @@ function AskTab() {
           onChange={e => setQuestion(e.target.value)}
           placeholder="What would you like to know?"
           rows={3}
-          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm resize-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+          className="w-full border border-[color:var(--border)] rounded-lg px-4 py-3 text-sm text-[color:var(--text)] bg-transparent resize-none focus:border-[color:var(--primary)] outline-none placeholder:text-[color:var(--text-soft)]"
           required
         />
 
@@ -501,7 +505,7 @@ function AskTab() {
               key={idx}
               type="button"
               onClick={() => setQuestion(q)}
-              className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full border border-blue-200 hover:bg-blue-100 transition-colors"
+              className="text-xs px-3 py-1.5 border border-[color:var(--border)] text-[color:var(--text-muted)] rounded-full hover:border-[color:var(--primary)] hover:text-[color:var(--primary)] transition-colors"
             >
               {q}
             </button>
@@ -515,39 +519,39 @@ function AskTab() {
       </form>
 
       {isLoading && (
-        <div className="flex items-center gap-3 p-4 bg-primary-50 rounded-xl border border-primary-200">
-          <div className="animate-spin"><Brain className="w-5 h-5 text-primary-600" /></div>
-          <p className="text-sm font-medium text-primary-800">AI is analyzing your workspace data…</p>
+        <div className="flex items-center gap-3 p-4 border border-[color:var(--primary)] rounded-lg">
+          <div className="animate-spin"><Brain className="w-5 h-5 text-[color:var(--primary)]" /></div>
+          <p className="text-sm font-medium text-[color:var(--primary)]">AI is analyzing your workspace data…</p>
         </div>
       )}
 
       {error && (
-        <div className="flex items-start gap-3 p-4 bg-red-50 rounded-xl border border-red-200">
-          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="flex items-start gap-3 p-4 border border-[color:var(--score-danger)] rounded-lg">
+          <AlertCircle className="w-5 h-5 text-[color:var(--score-danger)] shrink-0 mt-0.5" />
+          <p className="text-sm text-[color:var(--score-danger)]">{error}</p>
         </div>
       )}
 
       {response && (
-        <div className="bg-white rounded-xl border border-primary-200 p-5">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
+        <div className="border border-[color:var(--border)] rounded-lg p-5">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-[color:var(--border)]">
             <div className="flex items-center gap-2">
               <Badge color="primary" size="sm" variant="solid" className="gap-1">
                 <Sparkles className="w-3 h-3" /> AI Response
               </Badge>
-              <span className="text-xs text-gray-400">by {response.aiUser?.username || 'AI Assistant'}</span>
+              <span className="text-xs text-[color:var(--text-soft)]">by {response.aiUser?.username || 'AI Assistant'}</span>
             </div>
             <button
               onClick={() => { navigator.clipboard.writeText(response.answer); toast.success('Copied!'); }}
-              className="text-xs text-gray-500 hover:text-gray-700"
+              className="text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
             >
               Copy
             </button>
           </div>
-          <div className="text-sm text-gray-800 leading-relaxed space-y-1">
+          <div className="text-sm text-[color:var(--text)] leading-relaxed space-y-1">
             {formatAnswer(response.answer)}
           </div>
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-1.5 text-xs text-gray-400">
+          <div className="mt-4 pt-3 border-t border-[color:var(--border)] flex items-center gap-1.5 text-xs text-[color:var(--text-soft)]">
             <ArrowRight className="w-3 h-3" /> Generated using AI-powered analytics
           </div>
         </div>
@@ -586,33 +590,27 @@ export default function StrategicIntelligence() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <Card>
-        <Card.Content className="p-5">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg">
-              <Brain className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="flex-1">
-              <h1 className="text-xl font-semibold text-gray-900">Strategic Intelligence</h1>
-              <p className="text-sm text-gray-500 mt-0.5">AI-powered operational analytics and decision support</p>
-            </div>
-            <Badge color="primary" size="lg" variant="subtle" className="gap-1.5">
-              <Sparkles className="w-4 h-4" /> AI-Powered
-            </Badge>
-          </div>
-        </Card.Content>
-      </Card>
+      <header className="flex items-end justify-between gap-4 flex-wrap mb-6">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">Intelligence</p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">Strategic Intelligence</h1>
+          <p className="text-[13px] text-[color:var(--text-muted)] mt-1">AI-powered operational analytics and decision support</p>
+        </div>
+        <Badge color="primary" size="lg" variant="subtle" className="gap-1.5">
+          <Sparkles className="w-4 h-4" /> AI-Powered
+        </Badge>
+      </header>
 
       {/* Tab bar */}
-      <div className="flex bg-white rounded-xl border border-gray-200 p-1 gap-1">
+      <div className="flex border border-[color:var(--border)] rounded-lg p-1 gap-1">
         {visibleTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${
               activeTab === id
-                ? 'bg-primary-600 text-white shadow-sm'
-                : 'text-gray-600 hover:bg-gray-50'
+                ? 'bg-[var(--primary)] text-[color:var(--primary-contrast)]'
+                : 'text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]'
             }`}
           >
             <Icon className="w-4 h-4" />
@@ -622,14 +620,12 @@ export default function StrategicIntelligence() {
       </div>
 
       {/* Tab content */}
-      <Card>
-        <Card.Content className="p-5">
-          {activeTab === 'dashboard' && <DashboardTab />}
-          {activeTab === 'team'      && <TeamTab />}
-          {activeTab === 'projects'  && <ProjectsTab />}
-          {activeTab === 'ask'       && <AskTab />}
-        </Card.Content>
-      </Card>
+      <div className="border border-[color:var(--border)] rounded-lg p-5">
+        {activeTab === 'dashboard' && <DashboardTab />}
+        {activeTab === 'team'      && <TeamTab />}
+        {activeTab === 'projects'  && <ProjectsTab />}
+        {activeTab === 'ask'       && <AskTab />}
+      </div>
     </div>
   );
 }

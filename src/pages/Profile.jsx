@@ -18,11 +18,11 @@ function resolveUrl(src) {
 }
 
 function presenceColor(status) {
-  if (status === "online" || status === "available") return "bg-green-500";
-  if (status === "aws") return "bg-amber-500";
-  if (status === "lunch") return "bg-blue-500";
-  if (status === "signed-off") return "bg-slate-400";
-  return "bg-slate-300";
+  if (status === "online" || status === "available") return "bg-[var(--score-good)]";
+  if (status === "aws") return "bg-[var(--primary)]";
+  if (status === "lunch") return "bg-[var(--text-soft)]";
+  if (status === "signed-off") return "bg-[var(--text-soft)]";
+  return "bg-[var(--text-soft)]";
 }
 
 function presenceLabel(status) {
@@ -69,25 +69,25 @@ function ChangePassword() {
   };
 
   const inputClass =
-    "w-full border theme-border theme-surface theme-text rounded-lg px-3 py-2 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-400";
+    "w-full border border-[color:var(--border)] bg-[var(--surface)] text-[color:var(--text)] rounded-lg px-3 py-2 text-sm pr-10 focus:outline-none focus:ring-1 focus:ring-[color:var(--primary)]";
 
   return (
-    <div className="theme-surface border theme-border rounded-2xl overflow-hidden">
+    <div className="border border-[color:var(--border)] rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3.5 border-b theme-border">
+      <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[color:var(--border)]">
         <div className="w-8 h-8 rounded-lg bg-[var(--surface-soft)] flex items-center justify-center shrink-0">
-          <Lock className="w-4 h-4 theme-text-muted" />
+          <Lock className="w-4 h-4 text-[color:var(--text-muted)]" />
         </div>
         <div>
-          <p className="text-sm font-semibold theme-text">Change Password</p>
-          <p className="text-xs theme-text-muted">All active sessions will be signed out</p>
+          <p className="text-sm font-semibold text-[color:var(--text)]">Change Password</p>
+          <p className="text-xs text-[color:var(--text-muted)]">All active sessions will be signed out</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 py-4 space-y-3">
         {/* Current password */}
         <div>
-          <label className="block text-xs font-medium theme-text-muted mb-1">Current password</label>
+          <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Current password</label>
           <div className="relative">
             <input
               type={show.current ? "text" : "password"}
@@ -100,7 +100,7 @@ function ChangePassword() {
             <button
               type="button"
               onClick={() => toggleShow("current")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]"
               tabIndex={-1}
             >
               {show.current ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -110,7 +110,7 @@ function ChangePassword() {
 
         {/* New password */}
         <div>
-          <label className="block text-xs font-medium theme-text-muted mb-1">New password</label>
+          <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">New password</label>
           <div className="relative">
             <input
               type={show.next ? "text" : "password"}
@@ -123,7 +123,7 @@ function ChangePassword() {
             <button
               type="button"
               onClick={() => toggleShow("next")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]"
               tabIndex={-1}
             >
               {show.next ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -133,7 +133,7 @@ function ChangePassword() {
 
         {/* Confirm new password */}
         <div>
-          <label className="block text-xs font-medium theme-text-muted mb-1">Confirm new password</label>
+          <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Confirm new password</label>
           <div className="relative">
             <input
               type={show.confirm ? "text" : "password"}
@@ -146,7 +146,7 @@ function ChangePassword() {
             <button
               type="button"
               onClick={() => toggleShow("confirm")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]"
               tabIndex={-1}
             >
               {show.confirm ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -156,7 +156,7 @@ function ChangePassword() {
 
         {/* Match indicator */}
         {form.next && form.confirm && (
-          <p className={`text-xs ${form.next === form.confirm ? "text-green-500" : "text-red-500"}`}>
+          <p className={`text-xs ${form.next === form.confirm ? "text-[color:var(--score-good)]" : "text-[color:var(--score-danger)]"}`}>
             {form.next === form.confirm ? "Passwords match" : "Passwords do not match"}
           </p>
         )}
@@ -164,7 +164,7 @@ function ChangePassword() {
         <button
           type="submit"
           disabled={saving}
-          className="w-full theme-primary rounded-lg py-2 text-sm font-medium disabled:opacity-50 mt-1"
+          className="w-full bg-[var(--primary)] text-[color:var(--primary-contrast)] rounded-lg py-2 text-sm font-semibold hover:bg-[var(--primary-hover)] disabled:opacity-50 mt-1 transition-colors"
         >
           {saving ? "Updating…" : "Update password"}
         </button>
@@ -235,16 +235,17 @@ export default function Profile() {
     <div className="flex flex-col h-full">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
-        <h1 className="text-lg font-bold theme-text">My Profile</h1>
-        <p className="text-xs theme-text-muted mt-0.5">Account details and availability</p>
-      </div>
+      <header className="px-4 pt-4 pb-3 border-b border-[color:var(--border)] shrink-0">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">Account</p>
+        <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">My Profile</h1>
+        <p className="text-xs text-[color:var(--text-muted)] mt-0.5">Account details and availability</p>
+      </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
 
         {/* Loading */}
         {loading && (
-          <div className="theme-surface border theme-border rounded-2xl p-6 animate-pulse">
+          <div className="border border-[color:var(--border)] rounded-lg p-6 animate-pulse">
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 rounded-full bg-[var(--surface-soft)]" />
               <div className="flex-1 space-y-2">
@@ -258,45 +259,45 @@ export default function Profile() {
 
         {/* Error */}
         {!loading && error && (
-          <div className="px-4 py-3 rounded-2xl bg-red-50 border border-red-200">
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="px-4 py-3 rounded-lg border border-[color:var(--score-danger)]/40">
+            <p className="text-sm text-[color:var(--score-danger)]">{error}</p>
           </div>
         )}
 
         {/* Avatar card */}
         {!loading && profile && (
-          <div className="theme-surface border theme-border rounded-2xl p-5 flex flex-col items-center gap-3">
+          <div className="border border-[color:var(--border)] rounded-lg p-5 flex flex-col items-center gap-3">
             <div className="relative">
               <Avatar name={profile.username} src={avatarSrc} size="xl" />
               {/* Online ring */}
-              <span className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-white ${statusDot}`} />
+              <span className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-[var(--surface)] ${statusDot}`} />
               {/* Camera button */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full theme-surface border theme-border shadow flex items-center justify-center active:opacity-70 transition-opacity"
+                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[var(--surface)] border border-[color:var(--border)] flex items-center justify-center hover:bg-[var(--surface-soft)] disabled:opacity-50 transition-colors"
                 title="Change photo"
               >
                 {uploading
-                  ? <span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                  : <Camera size={14} className="theme-text-muted" />}
+                  ? <span className="w-3 h-3 border-2 border-[color:var(--text-muted)] border-t-transparent rounded-full animate-spin" />
+                  : <Camera size={14} className="text-[color:var(--text-muted)]" />}
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
             </div>
 
             <div className="text-center">
-              <p className="font-bold theme-text text-lg leading-tight">{profile.username}</p>
-              <p className="text-sm theme-text-muted">{profile.email}</p>
+              <p className="font-bold text-[color:var(--text)] text-lg leading-tight">{profile.username}</p>
+              <p className="text-sm text-[color:var(--text-muted)]">{profile.email}</p>
             </div>
 
             {/* Status pill */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface-soft)] border theme-border">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface-soft)] border border-[color:var(--border)]">
               <span className={`w-2 h-2 rounded-full ${statusDot}`} />
-              <span className="text-xs font-medium theme-text">{statusLabel}</span>
+              <span className="text-xs font-medium text-[color:var(--text)]">{statusLabel}</span>
             </div>
 
-            <p className="text-xs theme-text-muted">
+            <p className="text-xs text-[color:var(--text-muted)]">
               {uploading ? "Uploading..." : "Tap camera icon to change photo"}
             </p>
           </div>
@@ -304,7 +305,7 @@ export default function Profile() {
 
         {/* Info fields */}
         {!loading && profile && (
-          <div className="theme-surface border theme-border rounded-2xl overflow-hidden divide-y theme-border">
+          <div className="border border-[color:var(--border)] rounded-lg overflow-hidden divide-y divide-[color:var(--border)]">
             {[
               { icon: User,         label: "Username",  value: profile.username },
               { icon: Mail,         label: "Email",     value: profile.email },
@@ -320,11 +321,11 @@ export default function Profile() {
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-center gap-3 px-4 py-3.5">
                 <div className="w-8 h-8 rounded-lg bg-[var(--surface-soft)] flex items-center justify-center shrink-0">
-                  <Icon className="w-4 h-4 theme-text-muted" />
+                  <Icon className="w-4 h-4 text-[color:var(--text-muted)]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] theme-text-muted font-medium uppercase tracking-wide">{label}</p>
-                  <p className="text-sm font-semibold theme-text truncate">{value || "—"}</p>
+                  <p className="text-[11px] text-[color:var(--text-muted)] font-medium uppercase tracking-wide">{label}</p>
+                  <p className="text-sm font-semibold text-[color:var(--text)] truncate">{value || "—"}</p>
                 </div>
               </div>
             ))}
@@ -336,7 +337,7 @@ export default function Profile() {
 
         {/* Notification preferences */}
         {!loading && profile && (
-          <div className="theme-surface border theme-border rounded-2xl p-4">
+          <div className="border border-[color:var(--border)] rounded-lg p-4">
             <NotificationPreferences />
           </div>
         )}

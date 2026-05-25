@@ -93,8 +93,8 @@ function presenceColor(status) {
   if (status === "online" || status === "available") return "bg-green-500";
   if (status === "aws") return "bg-amber-500";
   if (status === "lunch") return "bg-blue-500";
-  if (status === "signed-off") return "bg-slate-400";
-  return "bg-slate-300";
+  if (status === "signed-off") return "bg-[#6b7280]";
+  return "bg-[#9ca3af]";
 }
 
 function presenceLabel(status) {
@@ -232,7 +232,7 @@ function AttachmentViewerModal({ url, name, type, onClose }) {
           <iframe
             src={url}
             title={name}
-            className="w-full rounded-xl bg-white"
+            className="w-full rounded-xl bg-transparent"
             style={{ height: "80vh" }}
           />
         )}
@@ -244,7 +244,7 @@ function AttachmentViewerModal({ url, name, type, onClose }) {
             <a
               href={url}
               download={name}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-gray-900 rounded-xl text-sm font-semibold hover:bg-white/90 transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[color:var(--primary)] text-[color:var(--primary-contrast)] rounded-xl text-sm font-semibold hover:opacity-90 transition-colors"
             >
               <Download className="w-4 h-4" /> Download to view
             </a>
@@ -272,7 +272,7 @@ function AttachmentActions({ url, name, type, children }) {
         {/* View / Download popover */}
         {menuOpen && (
           <div
-            className="absolute bottom-full left-0 mb-1.5 z-30 min-w-[130px] theme-surface border theme-border rounded-xl shadow-xl overflow-hidden"
+            className="absolute bottom-full left-0 mb-1.5 z-30 min-w-[130px] theme-surface border theme-border rounded-xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -395,7 +395,7 @@ function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys
   );
 
   if (failed || !objectUrl) return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
+    <span className="inline-flex items-center gap-1.5 text-xs text-[color:var(--text-muted)] px-3 py-2 border border-[color:var(--border)] rounded-xl">
       {failReason === "gone"
         ? `📎 ${att.name || "File"} — no longer available`
         : `🔒 ${att.name || "Encrypted file"} — key not available on this device`}
@@ -409,12 +409,12 @@ function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys
   if (isImage) return (
     <AttachmentActions url={objectUrl} name={att.name} type={att.type}>
       <img src={objectUrl} alt={att.name}
-        className="max-h-48 max-w-full rounded-2xl object-contain border theme-border shadow-sm hover:brightness-95 transition-all" />
+        className="max-h-48 max-w-full rounded-2xl object-contain border theme-border hover:brightness-95 transition-all" />
     </AttachmentActions>
   );
   if (isVideo) return (
     <AttachmentActions url={objectUrl} name={att.name} type={att.type}>
-      <video src={objectUrl} className="max-h-48 max-w-full rounded-2xl shadow-sm pointer-events-none" />
+      <video src={objectUrl} className="max-h-48 max-w-full rounded-2xl pointer-events-none" />
     </AttachmentActions>
   );
   if (isAudio) return (
@@ -447,12 +447,12 @@ function AttachmentItem({ att, senderId, currentUserId, usersWithKeys }) {
     if (isImage) return (
       <AttachmentActions url={att._localUrl} name={att.name} type={att.type}>
         <img src={att._localUrl} alt={att.name}
-          className="max-h-48 max-w-full rounded-2xl object-contain border theme-border shadow-sm opacity-80 hover:opacity-100 transition-opacity" />
+          className="max-h-48 max-w-full rounded-2xl object-contain border theme-border opacity-80 hover:opacity-100 transition-opacity" />
       </AttachmentActions>
     );
     if (isVideo) return (
       <AttachmentActions url={att._localUrl} name={att.name} type={att.type}>
-        <video src={att._localUrl} className="max-h-48 max-w-full rounded-2xl shadow-sm opacity-80 pointer-events-none" />
+        <video src={att._localUrl} className="max-h-48 max-w-full rounded-2xl opacity-80 pointer-events-none" />
       </AttachmentActions>
     );
     return (
@@ -489,7 +489,7 @@ function AttachmentItem({ att, senderId, currentUserId, usersWithKeys }) {
   if (isImage) return (
     <AttachmentActions url={fullUrl} name={att.name} type={att.type}>
       <img src={fullUrl} alt={att.name}
-        className="max-h-48 max-w-full rounded-2xl object-contain border theme-border shadow-sm hover:brightness-95 transition-all" />
+        className="max-h-48 max-w-full rounded-2xl object-contain border theme-border hover:brightness-95 transition-all" />
     </AttachmentActions>
   );
   if (isVideo) return (
@@ -2533,7 +2533,7 @@ useEffect(() => {
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${aiReplyEnabled ? "chat-sidebar-toggle-on" : "chat-sidebar-toggle-off"}`}
                 >
-                  <span className={`inline-block h-5 w-5 transform rounded-full theme-surface shadow transition-transform ${aiReplyEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                  <span className={`inline-block h-5 w-5 transform rounded-full theme-surface transition-transform ${aiReplyEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
                 </button>
               </div>
 
@@ -2731,7 +2731,7 @@ useEffect(() => {
                       {user.username?.[0]?.toUpperCase() || "?"}
                     </div>
                   )}
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[var(--sidebar-bg)]" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[color:var(--score-good)] border-2 border-[var(--sidebar-bg)]" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-semibold truncate chat-sidebar-item is-active" style={{background:"none"}}>{user.username}</div>
@@ -2779,7 +2779,7 @@ useEffect(() => {
                   type="button"
                   onClick={handleToggleHuddle}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-colors shrink-0 ${
-                    isHuddleActiveHere ? "bg-amber-500/15 text-amber-500 border border-amber-500/20" : "theme-surface-soft theme-text-muted"
+                    isHuddleActiveHere ? "bg-[var(--surface-soft)] text-[color:var(--primary)] border border-[color:var(--primary)]/30" : "theme-surface-soft theme-text-muted"
                   }`}
                   title={huddleButtonLabel}
                 >
@@ -2790,30 +2790,30 @@ useEffect(() => {
 
             {/* Disconnect banner */}
             {!connected && !joining && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-[11px] font-medium shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-200 animate-pulse" />
+              <div className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-soft)] border-b border-[color:var(--border)] text-[color:var(--score-danger)] text-[11px] font-medium shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--score-danger)] animate-pulse" />
                 <span>Disconnected — trying to reconnect…</span>
               </div>
             )}
 
             {/* Huddle banner */}
             {isHuddleActiveHere && (
-              <div className="mx-3 mt-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] flex items-center justify-between shrink-0">
+              <div className="mx-3 mt-2 p-2.5 bg-[var(--surface-soft)] border border-[color:var(--border)] rounded-xl text-[11px] flex items-center justify-between shrink-0">
                 <span>🔊 Huddle · <span className="font-semibold">{activeHuddle.startedBy?.username}</span></span>
                 <div className="flex items-center gap-2">
                   {!huddleJoined && !huddleConnecting && (
-                    <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-amber-500/25 rounded-lg px-2 py-1 theme-surface hover:bg-amber-500/10">Join</button>
+                    <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-[color:var(--border)] rounded-lg px-2 py-1 theme-surface hover:bg-[var(--surface-soft)]">Join</button>
                   )}
-                  {huddleJoined && <span className="text-amber-500 font-medium">You&apos;re in</span>}
+                  {huddleJoined && <span className="text-[color:var(--primary)] font-medium">You&apos;re in</span>}
                 </div>
               </div>
             )}
 
             {/* Editing banner */}
             {editingMessageId && (
-              <div className="mx-3 mt-2 px-3 py-1.5 bg-amber-500/10 border-l-2 border-amber-500 rounded text-[11px] flex items-center justify-between shrink-0">
-                <span className="text-amber-500 font-medium">Editing message</span>
-                <button type="button" onClick={handleCancelEdit} className="text-amber-500 text-[10px] underline">Cancel</button>
+              <div className="mx-3 mt-2 px-3 py-1.5 bg-[var(--surface-soft)] border-l-2 border-[color:var(--primary)] rounded text-[11px] flex items-center justify-between shrink-0">
+                <span className="text-[color:var(--primary)] font-medium">Editing message</span>
+                <button type="button" onClick={handleCancelEdit} className="text-[color:var(--primary)] text-[10px] underline">Cancel</button>
               </div>
             )}
 
@@ -2917,7 +2917,7 @@ useEffect(() => {
                                   <span className="text-[10px] text-red-500 font-medium" title="Failed to deliver">⚠ Not delivered</span>
                                 )}
                                 {m.username === "AI Assistant" && (
-                                  <span className="text-[9px] bg-violet-500/15 text-violet-500 rounded-full px-1.5 py-0.5 font-medium">AI</span>
+                                  <span className="text-[9px] bg-[var(--surface-soft)] text-[color:var(--primary)] rounded-full px-1.5 py-0.5 font-medium border border-[color:var(--border)]">AI</span>
                                 )}
                               </div>
                             )}
@@ -2979,7 +2979,7 @@ useEffect(() => {
 
                                 {/* Inline reaction picker (tap emoji button in toolbar) */}
                                 {openReactionFor === m.id && (
-                                  <div className="mt-2 flex flex-wrap gap-1.5 p-3 theme-surface border theme-border rounded-2xl shadow-xl z-30">
+                                  <div className="mt-2 flex flex-wrap gap-1.5 p-3 theme-surface border theme-border rounded-2xl z-30">
                                     {QUICK_REACTIONS.map((emoji) => (
                                       <button
                                         key={emoji}
@@ -3099,16 +3099,16 @@ useEffect(() => {
                 <form onSubmit={handleSend}>
                   {/* Composer box: editor + formatting bar */}
                   <div
-                    className="border theme-border rounded-2xl overflow-hidden theme-surface focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)] transition-all shadow-sm"
+                    className="border theme-border rounded-2xl overflow-hidden theme-surface focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)] transition-all"
                     onKeyDown={(e) => {
                       if (e.key === "Escape" && editingMessageId) handleCancelEdit();
                     }}
                   >
                     {/* Editing banner inside composer */}
                     {editingMessageId && (
-                      <div className="px-3 py-1 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-[11px]">
-                        <span className="text-amber-500 font-medium">Editing message</span>
-                        <button type="button" onClick={handleCancelEdit} className="text-amber-500 underline">Cancel</button>
+                      <div className="px-3 py-1 bg-[var(--surface-soft)] border-b border-[color:var(--border)] flex items-center justify-between text-[11px]">
+                        <span className="text-[color:var(--primary)] font-medium">Editing message</span>
+                        <button type="button" onClick={handleCancelEdit} className="text-[color:var(--primary)] underline">Cancel</button>
                       </div>
                     )}
 
@@ -3218,7 +3218,7 @@ useEffect(() => {
                       <button
                         type="submit"
                         disabled={!connected || (!editorHtml.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment}
-                        className="ml-auto w-9 h-9 rounded-xl theme-primary flex items-center justify-center shrink-0 disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 shadow-sm transition-colors"
+                        className="ml-auto w-9 h-9 rounded-xl theme-primary flex items-center justify-center shrink-0 disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 transition-colors"
                       >
                         {sending ? (
                           <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -3380,7 +3380,7 @@ useEffect(() => {
                   <button
                     type="submit"
                     disabled={!connected || !(threadEditorHtml || "").replace(/<[^>]*>/g, "").trim()}
-                    className="ml-auto w-9 h-9 rounded-xl theme-primary flex items-center justify-center disabled:opacity-30 hover:opacity-90 shadow-sm"
+                    className="ml-auto w-9 h-9 rounded-xl theme-primary flex items-center justify-center disabled:opacity-30 hover:opacity-90"
                   >
                     <Send size={15} />
                   </button>
@@ -3493,7 +3493,7 @@ useEffect(() => {
               }}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${aiReplyEnabled ? "chat-sidebar-toggle-on" : "chat-sidebar-toggle-off"}`}
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full theme-surface shadow-sm transition-transform ${aiReplyEnabled ? "translate-x-4" : "translate-x-1"}`} />
+              <span className={`inline-block h-4 w-4 transform rounded-full theme-surface transition-transform ${aiReplyEnabled ? "translate-x-4" : "translate-x-1"}`} />
             </button>
           </div>
         </div>
@@ -3756,13 +3756,13 @@ useEffect(() => {
                   {user.username?.[0]?.toUpperCase() || "?"}
                 </div>
               )}
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[var(--sidebar-bg)]" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[color:var(--score-good)] border-2 border-[var(--sidebar-bg)]" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[12px] font-semibold truncate chat-sidebar-item is-active" style={{background:"none"}}>{user.username}</div>
               <div className="text-[10px] capitalize truncate chat-sidebar-label">{user.role || "member"}</div>
             </div>
-            <div className={`w-2 h-2 rounded-full shrink-0 ${connected ? "bg-emerald-400" : "bg-red-400"}`} title={statusLabel} />
+            <div className={`w-2 h-2 rounded-full shrink-0 ${connected ? "bg-[color:var(--score-good)]" : "bg-[color:var(--score-danger)]"}`} title={statusLabel} />
           </div>
         </div>
       </aside>
@@ -3772,8 +3772,8 @@ useEffect(() => {
 
         {/* Disconnect banner */}
         {!connected && !joining && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-[11px] font-medium shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-200 animate-pulse" />
+          <div className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-soft)] border-b border-[color:var(--border)] text-[color:var(--score-danger)] text-[11px] font-medium shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--score-danger)] animate-pulse" />
             <span>Disconnected — trying to reconnect…</span>
           </div>
         )}
@@ -3824,7 +3824,7 @@ useEffect(() => {
                 onClick={handleToggleHuddle}
                 className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-2.5 md:px-3 text-[11px] font-medium transition-colors ${
                   isHuddleActiveHere
-                    ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                    ? "bg-[var(--surface-soft)] border-[color:var(--primary)]/30 text-[color:var(--primary)]"
                     : "theme-surface-soft theme-border theme-text-muted hover:opacity-90"
                 }`}
               >
@@ -3843,7 +3843,7 @@ useEffect(() => {
 
         {/* Huddle banner */}
         {isHuddleActiveHere && (
-          <div className="mx-4 mt-3 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[11px] flex items-center justify-between shrink-0">
+          <div className="mx-4 mt-3 p-2.5 bg-[var(--surface-soft)] border border-[color:var(--border)] rounded-lg text-[11px] flex items-center justify-between shrink-0">
             <div>
               <span>🔊 Huddle in progress · started by <span className="font-semibold">{activeHuddle.startedBy?.username}</span></span>
               {huddleError && <div className="text-[10px] text-red-500 mt-0.5">{huddleError}</div>}
@@ -3851,20 +3851,20 @@ useEffect(() => {
             <div className="flex items-center gap-2">
               {huddleConnecting && <span className="text-[10px] theme-text-muted">Joining...</span>}
               {!huddleJoined && !huddleConnecting && (
-                <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-amber-500/25 rounded px-2 py-1 theme-surface hover:bg-amber-500/10">
+                <button type="button" onClick={() => rtc?.joinHuddle?.()} className="text-[10px] border border-[color:var(--border)] rounded px-2 py-1 theme-surface hover:bg-[var(--surface-soft)]">
                   Join huddle
                 </button>
               )}
-              {huddleJoined && <span className="text-[10px] text-amber-500">You&apos;re in this huddle</span>}
+              {huddleJoined && <span className="text-[10px] text-[color:var(--primary)]">You&apos;re in this huddle</span>}
             </div>
           </div>
         )}
 
         {/* Editing banner */}
         {editingMessageId && (
-          <div className="mx-4 mt-2 px-3 py-1.5 bg-amber-500/10 border-l-2 border-amber-500 rounded text-[11px] flex items-center justify-between shrink-0">
-            <span className="text-amber-500 font-medium">Editing message</span>
-            <button type="button" onClick={handleCancelEdit} className="text-amber-500 hover:opacity-80 text-[10px] underline">Cancel</button>
+          <div className="mx-4 mt-2 px-3 py-1.5 bg-[var(--surface-soft)] border-l-2 border-[color:var(--primary)] rounded text-[11px] flex items-center justify-between shrink-0">
+            <span className="text-[color:var(--primary)] font-medium">Editing message</span>
+            <button type="button" onClick={handleCancelEdit} className="text-[color:var(--primary)] hover:opacity-80 text-[10px] underline">Cancel</button>
           </div>
         )}
 
@@ -3969,7 +3969,7 @@ useEffect(() => {
                             return (
                               <div className="flex items-baseline gap-2 mb-0.5">
                                 {standupProject ? (
-                                  <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "text-indigo-500"}`}>
+                                  <span className={`text-[13px] font-bold ${isOwn ? "text-[color:var(--primary)]" : "text-[color:var(--text)]"}`}>
                                     {displayName}
                                   </span>
                                 ) : (
@@ -3991,10 +3991,10 @@ useEffect(() => {
                                   <span className="text-[10px] text-red-500 font-medium">⚠ Not delivered</span>
                                 )}
                                 {standupProject && (
-                                  <span className="text-[9px] bg-indigo-500/15 text-indigo-500 rounded-full px-1.5 py-0.5 font-medium">Standup</span>
+                                  <span className="text-[9px] bg-[var(--surface-soft)] text-[color:var(--text-muted)] rounded-full px-1.5 py-0.5 font-medium border border-[color:var(--border)]">Standup</span>
                                 )}
                                 {!standupProject && m.username === "AI Assistant" && (
-                                  <span className="text-[9px] bg-violet-500/15 text-violet-500 rounded-full px-1.5 py-0.5 font-medium">AI</span>
+                                  <span className="text-[9px] bg-[var(--surface-soft)] text-[color:var(--primary)] rounded-full px-1.5 py-0.5 font-medium border border-[color:var(--border)]">AI</span>
                                 )}
                               </div>
                             );
@@ -4043,7 +4043,7 @@ useEffect(() => {
                                         onClick={() => handleToggleReaction(m.id, emoji)}
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12px] border transition-all ${
                                           hasReacted
-                                            ? "bg-[color:var(--primary)]/12 border-[color:var(--primary)]/35 text-[color:var(--primary)] font-semibold shadow-sm"
+                                            ? "bg-[color:var(--primary)]/12 border-[color:var(--primary)]/35 text-[color:var(--primary)] font-semibold"
                                             : "theme-surface border theme-border theme-text-muted hover:bg-[var(--surface-soft)]"
                                         }`}
                                       >
@@ -4057,7 +4057,7 @@ useEffect(() => {
 
                               {/* Inline reaction picker */}
                               {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && openReactionFor === m.id && (
-                                <div className="mt-2 inline-flex flex-wrap gap-1 p-2 theme-surface border theme-border rounded-2xl shadow-xl z-30">
+                                <div className="mt-2 inline-flex flex-wrap gap-1 p-2 theme-surface border theme-border rounded-2xl z-30">
                                   {QUICK_REACTIONS.map((emoji) => (
                                     <button
                                       key={emoji}
@@ -4096,7 +4096,7 @@ useEffect(() => {
 
                       {/* ── Right-side action toolbar (appears on row hover) ── */}
                       {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && !m.deletedAt && (
-                        <div className="absolute top-1.5 right-4 hidden group-hover:flex items-center theme-surface border theme-border rounded-lg shadow-md overflow-hidden z-20">
+                        <div className="absolute top-1.5 right-4 hidden group-hover:flex items-center theme-surface border theme-border rounded-lg overflow-hidden z-20">
                           <button
                             type="button"
                             onClick={() => handleOpenReactionPicker(m.id)}
@@ -4118,7 +4118,7 @@ useEffect(() => {
                               type="button"
                               onClick={() => handleExplainAI(m.id)}
                               disabled={aiExplainLoading === m.id}
-                              className="p-2 hover:bg-violet-500/12 theme-text-muted hover:text-violet-500 transition-colors border-r theme-border text-sm leading-none"
+                              className="p-2 hover:bg-[var(--surface-soft)] theme-text-muted hover:text-[color:var(--primary)] transition-colors border-r theme-border text-sm leading-none"
                               title="Why this reply?"
                             >
                               🧠
@@ -4171,7 +4171,7 @@ useEffect(() => {
           <button
             type="button"
             onClick={scrollToBottom}
-            className="absolute bottom-28 right-8 z-20 flex items-center gap-1.5 theme-surface border theme-border theme-text text-[11px] font-medium px-3 py-2 rounded-full shadow-lg hover:shadow-xl hover:bg-[var(--surface-soft)] transition-all"
+            className="absolute bottom-28 right-8 z-20 flex items-center gap-1.5 theme-surface border theme-border theme-text text-[11px] font-medium px-3 py-2 rounded-full hover:bg-[var(--surface-soft)] transition-all"
           >
             ↓ Jump to latest
           </button>
@@ -4200,7 +4200,7 @@ useEffect(() => {
               {/* @mention dropdown */}
               {mentionQuery !== null && (
                 <div className="relative mb-1">
-                  <div className="absolute bottom-0 left-0 z-50 theme-surface border theme-border rounded-xl shadow-lg w-56 max-h-44 overflow-y-auto">
+                  <div className="absolute bottom-0 left-0 z-50 theme-surface border theme-border rounded-xl w-56 max-h-44 overflow-y-auto">
                     {users
                       .filter(u => u.id !== user.id && u.role !== "system" && !u.is_system && u.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
                       .slice(0, 8)
@@ -4254,7 +4254,7 @@ useEffect(() => {
 
               {/* Integrated composer box */}
               <div
-                className="chat-composer-shell border theme-border rounded-xl theme-surface shadow-sm focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)] transition-shadow"
+                className="chat-composer-shell border theme-border rounded-xl theme-surface focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)] transition-shadow"
                 onKeyDown={(e) => {
                   if (e.ctrlKey && e.key === "Enter") {
                     e.preventDefault();
@@ -4267,9 +4267,9 @@ useEffect(() => {
               >
                 {/* Editing banner */}
                 {editingMessageId && (
-                  <div className="px-3 py-1 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-[11px]">
-                    <span className="text-amber-500 font-medium">Editing message</span>
-                    <button type="button" onClick={handleCancelEdit} className="text-amber-500 hover:underline">Cancel</button>
+                  <div className="px-3 py-1 bg-[var(--surface-soft)] border-b border-[color:var(--border)] flex items-center justify-between text-[11px]">
+                    <span className="text-[color:var(--primary)] font-medium">Editing message</span>
+                    <button type="button" onClick={handleCancelEdit} className="text-[color:var(--primary)] hover:underline">Cancel</button>
                   </div>
                 )}
 
@@ -4333,7 +4333,7 @@ useEffect(() => {
                     <button
                       type="submit"
                       disabled={!connected || (!editorHtml.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment}
-                      className="inline-flex items-center gap-1.5 theme-primary hover:opacity-90 text-[12px] font-semibold px-3 py-1 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
+                      className="inline-flex items-center gap-1.5 theme-primary hover:opacity-90 text-[12px] font-semibold px-3 py-1 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     >
                       <Send size={12} />
                       <span>{sending ? "Sending…" : editingMessageId ? "Save" : "Send"}</span>

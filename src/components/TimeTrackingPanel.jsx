@@ -69,15 +69,15 @@ export default function TimeTrackingPanel({ taskId, canEdit }) {
     : null;
 
   return (
-    <div className="mt-3 border-t pt-3">
+    <div className="mt-3 border-t border-[color:var(--border)] pt-3">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5 text-slate-400" />
+        <h3 className="text-xs font-semibold flex items-center gap-1.5 text-[color:var(--text)]">
+          <Clock className="w-3.5 h-3.5 text-[color:var(--text-muted)]" />
           Time Tracking
         </h3>
         {canEdit && (
           <button
-            className="text-[11px] text-indigo-600 hover:underline flex items-center gap-0.5"
+            className="text-[11px] text-[color:var(--primary)] hover:underline flex items-center gap-0.5"
             onClick={() => setShowForm(v => !v)}
           >
             <Plus className="w-3 h-3" /> Log time
@@ -89,44 +89,44 @@ export default function TimeTrackingPanel({ taskId, canEdit }) {
       <div className="flex items-center gap-3 mb-2">
         <div className="flex-1">
           <div className="flex items-center justify-between mb-0.5 text-[11px]">
-            <span className="text-slate-500">Logged: <strong>{summary.total_logged}h</strong></span>
+            <span className="text-[color:var(--text-muted)]">Logged: <strong className="text-[color:var(--text)]">{summary.total_logged}h</strong></span>
             <div className="flex items-center gap-1">
               {editingEstimate ? (
                 <>
                   <input
                     type="number"
-                    className="border rounded px-1 py-0.5 w-14 text-[11px]"
+                    className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded px-1 py-0.5 w-14 text-[11px] focus:outline-none focus:border-[color:var(--primary)]"
                     value={estimateVal}
                     min="0"
                     step="0.5"
                     onChange={e => setEstimateVal(e.target.value)}
                     placeholder="Est."
                   />
-                  <button className="text-[10px] text-green-600 hover:underline" onClick={handleSaveEstimate}>Save</button>
-                  <button className="text-[10px] text-slate-400 hover:underline" onClick={() => setEditingEstimate(false)}>Cancel</button>
+                  <button className="text-[10px] text-[color:var(--primary)] hover:underline" onClick={handleSaveEstimate}>Save</button>
+                  <button className="text-[10px] text-[color:var(--text-muted)] hover:underline" onClick={() => setEditingEstimate(false)}>Cancel</button>
                 </>
               ) : (
                 <span
-                  className={`text-slate-500 ${canEdit ? "cursor-pointer hover:text-indigo-600" : ""}`}
+                  className={`text-[color:var(--text-muted)] ${canEdit ? "cursor-pointer hover:text-[color:var(--primary)]" : ""}`}
                   onClick={() => canEdit && setEditingEstimate(true)}
                   title={canEdit ? "Click to set estimate" : ""}
                 >
-                  Est: <strong>{summary.estimation_hours != null ? `${summary.estimation_hours}h` : "—"}</strong>
+                  Est: <strong className="text-[color:var(--text)]">{summary.estimation_hours != null ? `${summary.estimation_hours}h` : "—"}</strong>
                 </span>
               )}
             </div>
           </div>
           {pct !== null && (
-            <div className="w-full bg-slate-100 rounded-full h-1.5">
+            <div className="w-full bg-[var(--surface-soft)] rounded-full h-1.5">
               <div
-                className={`h-1.5 rounded-full transition-all ${pct > 100 ? "bg-red-500" : pct > 75 ? "bg-orange-400" : "bg-indigo-500"}`}
-                style={{ width: `${Math.min(pct, 100)}%` }}
+                className={`h-1.5 rounded-full transition-all ${pct > 100 ? "bg-red-500" : pct > 75 ? "bg-[color:var(--primary)]" : "bg-[color:var(--primary)]"}`}
+                style={{ width: `${Math.min(pct, 100)}%`, opacity: pct > 100 ? 1 : pct > 75 ? 0.85 : 0.7 }}
               />
             </div>
           )}
           {pct !== null && (
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              {pct}% of estimate {pct > 100 && <span className="text-red-500 font-semibold">over budget!</span>}
+            <p className="text-[10px] text-[color:var(--text-muted)] mt-0.5">
+              {pct}% of estimate {pct > 100 && <span className="text-red-400 font-semibold">over budget!</span>}
             </p>
           )}
         </div>
@@ -134,14 +134,14 @@ export default function TimeTrackingPanel({ taskId, canEdit }) {
 
       {/* Log form */}
       {showForm && canEdit && (
-        <form onSubmit={handleLog} className="bg-slate-50 rounded-lg p-2 border border-slate-200 space-y-1.5 mb-2">
+        <form onSubmit={handleLog} className="border border-[color:var(--border)] rounded-lg p-2 space-y-1.5 mb-2">
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[10px] text-slate-500 block mb-0.5">Hours *</label>
+              <label className="text-[10px] text-[color:var(--text-muted)] block mb-0.5">Hours *</label>
               <input
                 type="number"
                 min="0.25" step="0.25"
-                className="w-full border rounded px-2 py-1 text-[11px]"
+                className="w-full bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded px-2 py-1 text-[11px] focus:outline-none focus:border-[color:var(--primary)] placeholder:text-[color:var(--text-muted)]"
                 value={form.hours}
                 onChange={e => setForm(f => ({ ...f, hours: e.target.value }))}
                 placeholder="0.5"
@@ -149,24 +149,34 @@ export default function TimeTrackingPanel({ taskId, canEdit }) {
               />
             </div>
             <div>
-              <label className="text-[10px] text-slate-500 block mb-0.5">Date</label>
+              <label className="text-[10px] text-[color:var(--text-muted)] block mb-0.5">Date</label>
               <input
                 type="date"
-                className="w-full border rounded px-2 py-1 text-[11px]"
+                className="w-full bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded px-2 py-1 text-[11px] focus:outline-none focus:border-[color:var(--primary)]"
                 value={form.log_date}
                 onChange={e => setForm(f => ({ ...f, log_date: e.target.value }))}
               />
             </div>
           </div>
           <input
-            className="w-full border rounded px-2 py-1 text-[11px]"
+            className="w-full bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded px-2 py-1 text-[11px] focus:outline-none focus:border-[color:var(--primary)] placeholder:text-[color:var(--text-muted)]"
             placeholder="What did you work on? (optional)"
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" className="text-[11px] text-slate-500 px-2 py-1 border rounded" onClick={() => setShowForm(false)}>Cancel</button>
-            <button type="submit" disabled={saving} className="text-[11px] bg-indigo-600 text-white px-3 py-1 rounded disabled:opacity-50">
+            <button
+              type="button"
+              className="text-[11px] text-[color:var(--text-muted)] px-2 py-1 border border-[color:var(--border)] rounded hover:text-[color:var(--text)]"
+              onClick={() => setShowForm(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="text-[11px] bg-[color:var(--primary)] text-[color:var(--primary-contrast)] px-3 py-1 rounded disabled:opacity-50"
+            >
               {saving ? "Saving…" : "Log"}
             </button>
           </div>
@@ -175,26 +185,26 @@ export default function TimeTrackingPanel({ taskId, canEdit }) {
 
       {/* Log list */}
       {loading ? (
-        <p className="text-[11px] text-slate-400">Loading…</p>
+        <p className="text-[11px] text-[color:var(--text-muted)]">Loading…</p>
       ) : logs.length === 0 ? (
-        <p className="text-[11px] text-slate-400">No time logged yet.</p>
+        <p className="text-[11px] text-[color:var(--text-muted)]">No time logged yet.</p>
       ) : (
         <div className="space-y-1 max-h-40 overflow-y-auto">
           {logs.map(log => (
-            <div key={log.id} className="flex items-start gap-2 text-[11px] p-1.5 rounded hover:bg-slate-50 group">
-              <Clock className="w-3 h-3 text-slate-300 mt-0.5 flex-shrink-0" />
+            <div key={log.id} className="flex items-start gap-2 text-[11px] p-1.5 rounded hover:bg-[var(--surface-soft)] group">
+              <Clock className="w-3 h-3 text-[color:var(--text-muted)] mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <strong className="text-indigo-600">{log.hours}h</strong>
-                  <span className="text-slate-400">{log.user_name}</span>
-                  <span className="text-slate-300">·</span>
-                  <span className="text-slate-400">{new Date(log.log_date).toLocaleDateString()}</span>
+                  <strong className="text-[color:var(--primary)]">{log.hours}h</strong>
+                  <span className="text-[color:var(--text-muted)]">{log.user_name}</span>
+                  <span className="text-[color:var(--border)]">·</span>
+                  <span className="text-[color:var(--text-muted)]">{new Date(log.log_date).toLocaleDateString()}</span>
                 </div>
-                {log.description && <p className="text-slate-500 truncate">{log.description}</p>}
+                {log.description && <p className="text-[color:var(--text-soft)] truncate">{log.description}</p>}
               </div>
               {canEdit && (
                 <button
-                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"
+                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300"
                   onClick={() => handleDelete(log.id)}
                 >
                   <Trash2 className="w-3 h-3" />

@@ -152,7 +152,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           {isActive && !collapsed && (
             <span
               aria-hidden="true"
-              className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-[var(--primary)]"
+              className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r brand-orange-bg"
             />
           )}
           <div className="relative shrink-0">
@@ -160,7 +160,7 @@ export default function Sidebar({ collapsed, onToggle }) {
               className={cn(
                 "w-[16px] h-[16px]",
                 isActive
-                  ? "text-[color:var(--primary)]"
+                  ? "brand-orange-text"
                   : "text-[color:var(--text-soft)] group-hover:text-[color:var(--text)]"
               )}
               strokeWidth={1.75}
@@ -171,7 +171,7 @@ export default function Sidebar({ collapsed, onToggle }) {
               </span>
             )}
             {badge > 0 && collapsed && (
-              <span className="absolute -top-1 -right-1 w-[7px] h-[7px] bg-[var(--primary)] rounded-full" />
+              <span className="absolute -top-1 -right-1 w-[7px] h-[7px] brand-orange-bg rounded-full" />
             )}
           </div>
           {!collapsed && (
@@ -179,7 +179,7 @@ export default function Sidebar({ collapsed, onToggle }) {
               <span className="flex-1 truncate">{label}</span>
               {locked && <Lock className="w-3 h-3 shrink-0 text-[color:var(--text-soft)]" aria-hidden="true" />}
               {badge > 0 && (
-                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--primary)] text-[10px] font-semibold px-1.5 text-[color:var(--primary-contrast)]">
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full brand-orange-bg text-[10px] font-semibold px-1.5 text-[#0a0a0b]">
                   {badge > 99 ? "99+" : badge}
                 </span>
               )}

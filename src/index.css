@@ -3,6 +3,39 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════════════════════════
+   GLOBAL MONOSPACE — technical block-font aesthetic.
+   Forced on every element including form controls, buttons, and
+   any Tailwind `font-sans` utility, so the entire surface reads
+   as a single technical typeface.
+═══════════════════════════════════════════════════════════════════ */
+html,
+body,
+#root,
+*,
+*::before,
+*::after,
+button,
+input,
+select,
+textarea,
+optgroup,
+.font-sans,
+.font-mono {
+  font-family:
+    'JetBrains Mono',
+    'IBM Plex Mono',
+    'Fira Code',
+    'SF Mono',
+    Menlo,
+    Consolas,
+    'Liberation Mono',
+    'Courier New',
+    ui-monospace,
+    monospace !important;
+  font-feature-settings: 'liga' 0, 'calt' 0, 'zero', 'ss01' !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ENTERPRISE DESIGN SYSTEM — Pitch-dark + rich orange
    ───────────────────────────────────────────────────────────────────
    Token contract is preserved (every legacy --var name still exists)
@@ -181,11 +214,12 @@
   --text: #0a0a0b;
   --text-muted: #52525b;
   --text-soft: #71717a;
-  --primary: #ea580c;
-  --primary-hover: #f97316;
-  --primary-soft: rgba(234, 88, 12, 0.08);
+  --brand-orange: #ffa500;
+  --primary: #ffa500;
+  --primary-hover: #ffb733;
+  --primary-soft: rgba(255, 165, 0, 0.08);
   --primary-contrast: #ffffff;
-  --ring: rgba(234, 88, 12, 0.30);
+  --ring: rgba(255, 165, 0, 0.30);
   --score-good: #16a34a;
   --score-good-bg: color-mix(in srgb, var(--score-good) 10%, var(--surface));
   --score-good-border: color-mix(in srgb, var(--score-good) 28%, var(--border));
@@ -252,47 +286,53 @@
    This is the new product face. Sharp, dense, operational.
 ═══════════════════════════════════════════════════════════════════ */
 html[data-theme="dark"] {
+  /* Single-canvas philosophy:
+     Outlines + colored text/icons are the ONLY classifiers.
+     No tinted fills. No card-on-card. Hierarchy comes from
+     typography, spacing, and borders. Genuine raised UI
+     (modals, dropdowns) gains elevation from border + shadow. */
   --app-bg: #0a0a0b;
-  --surface: #101012;
-  --surface-soft: #17171a;
-  --surface-strong: #1f1f23;
-  --border: #232328;
-  --border-strong: #32323a;
-  --text: #fafafa;
-  --text-muted: #a1a1aa;
-  --text-soft: #71717a;
-  --primary: #f97316;
-  --primary-hover: #fb923c;
-  --primary-soft: rgba(249, 115, 22, 0.12);
+  --surface: #0a0a0b;
+  --surface-soft: #0e0e10;
+  --surface-strong: #18181c;
+  --border: #3c3c44;
+  --border-strong: #4a4a52;
+  --text: #e7e7ea;
+  --text-muted: #8e8e96;
+  --text-soft: #5a5a62;
+  --brand-orange: #ffa500;
+  --primary: #ffa500;
+  --primary-hover: #ffb733;
+  --primary-soft: transparent;
   --primary-contrast: #0a0a0b;
-  --ring: rgba(249, 115, 22, 0.45);
+  --ring: rgba(255, 165, 0, 0.42);
   --score-good: #22c55e;
-  --score-good-bg: color-mix(in srgb, var(--score-good) 14%, var(--surface));
-  --score-good-border: color-mix(in srgb, var(--score-good) 30%, var(--border));
+  --score-good-bg: transparent;
+  --score-good-border: var(--border);
   --score-warning: #f59e0b;
-  --score-warning-bg: color-mix(in srgb, var(--score-warning) 14%, var(--surface));
-  --score-warning-border: color-mix(in srgb, var(--score-warning) 30%, var(--border));
+  --score-warning-bg: transparent;
+  --score-warning-border: var(--border);
   --score-danger: #ef4444;
-  --score-danger-bg: color-mix(in srgb, var(--score-danger) 14%, var(--surface));
-  --score-danger-border: color-mix(in srgb, var(--score-danger) 30%, var(--border));
+  --score-danger-bg: transparent;
+  --score-danger-border: var(--border);
   --danger-text: var(--score-danger);
-  --danger-bg: var(--score-danger-bg);
-  --danger-border: var(--score-danger-border);
-  --overdue-bg: var(--score-danger-bg);
-  --overdue-border: var(--score-danger-border);
+  --danger-bg: transparent;
+  --danger-border: var(--border);
+  --overdue-bg: transparent;
+  --overdue-border: var(--border);
   --overdue-text: var(--score-danger);
   --overdue-soft: var(--score-danger);
-  --sidebar-bg: #0d0d0f;
+  --sidebar-bg: #0a0a0b;
   --sidebar-border: #1c1c20;
   --sidebar-text: var(--text-soft);
   --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text);
   --sidebar-hover: var(--surface-soft);
-  --sidebar-active: color-mix(in srgb, var(--primary) 14%, var(--sidebar-bg));
+  --sidebar-active: var(--surface-soft);
   --sidebar-badge: var(--primary);
   --sidebar-badge-text: var(--primary-contrast);
   --sidebar-icon-bg: var(--surface-soft);
-  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 18%, var(--sidebar-bg));
+  --sidebar-icon-active-bg: var(--surface-soft);
   --sidebar-input-bg: var(--surface-soft);
   --sidebar-footer-bg: var(--sidebar-bg);
   --sidebar-toggle-off: var(--surface-strong);
@@ -339,11 +379,12 @@ html[data-theme="system"] {
   --text: #0a0a0b;
   --text-muted: #52525b;
   --text-soft: #71717a;
-  --primary: #ea580c;
-  --primary-hover: #f97316;
-  --primary-soft: rgba(234, 88, 12, 0.08);
+  --brand-orange: #ffa500;
+  --primary: #ffa500;
+  --primary-hover: #ffb733;
+  --primary-soft: rgba(255, 165, 0, 0.08);
   --primary-contrast: #ffffff;
-  --ring: rgba(234, 88, 12, 0.30);
+  --ring: rgba(255, 165, 0, 0.30);
   --score-good: #16a34a;
   --score-good-bg: color-mix(in srgb, var(--score-good) 10%, var(--surface));
   --score-good-border: color-mix(in srgb, var(--score-good) 28%, var(--border));
@@ -403,24 +444,27 @@ html[data-theme="system"] {
 @media (prefers-color-scheme: dark) {
   html[data-theme="system"] {
     --app-bg: #0a0a0b;
-    --surface: #101012;
-    --surface-soft: #17171a;
-    --surface-strong: #1f1f23;
-    --border: #232328;
-    --border-strong: #32323a;
-    --text: #fafafa;
-    --text-muted: #a1a1aa;
-    --text-soft: #71717a;
-    --primary: #f97316;
-    --primary-hover: #fb923c;
-    --primary-soft: rgba(249, 115, 22, 0.12);
+    --surface: #0a0a0b;
+    --surface-soft: #0e0e10;
+    --surface-strong: #18181c;
+    --border: #3c3c44;
+    --border-strong: #4a4a52;
+    --text: #e7e7ea;
+    --text-muted: #8e8e96;
+    --text-soft: #5a5a62;
+    --brand-orange: #ffa500;
+    --primary: #ffa500;
+    --primary-hover: #ffb733;
+    --primary-soft: transparent;
     --primary-contrast: #0a0a0b;
-    --ring: rgba(249, 115, 22, 0.45);
+    --ring: rgba(255, 165, 0, 0.42);
     --score-good: #22c55e;
     --score-warning: #f59e0b;
     --score-danger: #ef4444;
-    --sidebar-bg: #0d0d0f;
+    --sidebar-bg: #0a0a0b;
     --sidebar-border: #1c1c20;
+    --sidebar-active: var(--surface-soft);
+    --sidebar-icon-active-bg: var(--surface-soft);
     --shadow-xs: 0 1px 0 rgba(0,0,0,0.4);
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
     --shadow-md: 0 4px 16px rgba(0,0,0,0.55);
@@ -436,14 +480,14 @@ html[data-theme="system"] {
 ═══════════════════════════════════════════════════════════════════ */
 html[data-theme="ocean"] {
   --app-bg: #0a0e14;
-  --surface: #0f141d;
-  --surface-soft: #161c27;
+  --surface: #0a0e14;
+  --surface-soft: #131923;
   --surface-strong: #1d2532;
-  --border: #1d2532;
-  --border-strong: #2a3445;
-  --text: #f4f6fa;
-  --text-muted: #9aa6b8;
-  --text-soft: #6b7689;
+  --border: #1f2a3a;
+  --border-strong: #2e3d52;
+  --text: #e6e8ec;
+  --text-muted: #889ab1;
+  --text-soft: #5a6d82;
   --primary: #0ea5e9;
   --primary-hover: #38bdf8;
   --primary-soft: rgba(14, 165, 233, 0.12);
@@ -452,17 +496,17 @@ html[data-theme="ocean"] {
   --score-good: #22c55e;
   --score-warning: #f59e0b;
   --score-danger: #ef4444;
-  --sidebar-bg: #080c13;
+  --sidebar-bg: #0a0e14;
   --sidebar-border: #131923;
   --sidebar-text: var(--text-soft);
   --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text);
   --sidebar-hover: var(--surface-soft);
-  --sidebar-active: color-mix(in srgb, var(--primary) 16%, var(--sidebar-bg));
+  --sidebar-active: var(--surface-soft);
   --sidebar-badge: var(--primary);
   --sidebar-badge-text: var(--primary-contrast);
   --sidebar-icon-bg: var(--surface-soft);
-  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 20%, var(--sidebar-bg));
+  --sidebar-icon-active-bg: var(--surface-soft);
   --sidebar-input-bg: var(--surface-soft);
   --sidebar-footer-bg: var(--sidebar-bg);
   --sidebar-toggle-off: var(--surface-strong);
@@ -480,27 +524,27 @@ html[data-theme="ocean"] {
 
 html[data-theme="forest"] {
   --app-bg: #0a0f0c;
-  --surface: #0f1612;
-  --surface-soft: #161e19;
+  --surface: #0a0f0c;
+  --surface-soft: #131a16;
   --surface-strong: #1d2622;
-  --border: #1d2622;
-  --border-strong: #2a342e;
-  --text: #f4faf6;
-  --text-muted: #9bb0a3;
-  --text-soft: #6c8076;
+  --border: #1f2b25;
+  --border-strong: #2e3d34;
+  --text: #e6ece8;
+  --text-muted: #8aa298;
+  --text-soft: #5a7068;
   --primary: #10b981;
   --primary-hover: #34d399;
   --primary-soft: rgba(16, 185, 129, 0.12);
   --primary-contrast: #04110c;
   --ring: rgba(16, 185, 129, 0.42);
   --score-good: #22c55e; --score-warning: #f59e0b; --score-danger: #ef4444;
-  --sidebar-bg: #080c0a; --sidebar-border: #131a16;
+  --sidebar-bg: #0a0f0c; --sidebar-border: #131a16;
   --sidebar-text: var(--text-soft); --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text); --sidebar-hover: var(--surface-soft);
-  --sidebar-active: color-mix(in srgb, var(--primary) 16%, var(--sidebar-bg));
+  --sidebar-active: var(--surface-soft);
   --sidebar-badge: var(--primary); --sidebar-badge-text: var(--primary-contrast);
   --sidebar-icon-bg: var(--surface-soft);
-  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 20%, var(--sidebar-bg));
+  --sidebar-icon-active-bg: var(--surface-soft);
   --sidebar-input-bg: var(--surface-soft); --sidebar-footer-bg: var(--sidebar-bg);
   --sidebar-toggle-off: var(--surface-strong);
   --shadow-xs: 0 1px 0 rgba(0,0,0,0.4); --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
@@ -515,27 +559,28 @@ html[data-theme="forest"] {
 
 html[data-theme="sunset"] {
   --app-bg: #100a08;
-  --surface: #16100d;
-  --surface-soft: #1e1612;
+  --surface: #100a08;
+  --surface-soft: #1a130f;
   --surface-strong: #271d18;
-  --border: #271d18;
+  --border: #2a1f18;
   --border-strong: #3a2c24;
-  --text: #fbf6f3;
-  --text-muted: #b9a59a;
-  --text-soft: #8d7969;
-  --primary: #f97316;
-  --primary-hover: #fb923c;
-  --primary-soft: rgba(249, 115, 22, 0.12);
+  --text: #e9e4e1;
+  --text-muted: #a6938a;
+  --text-soft: #786a5e;
+  --brand-orange: #ffa500;
+  --primary: #ffa500;
+  --primary-hover: #ffb733;
+  --primary-soft: rgba(255, 165, 0, 0.12);
   --primary-contrast: #100a08;
-  --ring: rgba(249, 115, 22, 0.42);
+  --ring: rgba(255, 165, 0, 0.42);
   --score-good: #22c55e; --score-warning: #f59e0b; --score-danger: #ef4444;
-  --sidebar-bg: #0c0807; --sidebar-border: #1a120e;
+  --sidebar-bg: #100a08; --sidebar-border: #1a120e;
   --sidebar-text: var(--text-soft); --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text); --sidebar-hover: var(--surface-soft);
-  --sidebar-active: color-mix(in srgb, var(--primary) 16%, var(--sidebar-bg));
+  --sidebar-active: var(--surface-soft);
   --sidebar-badge: var(--primary); --sidebar-badge-text: var(--primary-contrast);
   --sidebar-icon-bg: var(--surface-soft);
-  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 20%, var(--sidebar-bg));
+  --sidebar-icon-active-bg: var(--surface-soft);
   --sidebar-input-bg: var(--surface-soft); --sidebar-footer-bg: var(--sidebar-bg);
   --sidebar-toggle-off: var(--surface-strong);
   --shadow-xs: 0 1px 0 rgba(0,0,0,0.4); --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
@@ -550,21 +595,21 @@ html[data-theme="sunset"] {
 
 html[data-theme="yellow"] {
   --app-bg: #0c0b06;
-  --surface: #13110a;
-  --surface-soft: #1b1810;
+  --surface: #0c0b06;
+  --surface-soft: #16140c;
   --surface-strong: #251f15;
-  --border: #251f15;
+  --border: #28220f;
   --border-strong: #382f1f;
-  --text: #fbf9f0;
-  --text-muted: #b8ad8a;
-  --text-soft: #8a7f5a;
+  --text: #ebe8dc;
+  --text-muted: #a89c80;
+  --text-soft: #756b52;
   --primary: #facc15;
   --primary-hover: #fde047;
   --primary-soft: rgba(250, 204, 21, 0.12);
   --primary-contrast: #0c0b06;
   --ring: rgba(250, 204, 21, 0.42);
   --score-good: #22c55e; --score-warning: #f59e0b; --score-danger: #ef4444;
-  --sidebar-bg: #0a0905; --sidebar-border: #15130a;
+  --sidebar-bg: #0c0b06; --sidebar-border: #15130a;
   --sidebar-text: var(--text-soft); --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text); --sidebar-hover: var(--surface-soft);
   --sidebar-active: color-mix(in srgb, var(--primary) 16%, var(--sidebar-bg));
@@ -591,11 +636,6 @@ html[data-theme="yellow"] {
 
   html {
     scroll-behavior: smooth;
-    font-family:
-      'Inter', -apple-system, BlinkMacSystemFont,
-      'Segoe UI Variable', 'SF Pro Text', system-ui, 'Helvetica Neue',
-      Arial, sans-serif;
-    font-feature-settings: 'cv11', 'ss01', 'ss03';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -605,25 +645,29 @@ html[data-theme="yellow"] {
     background: var(--app-bg);
     color: var(--text);
     @apply antialiased;
-    font-size: 14px;
-    line-height: 1.5;
-    letter-spacing: -0.005em;
+    font-size: 13px;
+    line-height: 1.55;
+    letter-spacing: 0;
   }
 
-  /* Tighter, more deliberate heading rhythm */
+  /* Heading rhythm — monospace tightens naturally, so no negative
+     tracking. Slightly heavier weights to compensate for mono's
+     thinner perceived weight. */
   h1, h2, h3, h4, h5, h6 {
     color: var(--text);
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
     font-weight: 600;
   }
-  h1 { font-size: 1.75rem; line-height: 1.15; letter-spacing: -0.028em; }
-  h2 { font-size: 1.375rem; line-height: 1.2; letter-spacing: -0.022em; }
-  h3 { font-size: 1.125rem; line-height: 1.25; }
-  h4 { font-size: 1rem;     line-height: 1.3; }
+  h1 { font-size: 1.5rem;   line-height: 1.2;  font-weight: 700; }
+  h2 { font-size: 1.25rem;  line-height: 1.25; font-weight: 700; }
+  h3 { font-size: 1rem;     line-height: 1.3;  }
+  h4 { font-size: 0.875rem; line-height: 1.35; }
 
-  /* Mono utility — for IDs, tokens, code, kbd */
+  /* .font-mono alias kept for explicit callouts (still mono since
+     base is now mono — same stack). */
   code, pre, kbd, samp, .font-mono {
-    font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas,
+    font-family:
+      'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', Menlo, Consolas,
       'Liberation Mono', 'Courier New', monospace;
     font-feature-settings: 'liga' 0, 'calt' 0;
   }
@@ -788,9 +832,11 @@ html[data-theme="yellow"] {
   }
   .dashboard-card {
     background: transparent;
-    border: 0;
     box-shadow: none;
     overflow: visible;
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--border);
   }
   .dashboard-danger-card {
     position: relative;
@@ -809,13 +855,17 @@ html[data-theme="yellow"] {
   }
   .dashboard-executive-card {
     background: transparent;
-    border: 0;
     box-shadow: none;
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--border);
   }
   .dashboard-performance-card {
     background: transparent;
-    border: 0;
     box-shadow: none;
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--border);
   }
   .gradient-danger {
     background: var(--score-danger);
@@ -1164,11 +1214,65 @@ html[data-theme="yellow"] {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Flat-on-canvas reset — these classes are LEGACY card chrome that
-   we keep working but render fully transparent. The reset uses
-   !important so inline Tailwind utilities (border, rounded-*, shadow)
-   on the same element don't re-introduce card visuals.
+   Outlines-on-canvas reset — wipe legacy card chrome and any
+   inline tint utilities that bypass our CSS variables.
 ═══════════════════════════════════════════════════════════════════ */
+
+/* Any Tailwind arbitrary-value background referencing a *-bg or
+   *-soft variable becomes transparent in dark mode. Status is
+   conveyed only by border/text/icon color inside the container. */
+html[data-theme="dark"] [class*="bg-[color:var(--score-good-bg)]"],
+html[data-theme="dark"] [class*="bg-[color:var(--score-warning-bg)]"],
+html[data-theme="dark"] [class*="bg-[color:var(--score-danger-bg)]"],
+html[data-theme="dark"] [class*="bg-[color:var(--overdue-bg)]"],
+html[data-theme="dark"] [class*="bg-[color:var(--danger-bg)]"],
+html[data-theme="dark"] [class*="bg-[var(--primary-soft)]"],
+html[data-theme="dark"] [class*="bg-[color:var(--primary-soft)]"] {
+  background-color: transparent !important;
+}
+
+/* Tailwind alpha-modifier patterns (e.g. bg-[color:var(--primary)]/10).
+   These bypass CSS variables entirely — kill them in dark mode so
+   no tinted fills leak through. Borders and text are unaffected. */
+html[data-theme="dark"] [class*="bg-[color:var(--primary)]/"] {
+  background-color: transparent !important;
+}
+
+/* Keep legacy Tailwind orange utilities aligned with the brand token.
+   Amber stays untouched for warnings/status states. */
+[class*="text-orange-"] {
+  color: var(--primary) !important;
+}
+[class*="bg-orange-"] {
+  background-color: var(--primary) !important;
+}
+[class*="border-orange-"] {
+  border-color: var(--primary) !important;
+}
+[class*="fill-orange-"] {
+  fill: var(--primary) !important;
+}
+[class*="stroke-orange-"] {
+  stroke: var(--primary) !important;
+}
+
+.brand-orange-text {
+  color: var(--brand-orange, #ffa500) !important;
+}
+.brand-orange-bg {
+  background-color: var(--brand-orange, #ffa500) !important;
+}
+.brand-orange-border {
+  border-color: var(--brand-orange, #ffa500) !important;
+}
+.brand-orange-fill {
+  fill: var(--brand-orange, #ffa500) !important;
+}
+.brand-orange-stroke {
+  stroke: var(--brand-orange, #ffa500) !important;
+}
+
+
 .dashboard-card,
 .dashboard-executive-card,
 .dashboard-performance-card,

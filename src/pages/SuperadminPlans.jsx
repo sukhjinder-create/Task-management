@@ -97,9 +97,9 @@ function FeatureSelector({ selected, onChange }) {
     <div className="space-y-2" ref={ref}>
       {/* Selected pills */}
       {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 p-2 rounded-lg border theme-border theme-surface min-h-[36px]">
+        <div className="flex flex-wrap gap-1.5 p-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] min-h-[36px]">
           {selected.map(key => (
-            <span key={key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-indigo-500/10 text-indigo-500 font-medium">
+            <span key={key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-[color:var(--border)] text-[color:var(--primary)] font-medium">
               {featureLabel(key)}
               <button type="button" onClick={() => removeFeature(key)} className="ml-0.5 hover:text-red-500 transition-colors">×</button>
             </span>
@@ -109,7 +109,7 @@ function FeatureSelector({ selected, onChange }) {
 
       {/* Trigger */}
       <button type="button" onClick={() => setOpen(p => !p)}
-        className="w-full flex items-center justify-between px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text-muted hover:theme-text transition-colors">
+        className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">
         <span className="flex items-center gap-2">
           <Plus className="w-3.5 h-3.5" />
           {selected.length === 0 ? "Select features to include…" : `${selected.length} feature${selected.length !== 1 ? "s" : ""} selected — add more`}
@@ -119,21 +119,23 @@ function FeatureSelector({ selected, onChange }) {
 
       {/* Dropdown panel */}
       {open && (
-        <div className="border theme-border rounded-xl theme-surface shadow-xl overflow-hidden z-30 relative">
+        <div className="border border-[color:var(--border)] rounded-xl bg-[var(--surface)] overflow-hidden z-30 relative">
           {/* Search + category filter */}
-          <div className="px-3 pt-3 pb-2 border-b theme-border space-y-2">
+          <div className="px-3 pt-3 pb-2 border-b border-[color:var(--border)] space-y-2">
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--surface-soft)]">
-              <Search className="w-3.5 h-3.5 theme-text-muted shrink-0" />
+              <Search className="w-3.5 h-3.5 text-[color:var(--text-muted)] shrink-0" />
               <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Search features…"
-                className="flex-1 bg-transparent text-sm theme-text focus:outline-none placeholder:theme-text-muted" />
-              {search && <button onClick={() => setSearch("")} className="theme-text-muted hover:theme-text text-xs">✕</button>}
+                className="flex-1 bg-transparent text-sm text-[color:var(--text)] focus:outline-none placeholder:text-[color:var(--text-muted)]" />
+              {search && <button onClick={() => setSearch("")} className="text-[color:var(--text-muted)] hover:text-[color:var(--text)] text-xs">✕</button>}
             </div>
             <div className="flex gap-1.5 overflow-x-auto pb-1">
               {["All", ...FEATURE_CATEGORIES].map(cat => (
                 <button key={cat} type="button" onClick={() => setCategory(cat)}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                    category === cat ? "bg-indigo-500 text-white" : "bg-[var(--surface-soft)] theme-text-muted hover:theme-text"
+                    category === cat
+                      ? "bg-[color:var(--primary)] text-white"
+                      : "bg-[var(--surface-soft)] text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
                   }`}>
                   {cat}
                 </button>
@@ -142,34 +144,34 @@ function FeatureSelector({ selected, onChange }) {
           </div>
 
           {/* Feature list */}
-          <div className="max-h-56 overflow-y-auto divide-y divide-[var(--border)]">
+          <div className="max-h-56 overflow-y-auto divide-y divide-[color:var(--border)]">
             {filtered.length === 0 ? (
-              <p className="px-4 py-3 text-sm theme-text-muted text-center">No features match "{search}"</p>
+              <p className="px-4 py-3 text-sm text-[color:var(--text-muted)] text-center">No features match "{search}"</p>
             ) : filtered.map(f => {
               const isSelected = selected.includes(f.key);
               return (
                 <button key={f.key} type="button" onClick={() => toggle(f.key)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                    isSelected ? "bg-indigo-500/8" : "hover:bg-[var(--surface-soft)]"
+                    isSelected ? "bg-[var(--surface-soft)]" : "hover:bg-[var(--surface-soft)]"
                   }`}>
                   <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                    isSelected ? "bg-indigo-500 border-indigo-500" : "theme-border"
+                    isSelected ? "bg-[color:var(--primary)] border-[color:var(--primary)]" : "border-[color:var(--border)]"
                   }`}>
                     {isSelected && <CheckCircle className="w-3 h-3 text-white" />}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm theme-text">{f.label}</p>
-                    <p className="text-[10px] theme-text-muted">{f.category}</p>
+                    <p className="text-sm text-[color:var(--text)]">{f.label}</p>
+                    <p className="text-[10px] text-[color:var(--text-muted)]">{f.category}</p>
                   </div>
                 </button>
               );
             })}
           </div>
 
-          <div className="px-4 py-2 border-t theme-border flex items-center justify-between">
-            <span className="text-xs theme-text-muted">{selected.length} selected</span>
+          <div className="px-4 py-2 border-t border-[color:var(--border)] flex items-center justify-between">
+            <span className="text-xs text-[color:var(--text-muted)]">{selected.length} selected</span>
             <button type="button" onClick={() => setOpen(false)}
-              className="text-xs font-semibold text-indigo-500 hover:text-indigo-600">Done</button>
+              className="text-xs font-semibold text-[color:var(--primary)] hover:opacity-80">Done</button>
           </div>
         </div>
       )}
@@ -280,19 +282,19 @@ function PlanModal({ plan, onClose, onSaved }) {
 
   const numField = (label, key, placeholder = "") => (
     <div>
-      <label className="block text-xs font-semibold theme-text-muted mb-1">{label}</label>
+      <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">{label}</label>
       <input type="number" min="0" value={form[key]} onChange={e => set(key, e.target.value)}
         placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+        className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
     </div>
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="theme-surface border theme-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b theme-border sticky top-0 theme-surface z-10">
-          <h2 className="text-base font-bold theme-text">{isEdit ? `Edit — ${plan.name}` : "Create New Plan"}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted"><X className="w-4 h-4" /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[var(--surface)] border border-[color:var(--border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[color:var(--border)] sticky top-0 bg-[var(--surface)] z-10">
+          <h2 className="text-base font-bold text-[color:var(--text)]">{isEdit ? `Edit — ${plan.name}` : "Create New Plan"}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)]"><X className="w-4 h-4" /></button>
         </div>
 
         <form onSubmit={submit} className="px-6 py-5 space-y-5">
@@ -300,60 +302,60 @@ function PlanModal({ plan, onClose, onSaved }) {
           {/* Identity */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold theme-text-muted mb-1">Plan Name *</label>
+              <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">Plan Name *</label>
               <input value={form.name} onChange={e => handleNameChange(e.target.value)}
                 placeholder="Pro" required
-                className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+                className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
             </div>
             <div>
-              <label className="block text-xs font-semibold theme-text-muted mb-1">
+              <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">
                 Slug *
                 <span className="ml-1.5 font-normal opacity-60">
                   {isEdit ? "cannot be changed after creation" : 'unique code ID, e.g. "pro"'}
                 </span>
               </label>
               {isEdit ? (
-                <div className="w-full px-3 py-2 rounded-lg border theme-border bg-[var(--surface-soft)] text-sm theme-text-muted font-mono">
+                <div className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] text-sm text-[color:var(--text-muted)] font-mono">
                   {form.slug}
                 </div>
               ) : (
                 <input value={form.slug}
                   onChange={e => { setSlugEdited(true); set("slug", toSlug(e.target.value)); }}
                   placeholder="pro" required
-                  className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+                  className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] font-mono focus:outline-none focus:border-[color:var(--primary)]" />
               )}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold theme-text-muted mb-1">Tagline</label>
+            <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">Tagline</label>
             <input value={form.tagline} onChange={e => set("tagline", e.target.value)}
               placeholder="Built for growing businesses"
-              className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
           </div>
 
           {/* Pricing */}
-          <div className="border theme-border rounded-xl p-4 space-y-3">
-            <p className="text-xs font-bold theme-text uppercase tracking-wider">Pricing per user (₹ Rupees)</p>
+          <div className="border border-[color:var(--border)] rounded-xl p-4 space-y-3">
+            <p className="text-xs font-bold text-[color:var(--text)] uppercase tracking-wider">Pricing per user (₹ Rupees)</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold theme-text-muted mb-1">Per User / Month (₹)</label>
+                <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">Per User / Month (₹)</label>
                 <input type="text" inputMode="numeric" value={form.price_monthly}
                   onChange={e => handlePriceChange("price_monthly", e.target.value.replace(/[^0-9]/g, ""))}
                   placeholder="999"
-                  className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+                  className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
               </div>
               <div>
-                <label className="block text-xs font-semibold theme-text-muted mb-1">Per User / Year (₹)</label>
+                <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">Per User / Year (₹)</label>
                 <input type="text" inputMode="numeric" value={form.price_yearly}
                   onChange={e => handlePriceChange("price_yearly", e.target.value.replace(/[^0-9]/g, ""))}
                   placeholder="9999"
-                  className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+                  className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
               </div>
             </div>
             {/* Auto-calculated discount */}
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
-              form.yearly_discount_pct > 0 ? "bg-green-500/10 text-green-600" : "bg-[var(--surface-soft)] theme-text-muted"
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-[color:var(--border)] text-xs transition-colors ${
+              form.yearly_discount_pct > 0 ? "text-green-500" : "text-[color:var(--text-muted)]"
             }`}>
               {form.yearly_discount_pct > 0
                 ? <><CheckCircle className="w-3.5 h-3.5" /> Yearly saves <strong>{form.yearly_discount_pct}%</strong> vs monthly (auto-calculated)</>
@@ -362,8 +364,8 @@ function PlanModal({ plan, onClose, onSaved }) {
           </div>
 
           {/* Limits */}
-          <div className="border theme-border rounded-xl p-4 space-y-3">
-            <p className="text-xs font-bold theme-text uppercase tracking-wider">Limits</p>
+          <div className="border border-[color:var(--border)] rounded-xl p-4 space-y-3">
+            <p className="text-xs font-bold text-[color:var(--text)] uppercase tracking-wider">Limits</p>
             <div className="grid grid-cols-2 gap-3">
               {numField("Max Members", "member_limit", "50")}
               {numField("Max Projects (blank = unlimited)", "max_projects")}
@@ -375,14 +377,14 @@ function PlanModal({ plan, onClose, onSaved }) {
           {/* Features */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold theme-text uppercase tracking-wider">Features Included in Plan</label>
+              <label className="text-xs font-bold text-[color:var(--text)] uppercase tracking-wider">Features Included in Plan</label>
               {form.features.length > 0 && (
                 <button type="button" onClick={() => set("features", [])}
                   className="text-xs text-red-400 hover:text-red-500 transition-colors">Clear all</button>
               )}
             </div>
             <FeatureSelector selected={form.features} onChange={v => set("features", v)} />
-            <p className="text-xs theme-text-muted mt-1.5">
+            <p className="text-xs text-[color:var(--text-muted)] mt-1.5">
               Only features selected here will be available to workspaces on this plan.
             </p>
           </div>
@@ -390,9 +392,9 @@ function PlanModal({ plan, onClose, onSaved }) {
           {/* Settings */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold theme-text-muted mb-1">Support Level</label>
+              <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">Support Level</label>
               <select value={form.support_level} onChange={e => set("support_level", e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+                className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]">
                 {Object.entries(SUPPORT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
@@ -404,17 +406,17 @@ function PlanModal({ plan, onClose, onSaved }) {
           {/* Toggles */}
           <label className="flex items-center gap-2.5 cursor-pointer">
             <input type="checkbox" checked={form.is_popular} onChange={e => set("is_popular", e.target.checked)}
-              className="w-4 h-4 rounded accent-indigo-500" />
-            <span className="text-sm theme-text">Show "Most Popular" badge on this plan</span>
+              className="w-4 h-4 rounded accent-[var(--primary)]" />
+            <span className="text-sm text-[color:var(--text)]">Show "Most Popular" badge on this plan</span>
           </label>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose}
-              className="px-4 py-2 rounded-xl text-sm font-medium theme-text-muted hover:theme-text theme-surface border theme-border transition-colors">
+              className="px-4 py-2 rounded-xl text-sm font-medium text-[color:var(--text-muted)] hover:text-[color:var(--text)] bg-[var(--surface)] border border-[color:var(--border)] transition-colors">
               Cancel
             </button>
             <button type="submit" disabled={saving}
-              className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-60 transition-colors flex items-center gap-2">
+              className="px-4 py-2 rounded-xl text-sm font-semibold bg-[color:var(--primary)] text-white hover:bg-[color:var(--primary-hover)] disabled:opacity-60 transition-colors flex items-center gap-2">
               {saving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
               {isEdit ? "Save Changes" : "Create Plan"}
             </button>
@@ -481,35 +483,35 @@ function UserManageModal({ ws, onClose }) {
   };
 
   const ROLE_COLOR = {
-    admin: "bg-indigo-500/10 text-indigo-500",
-    owner: "bg-purple-500/10 text-purple-500",
-    user:  "bg-gray-500/10 text-gray-500",
+    admin: "border border-[color:var(--border)] text-[color:var(--primary)]",
+    owner: "border border-[color:var(--border)] text-[color:var(--text-muted)]",
+    user:  "border border-[color:var(--border)] text-[color:var(--text-muted)]",
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="theme-surface rounded-2xl border theme-border w-full max-w-lg shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b theme-border">
-          <h3 className="font-semibold theme-text">{ws.name} — Users ({users.length})</h3>
-          <button onClick={onClose} className="theme-text-muted hover:theme-text"><X className="w-4 h-4" /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-[var(--surface)] rounded-2xl border border-[color:var(--border)] w-full max-w-lg">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)]">
+          <h3 className="font-semibold text-[color:var(--text)]">{ws.name} — Users ({users.length})</h3>
+          <button onClick={onClose} className="text-[color:var(--text-muted)] hover:text-[color:var(--text)]"><X className="w-4 h-4" /></button>
         </div>
         <div className="px-5 py-4">
           {loading ? (
-            <div className="py-8 text-center text-sm theme-text-muted">Loading…</div>
+            <div className="py-8 text-center text-sm text-[color:var(--text-muted)]">Loading…</div>
           ) : users.length === 0 ? (
-            <div className="py-8 text-center text-sm theme-text-muted">No users in this workspace</div>
+            <div className="py-8 text-center text-sm text-[color:var(--text-muted)]">No users in this workspace</div>
           ) : (
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {users.map(u => (
-                <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border theme-border hover:bg-[var(--surface-soft)]">
+                <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[color:var(--border)] hover:bg-[var(--surface-soft)] transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium theme-text truncate">{u.username}</p>
-                    <p className="text-xs theme-text-muted truncate">{u.email}</p>
+                    <p className="text-sm font-medium text-[color:var(--text)] truncate">{u.username}</p>
+                    <p className="text-xs text-[color:var(--text-muted)] truncate">{u.email}</p>
                   </div>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${ROLE_COLOR[u.role] || ROLE_COLOR.user}`}>
                     {u.role}
                   </span>
-                  <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-indigo-500 shrink-0" title="Edit">
+                  <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--primary)] shrink-0" title="Edit">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button onClick={() => openReset(u)} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-amber-500 shrink-0" title="Reset password">
@@ -524,17 +526,17 @@ function UserManageModal({ ws, onClose }) {
           )}
 
           {action?.type === "edit" && (
-            <form onSubmit={handleEdit} className="mt-4 p-3 rounded-xl border theme-border bg-[var(--surface-soft)] space-y-2">
-              <p className="text-xs font-semibold theme-text">Edit <span className="text-indigo-500">{action.user.username}</span></p>
+            <form onSubmit={handleEdit} className="mt-4 p-3 rounded-xl border border-[color:var(--border)] bg-[var(--surface-soft)] space-y-2">
+              <p className="text-xs font-semibold text-[color:var(--text)]">Edit <span className="text-[color:var(--primary)]">{action.user.username}</span></p>
               <div className="grid grid-cols-2 gap-2">
                 <input value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))}
                   placeholder="Username"
-                  className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+                  className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
                 <input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
                   placeholder="Email"
-                  className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+                  className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
                 <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
-                  className="col-span-2 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+                  className="col-span-2 px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]">
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                   <option value="owner">Owner</option>
@@ -542,26 +544,26 @@ function UserManageModal({ ws, onClose }) {
               </div>
               <div className="flex gap-2">
                 <button type="submit" disabled={saving}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+                  className="px-3 py-2 bg-[color:var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[color:var(--primary-hover)] disabled:opacity-60 transition-colors">
                   {saving ? "…" : "Save"}
                 </button>
-                <button type="button" onClick={closeAction} className="px-3 py-2 border theme-border rounded-lg text-sm theme-text">Cancel</button>
+                <button type="button" onClick={closeAction} className="px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)] hover:bg-[var(--surface-soft)] transition-colors">Cancel</button>
               </div>
             </form>
           )}
 
           {action?.type === "reset" && (
-            <form onSubmit={handleReset} className="mt-4 p-3 rounded-xl border theme-border bg-[var(--surface-soft)] space-y-2">
-              <p className="text-xs font-semibold theme-text">Reset password for <span className="text-amber-500">{action.user.username}</span></p>
+            <form onSubmit={handleReset} className="mt-4 p-3 rounded-xl border border-[color:var(--border)] bg-[var(--surface-soft)] space-y-2">
+              <p className="text-xs font-semibold text-[color:var(--text)]">Reset password for <span className="text-amber-500">{action.user.username}</span></p>
               <div className="flex gap-2">
                 <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
                   placeholder="New password (min 6 chars)"
-                  className="flex-1 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
+                  className="flex-1 px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-amber-500" />
                 <button type="submit" disabled={saving}
-                  className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-60">
+                  className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-60 transition-colors">
                   {saving ? "…" : "Reset"}
                 </button>
-                <button type="button" onClick={closeAction} className="px-3 py-2 border theme-border rounded-lg text-sm theme-text">Cancel</button>
+                <button type="button" onClick={closeAction} className="px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)] hover:bg-[var(--surface-soft)] transition-colors">Cancel</button>
               </div>
             </form>
           )}
@@ -595,32 +597,32 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUse
   }
 
   return (
-    <div className={`theme-surface border rounded-xl overflow-hidden ${plan.is_active ? "theme-border" : "border-dashed border-gray-400/30 opacity-60"}`}>
+    <div className={`bg-[var(--surface)] border rounded-xl overflow-hidden ${plan.is_active ? "border-[color:var(--border)]" : "border-dashed border-[color:var(--border)] opacity-60"}`}>
 
       {/* Header */}
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-bold theme-text">{plan.name}</p>
+              <p className="font-bold text-[color:var(--text)]">{plan.name}</p>
               {plan.is_popular && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 uppercase tracking-wide">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-[color:var(--border)] text-amber-500 uppercase tracking-wide">
                   <Star className="w-2.5 h-2.5" /> Popular
                 </span>
               )}
               {!plan.is_active && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/10 text-gray-500 uppercase">Inactive</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--surface-soft)] text-[color:var(--text-muted)] uppercase">Inactive</span>
               )}
             </div>
-            <p className="text-xs theme-text-muted mt-0.5">{plan.tagline || plan.slug}</p>
+            <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{plan.tagline || plan.slug}</p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <button onClick={() => onEdit(plan)}
-              className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted hover:theme-text transition-colors">
+              className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">
               <Pencil className="w-3.5 h-3.5" />
             </button>
             <button onClick={() => onDelete(plan)}
-              className="p-1.5 rounded-lg hover:bg-red-500/10 theme-text-muted hover:text-red-500 transition-colors">
+              className="p-1.5 rounded-lg hover:bg-red-500/10 text-[color:var(--text-muted)] hover:text-red-500 transition-colors">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -629,14 +631,14 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUse
         {/* Pricing */}
         <div className="flex items-baseline gap-3 mt-3 flex-wrap">
           {isFree ? (
-            <span className="text-2xl font-black theme-text">Free</span>
+            <span className="text-2xl font-black text-[color:var(--text)]">Free</span>
           ) : (
             <>
-              <span className="text-2xl font-black theme-text">
-                {rupees(plan.price_monthly_paise)}<span className="text-sm font-normal theme-text-muted">/user/mo</span>
+              <span className="text-2xl font-black text-[color:var(--text)]">
+                {rupees(plan.price_monthly_paise)}<span className="text-sm font-normal text-[color:var(--text-muted)]">/user/mo</span>
               </span>
               {plan.price_yearly_paise > 0 && (
-                <span className="text-sm theme-text-muted">
+                <span className="text-sm text-[color:var(--text-muted)]">
                   {rupees(plan.price_yearly_paise)}/user/yr
                   {plan.yearly_discount_pct > 0 && (
                     <span className="ml-1.5 text-green-500 font-semibold">{plan.yearly_discount_pct}% off</span>
@@ -649,18 +651,18 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUse
 
         {/* Stats */}
         <div className="flex items-center gap-4 mt-3 flex-wrap">
-          <span className="inline-flex items-center gap-1 text-xs theme-text-muted">
+          <span className="inline-flex items-center gap-1 text-xs text-[color:var(--text-muted)]">
             <Users className="w-3 h-3" /> {plan.member_limit > 0 ? `${plan.member_limit} members` : "Unlimited members"}
           </span>
-          <span className="inline-flex items-center gap-1 text-xs theme-text-muted">
+          <span className="inline-flex items-center gap-1 text-xs text-[color:var(--text-muted)]">
             <Crown className="w-3 h-3" /> {SUPPORT_LABELS[plan.support_level] || plan.support_level}
           </span>
           {plan.trial_days > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs text-indigo-500">
+            <span className="inline-flex items-center gap-1 text-xs text-[color:var(--primary)]">
               <Zap className="w-3 h-3" /> {plan.trial_days}d free trial
             </span>
           )}
-          <span className="inline-flex items-center gap-1 text-xs theme-text-muted">
+          <span className="inline-flex items-center gap-1 text-xs text-[color:var(--text-muted)]">
             <CheckCircle className="w-3 h-3" /> {plan.subscriber_count ?? 0} workspace{plan.subscriber_count !== 1 ? "s" : ""}
           </span>
         </div>
@@ -668,21 +670,19 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUse
 
       {/* Razorpay sync bar */}
       {!isFree && (
-        <div className={`px-5 py-2.5 border-t flex items-center justify-between gap-3 ${
-          razorpaySynced ? "bg-green-500/5 border-green-500/20" : "bg-amber-500/5 border-amber-500/20"
-        }`}>
+        <div className="px-5 py-2.5 border-t border-[color:var(--border)] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             {razorpaySynced
               ? <BadgeCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
               : <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-            <span className={`text-xs font-medium truncate ${razorpaySynced ? "text-green-600" : "text-amber-600"}`}>
+            <span className={`text-xs font-medium truncate ${razorpaySynced ? "text-green-500" : "text-amber-500"}`}>
               {razorpaySynced ? `Synced · ${plan.razorpay_monthly_plan_id}` : "Not synced to Razorpay yet"}
             </span>
           </div>
           <button onClick={handleSync} disabled={syncing}
             className={`shrink-0 px-3 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60 flex items-center gap-1.5 ${
               razorpaySynced
-                ? "theme-text-muted hover:theme-text theme-surface border theme-border"
+                ? "text-[color:var(--text-muted)] hover:text-[color:var(--text)] bg-[var(--surface)] border border-[color:var(--border)]"
                 : "bg-amber-500 text-white hover:bg-amber-600"
             }`}>
             <RefreshCw className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`} />
@@ -693,16 +693,16 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUse
 
       {/* Features (expandable) */}
       {features.length > 0 && (
-        <div className="border-t theme-border">
+        <div className="border-t border-[color:var(--border)]">
           <button onClick={() => setExpanded(p => !p)}
-            className="w-full flex items-center justify-between px-5 py-2.5 text-xs theme-text-muted hover:theme-text transition-colors">
+            className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">
             <span>{features.length} feature{features.length !== 1 ? "s" : ""} included</span>
             {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
           {expanded && (
             <ul className="px-5 pb-3 space-y-1.5 columns-2">
               {features.map(key => (
-                <li key={key} className="flex items-center gap-1.5 text-xs theme-text-muted break-inside-avoid">
+                <li key={key} className="flex items-center gap-1.5 text-xs text-[color:var(--text-muted)] break-inside-avoid">
                   <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
                   {featureLabel(key)}
                 </li>
@@ -713,9 +713,9 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUse
       )}
 
       {/* Workspaces on this plan (expandable) */}
-      <div className="border-t theme-border">
+      <div className="border-t border-[color:var(--border)]">
         <button onClick={() => setWsExpanded(p => !p)}
-          className="w-full flex items-center justify-between px-5 py-2.5 text-xs theme-text-muted hover:theme-text transition-colors">
+          className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">
           <span className="flex items-center gap-1.5">
             <Users className="w-3 h-3" />
             {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""} on this plan
@@ -724,31 +724,31 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUse
         </button>
         {wsExpanded && (
           workspaces.length === 0 ? (
-            <p className="px-5 pb-3 text-xs theme-text-muted italic">No workspaces on this plan yet.</p>
+            <p className="px-5 pb-3 text-xs text-[color:var(--text-muted)] italic">No workspaces on this plan yet.</p>
           ) : (
             <ul className="px-5 pb-3 space-y-1.5 max-h-48 overflow-y-auto">
               {workspaces.map(ws => {
                 const status = ws.is_active ? "active" : "suspended";
                 return (
-                  <li key={ws.id} className="flex items-center justify-between gap-2 text-xs py-1 border-b theme-border last:border-0">
+                  <li key={ws.id} className="flex items-center justify-between gap-2 text-xs py-1 border-b border-[color:var(--border)] last:border-0">
                     <div className="min-w-0">
-                      <p className="theme-text font-medium truncate">{ws.name}</p>
+                      <p className="text-[color:var(--text)] font-medium truncate">{ws.name}</p>
                       {ws.owner_email && (
-                        <p className="theme-text-muted truncate">{ws.owner_email}</p>
+                        <p className="text-[color:var(--text-muted)] truncate">{ws.owner_email}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] theme-text-muted">
+                      <span className="text-[10px] text-[color:var(--text-muted)]">
                         {ws.user_count ?? 0} users
                       </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                        status === "active" ? "bg-green-500/10 text-green-500" : "bg-amber-500/10 text-amber-500"
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold border border-[color:var(--border)] ${
+                        status === "active" ? "text-green-500" : "text-amber-500"
                       }`}>
                         {status}
                       </span>
                       <button
                         onClick={() => onManageUsers(ws)}
-                        className="p-1 rounded hover:bg-[var(--surface-soft)] text-indigo-500"
+                        className="p-1 rounded hover:bg-[var(--surface-soft)] text-[color:var(--primary)]"
                         title="Manage users"
                       >
                         <UserCog className="w-3.5 h-3.5" />
@@ -817,7 +817,7 @@ export default function SuperadminPlans() {
     }
   }
 
-  const active   = plans.filter(p => p.is_active);
+  const active    = plans.filter(p => p.is_active);
   const totalSubs = plans.reduce((s, p) => s + (p.subscriber_count || 0), 0);
   const mrrPaise  = plans.reduce((s, p) => s + ((p.price_monthly_paise || 0) * (p.subscriber_count || 0)), 0);
 
@@ -825,43 +825,43 @@ export default function SuperadminPlans() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <header className="flex items-end justify-between gap-4 flex-wrap mb-6">
         <div>
-          <h1 className="text-lg font-bold theme-text">Plan Configuration</h1>
-          <p className="text-xs theme-text-muted mt-0.5">Define plans, pricing, features, and Razorpay sync</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">Superadmin</p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">Plan Configuration</h1>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} disabled={loading}
-            className="p-2 rounded-xl theme-surface border theme-border theme-text-muted hover:theme-text transition-colors">
+            className="p-2 rounded-xl bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
           <button onClick={() => setCreate(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[color:var(--primary)] text-white text-sm font-semibold hover:bg-[color:var(--primary-hover)] transition-colors">
             <Plus className="w-4 h-4" /> New Plan
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Active Plans",       value: active.length,   sub: `${plans.length - active.length} inactive` },
-          { label: "Total Workspaces",    value: totalSubs,       sub: "across all plans" },
-          { label: "Est. MRR",           value: rupees(mrrPaise), sub: "based on monthly prices" },
+          { label: "Active Plans",    value: active.length,    sub: `${plans.length - active.length} inactive` },
+          { label: "Total Workspaces", value: totalSubs,       sub: "across all plans" },
+          { label: "Est. MRR",        value: rupees(mrrPaise), sub: "based on monthly prices" },
         ].map(s => (
-          <div key={s.label} className="theme-surface border theme-border rounded-xl px-5 py-4">
-            <p className="text-2xl font-bold theme-text">{s.value}</p>
-            <p className="text-xs font-medium theme-text mt-0.5">{s.label}</p>
-            <p className="text-xs theme-text-muted mt-0.5">{s.sub}</p>
+          <div key={s.label} className="border border-[color:var(--border)] rounded-xl px-5 py-4">
+            <p className="text-2xl font-bold text-[color:var(--text)]">{s.value}</p>
+            <p className="text-xs font-medium text-[color:var(--text)] mt-0.5">{s.label}</p>
+            <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{s.sub}</p>
           </div>
         ))}
       </div>
 
       {/* Razorpay notice */}
-      <div className="theme-surface border theme-border rounded-xl px-5 py-3 flex items-start gap-3">
+      <div className="border border-[color:var(--border)] rounded-xl px-5 py-3 flex items-start gap-3">
         <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-        <p className="text-xs theme-text-muted leading-relaxed">
-          <span className="font-semibold theme-text">Razorpay setup — </span>
+        <p className="text-xs text-[color:var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[color:var(--text)]">Razorpay setup — </span>
           Set <code className="px-1 py-0.5 rounded bg-[var(--surface-soft)]">RAZORPAY_KEY_ID</code>,{" "}
           <code className="px-1 py-0.5 rounded bg-[var(--surface-soft)]">RAZORPAY_KEY_SECRET</code>, and{" "}
           <code className="px-1 py-0.5 rounded bg-[var(--surface-soft)]">RAZORPAY_WEBHOOK_SECRET</code> in <code className="px-1 py-0.5 rounded bg-[var(--surface-soft)]">.env</code>.
@@ -871,7 +871,7 @@ export default function SuperadminPlans() {
 
       {/* Plans grid */}
       {loading ? (
-        <div className="flex justify-center py-16"><RefreshCw className="w-5 h-5 animate-spin theme-text-muted" /></div>
+        <div className="flex justify-center py-16"><RefreshCw className="w-5 h-5 animate-spin text-[color:var(--text-muted)]" /></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {plans.map(plan => (

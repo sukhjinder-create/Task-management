@@ -118,9 +118,9 @@ export default function AppLayout({ children }) {
       case "available":
         return { label: "Available", dot: "bg-[color:var(--score-good)]", tone: "good" };
       case "aws":
-        return { label: "AWS",       dot: "bg-[color:var(--score-warning)]", tone: "warn" };
+        return { label: "AWS",       dot: "brand-orange-bg", tone: "warn" };
       case "lunch":
-        return { label: "Lunch",     dot: "bg-[color:var(--score-warning)]", tone: "warn" };
+        return { label: "Lunch",     dot: "brand-orange-bg", tone: "warn" };
       default:
         return { label: "Offline",   dot: "bg-[color:var(--text-soft)]", tone: "neutral" };
     }
@@ -294,7 +294,7 @@ export default function AppLayout({ children }) {
                 "border border-[color:var(--border)] bg-[var(--surface-soft)]",
                 "text-[11.5px] font-medium tracking-tight",
                 statusMeta.tone === "good"    && "text-[color:var(--score-good)]",
-                statusMeta.tone === "warn"    && "text-[color:var(--score-warning)]",
+                statusMeta.tone === "warn"    && "brand-orange-text",
                 statusMeta.tone === "neutral" && "text-[color:var(--text-muted)]"
               )}
             >

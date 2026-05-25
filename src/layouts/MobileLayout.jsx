@@ -123,7 +123,7 @@ export default function MobileLayout() {
     switch (attendanceStatus) {
       case "available": return { label: "Available", dot: "bg-green-500",  color: "success" };
       case "aws":       return { label: "AWS",       dot: "bg-yellow-500", color: "warning" };
-      case "lunch":     return { label: "Lunch",     dot: "bg-orange-500", color: "warning" };
+      case "lunch":     return { label: "Lunch",     dot: "brand-orange-bg", color: "warning" };
       default:          return { label: "Offline",   dot: "bg-gray-400",   color: "neutral" };
     }
   }, [attendanceStatus]);

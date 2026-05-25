@@ -80,8 +80,8 @@ function TabButton({ active, onClick, icon: Icon, label }) {
       className={[
         "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
         active
-          ? "bg-[var(--primary)] border-[var(--primary)] text-white"
-          : "theme-surface theme-border theme-text-muted hover:bg-[var(--surface-soft)]",
+          ? "bg-[var(--primary)] border-[var(--primary)] text-[color:var(--primary-contrast)]"
+          : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]",
       ].join(" ")}
     >
       <Icon size={16} />
@@ -92,22 +92,20 @@ function TabButton({ active, onClick, icon: Icon, label }) {
 
 function MetricCard({ label, value, note, color = "neutral" }) {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] theme-text-muted">
-              {label}
-            </p>
-            <p className="mt-2 text-3xl font-semibold theme-text">{value}</p>
-            {note ? <p className="mt-2 text-sm theme-text-muted">{note}</p> : null}
-          </div>
-          <Badge color={color} size="md" variant="subtle">
-            Live
-          </Badge>
+    <div className="border border-[color:var(--border)] rounded-lg p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-[color:var(--text)]">{value}</p>
+          {note ? <p className="mt-2 text-sm text-[color:var(--text-muted)]">{note}</p> : null}
         </div>
-      </CardContent>
-    </Card>
+        <Badge color={color} size="md" variant="subtle">
+          Live
+        </Badge>
+      </div>
+    </div>
   );
 }
 
@@ -444,8 +442,8 @@ export default function OperationsOS() {
       <div className="p-6">
         <Card>
           <CardContent className="flex min-h-[320px] items-center justify-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm theme-text-muted">Loading operations workspace...</span>
+            <Loader2 className="h-5 w-5 animate-spin text-[color:var(--text-muted)]" />
+            <span className="text-sm text-[color:var(--text-muted)]">Loading operations workspace...</span>
           </CardContent>
         </Card>
       </div>
@@ -459,20 +457,21 @@ export default function OperationsOS() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-      <div className="overflow-hidden rounded-[28px] border theme-border bg-[linear-gradient(135deg,rgba(14,116,144,0.12),rgba(8,47,73,0.04),rgba(245,158,11,0.08))]">
+
+      {/* Page hero */}
+      <div className="border border-[color:var(--border)] rounded-2xl overflow-hidden">
         <div className="flex flex-col gap-6 px-6 py-8 md:flex-row md:items-end md:justify-between md:px-8">
           <div className="max-w-3xl">
-            <Badge color="primary" size="md" variant="subtle">
-              <Activity size={14} />
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+              Operations
+            </p>
+            <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight md:text-[30px]">
               Operations OS
-            </Badge>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight theme-text md:text-4xl">
-              One place for command center, approvals, automation, digests, search, and memory.
             </h1>
-            <p className="mt-3 text-sm leading-6 theme-text-muted">
+            <p className="mt-3 text-sm leading-6 text-[color:var(--text-muted)]">
               {dailyOs?.narrative || commandCenter?.narrative || "Operations view unavailable."}
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs theme-text-muted">
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[color:var(--text-muted)]">
               <span>Role: {role}</span>
               <span>Generated: {formatDateTime(commandCenter?.generatedAt)}</span>
               <span>Month: {commandCenter?.month || "Current"}</span>
@@ -495,6 +494,7 @@ export default function OperationsOS() {
         </div>
       </div>
 
+      {/* Metric row */}
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
           label="Health Score"
@@ -522,6 +522,7 @@ export default function OperationsOS() {
         />
       </div>
 
+      {/* Tab bar */}
       <div className="flex flex-wrap gap-2">
         <TabButton active={activeTab === "command"} onClick={() => setActiveTab("command")} icon={Command} label="Command Center" />
         <TabButton active={activeTab === "daily"} onClick={() => setActiveTab("daily")} icon={Compass} label="Daily OS" />
@@ -534,6 +535,7 @@ export default function OperationsOS() {
         <TabButton active={activeTab === "memory"} onClick={() => setActiveTab("memory")} icon={MemoryStick} label="Memory" />
       </div>
 
+      {/* ── Command Center ── */}
       {activeTab === "command" ? (
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <Card>
@@ -544,21 +546,21 @@ export default function OperationsOS() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl bg-[var(--surface-soft)] p-4">
-                <p className="text-sm font-semibold theme-text">
+              <div className="rounded-lg bg-[var(--surface-soft)] p-4">
+                <p className="text-sm font-semibold text-[color:var(--text)]">
                   {commandCenter?.executiveSummary?.headline || "Command center overview"}
                 </p>
-                <p className="mt-2 text-sm leading-6 theme-text-muted">
+                <p className="mt-2 text-sm leading-6 text-[color:var(--text-muted)]">
                   {commandCenter?.executiveSummary?.narrative || commandCenter?.narrative}
                 </p>
               </div>
 
               {(commandCenter?.priorities || []).map((item) => (
-                <div key={item.id} className="rounded-xl border theme-border p-4">
+                <div key={item.id} className="rounded-lg border border-[color:var(--border)] p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold theme-text">{item.task}</p>
-                      <p className="mt-1 text-xs theme-text-muted">
+                      <p className="text-sm font-semibold text-[color:var(--text)]">{item.task}</p>
+                      <p className="mt-1 text-xs text-[color:var(--text-muted)]">
                         {item.project_name || "Project"} • Due {item.due_date ? formatDate(item.due_date) : "No date"}
                       </p>
                     </div>
@@ -571,7 +573,7 @@ export default function OperationsOS() {
               ))}
 
               {!commandCenter?.priorities?.length ? (
-                <p className="text-sm theme-text-muted">No priority items in scope right now.</p>
+                <p className="text-sm text-[color:var(--text-muted)]">No priority items in scope right now.</p>
               ) : null}
             </CardContent>
           </Card>
@@ -583,25 +585,25 @@ export default function OperationsOS() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-[var(--surface-soft)] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] theme-text-muted">Absent</p>
-                    <p className="mt-2 text-2xl font-semibold theme-text">{peopleSignals.absentToday?.length || 0}</p>
+                  <div className="rounded-lg bg-[var(--surface-soft)] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Absent</p>
+                    <p className="mt-2 text-2xl font-semibold text-[color:var(--text)]">{peopleSignals.absentToday?.length || 0}</p>
                   </div>
-                  <div className="rounded-xl bg-[var(--surface-soft)] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] theme-text-muted">On Leave</p>
-                    <p className="mt-2 text-2xl font-semibold theme-text">{peopleSignals.onLeaveToday?.length || 0}</p>
+                  <div className="rounded-lg bg-[var(--surface-soft)] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">On Leave</p>
+                    <p className="mt-2 text-2xl font-semibold text-[color:var(--text)]">{peopleSignals.onLeaveToday?.length || 0}</p>
                   </div>
                 </div>
-                <div className="rounded-xl border theme-border p-4">
-                  <p className="text-sm font-semibold theme-text">Pending AI suggestions</p>
-                  <p className="mt-2 text-sm theme-text-muted">
+                <div className="rounded-lg border border-[color:var(--border)] p-4">
+                  <p className="text-sm font-semibold text-[color:var(--text)]">Pending AI suggestions</p>
+                  <p className="mt-2 text-sm text-[color:var(--text-muted)]">
                     {approvals.pendingOperationsActions || 0} operations actions and {approvals.pendingAutopilotActions || 0} autopilot actions are waiting for review.
                   </p>
                 </div>
                 {(commandCenter?.automationPreview?.findings || []).slice(0, 3).map((item, index) => (
-                  <div key={`${item.ruleKey}-${index}`} className="rounded-xl border theme-border p-4">
-                    <p className="text-sm font-semibold theme-text">{item.title}</p>
-                    <p className="mt-1 text-xs theme-text-muted">{item.summary}</p>
+                  <div key={`${item.ruleKey}-${index}`} className="rounded-lg border border-[color:var(--border)] p-4">
+                    <p className="text-sm font-semibold text-[color:var(--text)]">{item.title}</p>
+                    <p className="mt-1 text-xs text-[color:var(--text-muted)]">{item.summary}</p>
                   </div>
                 ))}
               </CardContent>
@@ -617,14 +619,14 @@ export default function OperationsOS() {
                     key={entry.id}
                     type="button"
                     onClick={() => beginEditMemory(entry)}
-                    className="block w-full rounded-xl border theme-border p-4 text-left transition-colors hover:bg-[var(--surface-soft)]"
+                    className="block w-full rounded-lg border border-[color:var(--border)] p-4 text-left transition-colors hover:bg-[var(--surface-soft)]"
                   >
-                    <p className="text-sm font-semibold theme-text">{entry.title}</p>
-                    <p className="mt-1 text-xs theme-text-muted line-clamp-3">{entry.content}</p>
+                    <p className="text-sm font-semibold text-[color:var(--text)]">{entry.title}</p>
+                    <p className="mt-1 text-xs text-[color:var(--text-muted)] line-clamp-3">{entry.content}</p>
                   </button>
                 ))}
                 {!commandCenter?.memoryHighlights?.length ? (
-                  <p className="text-sm theme-text-muted">No memory highlights available yet.</p>
+                  <p className="text-sm text-[color:var(--text-muted)]">No memory highlights available yet.</p>
                 ) : null}
               </CardContent>
             </Card>
@@ -632,6 +634,7 @@ export default function OperationsOS() {
         </div>
       ) : null}
 
+      {/* ── Daily OS ── */}
       {activeTab === "daily" ? (
         <Card>
           <CardHeader>
@@ -641,42 +644,42 @@ export default function OperationsOS() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 xl:grid-cols-3">
-            <div className="rounded-2xl bg-[var(--surface-soft)] p-5 xl:col-span-3">
-              <p className="text-lg font-semibold theme-text">{dailyOs?.headline || "Daily OS"}</p>
-              <p className="mt-3 text-sm leading-6 theme-text-muted">{dailyOs?.narrative}</p>
+            <div className="rounded-lg bg-[var(--surface-soft)] p-5 xl:col-span-3">
+              <p className="text-lg font-semibold text-[color:var(--text)]">{dailyOs?.headline || "Daily OS"}</p>
+              <p className="mt-3 text-sm leading-6 text-[color:var(--text-muted)]">{dailyOs?.narrative}</p>
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-semibold theme-text">Now</p>
+              <p className="text-sm font-semibold text-[color:var(--text)]">Now</p>
               {(dailyOs?.now?.priorities || []).map((item) => (
-                <div key={item.id} className="rounded-xl border theme-border p-4">
-                  <p className="text-sm font-semibold theme-text">{item.task}</p>
-                  <p className="mt-1 text-xs theme-text-muted">{item.project_name || "Project"}</p>
+                <div key={item.id} className="rounded-lg border border-[color:var(--border)] p-4">
+                  <p className="text-sm font-semibold text-[color:var(--text)]">{item.task}</p>
+                  <p className="mt-1 text-xs text-[color:var(--text-muted)]">{item.project_name || "Project"}</p>
                 </div>
               ))}
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-semibold theme-text">Watchlist</p>
+              <p className="text-sm font-semibold text-[color:var(--text)]">Watchlist</p>
               {(dailyOs?.watchlist?.automation || []).map((item, index) => (
-                <div key={`${item.ruleKey}-${index}`} className="rounded-xl border theme-border p-4">
-                  <p className="text-sm font-semibold theme-text">{item.title}</p>
-                  <p className="mt-1 text-xs theme-text-muted">{item.summary}</p>
+                <div key={`${item.ruleKey}-${index}`} className="rounded-lg border border-[color:var(--border)] p-4">
+                  <p className="text-sm font-semibold text-[color:var(--text)]">{item.title}</p>
+                  <p className="mt-1 text-xs text-[color:var(--text-muted)]">{item.summary}</p>
                 </div>
               ))}
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-semibold theme-text">Memory</p>
+              <p className="text-sm font-semibold text-[color:var(--text)]">Memory</p>
               {(dailyOs?.memory || []).map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => beginEditMemory(item)}
-                  className="block w-full rounded-xl border theme-border p-4 text-left"
+                  className="block w-full rounded-lg border border-[color:var(--border)] p-4 text-left hover:bg-[var(--surface-soft)] transition-colors"
                 >
-                  <p className="text-sm font-semibold theme-text">{item.title}</p>
-                  <p className="mt-1 text-xs theme-text-muted line-clamp-3">{item.content}</p>
+                  <p className="text-sm font-semibold text-[color:var(--text)]">{item.title}</p>
+                  <p className="mt-1 text-xs text-[color:var(--text-muted)] line-clamp-3">{item.content}</p>
                 </button>
               ))}
             </div>
@@ -684,6 +687,7 @@ export default function OperationsOS() {
         </Card>
       ) : null}
 
+      {/* ── AI Actions ── */}
       {activeTab === "actions" ? (
         <Card>
           <CardHeader>
@@ -701,8 +705,8 @@ export default function OperationsOS() {
                     className={[
                       "rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
                       actionStatus === status
-                        ? "bg-[var(--primary)] border-[var(--primary)] text-white"
-                        : "theme-border theme-text-muted hover:bg-[var(--surface-soft)]",
+                        ? "bg-[var(--primary)] border-[var(--primary)] text-[color:var(--primary-contrast)]"
+                        : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]",
                     ].join(" ")}
                   >
                     {status}
@@ -713,7 +717,7 @@ export default function OperationsOS() {
           </CardHeader>
           <CardContent className="space-y-4">
             {actions.map((action) => (
-              <div key={action.id} className="rounded-2xl border theme-border p-5">
+              <div key={action.id} className="rounded-lg border border-[color:var(--border)] p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
@@ -724,13 +728,13 @@ export default function OperationsOS() {
                       ) : null}
                     </div>
                     <div>
-                      <p className="text-base font-semibold theme-text">{action.title}</p>
-                      <p className="mt-2 text-sm leading-6 theme-text-muted">{action.summary}</p>
+                      <p className="text-base font-semibold text-[color:var(--text)]">{action.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-[color:var(--text-muted)]">{action.summary}</p>
                     </div>
                     {action.explanation ? (
-                      <p className="text-sm leading-6 theme-text">{action.explanation}</p>
+                      <p className="text-sm leading-6 text-[color:var(--text)]">{action.explanation}</p>
                     ) : null}
-                    <div className="flex flex-wrap gap-3 text-xs theme-text-muted">
+                    <div className="flex flex-wrap gap-3 text-xs text-[color:var(--text-muted)]">
                       <span>{formatDateTime(action.created_at)}</span>
                       <span>{action.action_type}</span>
                       {action.target_user_name ? <span>{action.target_user_name}</span> : null}
@@ -760,11 +764,14 @@ export default function OperationsOS() {
                 </div>
               </div>
             ))}
-            {!actions.length ? <p className="text-sm theme-text-muted">No actions in this queue.</p> : null}
+            {!actions.length ? (
+              <p className="text-sm text-[color:var(--text-muted)]">No actions in this queue.</p>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
 
+      {/* ── Automations ── */}
       {activeTab === "automations" && isPrivileged ? (
         <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
           <Card>
@@ -782,18 +789,22 @@ export default function OperationsOS() {
             </CardHeader>
             <CardContent className="space-y-4">
               {rules.map((rule) => (
-                <div key={rule.key} className="rounded-2xl border theme-border p-5">
+                <div key={rule.key} className="rounded-lg border border-[color:var(--border)] p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <p className="text-base font-semibold theme-text">{rule.name}</p>
-                      <p className="mt-1 text-xs theme-text-muted">{rule.key}</p>
+                      <p className="text-base font-semibold text-[color:var(--text)]">{rule.name}</p>
+                      <p className="mt-1 text-xs text-[color:var(--text-muted)]">{rule.key}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <label className="inline-flex items-center gap-2 text-sm theme-text">
+                      <label className="inline-flex items-center gap-2 text-sm text-[color:var(--text)]">
                         <input type="checkbox" checked={Boolean(rule.enabled)} onChange={(event) => handleRulePatch(rule.key, { enabled: event.target.checked })} />
                         Enabled
                       </label>
-                      <select value={rule.mode || "assist"} onChange={(event) => handleRulePatch(rule.key, { mode: event.target.value })} className="rounded-lg border theme-border bg-transparent px-3 py-2 text-sm theme-text">
+                      <select
+                        value={rule.mode || "assist"}
+                        onChange={(event) => handleRulePatch(rule.key, { mode: event.target.value })}
+                        className="rounded-lg border border-[color:var(--border)] bg-transparent px-3 py-2 text-sm text-[color:var(--text)]"
+                      >
                         <option value="assist">assist</option>
                         <option value="auto">auto</option>
                       </select>
@@ -823,20 +834,21 @@ export default function OperationsOS() {
                     <MetricCard label="Created" value={automationPreview.created || 0} color="neutral" />
                   </div>
                   {(automationPreview.findings || []).map((item, index) => (
-                    <div key={`${item.ruleKey}-${index}`} className="rounded-xl border theme-border p-4">
-                      <p className="text-sm font-semibold theme-text">{item.title}</p>
-                      <p className="mt-1 text-xs theme-text-muted">{item.summary}</p>
+                    <div key={`${item.ruleKey}-${index}`} className="rounded-lg border border-[color:var(--border)] p-4">
+                      <p className="text-sm font-semibold text-[color:var(--text)]">{item.title}</p>
+                      <p className="mt-1 text-xs text-[color:var(--text-muted)]">{item.summary}</p>
                     </div>
                   ))}
                 </>
               ) : (
-                <p className="text-sm theme-text-muted">Run a preview to inspect automation output.</p>
+                <p className="text-sm text-[color:var(--text-muted)]">Run a preview to inspect automation output.</p>
               )}
             </CardContent>
           </Card>
         </div>
       ) : null}
 
+      {/* ── Digests ── */}
       {activeTab === "digests" ? (
         <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           <Card>
@@ -846,23 +858,31 @@ export default function OperationsOS() {
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={handleDigestSave}>
-                <label className="flex items-center gap-2 text-sm theme-text">
+                <label className="flex items-center gap-2 text-sm text-[color:var(--text)]">
                   <input type="checkbox" checked={Boolean(digests?.enabled)} onChange={(event) => setDigests((prev) => ({ ...prev, enabled: event.target.checked }))} />
                   Enable digest delivery
                 </label>
                 <div className="grid gap-4 md:grid-cols-3">
-                  <select value={digests?.frequency || "daily"} onChange={(event) => setDigests((prev) => ({ ...prev, frequency: event.target.value }))} className="rounded-lg border theme-border bg-transparent px-3 py-2 text-sm theme-text">
+                  <select
+                    value={digests?.frequency || "daily"}
+                    onChange={(event) => setDigests((prev) => ({ ...prev, frequency: event.target.value }))}
+                    className="rounded-lg border border-[color:var(--border)] bg-transparent px-3 py-2 text-sm text-[color:var(--text)]"
+                  >
                     <option value="daily">daily</option>
                   </select>
                   <Input type="number" min="0" max="23" value={digests?.delivery_hour ?? 8} onChange={(event) => setDigests((prev) => ({ ...prev, delivery_hour: event.target.value }))} />
-                  <select value={digests?.channel || "in_app"} onChange={(event) => setDigests((prev) => ({ ...prev, channel: event.target.value }))} className="rounded-lg border theme-border bg-transparent px-3 py-2 text-sm theme-text">
+                  <select
+                    value={digests?.channel || "in_app"}
+                    onChange={(event) => setDigests((prev) => ({ ...prev, channel: event.target.value }))}
+                    className="rounded-lg border border-[color:var(--border)] bg-transparent px-3 py-2 text-sm text-[color:var(--text)]"
+                  >
                     <option value="in_app">in_app</option>
                     <option value="email">email</option>
                   </select>
                 </div>
                 <div className="flex flex-wrap gap-3">
                   {DIGEST_SECTIONS.map((section) => (
-                    <label key={section.key} className="inline-flex items-center gap-2 text-sm theme-text">
+                    <label key={section.key} className="inline-flex items-center gap-2 text-sm text-[color:var(--text)]">
                       <input
                         type="checkbox"
                         checked={digestSections.has(section.key)}
@@ -894,16 +914,16 @@ export default function OperationsOS() {
               <CardContent className="space-y-4">
                 {digestPreview?.digest ? (
                   <>
-                    <div className="rounded-xl bg-[var(--surface-soft)] p-4">
-                      <p className="text-sm leading-6 theme-text">{digestPreview.digest.summary}</p>
+                    <div className="rounded-lg bg-[var(--surface-soft)] p-4">
+                      <p className="text-sm leading-6 text-[color:var(--text)]">{digestPreview.digest.summary}</p>
                     </div>
-                    <div className="rounded-xl border theme-border p-4">
-                      <p className="text-sm font-semibold theme-text">{digestPreview.dailyOs?.headline}</p>
-                      <p className="mt-2 text-xs theme-text-muted">{digestPreview.dailyOs?.narrative}</p>
+                    <div className="rounded-lg border border-[color:var(--border)] p-4">
+                      <p className="text-sm font-semibold text-[color:var(--text)]">{digestPreview.dailyOs?.headline}</p>
+                      <p className="mt-2 text-xs text-[color:var(--text-muted)]">{digestPreview.dailyOs?.narrative}</p>
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm theme-text-muted">No digest preview generated yet.</p>
+                  <p className="text-sm text-[color:var(--text-muted)]">No digest preview generated yet.</p>
                 )}
               </CardContent>
             </Card>
@@ -914,19 +934,22 @@ export default function OperationsOS() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {digestHistory.map((item) => (
-                  <div key={item.id} className="rounded-xl border theme-border p-4">
-                    <p className="text-sm font-semibold theme-text">{item.digest_type}</p>
-                    <p className="mt-1 text-xs theme-text-muted">{item.summary}</p>
-                    <p className="mt-2 text-xs theme-text-muted">{item.delivery_mode} • {formatDateTime(item.created_at)}</p>
+                  <div key={item.id} className="rounded-lg border border-[color:var(--border)] p-4">
+                    <p className="text-sm font-semibold text-[color:var(--text)]">{item.digest_type}</p>
+                    <p className="mt-1 text-xs text-[color:var(--text-muted)]">{item.summary}</p>
+                    <p className="mt-2 text-xs text-[color:var(--text-muted)]">{item.delivery_mode} • {formatDateTime(item.created_at)}</p>
                   </div>
                 ))}
-                {!digestHistory.length ? <p className="text-sm theme-text-muted">No digest history yet.</p> : null}
+                {!digestHistory.length ? (
+                  <p className="text-sm text-[color:var(--text-muted)]">No digest history yet.</p>
+                ) : null}
               </CardContent>
             </Card>
           </div>
         </div>
       ) : null}
 
+      {/* ── Search ── */}
       {activeTab === "search" ? (
         <Card>
           <CardHeader>
@@ -941,7 +964,7 @@ export default function OperationsOS() {
               ))}
             </div>
             {searchState.loading ? (
-              <div className="flex items-center gap-2 text-sm theme-text-muted">
+              <div className="flex items-center gap-2 text-sm text-[color:var(--text-muted)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Searching...
               </div>
@@ -951,27 +974,28 @@ export default function OperationsOS() {
                 key={`${result.type}-${result.id}`}
                 type="button"
                 onClick={() => openSearchResult(result)}
-                className="block w-full rounded-2xl border theme-border p-4 text-left transition-colors hover:bg-[var(--surface-soft)]"
+                className="block w-full rounded-lg border border-[color:var(--border)] p-4 text-left transition-colors hover:bg-[var(--surface-soft)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge color="primary" variant="subtle">{result.type}</Badge>
-                      <p className="text-sm font-semibold theme-text">{result.title}</p>
+                      <p className="text-sm font-semibold text-[color:var(--text)]">{result.title}</p>
                     </div>
-                    <p className="mt-2 text-sm leading-6 theme-text-muted">{result.snippet}</p>
+                    <p className="mt-2 text-sm leading-6 text-[color:var(--text-muted)]">{result.snippet}</p>
                   </div>
-                  <ArrowRight size={16} className="shrink-0 theme-text-muted" />
+                  <ArrowRight size={16} className="shrink-0 text-[color:var(--text-muted)]" />
                 </div>
               </button>
             ))}
             {!searchState.loading && searchQuery.trim().length >= 2 && !searchState.results.length ? (
-              <p className="text-sm theme-text-muted">No matching records found.</p>
+              <p className="text-sm text-[color:var(--text-muted)]">No matching records found.</p>
             ) : null}
           </CardContent>
         </Card>
       ) : null}
 
+      {/* ── Memory ── */}
       {activeTab === "memory" ? (
         <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           <Card>
@@ -985,11 +1009,15 @@ export default function OperationsOS() {
                 <Textarea label="Content" rows={7} value={memoryForm.content} onChange={(event) => setMemoryForm((prev) => ({ ...prev, content: event.target.value }))} />
                 <Input label="Tags" value={memoryForm.tags} onChange={(event) => setMemoryForm((prev) => ({ ...prev, tags: event.target.value }))} helperText="Comma-separated tags" />
                 <div className="grid gap-4 md:grid-cols-2">
-                  <select value={memoryForm.visibility} onChange={(event) => setMemoryForm((prev) => ({ ...prev, visibility: event.target.value }))} className="rounded-lg border theme-border bg-transparent px-3 py-2 text-sm theme-text">
+                  <select
+                    value={memoryForm.visibility}
+                    onChange={(event) => setMemoryForm((prev) => ({ ...prev, visibility: event.target.value }))}
+                    className="rounded-lg border border-[color:var(--border)] bg-transparent px-3 py-2 text-sm text-[color:var(--text)]"
+                  >
                     <option value="workspace">workspace</option>
                     <option value="private">private</option>
                   </select>
-                  <label className="inline-flex items-center gap-2 text-sm theme-text md:mt-2">
+                  <label className="inline-flex items-center gap-2 text-sm text-[color:var(--text)] md:mt-2">
                     <input type="checkbox" checked={Boolean(memoryForm.isPinned)} onChange={(event) => setMemoryForm((prev) => ({ ...prev, isPinned: event.target.checked }))} />
                     Pin this entry
                   </label>
@@ -1020,7 +1048,7 @@ export default function OperationsOS() {
             </CardHeader>
             <CardContent className="space-y-4">
               {memoryEntries.map((entry) => (
-                <div key={entry.id} className="rounded-2xl border theme-border p-5">
+                <div key={entry.id} className="rounded-lg border border-[color:var(--border)] p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
                       <div className="flex flex-wrap gap-2">
@@ -1029,15 +1057,15 @@ export default function OperationsOS() {
                         {entry.is_archived ? <Badge color="warning">Archived</Badge> : null}
                       </div>
                       <div>
-                        <p className="text-base font-semibold theme-text">{entry.title}</p>
-                        <p className="mt-2 text-sm leading-6 theme-text-muted">{entry.content}</p>
+                        <p className="text-base font-semibold text-[color:var(--text)]">{entry.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-[color:var(--text-muted)]">{entry.content}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {(entry.tags || []).map((tag) => (
                           <Badge key={tag} color="neutral" variant="subtle">{tag}</Badge>
                         ))}
                       </div>
-                      <p className="text-xs theme-text-muted">
+                      <p className="text-xs text-[color:var(--text-muted)]">
                         {entry.created_by_name || "Unknown"} • Updated {formatDateTime(entry.updated_at)}
                       </p>
                     </div>
@@ -1054,7 +1082,9 @@ export default function OperationsOS() {
                   </div>
                 </div>
               ))}
-              {!memoryEntries.length ? <p className="text-sm theme-text-muted">No memory entries yet.</p> : null}
+              {!memoryEntries.length ? (
+                <p className="text-sm text-[color:var(--text-muted)]">No memory entries yet.</p>
+              ) : null}
             </CardContent>
           </Card>
         </div>

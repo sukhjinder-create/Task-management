@@ -26,20 +26,20 @@ export default function AppBrand({
     return (
       <div
         className={cn(
-          "h-8 w-8 flex items-center justify-center shrink-0",
+          "h-11 w-11 flex items-center justify-center shrink-0",
           className
         )}
         title="Asystence"
       >
-        <BrandMark className="h-7 w-7" />
+        <BrandMark className="h-10 w-10" />
       </div>
     );
   }
 
   return (
-    <div className={cn("flex min-w-0 items-center gap-2.5", className)}>
-      <div className="h-8 w-8 flex items-center justify-center shrink-0">
-        <BrandMark className="h-7 w-7" />
+    <div className={cn("flex min-w-0 items-center gap-1.5", className)}>
+      <div className="h-11 w-11 flex items-center justify-center shrink-0">
+        <BrandMark className="h-10 w-10" />
       </div>
       <div className="min-w-0 leading-none">
         <p className="text-[15px] leading-[1.1] font-semibold tracking-tight text-[color:var(--text)]">

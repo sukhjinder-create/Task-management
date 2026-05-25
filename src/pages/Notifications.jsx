@@ -167,41 +167,53 @@ export default function Notifications() {
     <div className="flex flex-col h-full">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <header className="flex items-end justify-between gap-4 flex-wrap px-4 pt-4 pb-3 border-b border-[color:var(--border)] shrink-0 mb-0">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+            Inbox
+          </p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight flex items-center gap-2">
             <div className="relative">
-              <Bell className="w-5 h-5 theme-text" />
+              <Bell className="w-6 h-6 text-[color:var(--primary)]" />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
             </div>
-            <h1 className="text-lg font-bold theme-text">Notifications</h1>
-            <span className={`w-2 h-2 rounded-full ${socketConnected ? "bg-green-500" : "bg-gray-400"}`} title={socketConnected ? "Live" : "Offline"} />
-          </div>
-
-          <button
-            onClick={handleMarkAllRead}
-            disabled={marking || unreadCount === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white disabled:opacity-40 active:bg-blue-700 transition-colors"
-          >
-            <CheckCheck className="w-3.5 h-3.5" />
-            <span>Mark all read</span>
-          </button>
+            Notifications
+            <span
+              className={`w-2 h-2 rounded-full ${socketConnected ? "bg-emerald-500" : "bg-[color:var(--text-soft)]"}`}
+              title={socketConnected ? "Live" : "Offline"}
+            />
+          </h1>
+          <p className="text-[13px] text-[color:var(--text-muted)] mt-1">
+            Your activity feed — tasks, comments, mentions, and system alerts.
+          </p>
         </div>
 
-        {/* ── Tab pills ───────────────────────────── */}
-        <div className="flex items-center gap-2 mt-3">
+        <button
+          onClick={handleMarkAllRead}
+          disabled={marking || unreadCount === 0}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[color:var(--primary-contrast)] disabled:opacity-40 hover:opacity-90 transition-opacity"
+        >
+          <CheckCheck className="w-3.5 h-3.5" />
+          <span>Mark all read</span>
+        </button>
+      </header>
+
+      {/* ── Tab + filter rail ───────────────────────────────────────────────── */}
+      <div className="px-4 pt-3 pb-2 border-b border-[color:var(--border)] shrink-0">
+        {/* All / Unread tabs */}
+        <div className="flex items-center gap-1 mb-2">
           {["all", "unread"].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              className={`px-3 py-1 text-xs font-semibold transition-colors rounded-[6px] ${
                 tab === t
-                  ? "bg-blue-600 text-white"
-                  : "theme-surface border theme-border theme-text-muted"
+                  ? "text-[color:var(--primary)] border-b-2 border-[color:var(--primary)]"
+                  : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
               }`}
             >
               {t === "all" ? `All (${notifications.length})` : `Unread (${unreadCount})`}
@@ -209,16 +221,16 @@ export default function Notifications() {
           ))}
         </div>
 
-        {/* ── Type filter chips (horizontal scroll) ── */}
-        <div className="flex gap-2 mt-2 overflow-x-auto pb-1 -mx-4 px-4">
+        {/* Type filter chips */}
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
           {visibleFilters.map((f) => (
             <button
               key={f.value}
               onClick={() => setTypeFilter(f.value)}
-              className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
                 typeFilter === f.value
-                  ? "bg-[var(--primary)] text-white"
-                  : "bg-[var(--surface-soft)] theme-text-muted"
+                  ? "border-[color:var(--primary)] text-[color:var(--primary)]"
+                  : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
               }`}
             >
               {f.label}
@@ -232,10 +244,10 @@ export default function Notifications() {
 
         {/* Loading skeletons */}
         {loading && (
-          <div className="flex flex-col divide-y theme-border">
+          <div className="flex flex-col divide-y divide-[color:var(--border)]">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-start gap-3 px-4 py-4 animate-pulse">
-                <div className="w-9 h-9 rounded-xl bg-[var(--surface-soft)] shrink-0" />
+                <div className="w-9 h-9 rounded-xl border border-[color:var(--border)] shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="h-3 bg-[var(--surface-soft)] rounded w-1/3" />
                   <div className="h-3 bg-[var(--surface-soft)] rounded w-3/4" />
@@ -249,19 +261,22 @@ export default function Notifications() {
         {/* Empty state */}
         {!loading && notifications.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <div className="p-4 rounded-full bg-[var(--surface-soft)]">
-              <Bell className="w-8 h-8 theme-text-muted" />
+            <div className="p-4 rounded-full border border-[color:var(--border)]">
+              <Bell className="w-8 h-8 text-[color:var(--text-muted)]" />
             </div>
-            <p className="font-semibold theme-text">All caught up</p>
-            <p className="text-sm theme-text-muted">No notifications yet</p>
+            <p className="font-semibold text-[color:var(--text)]">All caught up</p>
+            <p className="text-sm text-[color:var(--text-muted)]">No notifications yet</p>
           </div>
         )}
 
         {/* No results for filter */}
         {!loading && notifications.length > 0 && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 gap-2">
-            <p className="text-sm theme-text-muted">No notifications match your filters</p>
-            <button onClick={() => { setTab("all"); setTypeFilter("all"); }} className="text-sm text-blue-600 font-medium">
+            <p className="text-sm text-[color:var(--text-muted)]">No notifications match your filters</p>
+            <button
+              onClick={() => { setTab("all"); setTypeFilter("all"); }}
+              className="text-sm text-[color:var(--primary)] font-medium hover:underline"
+            >
               Clear filters
             </button>
           </div>
@@ -269,38 +284,33 @@ export default function Notifications() {
 
         {/* Notification rows */}
         {!loading && filtered.length > 0 && (
-          <div className="divide-y theme-border">
+          <div className="divide-y divide-[color:var(--border)]">
             {filtered.map((n) => {
               const isUnread = !n.is_read;
               return (
                 <button
                   key={n.id}
                   onClick={() => handleOpen(n)}
-                  className={`w-full text-left flex items-start gap-3 py-4 active:bg-[var(--surface-soft)] transition-colors relative ${
-                    isUnread ? "bg-blue-50/60" : ""
+                  className={`w-full text-left flex items-start gap-3 py-4 hover:bg-[var(--surface-soft)] transition-colors relative ${
+                    isUnread ? "border-l-2 border-[color:var(--primary)]" : ""
                   }`}
-                  style={{ paddingLeft: isUnread ? "calc(1rem + 3px)" : "1rem", paddingRight: "1rem" }}
+                  style={{ paddingLeft: isUnread ? "calc(1rem + 2px)" : "1rem", paddingRight: "1rem" }}
                 >
-                  {/* Unread indicator bar */}
-                  {isUnread && (
-                    <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-blue-500" />
-                  )}
-
                   {/* Icon badge */}
-                  <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--surface-soft)] flex items-center justify-center text-lg leading-none">
+                  <div className="shrink-0 w-9 h-9 rounded-xl border border-[color:var(--border)] flex items-center justify-center text-lg leading-none">
                     {typeIcon(n.type)}
                   </div>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[11px] font-semibold theme-text-muted">{typeLabel(n.type)}</span>
+                      <span className="text-[11px] font-semibold text-[color:var(--text-muted)]">{typeLabel(n.type)}</span>
                       {isUnread && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--primary)] shrink-0" />
                       )}
                     </div>
-                    <p className="text-sm theme-text leading-snug line-clamp-2">{n.message}</p>
-                    <p className="text-[11px] theme-text-muted mt-1">{relativeTime(n.created_at)}</p>
+                    <p className="text-sm text-[color:var(--text)] leading-snug line-clamp-2">{n.message}</p>
+                    <p className="text-[11px] text-[color:var(--text-muted)] mt-1">{relativeTime(n.created_at)}</p>
                   </div>
                 </button>
               );

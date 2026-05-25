@@ -4,15 +4,18 @@ export default {
   theme: {
     extend: {
       fontFamily: {
+        // Single mono stack for the entire surface — sans and mono
+        // both resolve to JetBrains Mono / system mono so any utility
+        // (font-sans / font-mono) renders identically.
         sans: [
-          'Inter',
-          '-apple-system', 'BlinkMacSystemFont',
-          'Segoe UI Variable', 'SF Pro Text',
-          'system-ui', 'Helvetica Neue', 'Arial', 'sans-serif',
+          'JetBrains Mono', 'IBM Plex Mono', 'Fira Code',
+          'SF Mono', 'Menlo', 'Consolas', 'Liberation Mono',
+          'Courier New', 'ui-monospace', 'monospace',
         ],
         mono: [
-          'JetBrains Mono', 'SF Mono', 'Menlo', 'Consolas',
-          'Liberation Mono', 'Courier New', 'monospace',
+          'JetBrains Mono', 'IBM Plex Mono', 'Fira Code',
+          'SF Mono', 'Menlo', 'Consolas', 'Liberation Mono',
+          'Courier New', 'ui-monospace', 'monospace',
         ],
       },
       colors: {
@@ -22,10 +25,10 @@ export default {
           100: '#ffedd5',
           200: '#fed7aa',
           300: '#fdba74',
-          400: '#fb923c',
-          500: '#f97316',
-          600: '#ea580c',
-          700: '#c2410c',
+          400: '#ffc966',
+          500: '#ffb733',
+          600: '#ffa500',
+          700: '#e69500',
           800: '#9a3412',
           900: '#7c2d12',
           950: '#431407',

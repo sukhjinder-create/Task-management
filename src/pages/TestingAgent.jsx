@@ -39,19 +39,19 @@ async function downloadRunReportPdf(runId) {
 }
 
 const STATUS_META = {
-  passed:         { label: "Passed",       bg: "bg-green-100",  text: "text-green-700",  border: "border-green-200",  Icon: CheckCircle2 },
-  failed:         { label: "Failed",       bg: "bg-red-100",    text: "text-red-700",    border: "border-red-200",    Icon: XCircle },
-  failed_tests:   { label: "Issues Found", bg: "bg-red-100",    text: "text-red-700",    border: "border-red-200",    Icon: XCircle },
-  cancelled:      { label: "Stopped",      bg: "bg-slate-100",  text: "text-slate-700",  border: "border-slate-200",  Icon: Square },
-  cancel_requested: { label: "Stopping",  bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200", Icon: Clock },
-  partial:        { label: "Partial",      bg: "bg-amber-100",  text: "text-amber-700",  border: "border-amber-200",  Icon: AlertTriangle },
-  blocked:        { label: "Blocked",      bg: "bg-amber-100",  text: "text-amber-700",  border: "border-amber-200",  Icon: AlertTriangle },
-  waiting_input:  { label: "Needs Login",  bg: "bg-amber-100",  text: "text-amber-700",  border: "border-amber-200",  Icon: AlertTriangle },
-  running:        { label: "Running",      bg: "bg-blue-100",   text: "text-blue-700",   border: "border-blue-200",   Icon: Clock },
-  generated:      { label: "Generated",    bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200", Icon: Layers },
-  pending:        { label: "Pending",      bg: "bg-gray-100",   text: "text-gray-600",   border: "border-gray-200",   Icon: Clock },
-  skipped:        { label: "Skipped",      bg: "bg-gray-100",   text: "text-gray-400",   border: "border-gray-200",   Icon: SkipForward },
-  unknown:        { label: "Unknown",      bg: "bg-gray-100",   text: "text-gray-500",   border: "border-gray-200",   Icon: Clock },
+  passed:           { label: "Passed",       bg: "", text: "text-emerald-400",  border: "border-emerald-800",  Icon: CheckCircle2 },
+  failed:           { label: "Failed",       bg: "", text: "text-red-400",      border: "border-red-800",      Icon: XCircle },
+  failed_tests:     { label: "Issues Found", bg: "", text: "text-red-400",      border: "border-red-800",      Icon: XCircle },
+  cancelled:        { label: "Stopped",      bg: "", text: "text-[color:var(--text-muted)]", border: "border-[color:var(--border)]", Icon: Square },
+  cancel_requested: { label: "Stopping",     bg: "", text: "text-amber-400",    border: "border-amber-800",    Icon: Clock },
+  partial:          { label: "Partial",      bg: "", text: "text-amber-400",    border: "border-amber-800",    Icon: AlertTriangle },
+  blocked:          { label: "Blocked",      bg: "", text: "text-amber-400",    border: "border-amber-800",    Icon: AlertTriangle },
+  waiting_input:    { label: "Needs Login",  bg: "", text: "text-amber-400",    border: "border-amber-800",    Icon: AlertTriangle },
+  running:          { label: "Running",      bg: "", text: "text-[color:var(--primary)]", border: "border-[color:var(--primary)]/30", Icon: Clock },
+  generated:        { label: "Generated",    bg: "", text: "text-[color:var(--primary)]", border: "border-[color:var(--border)]", Icon: Layers },
+  pending:          { label: "Pending",      bg: "", text: "text-[color:var(--text-muted)]", border: "border-[color:var(--border)]", Icon: Clock },
+  skipped:          { label: "Skipped",      bg: "", text: "text-[color:var(--text-soft)]",  border: "border-[color:var(--border)]", Icon: SkipForward },
+  unknown:          { label: "Unknown",      bg: "", text: "text-[color:var(--text-muted)]", border: "border-[color:var(--border)]", Icon: Clock },
 };
 
 function StatusBadge({ value, large = false }) {
@@ -59,7 +59,7 @@ function StatusBadge({ value, large = false }) {
   const Icon = s.Icon;
   const size = large ? "px-3 py-1.5 text-sm" : "px-2 py-0.5 text-xs";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full font-semibold ${s.bg} ${s.text} ${size}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full border ${s.border} font-semibold ${s.bg} ${s.text} ${size}`}>
       <Icon className={large ? "w-4 h-4" : "w-3 h-3"} />
       {s.label}
     </span>
@@ -67,26 +67,30 @@ function StatusBadge({ value, large = false }) {
 }
 
 const LEVEL_COLORS = {
-  basic: "bg-gray-100 text-gray-600", functional: "bg-blue-100 text-blue-700",
-  integration: "bg-indigo-100 text-indigo-700", ui: "bg-pink-100 text-pink-700",
-  edge: "bg-orange-100 text-orange-700", regression: "bg-yellow-100 text-yellow-700",
-  security: "bg-red-100 text-red-700", performance: "bg-teal-100 text-teal-700",
+  basic: "text-[color:var(--text-muted)]",
+  functional: "text-[color:var(--primary)]",
+  integration: "text-[color:var(--primary)]",
+  ui: "text-[color:var(--text-muted)]",
+  edge: "text-amber-400",
+  regression: "text-amber-300",
+  security: "text-red-400",
+  performance: "text-[color:var(--text-muted)]",
 };
 function LevelBadge({ level }) {
-  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${LEVEL_COLORS[level] || "bg-gray-100 text-gray-600"}`}>{level}</span>;
+  return <span className={`px-2 py-0.5 rounded-full border border-[color:var(--border)] text-xs font-semibold ${LEVEL_COLORS[level] || "text-[color:var(--text-muted)]"}`}>{level}</span>;
 }
 
 function Toggle({ label, description, checked, onChange }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2">
       <div>
-        <div className="text-sm font-medium theme-text">{label}</div>
-        {description && <div className="text-xs theme-text-muted mt-0.5">{description}</div>}
+        <div className="text-sm font-medium text-[color:var(--text)]">{label}</div>
+        {description && <div className="text-xs text-[color:var(--text-muted)] mt-0.5">{description}</div>}
       </div>
       <button type="button" onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${checked ? "theme-primary" : "theme-surface-soft"}`}
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${checked ? "bg-[color:var(--primary)]" : "bg-[var(--surface-soft)]"}`}
       >
-        <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full theme-surface shadow ring-0 transition-transform ${checked ? "translate-x-5" : "translate-x-0"}`} />
+        <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[var(--surface)] ring-0 transition-transform ${checked ? "translate-x-5" : "translate-x-0"}`} />
       </button>
     </div>
   );
@@ -98,12 +102,12 @@ function Toggle({ label, description, checked, onChange }) {
 function PerfChips({ metrics }) {
   if (!metrics) return null;
   const { loadComplete, firstByte, resourceCount } = metrics;
-  const loadColor = !loadComplete ? "text-gray-400" : loadComplete > 3000 ? "text-red-600 font-semibold" : loadComplete > 1500 ? "text-amber-600" : "text-green-600";
+  const loadColor = !loadComplete ? "text-[color:var(--text-muted)]" : loadComplete > 3000 ? "text-red-400 font-semibold" : loadComplete > 1500 ? "text-amber-400" : "text-emerald-400";
   return (
     <div className="flex flex-wrap gap-2 mt-1.5">
-      {loadComplete != null && <span className={`inline-flex items-center gap-1 text-xs ${loadColor} bg-gray-50 border border-gray-200 rounded px-2 py-0.5`}><Activity className="w-3 h-3" />Load {formatMs(loadComplete)}</span>}
-      {firstByte != null && <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-2 py-0.5"><Zap className="w-3 h-3" />TTFB {formatMs(firstByte)}</span>}
-      {resourceCount != null && <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-2 py-0.5"><TrendingUp className="w-3 h-3" />{resourceCount} resources</span>}
+      {loadComplete != null && <span className={`inline-flex items-center gap-1 text-xs ${loadColor} border border-[color:var(--border)] rounded px-2 py-0.5`}><Activity className="w-3 h-3" />Load {formatMs(loadComplete)}</span>}
+      {firstByte != null && <span className="inline-flex items-center gap-1 text-xs text-[color:var(--text-muted)] border border-[color:var(--border)] rounded px-2 py-0.5"><Zap className="w-3 h-3" />TTFB {formatMs(firstByte)}</span>}
+      {resourceCount != null && <span className="inline-flex items-center gap-1 text-xs text-[color:var(--text-muted)] border border-[color:var(--border)] rounded px-2 py-0.5"><TrendingUp className="w-3 h-3" />{resourceCount} resources</span>}
     </div>
   );
 }
@@ -122,25 +126,25 @@ function BrowserStepRow({ step, defaultShowScreenshot = false }) {
     <div className={`rounded-lg border ${meta.border} overflow-hidden`}>
       <div className="flex items-center gap-2.5 px-3 py-2.5">
         {isInProgress
-          ? <span className="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin shrink-0" />
+          ? <span className="w-4 h-4 rounded-full border-2 border-[color:var(--primary)] border-t-transparent animate-spin shrink-0" />
           : <Icon className={`w-4 h-4 shrink-0 ${meta.text}`} />
         }
-        <span className="text-xs text-gray-400 font-mono shrink-0">#{step.stepIndex + 1}</span>
-        <span className="text-xs font-semibold text-gray-500 shrink-0 bg-gray-100 px-1.5 py-0.5 rounded">{step.action}</span>
-        <span className="text-sm text-gray-700 flex-1 truncate">{step.description}</span>
+        <span className="text-xs text-[color:var(--text-muted)] font-mono shrink-0">#{step.stepIndex + 1}</span>
+        <span className="text-xs font-semibold text-[color:var(--text-muted)] shrink-0 border border-[color:var(--border)] px-1.5 py-0.5 rounded">{step.action}</span>
+        <span className="text-sm text-[color:var(--text)] flex-1 truncate">{step.description}</span>
         {step.healed && (
-          <span className="shrink-0 text-xs bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-semibold">Healed</span>
+          <span className="shrink-0 text-xs text-amber-400 border border-amber-800 px-1.5 py-0.5 rounded font-semibold">Healed</span>
         )}
-        {step.durationMs > 0 && <span className="text-xs text-gray-400 shrink-0">{formatMs(step.durationMs)}</span>}
+        {step.durationMs > 0 && <span className="text-xs text-[color:var(--text-muted)] shrink-0">{formatMs(step.durationMs)}</span>}
         {hasSS && (
-          <button onClick={() => setShowShot((v) => !v)} className="shrink-0 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
+          <button onClick={() => setShowShot((v) => !v)} className="shrink-0 flex items-center gap-1 text-xs text-[color:var(--primary)] hover:opacity-80">
             <Camera className="w-3 h-3" />{showShot ? "Hide" : "Shot"}
           </button>
         )}
       </div>
       {step.healed && step.usedSelector && step.usedSelector !== step.selector && (
         <div className="px-3 pb-1.5">
-          <p className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">
+          <p className="text-xs text-amber-400 border border-amber-800 rounded px-2 py-1">
             Selector healed: used <code className="font-mono">{step.usedSelector}</code>
           </p>
         </div>
@@ -148,9 +152,9 @@ function BrowserStepRow({ step, defaultShowScreenshot = false }) {
       {step.metrics && <div className="px-3 pb-2"><PerfChips metrics={step.metrics} /></div>}
       {step.error && (
         <div className="px-3 pb-2 space-y-1.5">
-          <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1 font-mono">{step.error}</p>
+          <p className="text-xs text-red-400 border border-red-800 rounded px-2 py-1 font-mono">{step.error}</p>
           {step.aiAnalysis && (
-            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            <p className="text-xs text-amber-300 border border-amber-800 rounded px-2 py-1.5">
               <span className="font-semibold">AI Analysis: </span>{step.aiAnalysis}
             </p>
           )}
@@ -158,7 +162,7 @@ function BrowserStepRow({ step, defaultShowScreenshot = false }) {
       )}
       {showShot && hasSS && (
         <div className="px-3 pb-3">
-          <img src={step.screenshot} alt={`Step ${step.stepIndex + 1}`} className="rounded-lg border border-gray-200 w-full max-h-80 object-contain bg-gray-50" />
+          <img src={step.screenshot} alt={`Step ${step.stepIndex + 1}`} className="rounded-lg border border-[color:var(--border)] w-full max-h-80 object-contain bg-[var(--surface-soft)]" />
         </div>
       )}
     </div>
@@ -172,9 +176,9 @@ function InsightsPanel({ insights }) {
   const [open, setOpen] = useState(true);
   if (!insights) return null;
   const verdictMeta = {
-    "All tests passed": { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", Icon: CheckCircle2 },
-    "Some tests failed": { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", Icon: AlertTriangle },
-    "Critical failure": { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", Icon: XCircle },
+    "All tests passed": { bg: "", border: "border-emerald-800", text: "text-emerald-400", Icon: CheckCircle2 },
+    "Some tests failed": { bg: "", border: "border-amber-800", text: "text-amber-400", Icon: AlertTriangle },
+    "Critical failure": { bg: "", border: "border-red-800", text: "text-red-400", Icon: XCircle },
   };
   const vm = verdictMeta[insights.verdict] || verdictMeta["Some tests failed"];
   const VIcon = vm.Icon;
@@ -186,44 +190,44 @@ function InsightsPanel({ insights }) {
         <span className={`font-semibold text-sm ${vm.text}`}>AI Insights</span>
         <span className={`flex-1 text-sm font-medium ${vm.text}`}>{insights.verdict}</span>
         <VIcon className={`w-4 h-4 shrink-0 ${vm.text}`} />
-        {open ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+        {open ? <ChevronDown className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" /> : <ChevronRight className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" />}
       </button>
       {open && (
-        <div className="px-4 pb-4 space-y-3 text-sm border-t border-gray-100 pt-3">
+        <div className="px-4 pb-4 space-y-3 text-sm border-t border-[color:var(--border)] pt-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {insights.whatWorked?.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-green-700 mb-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />What Worked</p>
-                <ul className="space-y-0.5">{insights.whatWorked.map((w, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-green-500 mt-0.5">-</span>{w}</li>)}</ul>
+                <p className="text-xs font-semibold text-emerald-400 mb-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />What Worked</p>
+                <ul className="space-y-0.5">{insights.whatWorked.map((w, i) => <li key={i} className="text-xs text-[color:var(--text-muted)] flex items-start gap-1"><span className="text-emerald-500 mt-0.5">-</span>{w}</li>)}</ul>
               </div>
             )}
             {insights.whatFailed?.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-red-700 mb-1 flex items-center gap-1"><XCircle className="w-3 h-3" />What Failed</p>
-                <ul className="space-y-0.5">{insights.whatFailed.map((w, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-red-500 mt-0.5">-</span>{w}</li>)}</ul>
+                <p className="text-xs font-semibold text-red-400 mb-1 flex items-center gap-1"><XCircle className="w-3 h-3" />What Failed</p>
+                <ul className="space-y-0.5">{insights.whatFailed.map((w, i) => <li key={i} className="text-xs text-[color:var(--text-muted)] flex items-start gap-1"><span className="text-red-500 mt-0.5">-</span>{w}</li>)}</ul>
               </div>
             )}
           </div>
           {insights.rootCause && (
-            <div className="bg-white/70 rounded-lg px-3 py-2">
-              <p className="text-xs font-semibold text-gray-600 mb-0.5">Root Cause</p>
-              <p className="text-xs text-gray-700">{insights.rootCause}</p>
+            <div className="border border-[color:var(--border)] rounded-lg px-3 py-2">
+              <p className="text-xs font-semibold text-[color:var(--text-muted)] mb-0.5">Root Cause</p>
+              <p className="text-xs text-[color:var(--text)]">{insights.rootCause}</p>
             </div>
           )}
           {insights.recommendations?.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1"><Info className="w-3 h-3" />Recommendations</p>
-              <ul className="space-y-0.5">{insights.recommendations.map((r, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-blue-500 mt-0.5">-&gt;</span>{r}</li>)}</ul>
+              <p className="text-xs font-semibold text-[color:var(--primary)] mb-1 flex items-center gap-1"><Info className="w-3 h-3" />Recommendations</p>
+              <ul className="space-y-0.5">{insights.recommendations.map((r, i) => <li key={i} className="text-xs text-[color:var(--text-muted)] flex items-start gap-1"><span className="text-[color:var(--primary)] mt-0.5">-&gt;</span>{r}</li>)}</ul>
             </div>
           )}
           {insights.nextTestsToRun?.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-purple-700 mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3" />Suggested Next Tests</p>
-              <ul className="space-y-0.5">{insights.nextTestsToRun.map((t, i) => <li key={i} className="text-xs text-gray-700 flex items-start gap-1"><span className="text-purple-500 mt-0.5">-&gt;</span>{t}</li>)}</ul>
+              <p className="text-xs font-semibold text-[color:var(--primary)] mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3" />Suggested Next Tests</p>
+              <ul className="space-y-0.5">{insights.nextTestsToRun.map((t, i) => <li key={i} className="text-xs text-[color:var(--text-muted)] flex items-start gap-1"><span className="text-[color:var(--primary)] mt-0.5">-&gt;</span>{t}</li>)}</ul>
             </div>
           )}
           {insights.performanceNote && (
-            <p className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded px-2 py-1.5">
+            <p className="text-xs text-[color:var(--primary)] border border-[color:var(--primary)]/30 rounded px-2 py-1.5">
               <span className="font-semibold">Performance: </span>{insights.performanceNote}
             </p>
           )}
@@ -235,28 +239,28 @@ function InsightsPanel({ insights }) {
 
 function PreviewSummaryCard({ label, value }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="mt-1 text-sm font-medium text-gray-800">{value ?? "-"}</p>
+    <div className="rounded-lg border border-[color:var(--border)] px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">{label}</p>
+      <p className="mt-1 text-sm font-medium text-[color:var(--text)]">{value ?? "-"}</p>
     </div>
   );
 }
 
 function PreviewStepList({ steps = [] }) {
   if (!Array.isArray(steps) || steps.length === 0) {
-    return <p className="text-sm text-gray-500">No concrete execution steps were generated.</p>;
+    return <p className="text-sm text-[color:var(--text-muted)]">No concrete execution steps were generated.</p>;
   }
 
   return (
     <div className="space-y-2">
       {steps.map((step, index) => (
-        <div key={`${step.action || "step"}-${index}`} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+        <div key={`${step.action || "step"}-${index}`} className="rounded-lg border border-[color:var(--border)] px-3 py-2">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-gray-400">#{index + 1}</span>
-            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700">{step.action || "step"}</span>
+            <span className="text-[11px] font-mono text-[color:var(--text-muted)]">#{index + 1}</span>
+            <span className="rounded border border-[color:var(--border)] px-1.5 py-0.5 text-[11px] font-semibold text-[color:var(--primary)]">{step.action || "step"}</span>
           </div>
-          <p className="mt-1 text-sm text-gray-800">{step.description || step.label || step.url || "Execution step"}</p>
-          {step.url && <p className="mt-1 text-xs text-gray-500 font-mono break-all">{step.url}</p>}
+          <p className="mt-1 text-sm text-[color:var(--text)]">{step.description || step.label || step.url || "Execution step"}</p>
+          {step.url && <p className="mt-1 text-xs text-[color:var(--text-muted)] font-mono break-all">{step.url}</p>}
         </div>
       ))}
     </div>
@@ -265,26 +269,26 @@ function PreviewStepList({ steps = [] }) {
 
 function MissionPreviewPanel({ preview, loading, error }) {
   if (loading) {
-    return <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">Building execution preview...</div>;
+    return <div className="rounded-xl border border-[color:var(--border)] px-4 py-3 text-sm text-[color:var(--primary)]">Building execution preview...</div>;
   }
   if (error) {
-    return <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
+    return <div className="rounded-xl border border-red-800 px-4 py-3 text-sm text-red-400">{error}</div>;
   }
   if (!preview) return null;
 
   const page = preview.pageContext || null;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 space-y-4">
+    <div className="rounded-lg border border-[color:var(--border)] p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Execution Preview</p>
-          <h3 className="text-base font-semibold text-gray-900">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">Execution Preview</p>
+          <h3 className="text-base font-semibold text-[color:var(--text)]">
             {preview.mode === "multi_scenario" ? "Coverage plan" : preview.mode === "deep_exploration" ? "Product audit plan" : "Run plan"}
           </h3>
         </div>
         {preview.url && (
-          <span className="max-w-[18rem] truncate rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 border border-gray-200">
+          <span className="max-w-[18rem] truncate rounded-full px-3 py-1 text-xs font-medium text-[color:var(--text-muted)] border border-[color:var(--border)]">
             {preview.url}
           </span>
         )}
@@ -302,10 +306,10 @@ function MissionPreviewPanel({ preview, loading, error }) {
       {preview.mode === "multi_scenario" && Array.isArray(preview.scenarios) && (
         <div className="space-y-3">
           {preview.scenarios.map((scenario) => (
-            <div key={scenario.type} className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+            <div key={scenario.type} className="rounded-lg border border-[color:var(--border)] p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h4 className="text-sm font-semibold text-gray-900 capitalize">{String(scenario.type || "").replace(/_/g, " ")}</h4>
-                <span className="text-xs text-gray-500">{scenario.steps?.length || 0} planned steps</span>
+                <h4 className="text-sm font-semibold text-[color:var(--text)] capitalize">{String(scenario.type || "").replace(/_/g, " ")}</h4>
+                <span className="text-xs text-[color:var(--text-muted)]">{scenario.steps?.length || 0} planned steps</span>
               </div>
               <PreviewStepList steps={scenario.steps || []} />
             </div>
@@ -319,23 +323,23 @@ function MissionPreviewPanel({ preview, loading, error }) {
             <PreviewSummaryCard label="Login Id" value={preview.credentialsDetected?.email ? "Detected" : "Not detected"} />
             <PreviewSummaryCard label="Password" value={preview.credentialsDetected?.password ? "Detected" : "Not detected"} />
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-3">
-            <p className="text-sm font-semibold text-gray-900 mb-2">Audit phases</p>
+          <div className="rounded-lg border border-[color:var(--border)] p-3">
+            <p className="text-sm font-semibold text-[color:var(--text)] mb-2">Audit phases</p>
             <ul className="space-y-1">
               {(preview.phases || []).map((phase, index) => (
-                <li key={phase} className="text-sm text-gray-700 flex items-start gap-2">
-                  <span className="mt-0.5 text-xs font-semibold text-blue-600">{index + 1}.</span>
+                <li key={phase} className="text-sm text-[color:var(--text-muted)] flex items-start gap-2">
+                  <span className="mt-0.5 text-xs font-semibold text-[color:var(--primary)]">{index + 1}.</span>
                   <span>{phase}</span>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-3">
-            <p className="text-sm font-semibold text-gray-900 mb-2">Preflight checklist</p>
+          <div className="rounded-lg border border-[color:var(--border)] p-3">
+            <p className="text-sm font-semibold text-[color:var(--text)] mb-2">Preflight checklist</p>
             <ul className="space-y-1">
               {(preview.checklist || []).map((item) => (
-                <li key={item} className="text-sm text-gray-700 flex items-start gap-2">
-                  <span className="mt-0.5 text-blue-500">•</span>
+                <li key={item} className="text-sm text-[color:var(--text-muted)] flex items-start gap-2">
+                  <span className="mt-0.5 text-[color:var(--primary)]">•</span>
                   <span>{item}</span>
                 </li>
               ))}
@@ -420,15 +424,15 @@ function QuickTemplateBar({ title = "Starter templates", items = [], onSelect })
   if (!items.length) return null;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{title}</p>
+    <div className="rounded-lg border border-[color:var(--border)] px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">{title}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {items.map((item) => (
           <button
             key={item.label}
             type="button"
             onClick={() => onSelect(item)}
-            className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-blue-300 hover:text-blue-700"
+            className="rounded-full border border-[color:var(--border)] px-2.5 py-1 text-xs font-medium text-[color:var(--text-muted)] hover:border-[color:var(--primary)] hover:text-[color:var(--primary)] transition-colors"
           >
             {item.label}
           </button>
@@ -503,27 +507,27 @@ function RunPrepPanel({ mode, selectedTask, values }) {
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+    <div className="rounded-lg border border-[color:var(--border)] p-4 space-y-3">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{meta.title}</p>
-        <p className="mt-1 text-sm text-gray-700">{meta.purpose}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">{meta.title}</p>
+        <p className="mt-1 text-sm text-[color:var(--text-muted)]">{meta.purpose}</p>
       </div>
       <div className="grid grid-cols-1 gap-2">
         {readiness.map((item) => (
-          <div key={item.label} className={`rounded-lg border px-3 py-2 ${item.ok ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+          <div key={item.label} className={`rounded-lg border px-3 py-2 ${item.ok ? "border-emerald-800" : "border-amber-800"}`}>
             <div className="flex items-center gap-2">
-              {item.ok ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />}
-              <p className={`text-sm font-medium ${item.ok ? "text-green-800" : "text-amber-800"}`}>{item.label}</p>
+              {item.ok ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />}
+              <p className={`text-sm font-medium ${item.ok ? "text-emerald-300" : "text-amber-300"}`}>{item.label}</p>
             </div>
-            <p className={`mt-1 text-xs ${item.ok ? "text-green-700" : "text-amber-700"}`}>{item.hint}</p>
+            <p className={`mt-1 text-xs ${item.ok ? "text-emerald-400" : "text-amber-400"}`}>{item.hint}</p>
           </div>
         ))}
       </div>
-      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Evidence produced</p>
+      <div className="rounded-lg border border-[color:var(--primary)]/30 px-3 py-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--primary)]">Evidence produced</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {meta.evidence.map((item) => (
-            <span key={item} className="rounded-full bg-white px-2 py-1 text-xs font-medium text-blue-800 border border-blue-100">
+            <span key={item} className="rounded-full px-2 py-1 text-xs font-medium text-[color:var(--primary)] border border-[color:var(--primary)]/20">
               {item}
             </span>
           ))}
@@ -535,19 +539,19 @@ function RunPrepPanel({ mode, selectedTask, values }) {
 
 function LiveScreenView({ displayShot, displayCaption, done, stopRequested, status, lastStep, className = "" }) {
   return (
-    <div className={`relative bg-gray-900 rounded-lg overflow-hidden ${className}`} style={{ aspectRatio: "16/10" }}>
+    <div className={`relative bg-[#0a0a0b] rounded-lg overflow-hidden ${className}`} style={{ aspectRatio: "16/10" }}>
       {displayShot ? (
         <img src={displayShot} alt="Agent view" className="w-full h-full object-contain transition-opacity duration-300" />
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-          <span className="w-6 h-6 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-          <p className="text-xs text-gray-400">Agent starting up...</p>
+          <span className="w-6 h-6 rounded-full border-2 border-[color:var(--primary)] border-t-transparent animate-spin" />
+          <p className="text-xs text-[color:var(--text-muted)]">Agent starting up...</p>
         </div>
       )}
       {displayCaption && (
         <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white px-3 py-1.5 flex items-center gap-2">
           {!done ? (
-            <span className={`w-2 h-2 rounded-full ${stopRequested ? "bg-orange-400" : "bg-green-400"} animate-pulse shrink-0`} />
+            <span className={`w-2 h-2 rounded-full ${stopRequested ? "bg-amber-400" : "bg-emerald-400"} animate-pulse shrink-0`} />
           ) : status === "passed" ? (
             <CheckCircle2 className="w-3 h-3 text-green-400 shrink-0" />
           ) : status === "cancelled" ? (
@@ -555,9 +559,9 @@ function LiveScreenView({ displayShot, displayCaption, done, stopRequested, stat
           ) : (
             <XCircle className="w-3 h-3 text-red-400 shrink-0" />
           )}
-          <span className="text-xs text-gray-200 truncate">{displayCaption}</span>
+          <span className="text-xs text-[color:var(--text-muted)] truncate">{displayCaption}</span>
           {lastStep?.durationMs > 0 && (
-            <span className="text-xs text-gray-400 shrink-0 ml-auto">{formatMs(lastStep.durationMs)}</span>
+            <span className="text-xs text-[color:var(--text-soft)] shrink-0 ml-auto">{formatMs(lastStep.durationMs)}</span>
           )}
         </div>
       )}
@@ -569,27 +573,27 @@ function LiveStepList({ liveSteps, done, bottomRef, maxH = "max-h-48" }) {
   return (
     <div className={`space-y-1 overflow-y-auto ${maxH} pr-0.5`}>
       {liveSteps.length === 0 && (
-        <p className="text-xs text-blue-400 text-center py-3 animate-pulse">Waiting for first step...</p>
+        <p className="text-xs text-[color:var(--primary)] text-center py-3 animate-pulse">Waiting for first step...</p>
       )}
       {liveSteps.map((step, i) => (
         <div
           key={i}
-          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs ${step.status === "passed" ? "bg-green-50 border border-green-100" : step.status === "failed" ? "bg-red-50 border border-red-100" : "bg-white border border-gray-100"}`}
+          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs border ${step.status === "passed" ? "border-emerald-800" : step.status === "failed" ? "border-red-800" : "border-[color:var(--border)]"}`}
         >
           {step.status === "passed"
-            ? <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
+            ? <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
             : step.status === "failed"
-              ? <XCircle className="w-3 h-3 text-red-500 shrink-0" />
+              ? <XCircle className="w-3 h-3 text-red-400 shrink-0" />
               : step.status === "cancelled"
-                ? <Square className="w-3 h-3 text-slate-500 shrink-0" />
+                ? <Square className="w-3 h-3 text-[color:var(--text-muted)] shrink-0" />
                 : i === liveSteps.length - 1 && !done
-                  ? <span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
-                  : <Clock className="w-3 h-3 text-gray-300 shrink-0" />}
-          <span className="font-mono text-gray-400 shrink-0">#{i + 1}</span>
-          <span className="font-semibold text-gray-500 bg-gray-100 px-1 py-0.5 rounded shrink-0">{step.action}</span>
-          <span className="text-gray-700 truncate">{step.description}</span>
+                  ? <span className="w-3 h-3 rounded-full border-2 border-[color:var(--primary)] border-t-transparent animate-spin shrink-0" />
+                  : <Clock className="w-3 h-3 text-[color:var(--text-soft)] shrink-0" />}
+          <span className="font-mono text-[color:var(--text-muted)] shrink-0">#{i + 1}</span>
+          <span className="font-semibold text-[color:var(--text-muted)] bg-[var(--surface-soft)] px-1 py-0.5 rounded shrink-0">{step.action}</span>
+          <span className="text-[color:var(--text)] truncate">{step.description}</span>
           {step.screenshot && step.screenshot !== true && (
-            <Camera className="w-3 h-3 text-indigo-400 shrink-0 ml-auto" title="Has screenshot" />
+            <Camera className="w-3 h-3 text-[color:var(--primary)] shrink-0 ml-auto" title="Has screenshot" />
           )}
         </div>
       ))}
@@ -711,40 +715,40 @@ function LiveRunPanel({ runId, onFinished }) {
     return (
       <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
         {/* Fullscreen header */}
-        <div className="flex items-center gap-3 px-5 py-3 bg-gray-900 border-b border-gray-700 shrink-0">
+        <div className="flex items-center gap-3 px-5 py-3 bg-[#0a0a0b] border-b border-[color:var(--border)] shrink-0">
           {!done
-            ? <span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
+            ? <span className="w-3 h-3 rounded-full border-2 border-[color:var(--primary)] border-t-transparent animate-spin shrink-0" />
             : status === "passed"
               ? <CheckCircle2 className="w-4 h-4 text-green-400" />
               : status === "cancelled"
                 ? <Square className="w-4 h-4 text-slate-300" />
               : <XCircle className="w-4 h-4 text-red-400" />
           }
-          <span className="text-sm font-semibold text-white">
+          <span className="text-sm font-semibold text-[color:var(--text)]">
             {done ? (status === "passed" ? "Run completed" : status === "cancelled" ? "Run stopped" : "Run finished") : status === "waiting_input" ? "Waiting for credentials..." : stopRequested ? "Stopping run..." : "Live Agent View"}
           </span>
           <span className="flex gap-2 text-xs ml-2">
             {passed > 0 && <span className="text-green-400 font-semibold">{passed} passed</span>}
             {failed > 0 && <span className="text-red-400 font-semibold">{failed} failed</span>}
-            <span className="text-gray-400">{liveSteps.length} steps</span>
+            <span className="text-[color:var(--text-muted)]">{liveSteps.length} steps</span>
           </span>
           <div className="ml-auto flex items-center gap-2">
             {!done && (
               <button
                 onClick={handleStopRun}
                 disabled={stopRequested}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-red-500/15 text-red-200 hover:bg-red-500/25 disabled:opacity-60 text-xs font-semibold"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-red-800 text-red-400 hover:bg-[var(--surface-soft)] disabled:opacity-60 text-xs font-semibold"
               >
                 <Square className="w-3.5 h-3.5" />{stopRequested ? "Stopping..." : "Stop"}
               </button>
             )}
             <button onClick={() => setFullscreen(false)}
-              className="text-gray-400 hover:text-white p-1.5 rounded hover:bg-gray-700 transition-colors"
+              className="text-[color:var(--text-muted)] hover:text-[color:var(--text)] p-1.5 rounded hover:bg-[var(--surface-soft)] transition-colors"
               title="Exit fullscreen">
               <Minimize2 className="w-4 h-4" />
             </button>
             <button onClick={() => setFullscreen(false)}
-              className="text-gray-400 hover:text-white p-1.5 rounded hover:bg-gray-700 transition-colors"
+              className="text-[color:var(--text-muted)] hover:text-[color:var(--text)] p-1.5 rounded hover:bg-[var(--surface-soft)] transition-colors"
               title="Close">
               <XIcon className="w-4 h-4" />
             </button>
@@ -756,8 +760,8 @@ function LiveRunPanel({ runId, onFinished }) {
           <div className="flex-1 p-4 flex flex-col">
             <LiveScreenView className="flex-1 h-full" displayShot={displayShot} displayCaption={displayCaption} done={done} stopRequested={stopRequested} status={status} lastStep={lastStep} />
           </div>
-          <div className="w-80 bg-gray-900 border-l border-gray-700 p-3 flex flex-col gap-2 overflow-hidden">
-            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide shrink-0">Steps</p>
+          <div className="w-80 bg-[#0a0a0b] border-l border-[color:var(--border)] p-3 flex flex-col gap-2 overflow-hidden">
+            <p className="text-xs text-[color:var(--text-muted)] font-semibold uppercase tracking-wide shrink-0">Steps</p>
             <LiveStepList liveSteps={liveSteps} done={done} bottomRef={bottomRef} maxH="h-full overflow-y-auto" />
           </div>
         </div>
@@ -767,25 +771,25 @@ function LiveRunPanel({ runId, onFinished }) {
 
   // â"€â"€ Normal (mini) panel â"€â"€
   return (
-    <div className="mt-4 border border-blue-200 rounded-xl overflow-hidden bg-blue-50/30 shadow-sm">
+    <div className="mt-4 border border-[color:var(--border)] rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-blue-100 bg-blue-50">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[color:var(--border)] bg-[var(--surface-soft)]">
         {!done
-          ? <span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin shrink-0" />
+          ? <span className="w-3 h-3 rounded-full border-2 border-[color:var(--primary)] border-t-transparent animate-spin shrink-0" />
           : status === "passed"
-            ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+            ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             : status === "cancelled"
-              ? <Square className="w-4 h-4 text-slate-600 shrink-0" />
-            : <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+              ? <Square className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" />
+            : <XCircle className="w-4 h-4 text-red-400 shrink-0" />
         }
-        <span className="text-sm font-semibold text-blue-800">
+        <span className="text-sm font-semibold text-[color:var(--text)]">
           {done ? (status === "passed" ? "Completed" : status === "cancelled" ? "Stopped" : "Finished") : status === "waiting_input" ? "Needs Login..." : stopRequested ? "Stopping..." : "Live..."}
         </span>
         {liveSteps.length > 0 && (
           <span className="flex gap-1.5 text-xs ml-1">
-            {passed > 0 && <span className="text-green-600 font-semibold">{passed} passed</span>}
-            {failed > 0 && <span className="text-red-500 font-semibold">{failed} failed</span>}
-            <span className="text-blue-400">{liveSteps.length} steps</span>
+            {passed > 0 && <span className="text-emerald-400 font-semibold">{passed} passed</span>}
+            {failed > 0 && <span className="text-red-400 font-semibold">{failed} failed</span>}
+            <span className="text-[color:var(--text-muted)]">{liveSteps.length} steps</span>
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
@@ -794,17 +798,17 @@ function LiveRunPanel({ runId, onFinished }) {
               onClick={handleStopRun}
               disabled={stopRequested}
               title="Stop run"
-              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-60 text-xs font-semibold"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-red-800 text-red-400 hover:bg-[var(--surface-soft)] disabled:opacity-60 text-xs font-semibold"
             >
               <Square className="w-3.5 h-3.5" />{stopRequested ? "Stopping" : "Stop"}
             </button>
           )}
           <button onClick={() => setFullscreen(true)} title="Fullscreen"
-            className="p-1 rounded hover:bg-blue-200 text-blue-500 transition-colors">
+            className="p-1 rounded hover:bg-[var(--surface-soft)] text-[color:var(--primary)] transition-colors">
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => setMinimized((v) => !v)} title={minimized ? "Expand" : "Minimize"}
-            className="p-1 rounded hover:bg-blue-200 text-blue-500 transition-colors">
+            className="p-1 rounded hover:bg-[var(--surface-soft)] text-[color:var(--primary)] transition-colors">
             {minimized ? <Monitor className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -819,38 +823,38 @@ function LiveRunPanel({ runId, onFinished }) {
 
       {/* Credential modal overlay */}
       {credPrompt && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="border border-[color:var(--border)] rounded-xl w-full max-w-sm p-6 space-y-4" style={{ background: "var(--surface)" }}>
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-              <h3 className="text-base font-semibold text-gray-900">Login Required</h3>
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+              <h3 className="text-base font-semibold text-[color:var(--text)]">Login Required</h3>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[color:var(--text-muted)]">
               The testing agent reached a login page and needs credentials to continue.
             </p>
             {credPrompt.loginUrl && (
-              <p className="text-xs font-mono bg-gray-50 border border-gray-200 rounded px-2 py-1 text-gray-500 break-all">{credPrompt.loginUrl}</p>
+              <p className="text-xs font-mono border border-[color:var(--border)] rounded px-2 py-1 text-[color:var(--text-muted)] break-all">{credPrompt.loginUrl}</p>
             )}
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Email / Username</label>
+                <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Email / Username</label>
                 <input
                   type="email"
                   value={credEmail}
                   onChange={(e) => setCredEmail(e.target.value)}
                   placeholder="user@example.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm bg-[var(--surface)] text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Password</label>
+                <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Password</label>
                 <input
                   type="password"
                   value={credPassword}
                   onChange={(e) => setCredPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm bg-[var(--surface)] text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]"
                   onKeyDown={(e) => e.key === "Enter" && submitCredentials()}
                 />
               </div>
@@ -859,13 +863,13 @@ function LiveRunPanel({ runId, onFinished }) {
               <button
                 onClick={submitCredentials}
                 disabled={!credEmail.trim() || !credPassword.trim() || submittingCreds}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-blue-700"
+                className="flex-1 px-4 py-2 bg-[color:var(--primary)] text-[color:var(--primary-contrast)] rounded-lg text-sm font-semibold disabled:opacity-50 hover:opacity-90"
               >
                 {submittingCreds ? "Submitting..." : "Submit & Continue"}
               </button>
               <button
                 onClick={() => setCredPrompt(null)}
-                className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50"
+                className="px-4 py-2 border border-[color:var(--border)] text-[color:var(--text-muted)] rounded-lg text-sm font-medium hover:text-[color:var(--text)]"
               >
                 Cancel
               </button>
@@ -883,23 +887,23 @@ function LiveRunPanel({ runId, onFinished }) {
 function TestCaseRow({ tc }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left">
-        {open ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
-        <span className="text-xs font-mono text-gray-500 shrink-0">{tc.id}</span>
+    <div className="border border-[color:var(--border)] rounded-lg overflow-hidden">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-2 px-3 py-2 bg-[var(--surface-soft)] hover:bg-[var(--surface-soft)] text-left transition-colors">
+        {open ? <ChevronDown className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" /> : <ChevronRight className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" />}
+        <span className="text-xs font-mono text-[color:var(--text-muted)] shrink-0">{tc.id}</span>
         <LevelBadge level={tc.level} />
-        <span className="text-sm font-medium text-gray-800 truncate">{tc.title}</span>
+        <span className="text-sm font-medium text-[color:var(--text)] truncate">{tc.title}</span>
       </button>
       {open && (
-        <div className="px-4 py-3 space-y-3 text-sm bg-white">
-          <p className="text-gray-700"><span className="font-semibold">Objective: </span>{tc.objective}</p>
+        <div className="px-4 py-3 space-y-3 text-sm">
+          <p className="text-[color:var(--text-muted)]"><span className="font-semibold text-[color:var(--text)]">Objective: </span>{tc.objective}</p>
           <div>
-            <p className="font-semibold text-gray-700 mb-1">Steps:</p>
-            <ol className="list-decimal list-inside space-y-1 text-gray-600">{(tc.steps || []).map((s, i) => <li key={i}>{s}</li>)}</ol>
+            <p className="font-semibold text-[color:var(--text)] mb-1">Steps:</p>
+            <ol className="list-decimal list-inside space-y-1 text-[color:var(--text-muted)]">{(tc.steps || []).map((s, i) => <li key={i}>{s}</li>)}</ol>
           </div>
           <div>
-            <p className="font-semibold text-gray-700 mb-1">Expected:</p>
-            <ul className="list-disc list-inside space-y-1 text-gray-600">{(tc.expected || []).map((e, i) => <li key={i}>{e}</li>)}</ul>
+            <p className="font-semibold text-[color:var(--text)] mb-1">Expected:</p>
+            <ul className="list-disc list-inside space-y-1 text-[color:var(--text-muted)]">{(tc.expected || []).map((e, i) => <li key={i}>{e}</li>)}</ul>
           </div>
         </div>
       )}
@@ -911,25 +915,25 @@ function TestCaseRow({ tc }) {
 function CommandOutput({ cmd }) {
   const [open, setOpen] = useState(false);
   const hasOutput = cmd.stdout || cmd.stderr;
-  const borderColor = cmd.passed ? "border-green-200 bg-green-50" : cmd.timedOut ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50";
+  const borderColor = cmd.passed ? "border-emerald-800" : cmd.timedOut ? "border-amber-800" : "border-red-800";
   return (
     <div className={`rounded-lg border ${borderColor}`}>
       <div className="flex items-center justify-between px-3 py-2 gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          {cmd.passed ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" /> : cmd.timedOut ? <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" /> : <XCircle className="w-4 h-4 text-red-600 shrink-0" />}
-          <code className="text-sm font-mono truncate text-gray-800">{cmd.command}</code>
+          {cmd.passed ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> : cmd.timedOut ? <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" /> : <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
+          <code className="text-sm font-mono truncate text-[color:var(--text)]">{cmd.command}</code>
         </div>
-        <div className="flex items-center gap-3 shrink-0 text-xs text-gray-500">
-          {cmd.timedOut && <span className="text-amber-600 font-semibold">Timed out</span>}
+        <div className="flex items-center gap-3 shrink-0 text-xs text-[color:var(--text-muted)]">
+          {cmd.timedOut && <span className="text-amber-400 font-semibold">Timed out</span>}
           <span>exit {cmd.exitCode}</span>
           <span>{formatMs(cmd.durationMs)}</span>
-          {hasOutput && <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-1 text-gray-600 hover:text-gray-900">{open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />} Output</button>}
+          {hasOutput && <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-1 text-[color:var(--text-muted)] hover:text-[color:var(--text)]">{open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />} Output</button>}
         </div>
       </div>
       {open && hasOutput && (
-        <div className="border-t border-gray-200 p-3 space-y-2">
-          {cmd.stdout && <pre className="text-xs bg-gray-900 text-green-300 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap">{cmd.stdout}</pre>}
-          {cmd.stderr && <pre className="text-xs bg-gray-900 text-red-300 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap">{cmd.stderr}</pre>}
+        <div className="border-t border-[color:var(--border)] p-3 space-y-2">
+          {cmd.stdout && <pre className="text-xs bg-[#0d1117] text-emerald-300 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap">{cmd.stdout}</pre>}
+          {cmd.stderr && <pre className="text-xs bg-[#0d1117] text-red-300 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap">{cmd.stderr}</pre>}
         </div>
       )}
     </div>
@@ -940,10 +944,10 @@ function CommandOutput({ cmd }) {
 // Multi-scenario cards
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const SCENARIO_META = {
-  happy_path:    { label: "Happy Path",    Icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50", border: "border-green-200" },
-  error_handling:{ label: "Error Handling",Icon: Shield,       color: "text-red-600",   bg: "bg-red-50",   border: "border-red-200" },
-  edge_cases:    { label: "Edge Cases",    Icon: AlertTriangle,color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
-  performance:   { label: "Performance",   Icon: Activity,     color: "text-teal-600",  bg: "bg-teal-50",  border: "border-teal-200" },
+  happy_path:    { label: "Happy Path",    Icon: CheckCircle2, color: "text-emerald-400", bg: "", border: "border-[color:var(--border)]" },
+  error_handling:{ label: "Error Handling",Icon: Shield,       color: "text-red-400",     bg: "", border: "border-[color:var(--border)]" },
+  edge_cases:    { label: "Edge Cases",    Icon: AlertTriangle,color: "text-amber-400",   bg: "", border: "border-[color:var(--border)]" },
+  performance:   { label: "Performance",   Icon: Activity,     color: "text-[color:var(--primary)]", bg: "", border: "border-[color:var(--border)]" },
 };
 
 function ScenarioCard({ scenario, onViewDetails }) {
@@ -951,7 +955,7 @@ function ScenarioCard({ scenario, onViewDetails }) {
   const SIcon = meta.Icon;
   const { passed = 0, failed = 0, total = 0 } = scenario.summary || {};
   return (
-    <div className={`rounded-xl border ${meta.border} ${meta.bg} p-4 space-y-2`}>
+    <div className={`rounded-xl border ${meta.border} p-4 space-y-2`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <SIcon className={`w-4 h-4 ${meta.color}`} />
@@ -959,13 +963,13 @@ function ScenarioCard({ scenario, onViewDetails }) {
         </div>
         <StatusBadge value={scenario.status} />
       </div>
-      <div className="flex items-center gap-3 text-xs text-gray-600">
-        <span><span className="text-green-600 font-semibold">{passed}</span> passed</span>
-        <span><span className="text-red-600 font-semibold">{failed}</span> failed</span>
-        <span className="text-gray-400">{total} total</span>
+      <div className="flex items-center gap-3 text-xs text-[color:var(--text-muted)]">
+        <span><span className="text-emerald-400 font-semibold">{passed}</span> passed</span>
+        <span><span className="text-red-400 font-semibold">{failed}</span> failed</span>
+        <span className="text-[color:var(--text-soft)]">{total} total</span>
       </div>
       {scenario.insights?.verdict && (
-        <p className="text-xs text-gray-600 line-clamp-2">{scenario.insights.verdict}</p>
+        <p className="text-xs text-[color:var(--text-muted)] line-clamp-2">{scenario.insights.verdict}</p>
       )}
       <button onClick={() => onViewDetails(scenario.runId)}
         className={`text-xs font-semibold ${meta.color} hover:underline flex items-center gap-1`}
@@ -980,10 +984,10 @@ function ScenarioCard({ scenario, onViewDetails }) {
 // Full QA Report Panel (for deep exploration runs)
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const SEVERITY_META = {
-  critical: { bg: "bg-red-100",    text: "text-red-700",    border: "border-red-300",    dot: "bg-red-500" },
-  high:     { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-300", dot: "bg-orange-500" },
-  medium:   { bg: "bg-amber-100",  text: "text-amber-700",  border: "border-amber-300",  dot: "bg-amber-500" },
-  low:      { bg: "bg-blue-50",    text: "text-blue-700",   border: "border-blue-200",   dot: "bg-blue-400" },
+  critical: { bg: "", text: "text-red-400",    border: "border-red-800",    dot: "bg-red-500" },
+  high:     { bg: "", text: "text-amber-400",  border: "border-amber-800",  dot: "bg-amber-500" },
+  medium:   { bg: "", text: "text-amber-300",  border: "border-amber-800",  dot: "bg-amber-400" },
+  low:      { bg: "", text: "text-[color:var(--text-muted)]", border: "border-[color:var(--border)]", dot: "bg-[color:var(--text-soft)]" },
 };
 
 function BugCard({ bug }) {
@@ -991,40 +995,40 @@ function BugCard({ bug }) {
   const sm = SEVERITY_META[bug.severity] || SEVERITY_META.low;
   return (
     <div className={`rounded-lg border ${sm.border} overflow-hidden`}>
-      <button onClick={() => setOpen(v => !v)} className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${sm.bg} hover:brightness-95`}>
+      <button onClick={() => setOpen(v => !v)} className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${sm.bg} hover:opacity-90`}>
         <span className={`w-2 h-2 rounded-full shrink-0 ${sm.dot}`} />
         <span className={`text-xs font-bold uppercase tracking-wide shrink-0 ${sm.text}`}>{bug.severity}</span>
-        <span className="text-sm font-semibold text-gray-800 flex-1 truncate">{bug.title}</span>
-        {bug.module && <span className="text-xs text-gray-500 shrink-0 bg-white/60 px-2 py-0.5 rounded-full">{bug.module}</span>}
-        {open ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+        <span className="text-sm font-semibold text-[color:var(--text)] flex-1 truncate">{bug.title}</span>
+        {bug.module && <span className="text-xs text-[color:var(--text-muted)] shrink-0 bg-[var(--surface-soft)] px-2 py-0.5 rounded-full">{bug.module}</span>}
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-[color:var(--text-muted)] shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-[color:var(--text-muted)] shrink-0" />}
       </button>
       {open && (
-        <div className="bg-white px-4 py-3 space-y-2.5 text-sm border-t border-gray-100">
-          <p className="text-gray-700">{bug.description}</p>
+        <div className="px-4 py-3 space-y-2.5 text-sm border-t border-[color:var(--border)]">
+          <p className="text-[color:var(--text-muted)]">{bug.description}</p>
           {bug.stepsToReproduce?.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-600 mb-1">Steps to reproduce</p>
-              <ol className="list-decimal list-inside space-y-0.5 text-xs text-gray-600">
+              <p className="text-xs font-semibold text-[color:var(--text-muted)] mb-1">Steps to reproduce</p>
+              <ol className="list-decimal list-inside space-y-0.5 text-xs text-[color:var(--text-muted)]">
                 {bug.stepsToReproduce.map((s, i) => <li key={i}>{s}</li>)}
               </ol>
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
             {bug.expectedBehavior && (
-              <div className="bg-green-50 border border-green-100 rounded px-2 py-1.5">
-                <p className="text-xs font-semibold text-green-700 mb-0.5">Expected</p>
-                <p className="text-xs text-green-800">{bug.expectedBehavior}</p>
+              <div className="border border-emerald-800 rounded px-2 py-1.5">
+                <p className="text-xs font-semibold text-emerald-400 mb-0.5">Expected</p>
+                <p className="text-xs text-emerald-300">{bug.expectedBehavior}</p>
               </div>
             )}
             {bug.actualBehavior && (
-              <div className="bg-red-50 border border-red-100 rounded px-2 py-1.5">
-                <p className="text-xs font-semibold text-red-700 mb-0.5">Actual</p>
-                <p className="text-xs text-red-800">{bug.actualBehavior}</p>
+              <div className="border border-red-800 rounded px-2 py-1.5">
+                <p className="text-xs font-semibold text-red-400 mb-0.5">Actual</p>
+                <p className="text-xs text-red-300">{bug.actualBehavior}</p>
               </div>
             )}
           </div>
           {bug.impact && (
-            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            <p className="text-xs text-amber-400 border border-amber-800 rounded px-2 py-1.5">
               <span className="font-semibold">Impact: </span>{bug.impact}
             </p>
           )}
@@ -1039,8 +1043,8 @@ function QAReportPanel({ report, phases }) {
   if (!report) return null;
 
   const score = report.overallHealthScore || 0;
-  const scoreColor = score >= 8 ? "text-green-600" : score >= 5 ? "text-amber-600" : "text-red-600";
-  const scoreBg = score >= 8 ? "bg-green-50 border-green-200" : score >= 5 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200";
+  const scoreColor = score >= 8 ? "text-emerald-400" : score >= 5 ? "text-amber-400" : "text-red-400";
+  const scoreBg = score >= 8 ? "border-emerald-800" : score >= 5 ? "border-amber-800" : "border-red-800";
 
   const tabs = [
     { key: "bugs", label: `Bugs (${report.bugsFound?.length || 0})` },
@@ -1055,32 +1059,32 @@ function QAReportPanel({ report, phases }) {
       <div className={`rounded-xl border ${scoreBg} p-4 space-y-2`}>
         <div className="flex items-center gap-3">
           <div className="text-center">
-            <div className={`text-3xl font-black ${scoreColor}`}>{score}<span className="text-base font-semibold text-gray-400">/10</span></div>
-            <div className="text-xs text-gray-500 font-medium">Health Score</div>
+            <div className={`text-3xl font-black ${scoreColor}`}>{score}<span className="text-base font-semibold text-[color:var(--text-muted)]">/10</span></div>
+            <div className="text-xs text-[color:var(--text-muted)] font-medium">Health Score</div>
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-800 mb-1">Overall Assessment</p>
-            <p className="text-sm text-gray-700 leading-relaxed">{report.verdict}</p>
+            <p className="text-sm font-semibold text-[color:var(--text)] mb-1">Overall Assessment</p>
+            <p className="text-sm text-[color:var(--text-muted)] leading-relaxed">{report.verdict}</p>
           </div>
         </div>
         {phases && (
-          <div className="flex flex-wrap gap-3 text-xs text-gray-500 border-t border-gray-200 pt-2 mt-1">
-            <span>Modules: <b className="text-gray-700">{phases.recon?.modulesDiscovered || 0}</b></span>
-            <span>Modals found: <b className="text-gray-700">{phases.recon?.totalModalsFound ?? "-"}</b></span>
-            <span>Buttons clicked: <b className="text-gray-700">{phases.recon?.totalButtonsFound ?? "-"}</b></span>
-            <span>Tabs explored: <b className="text-gray-700">{phases.recon?.totalTabsFound ?? "-"}</b></span>
-            <span>Test cases run: <b className="text-gray-700">{phases.plan?.totalTestCases || 0}</b></span>
+          <div className="flex flex-wrap gap-3 text-xs text-[color:var(--text-muted)] border-t border-[color:var(--border)] pt-2 mt-1">
+            <span>Modules: <b className="text-[color:var(--text)]">{phases.recon?.modulesDiscovered || 0}</b></span>
+            <span>Modals found: <b className="text-[color:var(--text)]">{phases.recon?.totalModalsFound ?? "-"}</b></span>
+            <span>Buttons clicked: <b className="text-[color:var(--text)]">{phases.recon?.totalButtonsFound ?? "-"}</b></span>
+            <span>Tabs explored: <b className="text-[color:var(--text)]">{phases.recon?.totalTabsFound ?? "-"}</b></span>
+            <span>Test cases run: <b className="text-[color:var(--text)]">{phases.plan?.totalTestCases || 0}</b></span>
           </div>
         )}
       </div>
 
       {/* Priority fixes */}
       {report.topPriorityFixes?.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-          <p className="text-xs font-semibold text-red-700 mb-1.5 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Top Priority Fixes</p>
+        <div className="border border-red-800 rounded-lg px-4 py-3">
+          <p className="text-xs font-semibold text-red-400 mb-1.5 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Top Priority Fixes</p>
           <ol className="space-y-0.5">
             {report.topPriorityFixes.map((f, i) => (
-              <li key={i} className="text-xs text-red-800 flex items-start gap-1.5">
+              <li key={i} className="text-xs text-red-300 flex items-start gap-1.5">
                 <span className="font-bold shrink-0">{i + 1}.</span>{f}
               </li>
             ))}
@@ -1089,10 +1093,10 @@ function QAReportPanel({ report, phases }) {
       )}
 
       {/* Section tabs */}
-      <div className="flex gap-1 border-b border-gray-200 pb-0">
+      <div className="flex gap-1 border-b border-[color:var(--border)] pb-0">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setSection(t.key)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors ${section === t.key ? "bg-white border-gray-200 text-gray-900 -mb-px" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+            className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors ${section === t.key ? "border-[color:var(--border)] text-[color:var(--text)] -mb-px bg-[var(--surface-soft)]" : "border-transparent text-[color:var(--text-muted)] hover:text-[color:var(--text)]"}`}>
             {t.label}
           </button>
         ))}
@@ -1101,7 +1105,7 @@ function QAReportPanel({ report, phases }) {
       {/* Bugs tab */}
       {section === "bugs" && (
         <div className="space-y-2">
-          {report.bugsFound?.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No bugs found - great health!</p>}
+          {report.bugsFound?.length === 0 && <p className="text-sm text-[color:var(--text-muted)] text-center py-4">No bugs found - great health!</p>}
           {report.bugsFound?.map((bug, i) => <BugCard key={i} bug={bug} />)}
         </div>
       )}
@@ -1111,22 +1115,22 @@ function QAReportPanel({ report, phases }) {
         <div className="space-y-2">
           {report.moduleReports?.map((m, i) => {
             const mScore = m.healthScore || 5;
-            const mColor = mScore >= 8 ? "text-green-600" : mScore >= 5 ? "text-amber-600" : "text-red-600";
+            const mColor = mScore >= 8 ? "text-emerald-400" : mScore >= 5 ? "text-amber-400" : "text-red-400";
             return (
-              <div key={i} className="border border-gray-200 rounded-lg p-3 space-y-1.5">
+              <div key={i} className="border border-[color:var(--border)] rounded-lg p-3 space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className={`text-lg font-black ${mColor}`}>{mScore}<span className="text-xs text-gray-400">/10</span></span>
-                  <span className="font-semibold text-gray-800 text-sm">{m.module}</span>
+                  <span className={`text-lg font-black ${mColor}`}>{mScore}<span className="text-xs text-[color:var(--text-muted)]">/10</span></span>
+                  <span className="font-semibold text-[color:var(--text)] text-sm">{m.module}</span>
                 </div>
-                <p className="text-xs text-gray-600">{m.summary}</p>
+                <p className="text-xs text-[color:var(--text-muted)]">{m.summary}</p>
                 {m.issues?.length > 0 && (
                   <ul className="space-y-0.5">
-                    {m.issues.map((issue, j) => <li key={j} className="text-xs text-red-600 flex items-start gap-1"><span className="text-red-400 mt-0.5">-</span>{issue}</li>)}
+                    {m.issues.map((issue, j) => <li key={j} className="text-xs text-red-400 flex items-start gap-1"><span className="text-red-500 mt-0.5">-</span>{issue}</li>)}
                   </ul>
                 )}
                 {m.testedFeatures?.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-0.5">
-                    {m.testedFeatures.map((f, j) => <span key={j} className="text-xs bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">{f}</span>)}
+                    {m.testedFeatures.map((f, j) => <span key={j} className="text-xs text-emerald-400 border border-emerald-800 px-1.5 py-0.5 rounded-full">{f}</span>)}
                   </div>
                 )}
               </div>
@@ -1140,24 +1144,24 @@ function QAReportPanel({ report, phases }) {
         <div className="space-y-2">
           {report.securityConcerns?.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-red-700 mb-1.5 flex items-center gap-1"><Shield className="w-3 h-3" /> Security Concerns</p>
-              {report.securityConcerns.map((c, i) => <p key={i} className="text-xs text-red-800 bg-red-50 border border-red-200 rounded px-2.5 py-1.5 mb-1">{c}</p>)}
+              <p className="text-xs font-semibold text-red-400 mb-1.5 flex items-center gap-1"><Shield className="w-3 h-3" /> Security Concerns</p>
+              {report.securityConcerns.map((c, i) => <p key={i} className="text-xs text-red-300 border border-red-800 rounded px-2.5 py-1.5 mb-1">{c}</p>)}
             </div>
           )}
           {report.performanceIssues?.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-amber-700 mb-1.5 flex items-center gap-1"><Activity className="w-3 h-3" /> Performance Issues</p>
-              {report.performanceIssues.map((c, i) => <p key={i} className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 mb-1">{c}</p>)}
+              <p className="text-xs font-semibold text-amber-400 mb-1.5 flex items-center gap-1"><Activity className="w-3 h-3" /> Performance Issues</p>
+              {report.performanceIssues.map((c, i) => <p key={i} className="text-xs text-amber-300 border border-amber-800 rounded px-2.5 py-1.5 mb-1">{c}</p>)}
             </div>
           )}
           {report.logicalInconsistencies?.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-purple-700 mb-1.5 flex items-center gap-1"><Info className="w-3 h-3" /> Logical Inconsistencies</p>
-              {report.logicalInconsistencies.map((c, i) => <p key={i} className="text-xs text-purple-800 bg-purple-50 border border-purple-200 rounded px-2.5 py-1.5 mb-1">{c}</p>)}
+              <p className="text-xs font-semibold text-[color:var(--text-muted)] mb-1.5 flex items-center gap-1"><Info className="w-3 h-3" /> Logical Inconsistencies</p>
+              {report.logicalInconsistencies.map((c, i) => <p key={i} className="text-xs text-[color:var(--text-muted)] border border-[color:var(--border)] rounded px-2.5 py-1.5 mb-1">{c}</p>)}
             </div>
           )}
           {!report.securityConcerns?.length && !report.performanceIssues?.length && !report.logicalInconsistencies?.length && (
-            <p className="text-sm text-gray-500 text-center py-4">No security or performance issues detected.</p>
+            <p className="text-sm text-[color:var(--text-muted)] text-center py-4">No security or performance issues detected.</p>
           )}
         </div>
       )}
@@ -1167,16 +1171,16 @@ function QAReportPanel({ report, phases }) {
         <div className="space-y-2">
           {report.topPriorityFixes?.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-600 mb-1.5">Priority Fixes</p>
+              <p className="text-xs font-semibold text-[color:var(--text-muted)] mb-1.5">Priority Fixes</p>
               <ol className="space-y-1.5">
-                {report.topPriorityFixes.map((f, i) => <li key={i} className="text-sm text-gray-700 flex gap-2"><span className="font-bold text-red-500 shrink-0">{i + 1}.</span>{f}</li>)}
+                {report.topPriorityFixes.map((f, i) => <li key={i} className="text-sm text-[color:var(--text)] flex gap-2"><span className="font-bold text-red-400 shrink-0">{i + 1}.</span>{f}</li>)}
               </ol>
             </div>
           )}
           {report.coverageGaps?.length > 0 && (
             <div className="mt-2">
-              <p className="text-xs font-semibold text-gray-600 mb-1.5">Coverage Gaps (untested areas)</p>
-              {report.coverageGaps.map((g, i) => <p key={i} className="text-xs text-gray-600 flex items-start gap-1.5 mb-1"><span className="text-gray-400 mt-0.5">-&gt;</span>{g}</p>)}
+              <p className="text-xs font-semibold text-[color:var(--text-muted)] mb-1.5">Coverage Gaps (untested areas)</p>
+              {report.coverageGaps.map((g, i) => <p key={i} className="text-xs text-[color:var(--text-muted)] flex items-start gap-1.5 mb-1"><span className="text-[color:var(--text-soft)] mt-0.5">-&gt;</span>{g}</p>)}
             </div>
           )}
         </div>
@@ -1189,10 +1193,10 @@ function QAReportPanel({ report, phases }) {
 // Smart Browser Report Panel (DOM-first test runs)
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const CATEGORY_META = {
-  happy_path:     { label: "Happy Path",     bg: "bg-green-50",  border: "border-green-200",  text: "text-green-700",  dot: "bg-green-500",  Icon: CheckCircle2 },
-  error_handling: { label: "Error Handling", bg: "bg-red-50",    border: "border-red-200",    text: "text-red-700",    dot: "bg-red-500",    Icon: Shield },
-  edge_case:      { label: "Edge Cases",     bg: "bg-amber-50",  border: "border-amber-200",  text: "text-amber-700",  dot: "bg-amber-500",  Icon: AlertTriangle },
-  regression:     { label: "Regression",     bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", dot: "bg-purple-500", Icon: Activity },
+  happy_path:     { label: "Happy Path",     bg: "",  border: "border-emerald-800",  text: "text-emerald-400",  dot: "bg-emerald-500",  Icon: CheckCircle2 },
+  error_handling: { label: "Error Handling", bg: "",  border: "border-red-800",      text: "text-red-400",      dot: "bg-red-500",      Icon: Shield },
+  edge_case:      { label: "Edge Cases",     bg: "",  border: "border-amber-800",    text: "text-amber-400",    dot: "bg-amber-500",    Icon: AlertTriangle },
+  regression:     { label: "Regression",     bg: "",  border: "border-[color:var(--border)]", text: "text-[color:var(--primary)]", dot: "bg-[color:var(--primary)]", Icon: Activity },
 };
 
 function SmartBrowserReportPanel({ report }) {
@@ -1213,8 +1217,8 @@ function SmartBrowserReportPanel({ report }) {
   const criticalIssues  = report.criticalIssues ?? [];
   const categorySummary = report.categorySummary ?? [];
 
-  const passColor = passRate >= 80 ? "text-green-600" : passRate >= 50 ? "text-amber-600" : "text-red-600";
-  const passBg    = passRate >= 80 ? "bg-green-50 border-green-200" : passRate >= 50 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200";
+  const passColor = passRate >= 80 ? "text-emerald-400" : passRate >= 50 ? "text-amber-400" : "text-red-400";
+  const passBg    = passRate >= 80 ? "border-emerald-800" : passRate >= 50 ? "border-amber-800" : "border-red-800";
 
   const tabs = [
     { key: "overview",  label: "Overview" },
@@ -1228,14 +1232,14 @@ function SmartBrowserReportPanel({ report }) {
       <div className={`rounded-xl border ${passBg} p-4`}>
         <div className="flex items-center gap-5 flex-wrap">
           <div className="text-center shrink-0">
-            <div className={`text-4xl font-black ${passColor}`}>{passRate}<span className="text-lg font-semibold text-gray-400">%</span></div>
-            <div className="text-xs text-gray-500 font-medium mt-0.5">Pass Rate</div>
+            <div className={`text-4xl font-black ${passColor}`}>{passRate}<span className="text-lg font-semibold text-[color:var(--text-muted)]">%</span></div>
+            <div className="text-xs text-[color:var(--text-muted)] font-medium mt-0.5">Pass Rate</div>
           </div>
           <div className="flex gap-5 text-sm flex-wrap">
-            <div className="text-center"><div className="text-xl font-bold text-green-600">{passed}</div><div className="text-xs text-gray-500">Passed</div></div>
-            <div className="text-center"><div className="text-xl font-bold text-red-600">{failed}</div><div className="text-xs text-gray-500">Failed</div></div>
-            <div className="text-center"><div className="text-xl font-bold text-gray-700">{total}</div><div className="text-xs text-gray-500">Total</div></div>
-            <div className="text-center"><div className="text-xl font-bold text-blue-600">{modules.length}</div><div className="text-xs text-gray-500">Pages</div></div>
+            <div className="text-center"><div className="text-xl font-bold text-emerald-400">{passed}</div><div className="text-xs text-[color:var(--text-muted)]">Passed</div></div>
+            <div className="text-center"><div className="text-xl font-bold text-red-400">{failed}</div><div className="text-xs text-[color:var(--text-muted)]">Failed</div></div>
+            <div className="text-center"><div className="text-xl font-bold text-[color:var(--text)]">{total}</div><div className="text-xs text-[color:var(--text-muted)]">Total</div></div>
+            <div className="text-center"><div className="text-xl font-bold text-[color:var(--primary)]">{modules.length}</div><div className="text-xs text-[color:var(--text-muted)]">Pages</div></div>
           </div>
           {categorySummary.length > 0 && (
             <div className="flex flex-wrap gap-2 ml-auto">
@@ -1253,14 +1257,14 @@ function SmartBrowserReportPanel({ report }) {
             </div>
           )}
         </div>
-        {url && <p className="mt-2 text-xs text-gray-500 font-mono break-all">{url}</p>}
+        {url && <p className="mt-2 text-xs text-[color:var(--text-muted)] font-mono break-all">{url}</p>}
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-[color:var(--border)]">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors ${activeTab === t.key ? "bg-white border-gray-200 text-gray-900 -mb-px" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+            className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors ${activeTab === t.key ? "bg-[var(--surface-soft)] border-[color:var(--border)] text-[color:var(--text)] -mb-px" : "border-transparent text-[color:var(--text-muted)] hover:text-[color:var(--text)]"}`}>
             {t.label}
           </button>
         ))}
@@ -1270,9 +1274,9 @@ function SmartBrowserReportPanel({ report }) {
       {activeTab === "overview" && (
         <div className="space-y-3">
           {narrative && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-              <p className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3" />QA Executive Summary</p>
-              <p className="text-sm text-blue-900 leading-relaxed">{narrative}</p>
+            <div className="rounded-lg border border-[color:var(--border)] px-4 py-3">
+              <p className="text-xs font-semibold text-[color:var(--primary)] mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3" />QA Executive Summary</p>
+              <p className="text-sm text-[color:var(--text-muted)] leading-relaxed">{narrative}</p>
             </div>
           )}
 
@@ -1284,19 +1288,19 @@ function SmartBrowserReportPanel({ report }) {
                 const CIcon = cm.Icon;
                 const pct = c.total > 0 ? Math.round((c.passed / c.total) * 100) : 0;
                 return (
-                  <div key={c.category} className={`rounded-xl border ${cm.border} ${cm.bg} p-3`}>
+                  <div key={c.category} className={`rounded-xl border ${cm.border} p-3`}>
                     <div className="flex items-center gap-2 mb-1.5">
                       <CIcon className={`w-4 h-4 ${cm.text} shrink-0`} />
                       <span className={`text-sm font-semibold ${cm.text}`}>{cm.label}</span>
                     </div>
                     <div className="flex items-end justify-between">
                       <div>
-                        <span className="text-2xl font-black text-gray-800">{pct}</span>
-                        <span className="text-xs text-gray-500">%</span>
+                        <span className={`text-2xl font-black ${cm.text}`}>{pct}</span>
+                        <span className="text-xs text-[color:var(--text-muted)]">%</span>
                       </div>
-                      <div className="text-right text-xs text-gray-500">
-                        <div className="text-green-600 font-semibold">{c.passed} passed</div>
-                        {c.failed > 0 && <div className="text-red-600 font-semibold">{c.failed} failed</div>}
+                      <div className="text-right text-xs text-[color:var(--text-muted)]">
+                        <div className="text-emerald-400 font-semibold">{c.passed} passed</div>
+                        {c.failed > 0 && <div className="text-red-400 font-semibold">{c.failed} failed</div>}
                         <div>{c.total} total</div>
                       </div>
                     </div>
@@ -1309,21 +1313,21 @@ function SmartBrowserReportPanel({ report }) {
           {/* Pages summary */}
           {modules.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Pages Tested</p>
+              <p className="text-xs font-semibold text-[color:var(--text-muted)] uppercase tracking-wide">Pages Tested</p>
               {modules.map((mod, i) => {
                 const pFailed = mod.failed ?? 0;
                 const pPassed = mod.passed ?? 0;
                 const pTotal  = pPassed + pFailed;
                 return (
-                  <div key={i} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${pFailed === 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
-                    {pFailed === 0 ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" /> : <XCircle className="w-4 h-4 text-red-600 shrink-0" />}
+                  <div key={i} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${pFailed === 0 ? "border-emerald-800" : "border-red-800"}`}>
+                    {pFailed === 0 ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> : <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{mod.title || mod.url}</p>
-                      {mod.pageIntent && <p className="text-xs text-gray-500 truncate">{mod.pageIntent}</p>}
+                      <p className="text-sm font-semibold text-[color:var(--text)] truncate">{mod.title || mod.url}</p>
+                      {mod.pageIntent && <p className="text-xs text-[color:var(--text-muted)] truncate">{mod.pageIntent}</p>}
                     </div>
-                    <span className={`text-xs font-bold shrink-0 ${pFailed === 0 ? "text-green-600" : "text-red-600"}`}>{pPassed}/{pTotal}</span>
+                    <span className={`text-xs font-bold shrink-0 ${pFailed === 0 ? "text-emerald-400" : "text-red-400"}`}>{pPassed}/{pTotal}</span>
                     {mod.scenarios?.length > 0 && (
-                      <span className="text-xs text-gray-400 shrink-0">{mod.scenarios.length} scenarios</span>
+                      <span className="text-xs text-[color:var(--text-muted)] shrink-0">{mod.scenarios.length} scenarios</span>
                     )}
                   </div>
                 );
@@ -1341,13 +1345,13 @@ function SmartBrowserReportPanel({ report }) {
             if (modScenarios.length === 0) return null;
             const fullMod = fullResults.find(f => f.url === mod.url);
             return (
-              <div key={mi} className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border-b border-gray-200">
-                  <Globe className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-sm font-semibold text-gray-800 flex-1 truncate">{mod.title || mod.url}</span>
-                  {mod.pageIntent && <span className="text-xs text-gray-400 italic truncate max-w-[180px]">{mod.pageIntent}</span>}
+              <div key={mi} className="border border-[color:var(--border)] rounded-xl overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-[var(--surface-soft)] border-b border-[color:var(--border)]">
+                  <Globe className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" />
+                  <span className="text-sm font-semibold text-[color:var(--text)] flex-1 truncate">{mod.title || mod.url}</span>
+                  {mod.pageIntent && <span className="text-xs text-[color:var(--text-muted)] italic truncate max-w-[180px]">{mod.pageIntent}</span>}
                 </div>
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-[color:var(--border)]">
                   {modScenarios.map((scen, si) => {
                     const cm = CATEGORY_META[scen.category] || CATEGORY_META.happy_path;
                     const CIcon = cm.Icon;
@@ -1360,35 +1364,35 @@ function SmartBrowserReportPanel({ report }) {
                       <div key={si}>
                         <button
                           onClick={() => setOpenScenario(isOpen ? null : key)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-gray-50 ${isOpen ? "bg-gray-50" : ""}`}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-[var(--surface-soft)] ${isOpen ? "bg-[var(--surface-soft)]" : ""}`}
                         >
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${scen.passed ? "bg-green-500" : "bg-red-500"}`} />
-                          <span className={`text-xs font-bold shrink-0 px-1.5 py-0.5 rounded-full ${cm.bg} ${cm.text} ${cm.border} border`}>{cm.label}</span>
-                          <span className="text-sm text-gray-800 flex-1 truncate">{scen.name}</span>
-                          <span className="text-xs text-gray-400 shrink-0">{scen.steps - scen.failedSteps}/{scen.steps} steps</span>
-                          {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${scen.passed ? "bg-emerald-500" : "bg-red-500"}`} />
+                          <span className={`text-xs font-bold shrink-0 px-1.5 py-0.5 rounded-full ${cm.text} ${cm.border} border`}>{cm.label}</span>
+                          <span className="text-sm text-[color:var(--text)] flex-1 truncate">{scen.name}</span>
+                          <span className="text-xs text-[color:var(--text-muted)] shrink-0">{scen.steps - scen.failedSteps}/{scen.steps} steps</span>
+                          {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-[color:var(--text-muted)] shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-[color:var(--text-muted)] shrink-0" />}
                         </button>
                         {isOpen && (
-                          <div className="border-t border-gray-100 bg-white">
+                          <div className="border-t border-[color:var(--border)]">
                             {stepResults.length > 0 ? stepResults.map((step, j) => (
-                              <div key={j} className={`flex items-start gap-2 px-4 py-2 border-b border-gray-50 last:border-0 ${step.passed ? "" : "bg-red-50/40"}`}>
+                              <div key={j} className={`flex items-start gap-2 px-4 py-2 border-b border-[color:var(--border)] last:border-0 ${step.passed ? "" : "border-l-2 border-red-800"}`}>
                                 {step.passed
-                                  ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />
-                                  : <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                                  : <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
                                 }
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{step.action}</span>
-                                    <span className="text-xs text-gray-700 truncate">{step.step}</span>
+                                    <span className="text-xs font-semibold bg-[var(--surface-soft)] text-[color:var(--text-muted)] px-1.5 py-0.5 rounded">{step.action}</span>
+                                    <span className="text-xs text-[color:var(--text)] truncate">{step.step}</span>
                                   </div>
-                                  {step.error && <p className="text-xs text-red-600 mt-0.5 bg-red-50 rounded px-1.5 py-0.5 font-mono">{step.error}</p>}
+                                  {step.error && <p className="text-xs text-red-400 mt-0.5 border border-red-800 rounded px-1.5 py-0.5 font-mono">{step.error}</p>}
                                   {step.screenshot && step.screenshot !== true && (
-                                    <img src={step.screenshot} alt="" className="mt-1.5 rounded border border-gray-200 max-h-28 object-contain" />
+                                    <img src={step.screenshot} alt="" className="mt-1.5 rounded border border-[color:var(--border)] max-h-28 object-contain" />
                                   )}
                                 </div>
                               </div>
                             )) : (
-                              <p className="px-4 py-2 text-xs text-gray-400">No step detail available.</p>
+                              <p className="px-4 py-2 text-xs text-[color:var(--text-muted)]">No step detail available.</p>
                             )}
                           </div>
                         )}
@@ -1400,7 +1404,7 @@ function SmartBrowserReportPanel({ report }) {
             );
           })}
           {modules.every(m => !m.scenarios?.length) && (
-            <p className="text-sm text-gray-500 text-center py-6">No scenario data — run used mechanical fallback mode.</p>
+            <p className="text-sm text-[color:var(--text-muted)] text-center py-6">No scenario data — run used mechanical fallback mode.</p>
           )}
         </div>
       )}
@@ -1410,26 +1414,26 @@ function SmartBrowserReportPanel({ report }) {
         <div className="space-y-2">
           {criticalIssues.length === 0 && (
             <div className="text-center py-8">
-              <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">No failures — all checks passed.</p>
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
+              <p className="text-sm text-[color:var(--text-muted)]">No failures — all checks passed.</p>
             </div>
           )}
           {criticalIssues.map((issue, i) => {
             const cm = CATEGORY_META[issue.category] || CATEGORY_META.edge_case;
             return (
-              <div key={i} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+              <div key={i} className="rounded-lg border border-red-800 px-3 py-2.5">
                 <div className="flex items-start gap-2">
-                  <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                  <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                       {issue.category && (
-                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${cm.bg} ${cm.text} ${cm.border} border`}>{cm.label}</span>
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${cm.text} ${cm.border} border`}>{cm.label}</span>
                       )}
-                      <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{issue.action}</span>
+                      <span className="text-xs font-semibold bg-[var(--surface-soft)] text-[color:var(--text-muted)] px-1.5 py-0.5 rounded">{issue.action}</span>
                     </div>
-                    <p className="text-xs text-red-800 font-medium">{issue.step}</p>
-                    <p className="text-xs text-red-600 font-mono mt-0.5">{issue.error}</p>
-                    {issue.page && <p className="text-xs text-gray-400 mt-0.5 truncate">{issue.page}</p>}
+                    <p className="text-xs text-red-300 font-medium">{issue.step}</p>
+                    <p className="text-xs text-red-400 font-mono mt-0.5">{issue.error}</p>
+                    {issue.page && <p className="text-xs text-[color:var(--text-muted)] mt-0.5 truncate">{issue.page}</p>}
                   </div>
                 </div>
               </div>
@@ -1449,21 +1453,21 @@ function NarrativeReportPanel({ reportDocument }) {
   if (!reportDocument?.sections?.length) return null;
 
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-2 px-4 py-3 text-left border-b border-gray-100">
-        <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-        <span className="text-sm font-semibold text-gray-800 flex-1">Narrative Report</span>
-        <span className="text-xs text-gray-400">{reportDocument.generatedAt ? formatDate(reportDocument.generatedAt) : ""}</span>
-        {open ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+    <div className="border border-[color:var(--border)] rounded-xl overflow-hidden">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-2 px-4 py-3 text-left border-b border-[color:var(--border)]">
+        <FileText className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" />
+        <span className="text-sm font-semibold text-[color:var(--text)] flex-1">Narrative Report</span>
+        <span className="text-xs text-[color:var(--text-muted)]">{reportDocument.generatedAt ? formatDate(reportDocument.generatedAt) : ""}</span>
+        {open ? <ChevronDown className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" /> : <ChevronRight className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" />}
       </button>
       {open && (
         <div className="p-4 space-y-4">
           {reportDocument.sections.map((section) => (
             <div key={section.title} className="space-y-1.5">
-              <h4 className="text-sm font-semibold text-gray-800">{section.title}</h4>
+              <h4 className="text-sm font-semibold text-[color:var(--text)]">{section.title}</h4>
               <div className="space-y-1">
                 {section.lines.map((line, index) => (
-                  <p key={`${section.title}-${index}`} className="text-xs text-gray-600 leading-relaxed">
+                  <p key={`${section.title}-${index}`} className="text-xs text-[color:var(--text-muted)] leading-relaxed">
                     {line}
                   </p>
                 ))}
@@ -1495,40 +1499,40 @@ function RunDetailModal({ run, onClose }) {
   const reportDocument = output.reportDocument || null;
 
   const modeMeta = {
-    smart_browser:    { label: "Smart DOM Test", Icon: Wand2,    color: "text-emerald-600", bg: "bg-emerald-50" },
-    browser:          { label: "Browser",        Icon: Globe,    color: "text-blue-600",    bg: "bg-blue-50" },
-    auto_discover:    { label: "Auto-Discover",  Icon: Wand2,    color: "text-indigo-600",  bg: "bg-indigo-50" },
-    multi_scenario:   { label: "Multi-Scenario", Icon: Layers,   color: "text-orange-600",  bg: "bg-orange-50" },
-    deep_exploration: { label: "Deep Explore",   Icon: Eye,      color: "text-violet-600",  bg: "bg-violet-50" },
-    cli:              { label: "CLI",            Icon: Terminal, color: "text-gray-600",    bg: "bg-gray-50" },
-    generate:         { label: "Generate",       Icon: Sparkles, color: "text-purple-600",  bg: "bg-purple-50" },
+    smart_browser:    { label: "Smart DOM Test", Icon: Wand2,    color: "text-emerald-400", bg: "border border-[color:var(--border)]" },
+    browser:          { label: "Browser",        Icon: Globe,    color: "text-[color:var(--primary)]", bg: "border border-[color:var(--border)]" },
+    auto_discover:    { label: "Auto-Discover",  Icon: Wand2,    color: "text-[color:var(--primary)]", bg: "border border-[color:var(--border)]" },
+    multi_scenario:   { label: "Multi-Scenario", Icon: Layers,   color: "text-amber-400",   bg: "border border-[color:var(--border)]" },
+    deep_exploration: { label: "Deep Explore",   Icon: Eye,      color: "text-[color:var(--primary)]", bg: "border border-[color:var(--border)]" },
+    cli:              { label: "CLI",            Icon: Terminal, color: "text-[color:var(--text-muted)]", bg: "border border-[color:var(--border)]" },
+    generate:         { label: "Generate",       Icon: Sparkles, color: "text-[color:var(--primary)]", bg: "border border-[color:var(--border)]" },
   };
   const mm = modeMeta[run.mode] || modeMeta.browser;
   const MIcon = mm.Icon;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="border border-[color:var(--border)] rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)]">
           <div className="flex items-center gap-3">
             <StatusBadge value={run.status} large />
             <span className={`inline-flex items-center gap-1 text-xs ${mm.bg} ${mm.color} px-2 py-1 rounded-full font-semibold`}>
               <MIcon className="w-3 h-3" />{mm.label}
             </span>
             <div>
-              <div className="font-semibold text-gray-900">{run.task_name || "Unknown task"}</div>
-              <div className="text-xs text-gray-500">{run.project_name} - {formatDate(run.created_at)}</div>
+              <div className="font-semibold text-[color:var(--text)]">{run.task_name || "Unknown task"}</div>
+              <div className="text-xs text-[color:var(--text-muted)]">{run.project_name} - {formatDate(run.created_at)}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => downloadRunReportPdf(run.id).catch(() => toast.error("Failed to download PDF report"))}
-              className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-semibold"
+              className="inline-flex items-center gap-1.5 text-xs text-[color:var(--primary)] border border-[color:var(--border)] hover:bg-[var(--surface-soft)] px-3 py-1.5 rounded-lg font-semibold"
             >
               <Download className="w-3.5 h-3.5" /> PDF Report
             </button>
-            <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-lg hover:bg-gray-100">Close</button>
+            <button onClick={onClose} className="text-sm text-[color:var(--text-muted)] hover:text-[color:var(--text)] px-3 py-1 rounded-lg hover:bg-[var(--surface-soft)]">Close</button>
           </div>
         </div>
 
@@ -1583,8 +1587,8 @@ function RunDetailModal({ run, onClose }) {
           {/* Full QA Report (deep exploration) */}
           {isDeepExploration && qaReport && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <Shield className="w-4 h-4 text-violet-600" /> Full QA Report
+              <h3 className="text-sm font-semibold text-[color:var(--text-muted)] mb-3 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-[color:var(--primary)]" /> Full QA Report
               </h3>
               <QAReportPanel report={qaReport} phases={output.phases} />
             </section>
@@ -1596,17 +1600,17 @@ function RunDetailModal({ run, onClose }) {
 
           {/* Auto-discover: page info */}
           {isAutoDiscover && output.pageTitle && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
-              <p className="text-xs text-indigo-500 font-semibold mb-1">Discovered page: {output.url}</p>
-              <p className="text-sm text-indigo-900 font-medium">{output.pageTitle}</p>
+            <div className="border border-[color:var(--border)] rounded-lg px-4 py-3">
+              <p className="text-xs text-[color:var(--primary)] font-semibold mb-1">Discovered page: {output.url}</p>
+              <p className="text-sm text-[color:var(--text)] font-medium">{output.pageTitle}</p>
             </div>
           )}
 
           {/* Browser: instructions */}
           {run.mode === "browser" && output.instructions && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-              <p className="text-xs text-blue-500 font-semibold mb-1">Instructions given:</p>
-              <p className="text-sm text-blue-900">{output.instructions}</p>
+            <div className="border border-[color:var(--border)] rounded-lg px-4 py-3">
+              <p className="text-xs text-[color:var(--primary)] font-semibold mb-1">Instructions given:</p>
+              <p className="text-sm text-[color:var(--text-muted)]">{output.instructions}</p>
             </div>
           )}
 
@@ -1614,19 +1618,19 @@ function RunDetailModal({ run, onClose }) {
           {isDeepExploration && (
             <div className="space-y-2">
               {output.instructions && (
-                <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-3">
-                  <p className="text-xs text-violet-500 font-semibold mb-1">Instructions given:</p>
-                  <p className="text-sm text-violet-900">{output.instructions}</p>
+                <div className="border border-[color:var(--border)] rounded-lg px-4 py-3">
+                  <p className="text-xs text-[color:var(--primary)] font-semibold mb-1">Instructions given:</p>
+                  <p className="text-sm text-[color:var(--text-muted)]">{output.instructions}</p>
                 </div>
               )}
               {output.discoveredModules?.length > 0 && (
-                <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-3">
-                  <p className="text-xs text-violet-500 font-semibold mb-2">Modules discovered &amp; tested ({output.discoveredModules.length}):</p>
+                <div className="border border-[color:var(--border)] rounded-lg px-4 py-3">
+                  <p className="text-xs text-[color:var(--primary)] font-semibold mb-2">Modules discovered &amp; tested ({output.discoveredModules.length}):</p>
                   <div className="flex flex-wrap gap-1.5">
                     {output.discoveredModules.map((m, i) => {
                       const mod = output.modules?.find(x => x.name === m);
                       const st = mod?.status || "unknown";
-                      const cls = st === "passed" ? "bg-green-100 text-green-700" : st === "failed" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600";
+                      const cls = st === "passed" ? "border border-emerald-800 text-emerald-400" : st === "failed" ? "border border-red-800 text-red-400" : "border border-[color:var(--border)] text-[color:var(--text-muted)]";
                       return <span key={i} className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{m}</span>;
                     })}
                   </div>
@@ -1637,17 +1641,17 @@ function RunDetailModal({ run, onClose }) {
 
           {/* Git context (CLI runs) */}
           {!isBrowser && gitContext.branch && (
-            <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-              <GitBranch className="w-4 h-4 text-gray-400" />
-              <span>Branch: <span className="font-mono font-semibold">{gitContext.branch}</span></span>
-              {gitContext.changedFiles?.length > 0 && <span className="text-gray-400">- {gitContext.changedFiles.length} changed files</span>}
+            <div className="flex items-center gap-2 text-sm text-[color:var(--text-muted)] border border-[color:var(--border)] rounded-lg px-3 py-2">
+              <GitBranch className="w-4 h-4 text-[color:var(--text-muted)]" />
+              <span>Branch: <span className="font-mono font-semibold text-[color:var(--text)]">{gitContext.branch}</span></span>
+              {gitContext.changedFiles?.length > 0 && <span className="text-[color:var(--text-muted)]">- {gitContext.changedFiles.length} changed files</span>}
             </div>
           )}
 
           {/* Browser step results */}
           {isBrowser && stepResults.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[color:var(--text-muted)] mb-2 flex items-center gap-2">
                 <Globe className="w-4 h-4" /> Step Results
               </h3>
               <div className="space-y-2">
@@ -1659,7 +1663,7 @@ function RunDetailModal({ run, onClose }) {
           {/* CLI command outputs */}
           {!isBrowser && commandOutputs.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><Terminal className="w-4 h-4" /> Command Results</h3>
+              <h3 className="text-sm font-semibold text-[color:var(--text-muted)] mb-2 flex items-center gap-2"><Terminal className="w-4 h-4" /> Command Results</h3>
               <div className="space-y-2">{commandOutputs.map((cmd, i) => <CommandOutput key={i} cmd={cmd} />)}</div>
             </section>
           )}
@@ -1667,13 +1671,13 @@ function RunDetailModal({ run, onClose }) {
           {/* Generated test cases */}
           {cases.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><Layers className="w-4 h-4" /> Generated Test Cases ({cases.length})</h3>
+              <h3 className="text-sm font-semibold text-[color:var(--text-muted)] mb-2 flex items-center gap-2"><Layers className="w-4 h-4" /> Generated Test Cases ({cases.length})</h3>
               <div className="space-y-1.5">{cases.map((tc, i) => <TestCaseRow key={tc.id || i} tc={tc} />)}</div>
             </section>
           )}
 
           {stepResults.length === 0 && commandOutputs.length === 0 && cases.length === 0 && (
-            <p className="text-sm text-gray-500 text-center py-4">No detail data available for this run.</p>
+            <p className="text-sm text-[color:var(--text-muted)] text-center py-4">No detail data available for this run.</p>
           )}
         </div>
       </div>
@@ -1681,10 +1685,10 @@ function RunDetailModal({ run, onClose }) {
   );
 }
 
-function InfoTile({ label, value, valueColor = "text-gray-800" }) {
+function InfoTile({ label, value, valueColor = "text-[color:var(--text)]" }) {
   return (
-    <div className="bg-gray-50 rounded-lg px-3 py-2">
-      <div className="text-xs text-gray-500">{label}</div>
+    <div className="border border-[color:var(--border)] rounded-lg px-3 py-2">
+      <div className="text-xs text-[color:var(--text-muted)]">{label}</div>
       <div className={`text-sm font-semibold truncate mt-0.5 ${valueColor}`}>{value ?? "-"}</div>
     </div>
   );
@@ -2118,12 +2122,13 @@ export default function TestingAgent() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg">
-          <Beaker className="w-6 h-6" />
+        <div className="p-2.5 rounded-lg border border-[color:var(--border)]">
+          <Beaker className="w-6 h-6 text-[color:var(--primary)]" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold theme-text">Testing Agent</h1>
-          <p className="text-sm theme-text-muted">Evidence-first browser and repository testing with reproducible runs, previews, and reports.</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-0.5">Quality Assurance</p>
+          <h1 className="text-[26px] font-semibold text-[color:var(--text)] leading-tight">Testing Agent</h1>
+          <p className="text-sm text-[color:var(--text-muted)]">Evidence-first browser and repository testing with reproducible runs, previews, and reports.</p>
         </div>
       </div>
 
@@ -2138,33 +2143,33 @@ export default function TestingAgent() {
       {/* Settings + Run panel */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Settings */}
-        <div id="testing-agent-settings-section" className="xl:col-span-2 theme-surface border theme-border rounded-xl p-5">
-          <h2 className="font-semibold theme-text flex items-center gap-2 mb-4">
-            <Settings className="w-4 h-4 theme-text-muted" /> Automation Settings
+        <div id="testing-agent-settings-section" className="xl:col-span-2 border border-[color:var(--border)] rounded-xl p-5">
+          <h2 className="font-semibold text-[color:var(--text)] flex items-center gap-2 mb-4">
+            <Settings className="w-4 h-4 text-[color:var(--text-muted)]" /> Automation Settings
           </h2>
-          {!settingsDraft ? <p className="text-sm theme-text-muted">Loading...</p> : (
-            <div className="space-y-1 divide-y theme-border">
+          {!settingsDraft ? <p className="text-sm text-[color:var(--text-muted)]">Loading...</p> : (
+            <div className="space-y-1 divide-y divide-[color:var(--border)]">
               <Toggle label="Enable testing agent" description="Master switch." checked={settingsDraft.enabled} onChange={(v) => setSettingsDraft((p) => ({ ...p, enabled: v }))} />
               <Toggle label="Auto-generate test cases on Git push" description="Generate cases when a Git-linked task is updated." checked={settingsDraft.auto_generate_on_git} onChange={(v) => setSettingsDraft((p) => ({ ...p, auto_generate_on_git: v }))} />
               <Toggle label="Auto-run CLI tests on Git push" description="Execute CLI tests automatically (requires repo path per project)." checked={settingsDraft.auto_run_on_git} onChange={(v) => setSettingsDraft((p) => ({ ...p, auto_run_on_git: v }))} />
               <div className="pt-3 space-y-3">
                 <div>
-                  <label className="block text-xs font-medium theme-text-muted mb-1">Max CLI runtime per command (seconds)</label>
+                  <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Max CLI runtime per command (seconds)</label>
                   <input type="number" min={30} max={3600} value={settingsDraft.max_runtime_seconds}
                     onChange={(e) => setSettingsDraft((p) => ({ ...p, max_runtime_seconds: Number(e.target.value || 900) }))}
-                    className="w-40 px-3 py-2 rounded-lg theme-input border theme-border text-sm"
+                    className="w-40 px-3 py-2 rounded-lg bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium theme-text-muted mb-1">Fallback CLI test commands <span className="theme-text-soft">(one per line)</span></label>
+                  <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Fallback CLI test commands <span className="text-[color:var(--text-soft)]">(one per line)</span></label>
                   <textarea rows={3} value={settingsDraft.test_commands}
                     onChange={(e) => setSettingsDraft((p) => ({ ...p, test_commands: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg theme-input border theme-border font-mono text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] font-mono text-sm"
                     placeholder={"npm test -- --runInBand\nnpm run test:e2e"}
                   />
                 </div>
                 <button onClick={saveSettings} disabled={savingSettings}
-                  className="px-4 py-2 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex items-center gap-2 text-sm"
+                  className="px-4 py-2 rounded-lg bg-[color:var(--primary)] text-[color:var(--primary-contrast)] font-semibold disabled:opacity-50 inline-flex items-center gap-2 text-sm hover:opacity-90"
                 >
                   <Save className="w-4 h-4" />{savingSettings ? "Saving..." : "Save Settings"}
                 </button>
@@ -2174,21 +2179,21 @@ export default function TestingAgent() {
         </div>
 
         {/* Run panel */}
-        <div className="theme-surface border theme-border rounded-xl p-5 space-y-3">
-          <h2 className="font-semibold theme-text flex items-center gap-2">
-            <FileCode2 className="w-4 h-4 theme-text-muted" /> Manual Test Run
+        <div className="border border-[color:var(--border)] rounded-xl p-5 space-y-3">
+          <h2 className="font-semibold text-[color:var(--text)] flex items-center gap-2">
+            <FileCode2 className="w-4 h-4 text-[color:var(--text-muted)]" /> Manual Test Run
           </h2>
 
           {/* Task picker */}
           <div className="relative">
-            <Search className="w-4 h-4 theme-text-soft absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[color:var(--text-soft)] absolute left-3 top-1/2 -translate-y-1/2" />
             <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)}
               placeholder="Search task / project / assignee"
-              className="w-full pl-9 pr-3 py-2 rounded-lg theme-input border theme-border text-sm"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] text-sm"
             />
           </div>
           <select value={selectedTaskId} onChange={(e) => setSelectedTaskId(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] text-sm"
           >
             <option value="">Select a task...</option>
             {taskOptions.map((t) => (
@@ -2198,19 +2203,19 @@ export default function TestingAgent() {
             ))}
           </select>
           {selectedTask && (
-            <div className="text-xs theme-text-muted theme-surface-soft rounded-lg p-2">
+            <div className="text-xs text-[color:var(--text-muted)] bg-[var(--surface-soft)] rounded-lg p-2">
               Status: <b>{selectedTask.status || "n/a"}</b> - Priority: <b>{selectedTask.priority || "n/a"}</b>
               {selectedTask.assigneeName && <> - Assignee: <b>{selectedTask.assigneeName}</b></>}
             </div>
           )}
 
-          {/* Mode tabs â€" 5 tabs */}
+          {/* Mode tabs — 5 tabs */}
           <div className="grid grid-cols-3 gap-1.5">
             {TABS.map((tab) => {
               const TabIcon = tab.Icon;
               return (
                 <button key={tab.key} onClick={() => setRunMode(tab.key)}
-                  className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors ${runMode === tab.key ? "theme-primary text-white shadow" : "theme-surface-soft theme-text-muted hover:opacity-90"}`}
+                  className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors ${runMode === tab.key ? "bg-[var(--surface-soft)] text-[color:var(--primary)]" : "bg-[var(--surface-soft)] text-[color:var(--text-muted)] hover:text-[color:var(--text)]"}`}
                 >
                   <TabIcon className="w-3.5 h-3.5" />{tab.label}
                 </button>
@@ -2227,27 +2232,27 @@ export default function TestingAgent() {
           {/* â"€â"€ AUTO-TEST TAB â"€â"€ */}
           {runMode === "auto" && (
             <div className="space-y-2">
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg px-3 py-2">
-                <p className="text-xs text-emerald-700 font-semibold">DOM-first smart test</p>
-                <p className="text-xs text-emerald-600 mt-0.5">Paste a URL. The agent reads the real DOM, clicks every button, fills every form, and follows every link — no LLM guessing, zero hallucination.</p>
+              <div className="border border-emerald-800 rounded-lg px-3 py-2">
+                <p className="text-xs text-emerald-400 font-semibold">DOM-first smart test</p>
+                <p className="text-xs text-emerald-300 mt-0.5">Paste a URL. The agent reads the real DOM, clicks every button, fills every form, and follows every link — no LLM guessing, zero hallucination.</p>
               </div>
-              <label className="block text-xs font-medium theme-text-muted">URL to test</label>
+              <label className="block text-xs font-medium text-[color:var(--text-muted)]">URL to test</label>
               <input
                 value={autoUrl}
                 onChange={(e) => setAutoUrl(e.target.value)}
                 placeholder="https://myapp.com"
-                className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] text-sm"
               />
               <QuickTemplateBar items={RUN_MODE_TEMPLATES.auto} onSelect={applyAutoTemplate} />
               <div className="flex gap-2">
                 <button onClick={handleSmartTest} disabled={running || !selectedTaskId || !autoUrl.trim()}
-                  className="flex-1 px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
+                  className="flex-1 px-3 py-2.5 rounded-lg bg-[color:var(--primary)] text-[color:var(--primary-contrast)] font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm hover:opacity-90"
                 >
                   <Wand2 className="w-4 h-4" />
                   {running ? "Testing..." : "Run Smart Test"}
                 </button>
               </div>
-              <p className="text-xs theme-text-soft">If the agent hits a login wall, it will pause and ask you for credentials live. You will see a modal to enter them and the run continues.</p>
+              <p className="text-xs text-[color:var(--text-soft)]">If the agent hits a login wall, it will pause and ask you for credentials live. You will see a modal to enter them and the run continues.</p>
               {liveRunId && <LiveRunPanel key={liveRunId} runId={liveRunId} onFinished={(run) => {
                 setRunning(false);
                 const s = run?.status;
@@ -2261,7 +2266,7 @@ export default function TestingAgent() {
                 <div className="mt-2 space-y-2">
                   <div className="flex items-center justify-between">
                     <StatusBadge value={autoResult.status} large />
-                    <span className="text-xs theme-text-muted">{autoResult.report?.passed ?? autoResult.summary?.passed}/{autoResult.report?.total ?? autoResult.summary?.total} passed</span>
+                    <span className="text-xs text-[color:var(--text-muted)]">{autoResult.report?.passed ?? autoResult.summary?.passed}/{autoResult.report?.total ?? autoResult.summary?.total} passed</span>
                   </div>
                   {autoResult.report && <SmartBrowserReportPanel report={autoResult.report} />}
                 </div>
@@ -2272,30 +2277,30 @@ export default function TestingAgent() {
           {/* â"€â"€ GUIDED TEST TAB â"€â"€ */}
           {runMode === "guided" && (
             <div className="space-y-2">
-              <label className="block text-xs font-medium theme-text-muted">Test instructions</label>
+              <label className="block text-xs font-medium text-[color:var(--text-muted)]">Test instructions</label>
               <textarea
                 value={browserInstructions}
                 onChange={(e) => setBrowserInstructions(e.target.value)}
                 rows={5}
                 placeholder={"go to https://myapp.com, click Login, enter admin@test.com / pass123, verify dashboard shows"}
-                className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm resize-none"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] text-sm resize-none"
               />
               <QuickTemplateBar items={RUN_MODE_TEMPLATES.guided} onSelect={applyGuidedTemplate} />
               <div className="flex gap-2">
                 <button onClick={previewBrowser} disabled={previewLoading || running || !selectedTaskId || !browserInstructions.trim()}
-                  className="flex-1 px-3 py-2 rounded-lg border theme-border theme-surface-soft font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm theme-text"
+                  className="flex-1 px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm text-[color:var(--text)]"
                 >
                   <FileText className="w-4 h-4" />
                   {previewLoading ? "Previewing..." : "Preview Plan"}
                 </button>
                 <button onClick={handleBrowserRun} disabled={running || !selectedTaskId || !browserInstructions.trim()}
-                  className="flex-1 px-3 py-2 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm"
+                  className="flex-1 px-3 py-2 rounded-lg bg-[color:var(--primary)] text-[color:var(--primary-contrast)] font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm hover:opacity-90"
                 >
                   <Globe className="w-4 h-4" />
                   {running ? "Executing scenario..." : "Run Scenario"}
                 </button>
               </div>
-              <p className="text-xs theme-text-soft">Use this for a specific workflow you want reproduced exactly, with evidence after each meaningful state change.</p>
+              <p className="text-xs text-[color:var(--text-soft)]">Use this for a specific workflow you want reproduced exactly, with evidence after each meaningful state change.</p>
               <MissionPreviewPanel preview={previewData} loading={previewLoading} error={previewError} />
               {liveRunId && <LiveRunPanel key={liveRunId} runId={liveRunId} onFinished={(run) => {
                 setRunning(false);
@@ -2310,41 +2315,41 @@ export default function TestingAgent() {
           {/* â"€â"€ MULTI-SCENARIO TAB â"€â"€ */}
           {runMode === "multi" && (
             <div className="space-y-2">
-              <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg px-3 py-2">
-                <p className="text-xs text-orange-700 font-semibold">Coverage sweep</p>
-                <p className="text-xs text-orange-600 mt-0.5">Build a four-angle plan before launch: happy path, handled failures, edge cases, and performance.</p>
+              <div className="border border-amber-800 rounded-lg px-3 py-2">
+                <p className="text-xs text-amber-400 font-semibold">Coverage sweep</p>
+                <p className="text-xs text-amber-300 mt-0.5">Build a four-angle plan before launch: happy path, handled failures, edge cases, and performance.</p>
               </div>
-              <label className="block text-xs font-medium theme-text-muted">Feature / app description</label>
+              <label className="block text-xs font-medium text-[color:var(--text-muted)]">Feature / app description</label>
               <textarea
                 value={multiDescription}
                 onChange={(e) => setMultiDescription(e.target.value)}
                 rows={3}
                 placeholder="Login flow for an e-commerce app at https://myapp.com"
-                className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm resize-none"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] text-sm resize-none"
               />
-              <label className="block text-xs font-medium theme-text-muted">Base URL (optional)</label>
+              <label className="block text-xs font-medium text-[color:var(--text-muted)]">Base URL (optional)</label>
               <input
                 value={multiUrl}
                 onChange={(e) => setMultiUrl(e.target.value)}
                 placeholder="https://myapp.com"
-                className="w-full px-3 py-2 rounded-lg theme-input border theme-border text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] text-sm"
               />
               <QuickTemplateBar items={RUN_MODE_TEMPLATES.multi} onSelect={applyMultiTemplate} />
               <div className="flex gap-2">
                 <button onClick={previewMultiScenario} disabled={previewLoading || running || !selectedTaskId || !multiDescription.trim()}
-                  className="flex-1 px-3 py-2.5 rounded-lg border theme-border theme-surface-soft font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm theme-text"
+                  className="flex-1 px-3 py-2.5 rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm text-[color:var(--text)]"
                 >
                   <FileText className="w-4 h-4" />
                   {previewLoading ? "Previewing..." : "Preview Coverage"}
                 </button>
                 <button onClick={handleMultiScenario} disabled={running || !selectedTaskId || !multiDescription.trim()}
-                  className="flex-1 px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
+                  className="flex-1 px-3 py-2.5 rounded-lg bg-[color:var(--primary)] text-[color:var(--primary-contrast)] font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm hover:opacity-90"
                 >
                   <Layers className="w-4 h-4" />
                   {running ? "Running coverage..." : "Run Coverage Sweep"}
                 </button>
               </div>
-              <p className="text-xs theme-text-soft">Each scenario runs separately so you can see which testing angle failed and why.</p>
+              <p className="text-xs text-[color:var(--text-soft)]">Each scenario runs separately so you can see which testing angle failed and why.</p>
               <MissionPreviewPanel preview={previewData} loading={previewLoading} error={previewError} />
               {liveRunId && <LiveRunPanel key={liveRunId} runId={liveRunId} onFinished={(run) => { setRunning(false); const output = run?.output_json || {}; const result = { description: output.description || multiDescription.trim(), scenarios: Array.isArray(output.scenarios) ? output.scenarios : [], overallStatus: output.overallStatus || run?.status || "failed", summary: output.summary || {}, }; setMultiResult(result); const os = result.overallStatus; if (run?.status === "cancelled" || os === "cancelled") toast("Coverage sweep stopped"); else if (os === "passed") toast.success(`All ${result.summary?.total ?? "?"} scenarios passed`); else if (os === "partial") toast(`${result.summary?.passed ?? 0} of ${result.summary?.total ?? "?"} scenarios passed`); else toast.error(`Coverage sweep found issues - ${result.summary?.failed ?? "?"} scenario(s) failed`, { duration: 5000 }); loadRuns(1, historySearch); }} />}
               {multiResult && !running && (
@@ -2366,9 +2371,9 @@ export default function TestingAgent() {
           {/* â"€â"€ DEEP TEST TAB â"€â"€ */}
           {runMode === "deep" && (
             <div className="space-y-2">
-              <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-lg px-3 py-2 space-y-1">
-                <p className="text-xs text-violet-700 font-semibold">Product audit</p>
-                <div className="text-xs text-violet-600 space-y-0.5">
+              <div className="border border-[color:var(--border)] rounded-lg px-3 py-2 space-y-1">
+                <p className="text-xs text-[color:var(--primary)] font-semibold">Product audit</p>
+                <div className="text-xs text-[color:var(--text-muted)] space-y-0.5">
                   <p><span className="font-semibold">Phase 1:</span> Authenticate and map reachable product surface.</p>
                   <p><span className="font-semibold">Phase 2:</span> Build module-level tests from real DOM and workflow evidence.</p>
                   <p><span className="font-semibold">Phase 3:</span> Execute the audit and produce a usable QA report.</p>
@@ -2385,10 +2390,10 @@ export default function TestingAgent() {
               />
               <QuickTemplateBar items={RUN_MODE_TEMPLATES.deep} onSelect={applyDeepTemplate} />
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
-                <p className="text-xs text-amber-700 font-semibold">Tips for best results</p>
-                <ul className="text-xs text-amber-600 space-y-0.5 list-disc list-inside">
-                  <li>Include the full URL with <code className="bg-amber-100 px-1 rounded">https://</code></li>
+              <div className="border border-amber-800 rounded-lg px-3 py-2 space-y-1">
+                <p className="text-xs text-amber-400 font-semibold">Tips for best results</p>
+                <ul className="text-xs text-amber-300 space-y-0.5 list-disc list-inside">
+                  <li>Include the full URL with <code className="bg-[var(--surface-soft)] px-1 rounded">https://</code></li>
                   <li>Include login credentials if the app requires authentication</li>
                   <li>Say "test all modules" or "explore every feature" to trigger deep mode</li>
                   <li>Runs can take 5-15 minutes for large apps - live progress shows below</li>
@@ -2407,7 +2412,7 @@ export default function TestingAgent() {
                 <button
                   onClick={handleDeepTest}
                   disabled={running || !selectedTaskId || !deepInstructions.trim()}
-                  className="flex-1 px-3 py-2.5 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm shadow"
+                  className="flex-1 px-3 py-2.5 rounded-lg bg-[color:var(--primary)] text-[color:var(--primary-contrast)] font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-2 text-sm hover:opacity-90"
                 >
                   <Eye className="w-4 h-4" />
                   {running ? "Running audit..." : "Start Product Audit"}
@@ -2450,7 +2455,7 @@ export default function TestingAgent() {
                   {generating ? "Generating..." : "Generate Cases"}
                 </button>
                 <button onClick={handleCliRun} disabled={running || !selectedTaskId}
-                  className="flex-1 px-3 py-2 rounded-lg theme-primary text-white font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-1.5 text-sm"
+                  className="flex-1 px-3 py-2 rounded-lg bg-[color:var(--primary)] text-[color:var(--primary-contrast)] font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-1.5 text-sm hover:opacity-90"
                 >
                   <Play className="w-4 h-4" />{running ? "Running..." : "Run Tests"}
                 </button>
@@ -2461,9 +2466,9 @@ export default function TestingAgent() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-        <p className="text-sm font-semibold text-blue-900">Tester experience goals</p>
-        <p className="mt-1 text-sm text-blue-800">
+      <div className="rounded-xl border border-[color:var(--border)] px-4 py-3">
+        <p className="text-sm font-semibold text-[color:var(--text)]">Tester experience goals</p>
+        <p className="mt-1 text-sm text-[color:var(--text-muted)]">
           Every run should make its intent visible before launch, prove state changes while executing, and leave behind usable evidence for the next person.
         </p>
       </div>
@@ -2578,7 +2583,7 @@ export default function TestingAgent() {
                           onClick={() => setProfileEdits((prev) => ({ ...prev, [p.projectId]: { ...edit, enabled: !edit.enabled } }))}
                           className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${edit.enabled ? "theme-primary" : "theme-surface"}`}
                         >
-                          <span className={`inline-block h-4 w-4 transform rounded-full theme-surface shadow transition-transform ${edit.enabled ? "translate-x-4" : "translate-x-0"}`} />
+                          <span className={`inline-block h-4 w-4 transform rounded-full theme-surface transition-transform ${edit.enabled ? "translate-x-4" : "translate-x-0"}`} />
                         </button>
                         Enabled
                       </label>
@@ -2639,13 +2644,13 @@ export default function TestingAgent() {
 
 function modeBadge(mode) {
   const map = {
-    smart_browser:    { label: "Smart DOM Test",  Icon: Wand2,     cls: "bg-emerald-50 text-emerald-700" },
-    browser:          { label: "Browser",         Icon: Globe,     cls: "bg-blue-50 text-blue-600" },
-    auto_discover:    { label: "Auto-Discover",   Icon: Wand2,     cls: "bg-indigo-50 text-indigo-600" },
-    multi_scenario:   { label: "Multi-Scenario",  Icon: Layers,    cls: "bg-orange-50 text-orange-600" },
-    deep_exploration: { label: "Deep Explore",    Icon: Eye,       cls: "bg-violet-50 text-violet-600" },
-    generate:         { label: "Generate",        Icon: Sparkles,  cls: "bg-purple-50 text-purple-600" },
-    cli:              { label: "CLI",             Icon: Terminal,  cls: "bg-gray-100 text-gray-600" },
+    smart_browser:    { label: "Smart DOM Test",  Icon: Wand2,     cls: "border border-[color:var(--border)] text-emerald-400" },
+    browser:          { label: "Browser",         Icon: Globe,     cls: "border border-[color:var(--border)] text-[color:var(--primary)]" },
+    auto_discover:    { label: "Auto-Discover",   Icon: Wand2,     cls: "border border-[color:var(--border)] text-[color:var(--primary)]" },
+    multi_scenario:   { label: "Multi-Scenario",  Icon: Layers,    cls: "border border-[color:var(--border)] text-amber-400" },
+    deep_exploration: { label: "Deep Explore",    Icon: Eye,       cls: "border border-[color:var(--border)] text-[color:var(--primary)]" },
+    generate:         { label: "Generate",        Icon: Sparkles,  cls: "border border-[color:var(--border)] text-[color:var(--primary)]" },
+    cli:              { label: "CLI",             Icon: Terminal,  cls: "border border-[color:var(--border)] text-[color:var(--text-muted)]" },
   };
   const m = map[mode] || map.cli;
   const Icon = m.Icon;
@@ -2653,13 +2658,18 @@ function modeBadge(mode) {
 }
 
 function StatCard({ label, value, color, icon }) {
-  const colors = { blue: "bg-blue-50 text-blue-600", green: "bg-green-50 text-green-600", red: "bg-red-50 text-red-600", amber: "bg-amber-50 text-amber-600" };
+  const colors = {
+    blue:  "text-[color:var(--primary)]",
+    green: "text-emerald-400",
+    red:   "text-red-400",
+    amber: "text-amber-400"
+  };
   return (
-    <div className="theme-surface border theme-border rounded-xl p-4 flex items-center gap-3">
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors[color]}`}>{icon}</div>
+    <div className="border border-[color:var(--border)] rounded-xl p-4 flex items-center gap-3">
+      <div className={`w-10 h-10 rounded-lg border border-[color:var(--border)] flex items-center justify-center ${colors[color]}`}>{icon}</div>
       <div>
-        <div className="text-2xl font-bold theme-text">{value}</div>
-        <div className="text-xs theme-text-muted">{label}</div>
+        <div className="text-2xl font-bold text-[color:var(--text)]">{value}</div>
+        <div className="text-xs text-[color:var(--text-muted)]">{label}</div>
       </div>
     </div>
   );

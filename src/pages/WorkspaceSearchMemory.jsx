@@ -66,8 +66,8 @@ function ResultFilterChip({ active, label, count, onClick }) {
       onClick={onClick}
       className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
         active
-          ? "border-[var(--primary,#2563eb)] bg-[var(--primary-soft,#dbeafe)] text-[var(--primary,#2563eb)]"
-          : "theme-border bg-[var(--surface-soft)] theme-text-muted hover:border-[var(--primary,#2563eb)] hover:text-[var(--primary,#2563eb)]"
+          ? "border-[color:var(--primary)] text-[color:var(--primary)]"
+          : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:border-[color:var(--primary)] hover:text-[color:var(--primary)]"
       }`}
     >
       {label} ({count})
@@ -354,7 +354,7 @@ export default function WorkspaceSearchMemory() {
         <Card>
           <CardContent className="flex min-h-[320px] items-center justify-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm theme-text-muted">Loading workspace search and memory...</span>
+            <span className="text-sm text-[color:var(--text-muted)]">Loading workspace search and memory...</span>
           </CardContent>
         </Card>
       </div>
@@ -363,17 +363,17 @@ export default function WorkspaceSearchMemory() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-      <div className="overflow-hidden rounded-[28px] border theme-border bg-[linear-gradient(135deg,rgba(2,132,199,0.12),rgba(15,23,42,0.04),rgba(16,185,129,0.08))]">
+      <div className="overflow-hidden rounded-[28px] border border-[color:var(--border)]">
         <div className="flex flex-col gap-6 px-6 py-8 md:flex-row md:items-end md:justify-between md:px-8">
           <div className="max-w-3xl">
             <Badge color="primary" size="md" variant="subtle">
               <Shield size={14} />
               Admin Feature
             </Badge>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight theme-text md:text-4xl">
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[color:var(--text)] md:text-4xl">
               Workspace Search + Memory
             </h1>
-            <p className="mt-3 text-sm leading-6 theme-text-muted">
+            <p className="mt-3 text-sm leading-6 text-[color:var(--text-muted)]">
               Search workspace modules, AI surfaces, users, tasks, chat, wiki, goals, and shared memory, then open the exact destination in one click.
             </p>
           </div>
@@ -388,21 +388,21 @@ export default function WorkspaceSearchMemory() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <button type="button" onClick={() => setShowSearchHistory((prev) => !prev)} className="text-left">
-          <Card className="transition-colors hover:border-[var(--primary,#2563eb)]">
+          <Card className="transition-colors hover:border-[color:var(--primary)]">
             <CardContent className="p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] theme-text-muted">Search Hits</p>
-              <p className="mt-2 text-3xl font-semibold theme-text">{historyState.summary.totalClicks}</p>
-              <p className="mt-2 text-sm theme-text-muted">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Search Hits</p>
+              <p className="mt-2 text-3xl font-semibold text-[color:var(--text)]">{historyState.summary.totalClicks}</p>
+              <p className="mt-2 text-sm text-[color:var(--text-muted)]">
                 {historyState.summary.uniqueQueries} unique queries
                 {historyState.summary.lastClickedAt ? ` - Last ${formatDateTime(historyState.summary.lastClickedAt)}` : ""}
               </p>
-              <p className="mt-1 text-xs theme-text-muted">{historyState.summary.uniqueDestinations} unique destinations opened</p>
-              <p className="mt-2 text-xs font-medium text-[var(--primary,#2563eb)]">Click to view opened result history</p>
+              <p className="mt-1 text-xs text-[color:var(--text-muted)]">{historyState.summary.uniqueDestinations} unique destinations opened</p>
+              <p className="mt-2 text-xs font-medium text-[color:var(--primary)]">Click to view opened result history</p>
             </CardContent>
           </Card>
         </button>
-        <Card><CardContent className="p-5"><p className="text-xs font-semibold uppercase tracking-[0.18em] theme-text-muted">Memory Entries</p><p className="mt-2 text-3xl font-semibold theme-text">{memoryEntries.length}</p></CardContent></Card>
-        <Card><CardContent className="p-5"><p className="text-xs font-semibold uppercase tracking-[0.18em] theme-text-muted">Access Model</p><p className="mt-2 text-lg font-semibold theme-text">Admin + Plan</p><p className="mt-2 text-sm theme-text-muted">Locked on both frontend and backend.</p></CardContent></Card>
+        <Card><CardContent className="p-5"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Memory Entries</p><p className="mt-2 text-3xl font-semibold text-[color:var(--text)]">{memoryEntries.length}</p></CardContent></Card>
+        <Card><CardContent className="p-5"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Access Model</p><p className="mt-2 text-lg font-semibold text-[color:var(--text)]">Admin + Plan</p><p className="mt-2 text-sm text-[color:var(--text-muted)]">Locked on both frontend and backend.</p></CardContent></Card>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -450,7 +450,7 @@ export default function WorkspaceSearchMemory() {
                   ))}
                 </div>
                 {currentSearchHits > 0 ? (
-                  <p className="text-xs theme-text-muted">
+                  <p className="text-xs text-[color:var(--text-muted)]">
                     {activeResultFilter === "all"
                       ? "Showing all matching search results."
                       : `Showing only ${(RESULT_FILTER_LABELS[activeResultFilter] || activeResultFilter).toLowerCase()} results.`}
@@ -460,11 +460,11 @@ export default function WorkspaceSearchMemory() {
             ) : null}
 
             {showSearchHistory ? (
-              <div className="rounded-2xl border theme-border p-4 space-y-4">
+              <div className="border border-[color:var(--border)] rounded-lg p-4 space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold theme-text">Recent Search History</p>
-                    <p className="text-xs theme-text-muted">
+                    <p className="text-sm font-semibold text-[color:var(--text)]">Recent Search History</p>
+                    <p className="text-xs text-[color:var(--text-muted)]">
                       Only clicked search results are stored here.
                     </p>
                   </div>
@@ -481,14 +481,14 @@ export default function WorkspaceSearchMemory() {
                 </div>
 
                 {historyState.loading ? (
-                  <div className="flex items-center gap-2 text-sm theme-text-muted">
+                  <div className="flex items-center gap-2 text-sm text-[color:var(--text-muted)]">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading search history...
                   </div>
                 ) : null}
 
                 {!historyState.loading && historyState.items.length === 0 ? (
-                  <p className="text-sm theme-text-muted">No clicked search results recorded yet.</p>
+                  <p className="text-sm text-[color:var(--text-muted)]">No clicked search results recorded yet.</p>
                 ) : null}
 
                 {historyState.items.map((entry) => (
@@ -502,24 +502,24 @@ export default function WorkspaceSearchMemory() {
                       }
                       navigate(entry.path);
                     }}
-                    className="block w-full rounded-xl border theme-border p-4 text-left transition-colors hover:bg-[var(--surface-soft)]"
+                    className="block w-full border border-[color:var(--border)] rounded-lg p-4 text-left transition-colors hover:bg-[var(--surface-soft)]"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <ResultBadge>{entry.resultType}</ResultBadge>
-                          <p className="text-sm font-semibold theme-text truncate">{entry.resultTitle}</p>
+                          <p className="text-sm font-semibold text-[color:var(--text)] truncate">{entry.resultTitle}</p>
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs theme-text-muted">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[color:var(--text-muted)]">
                           <span className="inline-flex items-center gap-1">
                             <Clock3 size={12} />
                             {formatDateTime(entry.clickedAt)}
                           </span>
                           <span>Query: {entry.query || "Unknown"}</span>
                         </div>
-                        {entry.path ? <p className="mt-2 text-xs theme-text-muted truncate">{entry.path}</p> : null}
+                        {entry.path ? <p className="mt-2 text-xs text-[color:var(--text-muted)] truncate">{entry.path}</p> : null}
                       </div>
-                      <Sparkles size={16} className="shrink-0 theme-text-muted" />
+                      <Sparkles size={16} className="shrink-0 text-[color:var(--text-muted)]" />
                     </div>
                   </button>
                 ))}
@@ -527,7 +527,7 @@ export default function WorkspaceSearchMemory() {
             ) : null}
 
             {searchState.loading ? (
-              <div className="flex items-center gap-2 text-sm theme-text-muted">
+              <div className="flex items-center gap-2 text-sm text-[color:var(--text-muted)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Searching workspace...
               </div>
@@ -538,27 +538,27 @@ export default function WorkspaceSearchMemory() {
                 key={`${result.type}-${result.id}`}
                 type="button"
                 onClick={() => handleSearchResultClick(result)}
-                className="block w-full rounded-2xl border theme-border p-4 text-left transition-colors hover:bg-[var(--surface-soft)]"
+                className="block w-full border border-[color:var(--border)] rounded-lg p-4 text-left transition-colors hover:bg-[var(--surface-soft)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <ResultBadge>{result.type}</ResultBadge>
-                      <p className="text-sm font-semibold theme-text">{result.title}</p>
+                      <p className="text-sm font-semibold text-[color:var(--text)]">{result.title}</p>
                     </div>
-                    <p className="mt-2 text-sm leading-6 theme-text-muted">{result.snippet}</p>
+                    <p className="mt-2 text-sm leading-6 text-[color:var(--text-muted)]">{result.snippet}</p>
                   </div>
-                  <Sparkles size={16} className="shrink-0 theme-text-muted" />
+                  <Sparkles size={16} className="shrink-0 text-[color:var(--text-muted)]" />
                 </div>
               </button>
             ))}
 
             {!searchState.loading && searchQuery.trim().length >= 2 && !searchState.results.length ? (
-              <p className="text-sm theme-text-muted">No matching workspace modules or records found.</p>
+              <p className="text-sm text-[color:var(--text-muted)]">No matching workspace modules or records found.</p>
             ) : null}
 
             {!searchState.loading && searchState.results.length > 0 && !filteredSearchResults.length ? (
-              <p className="text-sm theme-text-muted">
+              <p className="text-sm text-[color:var(--text-muted)]">
                 No {(RESULT_FILTER_LABELS[activeResultFilter] || activeResultFilter).toLowerCase()} results match this query.
               </p>
             ) : null}
@@ -581,11 +581,11 @@ export default function WorkspaceSearchMemory() {
                 <Textarea label="Content" rows={8} value={memoryForm.content} onChange={(event) => setMemoryForm((prev) => ({ ...prev, content: event.target.value }))} />
                 <Input label="Tags" value={memoryForm.tags} onChange={(event) => setMemoryForm((prev) => ({ ...prev, tags: event.target.value }))} helperText="Comma-separated tags" />
                 <div className="grid gap-4 md:grid-cols-2">
-                  <select value={memoryForm.visibility} onChange={(event) => setMemoryForm((prev) => ({ ...prev, visibility: event.target.value }))} className="rounded-lg border theme-border bg-transparent px-3 py-2 text-sm theme-text">
+                  <select value={memoryForm.visibility} onChange={(event) => setMemoryForm((prev) => ({ ...prev, visibility: event.target.value }))} className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm">
                     <option value="workspace">workspace</option>
                     <option value="private">private</option>
                   </select>
-                  <label className="inline-flex items-center gap-2 text-sm theme-text md:mt-2">
+                  <label className="inline-flex items-center gap-2 text-sm text-[color:var(--text)] md:mt-2">
                     <input type="checkbox" checked={Boolean(memoryForm.isPinned)} onChange={(event) => setMemoryForm((prev) => ({ ...prev, isPinned: event.target.checked }))} />
                     Pin this entry
                   </label>
@@ -616,7 +616,7 @@ export default function WorkspaceSearchMemory() {
             </CardHeader>
             <CardContent className="space-y-4">
               {memoryEntries.map((entry) => (
-                <div key={entry.id} className="rounded-2xl border theme-border p-5">
+                <div key={entry.id} className="border border-[color:var(--border)] rounded-lg p-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
                       <div className="flex flex-wrap gap-2">
@@ -625,15 +625,15 @@ export default function WorkspaceSearchMemory() {
                         {entry.is_archived ? <Badge color="warning">Archived</Badge> : null}
                       </div>
                       <div>
-                        <p className="text-base font-semibold theme-text">{entry.title}</p>
-                        <p className="mt-2 text-sm leading-6 theme-text-muted">{entry.content}</p>
+                        <p className="text-base font-semibold text-[color:var(--text)]">{entry.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-[color:var(--text-muted)]">{entry.content}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {(entry.tags || []).map((tag) => (
                           <Badge key={tag} color="neutral" variant="subtle">{tag}</Badge>
                         ))}
                       </div>
-                      <p className="text-xs theme-text-muted">{entry.created_by_name || "Unknown"} • Updated {formatDateTime(entry.updated_at)}</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">{entry.created_by_name || "Unknown"} • Updated {formatDateTime(entry.updated_at)}</p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <Button size="sm" variant="secondary" onClick={() => beginEdit(entry)}>Edit</Button>
@@ -648,7 +648,7 @@ export default function WorkspaceSearchMemory() {
                   </div>
                 </div>
               ))}
-              {!memoryEntries.length ? <p className="text-sm theme-text-muted">No memory entries yet.</p> : null}
+              {!memoryEntries.length ? <p className="text-sm text-[color:var(--text-muted)]">No memory entries yet.</p> : null}
             </CardContent>
           </Card>
         </div>

@@ -42,11 +42,14 @@ const SCORE_BG = {
   neutral: "bg-[color:var(--surface-strong)]",
 };
 
+// Outlines on canvas — no fills, neutral borders only. Status is
+// conveyed by the text/icon color inside the container, not the
+// container itself.
 const SCORE_SURFACE = {
-  good: "bg-[color:var(--score-good-bg)] border-[color:var(--score-good-border)]",
-  warning: "bg-[color:var(--score-warning-bg)] border-[color:var(--score-warning-border)]",
-  danger: "bg-[color:var(--score-danger-bg)] border-[color:var(--score-danger-border)]",
-  neutral: "bg-[color:var(--surface-soft)] border-[color:var(--border)]",
+  good: "border-[color:var(--border)]",
+  warning: "border-[color:var(--border)]",
+  danger: "border-[color:var(--border)]",
+  neutral: "border-[color:var(--border)]",
 };
 
 function getScoreTone(value, { direction = "high", goodAt = 75, warningAt = 50 } = {}) {
@@ -462,7 +465,7 @@ const autonomousInsight = useMemo(() => {
         }
       : autonomousInsight?.type === "warning"
       ? {
-          panel: "dashboard-card border-[color:var(--score-warning-border)]",
+          panel: "border-[color:var(--border)]",
           icon: "bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)]",
           label: "bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)] border border-[color:var(--score-warning-border)]",
           metric: SCORE_SURFACE.warning,
@@ -470,14 +473,14 @@ const autonomousInsight = useMemo(() => {
         }
       : autonomousInsight?.type === "positive"
       ? {
-          panel: "dashboard-card border-[color:var(--score-good-border)]",
+          panel: "border-[color:var(--border)]",
           icon: "bg-[color:var(--score-good-bg)] text-[color:var(--score-good)]",
           label: "bg-[color:var(--score-good-bg)] text-[color:var(--score-good)] border border-[color:var(--score-good-border)]",
           metric: SCORE_SURFACE.good,
           metricText: SCORE_TEXT.good,
         }
       : {
-          panel: "dashboard-card",
+          panel: "border-[color:var(--border)]",
           icon: "bg-[color:var(--surface-soft)] theme-text-muted",
           label: "bg-[color:var(--surface-soft)] theme-text-muted border border-[color:var(--border)]",
           metric: SCORE_SURFACE.neutral,
@@ -544,7 +547,7 @@ const autonomousInsight = useMemo(() => {
         <div className="grid grid-cols-3 gap-2">
           {autonomousInsight.stats.map((s, index) => (
             <div key={s.label} className={`rounded-lg border px-3 py-2.5 text-center ${index === 0 ? insightTone.metric : "bg-[color:var(--surface)] border-[color:var(--border)]"}`}>
-              <span className={`block text-xl font-black leading-none ${index === 0 ? insightTone.metricText : s.color}`}>{s.value}</span>
+              <span className={`block text-lg font-semibold leading-none ${index === 0 ? insightTone.metricText : s.color}`}>{s.value}</span>
               <span className="mt-1 block text-[10px] font-semibold uppercase theme-text-muted">{s.label}</span>
             </div>
           ))}
@@ -623,17 +626,17 @@ const autonomousInsight = useMemo(() => {
 )}
 
 {isAdmin && dashboardOverview?.executiveSummary && (
-  <div className="dashboard-card dashboard-executive-card border rounded-lg p-5">
+  <div className="border border-[color:var(--border)] rounded-lg p-5">
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
       <div className="min-w-0">
         <div className="flex items-start gap-3 mb-3">
-          <div className="w-9 h-9 rounded-lg bg-[color:var(--primary)] text-[color:var(--primary-contrast)] flex items-center justify-center shadow-sm">
+          <div className="w-9 h-9 rounded-lg brand-orange-bg text-[#0a0a0b] flex items-center justify-center shadow-sm">
             <Shield className="h-4 w-4" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm font-bold theme-text">Executive Intelligence</h2>
-              <span className="text-[10px] px-2 py-0.5 rounded-md bg-[color:var(--primary)]/10 text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20 shrink-0">
+              <span className="text-[10px] px-2 py-0.5 rounded-md brand-orange-text font-semibold border brand-orange-border shrink-0">
                 Live
               </span>
             </div>
@@ -649,15 +652,15 @@ const autonomousInsight = useMemo(() => {
           {dashboardOverview.executiveSummary.narrative}
         </p>
       </div>
-      <div className="rounded-lg border border-[color:var(--primary)]/20 bg-[color:var(--primary)]/10 p-3 self-stretch flex flex-col justify-between gap-3">
+      <div className="rounded-lg border brand-orange-border p-3 self-stretch flex flex-col justify-between gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase text-[color:var(--primary)]">Current signal</div>
+          <div className="text-[10px] font-bold uppercase brand-orange-text">Current signal</div>
           <div className="text-xs theme-text-muted mt-1">Operational summary ready</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => openExecutiveDetail("summary")}
-            className="text-xs font-semibold text-[color:var(--primary)] hover:opacity-80 transition-opacity"
+            className="text-xs font-semibold brand-orange-text hover:opacity-80 transition-opacity"
           >
             Read full summary →
           </button>
@@ -680,13 +683,13 @@ const autonomousInsight = useMemo(() => {
       className="h-1 w-full"
       style={{
         background:
-          "linear-gradient(90deg, color-mix(in srgb, var(--primary) 72%, white), var(--primary), color-mix(in srgb, var(--primary) 72%, black))",
+          "linear-gradient(90deg, var(--primary-hover), var(--primary), var(--primary-hover))",
       }}
     />
     <div className="p-5">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[color:var(--primary)]/15 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center">
             <span className="text-sm">🧠</span>
           </div>
           <div>
@@ -694,7 +697,7 @@ const autonomousInsight = useMemo(() => {
             <p className="text-[10px] theme-text-muted">AI-generated org analysis</p>
           </div>
         </div>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[color:var(--primary)]/10 text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20 shrink-0">
+        <span className="text-[10px] px-2 py-0.5 rounded-full text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20 shrink-0">
           Live
         </span>
       </div>
@@ -768,7 +771,7 @@ const autonomousInsight = useMemo(() => {
   };
 
   return (
-  <Card className="dashboard-card dashboard-performance-card">
+  <Card className="">
     <Card.Content className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px] items-stretch">
         <div className="min-w-0">
@@ -782,7 +785,7 @@ const autonomousInsight = useMemo(() => {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-[10px] font-bold uppercase theme-text-muted">Score</div>
-              <div className={`text-4xl font-black leading-none ${getScoreTextClass(score)}`}>
+              <div className={`text-3xl font-semibold leading-none ${getScoreTextClass(score)}`}>
                 {score}
                 <span className={`text-base font-bold ${getScoreTextClass(score)}`}>/100</span>
               </div>
@@ -791,9 +794,9 @@ const autonomousInsight = useMemo(() => {
               {risk?.level || "No"} Risk
             </span>
           </div>
-          <div className="mt-3 h-2.5 w-full rounded-full bg-[color:var(--surface)] overflow-hidden">
+          <div className="mt-3 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
             <div
-              className={`h-2.5 rounded-full transition-all duration-700 ${getScoreBgClass(score)}`}
+              className={`h-1 rounded-full transition-all duration-700 ${getScoreBgClass(score)}`}
               style={{ width: `${Math.min(score, 100)}%` }}
             />
           </div>
@@ -815,7 +818,7 @@ const autonomousInsight = useMemo(() => {
           )}
         </div>
         <div className="text-right shrink-0">
-          <div className={`text-4xl font-bold ${getScoreTextClass(score)}`}>
+          <div className={`text-3xl font-semibold ${getScoreTextClass(score)}`}>
             {score}
             <span className={`text-base font-normal ${getScoreTextClass(score)}`}>/100</span>
           </div>
@@ -837,7 +840,7 @@ const autonomousInsight = useMemo(() => {
       {/* SCORE BAR */}
       <div className="hidden">
         <div
-          className={`h-2.5 rounded-full transition-all duration-700 ${getScoreBgClass(score)}`}
+          className={`h-1 rounded-full transition-all duration-700 ${getScoreBgClass(score)}`}
           style={{ width: `${Math.min(score, 100)}%` }}
         />
       </div>
@@ -856,10 +859,10 @@ const autonomousInsight = useMemo(() => {
             <div className={`rounded-lg border p-3 ${getScoreSurfaceClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-semibold theme-text">Attendance</span>
-                <span className={`text-sm font-black ${getScoreTextClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>{breakdown.attendanceScore ?? "-"}/100</span>
+                <span className={`text-sm font-semibold ${getScoreTextClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>{breakdown.attendanceScore ?? "-"}/100</span>
               </div>
-              <div className="mt-2 h-2.5 w-full rounded-full bg-[color:var(--surface)] overflow-hidden">
-                <div className={`h-2.5 rounded-full ${getScoreBgClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${breakdown.attendanceScore ?? 0}%` }} />
+              <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
+                <div className={`h-1 rounded-full ${getScoreBgClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${breakdown.attendanceScore ?? 0}%` }} />
               </div>
               <div className="mt-1 text-[10px] theme-text-muted">30% of score</div>
               {breakdown.hasAttendanceTracking === false && (
@@ -869,10 +872,10 @@ const autonomousInsight = useMemo(() => {
             <div className={`rounded-lg border p-3 ${getScoreSurfaceClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-semibold theme-text">Productivity</span>
-                <span className={`text-sm font-black ${getScoreTextClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>{breakdown.productivityScore ?? "-"}/100</span>
+                <span className={`text-sm font-semibold ${getScoreTextClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>{breakdown.productivityScore ?? "-"}/100</span>
               </div>
-              <div className="mt-2 h-2.5 w-full rounded-full bg-[color:var(--surface)] overflow-hidden">
-                <div className={`h-2.5 rounded-full ${getScoreBgClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${breakdown.productivityScore ?? 0}%` }} />
+              <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
+                <div className={`h-1 rounded-full ${getScoreBgClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${breakdown.productivityScore ?? 0}%` }} />
               </div>
               <div className="mt-1 text-[10px] theme-text-muted">70% of score</div>
             </div>
@@ -912,16 +915,16 @@ const autonomousInsight = useMemo(() => {
         </div>
       )}
 
-      {/* MY TASK STATS */}
+      {/* MY TASK STATS — outlines on canvas, status via text color */}
       <div className="grid grid-cols-4 gap-2">
         {[
-          { label: "My Tasks", value: myTotal, color: "theme-text", bg: "bg-[var(--surface-soft)] border-[var(--border)]" },
-          { label: "Completed", value: myCompleted, color: SCORE_TEXT.good, bg: SCORE_SURFACE.good },
-          { label: "In Progress", value: myInProgress, color: "text-[color:var(--primary)]", bg: "bg-[color:var(--primary)]/10 border-[color:var(--primary)]/20" },
-          { label: "Overdue", value: myOverdue, color: myOverdue > 0 ? SCORE_TEXT.danger : "theme-text-muted", bg: myOverdue > 0 ? SCORE_SURFACE.danger : SCORE_SURFACE.neutral },
+          { label: "My Tasks",    value: myTotal,      color: "theme-text" },
+          { label: "Completed",   value: myCompleted,  color: SCORE_TEXT.good },
+          { label: "In Progress", value: myInProgress, color: "text-[color:var(--primary)]" },
+          { label: "Overdue",     value: myOverdue,    color: myOverdue > 0 ? SCORE_TEXT.danger : "theme-text-muted" },
         ].map(s => (
-          <div key={s.label} className={`rounded-lg border p-3 text-center ${s.bg}`}>
-            <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+          <div key={s.label} className="rounded-lg border border-[color:var(--border)] p-3 text-center">
+            <div className={`text-xl font-semibold ${s.color}`}>{s.value}</div>
             <div className="text-[10px] theme-text-muted mt-0.5 font-medium">{s.label}</div>
           </div>
         ))}
@@ -946,16 +949,16 @@ const autonomousInsight = useMemo(() => {
               const barColor = getDimColor(key, value);
               const textColor = getDimTextColor(key, value);
               return (
-                <div key={key} className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-lg p-3">
+                <div key={key} className="border border-[color:var(--border)] rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
                       <span className="text-base">{meta.icon}</span>
                       <span className="text-xs theme-text-muted font-medium">{meta.label}</span>
                     </div>
-                    <span className={`text-sm font-bold ${textColor}`}>{Math.round(value)}</span>
+                    <span className={`text-sm font-semibold ${textColor}`}>{Math.round(value)}</span>
                   </div>
-                  <div className="w-full bg-[var(--surface-strong)] rounded-full h-1.5">
-                    <div className={`${barColor} h-1.5 rounded-full transition-all duration-700`} style={{ width: `${Math.min(value, 100)}%` }} />
+                  <div className="w-full bg-[var(--surface-soft)] rounded-full h-1">
+                    <div className={`${barColor} h-1 rounded-full transition-all duration-700`} style={{ width: `${Math.min(value, 100)}%` }} />
                   </div>
                 </div>
               );
@@ -964,16 +967,12 @@ const autonomousInsight = useMemo(() => {
         </div>
       )}
 
-      {/* RISK + SIGNALS */}
+      {/* RISK + SIGNALS — outline only, status via text color inside */}
       {risk && (
-        <div className={`rounded-lg border p-3 flex items-start justify-between gap-3 ${
-          risk.level === "High" ? "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)]" :
-          risk.level === "Medium" ? "bg-[color:var(--surface-strong)] border-[color:var(--border)]" :
-          "bg-[color:var(--surface-soft)] border-[color:var(--border)]"
-        }`}>
+        <div className="rounded-lg border border-[color:var(--border)] p-3 flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-semibold theme-text-muted mb-1">Performance Risk</div>
-            <div className={`text-2xl font-bold ${risk.level === "High" ? "text-[color:var(--overdue-text)]" : risk.level === "Medium" ? "text-[color:var(--text-soft)]" : "text-[color:var(--text-soft)]"}`}>
+            <div className={`text-xl font-semibold ${risk.level === "High" ? "text-[color:var(--overdue-text)]" : risk.level === "Medium" ? "text-[color:var(--text-soft)]" : "text-[color:var(--text-soft)]"}`}>
               {Math.round(risk.probability)}%
             </div>
             <div className="text-xs theme-text-muted mt-0.5">probability of underperformance</div>
@@ -1034,14 +1033,17 @@ const autonomousInsight = useMemo(() => {
         </div>
       )}
 
-      {/* COACHING */}
+      {/* COACHING — outlined rows on canvas, no fills */}
       {coaching.length > 0 && (
         <div>
-          <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-2">Recommendations</div>
+          <div className="text-[10px] font-semibold theme-text-muted uppercase tracking-[0.14em] mb-2">Recommendations</div>
           <div className="space-y-2">
             {coaching.map((nudge, idx) => (
-              <div key={idx} className="flex items-start gap-2 bg-[color:var(--score-warning-bg)] border border-[color:var(--score-warning-border)] rounded-lg px-3 py-2.5">
-                <span className="text-[color:var(--score-warning)] mt-0.5 shrink-0">→</span>
+              <div
+                key={idx}
+                className="flex items-start gap-2.5 border border-[color:var(--border)] rounded-lg px-3 py-2.5"
+              >
+                <span className="text-[color:var(--primary)] mt-0.5 shrink-0 font-semibold">→</span>
                 <span className="text-xs theme-text leading-relaxed">
                   {typeof nudge === "string" ? nudge : nudge.message || nudge.action}
                 </span>
@@ -1080,8 +1082,8 @@ const autonomousInsight = useMemo(() => {
       sub: `of ${totalTasks} total tasks`,
       icon: <Clock className="w-4 h-4" />,
       valueClass: "text-[color:var(--primary)]",
-      bg: "bg-[color:var(--primary)]/10 border-[color:var(--primary)]/20",
-      iconBg: "bg-[color:var(--primary)]/15 text-[color:var(--primary)]",
+      bg: "border-[color:var(--primary)]/20",
+      iconBg: "text-[color:var(--primary)]",
     },
     {
       label: "Completed",
@@ -1098,8 +1100,8 @@ const autonomousInsight = useMemo(() => {
       sub: monthLabel,
       icon: <FolderKanban className="w-4 h-4" />,
       valueClass: "text-[color:var(--primary)]",
-      bg: "bg-[color:var(--primary)]/10 border-[color:var(--primary)]/20",
-      iconBg: "bg-[color:var(--primary)]/15 text-[color:var(--primary)]",
+      bg: "border-[color:var(--primary)]/20",
+      iconBg: "text-[color:var(--primary)]",
     },
   ];
 
@@ -1119,8 +1121,8 @@ const autonomousInsight = useMemo(() => {
       sub: "in workspace",
       icon: <Users className="w-4 h-4" />,
       valueClass: "text-[color:var(--primary)]",
-      bg: "bg-[color:var(--primary)]/10 border-[color:var(--primary)]/20",
-      iconBg: "bg-[color:var(--primary)]/15 text-[color:var(--primary)]",
+      bg: "border-[color:var(--primary)]/20",
+      iconBg: "text-[color:var(--primary)]",
     },
     {
       label: "High Performers",
@@ -1148,7 +1150,7 @@ const autonomousInsight = useMemo(() => {
         {tile.icon}
       </div>
       <div className="min-w-0">
-        <div className={`text-2xl font-bold leading-none ${tile.valueClass}`}>{tile.value}</div>
+        <div className={`text-xl font-semibold leading-none ${tile.valueClass}`}>{tile.value}</div>
         <div className="text-[11px] font-semibold theme-text mt-1 truncate">{tile.label}</div>
         <div className="text-[10px] theme-text-muted truncate">{tile.sub}</div>
       </div>
@@ -1156,13 +1158,13 @@ const autonomousInsight = useMemo(() => {
   );
 
   return (
-    <section className="dashboard-card rounded-2xl border p-5 lg:col-span-2">
+    <section className="rounded-2xl border border-[color:var(--border)] p-5 lg:col-span-2">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-sm font-semibold theme-text">Workspace Overview</h2>
           <p className="text-xs theme-text-muted mt-0.5">{monthLabel}</p>
         </div>
-        <span className="text-[10px] px-2 py-1 rounded-full bg-[color:var(--primary)]/10 text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20">
+        <span className="text-[10px] px-2 py-1 rounded-full text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20">
           {intelligence ? "Intelligence" : "Live"}
         </span>
       </div>
@@ -1188,7 +1190,7 @@ const autonomousInsight = useMemo(() => {
   ];
 
   return (
-    <section className="dashboard-card border rounded-lg p-5 flex flex-col">
+    <section className="border border-[color:var(--border)] rounded-lg p-5 flex flex-col">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-7 h-7 rounded-lg bg-[color:var(--surface-strong)] flex items-center justify-center">
           <Trophy className="w-4 h-4 text-[color:var(--text-soft)]" />
@@ -1270,7 +1272,7 @@ const autonomousInsight = useMemo(() => {
 </div>
 
 {isAdmin && intelligence?.forecast && (
-  <section className="dashboard-card border rounded-lg p-6 space-y-4">
+  <section className="border border-[color:var(--border)] rounded-lg p-6 space-y-4">
 
     <div className="flex justify-between items-center">
       <h2 className="text-sm font-semibold">
@@ -1361,7 +1363,7 @@ const autonomousInsight = useMemo(() => {
    WORKSPACE HEALTH PULSE (admin only)
 ================================ */}
 {isAdmin && (
-<section className="dashboard-card rounded-lg p-4 border">
+<section className="rounded-lg p-4 border border-[color:var(--border)]">
   <div className="flex justify-between items-center mb-2">
     <h2 className="text-sm font-semibold">
       Workspace Health Pulse
@@ -1399,7 +1401,7 @@ const autonomousInsight = useMemo(() => {
       </section>
 
       {/* High-level stats */}
-      <section className="dashboard-card rounded-2xl border p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+      <section className="rounded-2xl border border-[color:var(--border)] p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
         <div>
           <div className="theme-text-muted">Projects</div>
           <div className="text-lg font-semibold">{totalProjects}</div>
@@ -1430,7 +1432,7 @@ const autonomousInsight = useMemo(() => {
       <div className="grid md:grid-cols-3 gap-4">
 
         {/* My Tasks card */}
-        <div className="dashboard-card border rounded-lg p-4 flex flex-col gap-3">
+        <div className="border border-[color:var(--border)] rounded-lg p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckSquare className="w-4 h-4 text-[color:var(--primary)]" />
@@ -1444,19 +1446,15 @@ const autonomousInsight = useMemo(() => {
             </Link>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg bg-[color:var(--primary)]/10 border border-[color:var(--primary)]/20 px-3 py-2.5 text-center">
-              <div className="text-2xl font-bold text-[color:var(--primary)]">{myTasks.length}</div>
-              <div className="text-[10px] text-[color:var(--primary)] font-medium mt-0.5">Total assigned</div>
+            <div className="rounded-lg border border-[color:var(--border)] px-3 py-2.5 text-center">
+              <div className="text-xl font-semibold text-[color:var(--text)]">{myTasks.length}</div>
+              <div className="text-[10px] text-[color:var(--text-muted)] font-medium mt-0.5">Total assigned</div>
             </div>
             <Link
               to={isAdmin || isManager ? "/my-tasks?tab=mine" : "/my-tasks"}
-              className={`rounded-lg border px-3 py-2.5 text-center block transition-colors ${
-                myOverdueTasks.length > 0
-                  ? "bg-[color:var(--overdue-bg)] border-[color:var(--overdue-border)] hover:bg-[color:var(--overdue-bg)]/80"
-                  : "bg-[color:var(--surface-soft)] border-[color:var(--border)]"
-              }`}
+              className="rounded-lg border border-[color:var(--border)] px-3 py-2.5 text-center block transition-colors hover:bg-[var(--surface-soft)]"
             >
-              <div className={`text-2xl font-bold ${myOverdueTasks.length > 0 ? "text-[color:var(--overdue-text)]" : "text-[color:var(--text-soft)]"}`}>
+              <div className={`text-xl font-semibold ${myOverdueTasks.length > 0 ? "text-[color:var(--overdue-text)]" : "text-[color:var(--text-soft)]"}`}>
                 {myOverdueTasks.length}
               </div>
               <div className={`text-[10px] font-medium mt-0.5 ${myOverdueTasks.length > 0 ? "text-[color:var(--overdue-text)]" : "text-[color:var(--text-soft)]"}`}>
@@ -1473,11 +1471,11 @@ const autonomousInsight = useMemo(() => {
         </div>
 
         {/* Role card */}
-        <div className="dashboard-card border rounded-lg p-4 flex flex-col gap-3">
+        <div className="border border-[color:var(--border)] rounded-lg p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            {isAdmin ? <Shield className="w-4 h-4 text-[color:var(--primary)]" /> : <Users className="w-4 h-4 text-[color:var(--primary)]" />}
+            {isAdmin ? <Shield className="w-4 h-4 brand-orange-text" /> : <Users className="w-4 h-4 brand-orange-text" />}
             <span className="text-sm font-semibold theme-text capitalize">{role} Access</span>
-            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-[color:var(--primary)]/15 text-[color:var(--primary)] border border-[color:var(--primary)]/20 font-semibold capitalize">{role}</span>
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full brand-orange-text border brand-orange-border font-semibold capitalize">{role}</span>
           </div>
           <div className="space-y-1.5">
             {[
@@ -1499,7 +1497,7 @@ const autonomousInsight = useMemo(() => {
         </div>
 
         {/* Projects card */}
-        <div className="dashboard-card border rounded-lg p-4 flex flex-col gap-3">
+        <div className="border border-[color:var(--border)] rounded-lg p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FolderKanban className="w-4 h-4 text-[color:var(--primary)]" />
@@ -1537,7 +1535,7 @@ const autonomousInsight = useMemo(() => {
       </div>
 
       {/* Top overdue tasks */}
-      <section className="dashboard-card rounded-2xl border p-4">
+      <section className="rounded-2xl border border-[color:var(--border)] p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-[color:var(--overdue-text)]" />

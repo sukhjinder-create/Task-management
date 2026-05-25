@@ -40,13 +40,13 @@ export default function ChannelCreateModal({ open, onClose, onCreated }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[999] p-4">
-      <div className="theme-dialog-panel w-full max-w-md p-5 text-sm">
-        <h2 className="text-base font-semibold mb-3">Create new channel</h2>
+    <div className="bg-black/60 fixed inset-0 flex items-center justify-center z-50 p-4">
+      <div className="bg-[var(--surface)] border border-[color:var(--border)] rounded-xl p-6 shadow-xl w-full max-w-md text-sm">
+        <h2 className="text-base font-semibold mb-3 text-[color:var(--text)]">Create new channel</h2>
 
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1">
+            <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">
               Channel name
             </label>
             <input
@@ -54,7 +54,7 @@ export default function ChannelCreateModal({ open, onClose, onCreated }) {
               placeholder="#marketing"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border px-3 py-2 rounded focus:ring-blue-400 focus:outline-none"
+              className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors"
             />
           </div>
 
@@ -65,7 +65,7 @@ export default function ChannelCreateModal({ open, onClose, onCreated }) {
               onChange={(e) => setIsPrivate(e.target.checked)}
               id="privateChannel"
             />
-            <label htmlFor="privateChannel" className="text-xs text-slate-600">
+            <label htmlFor="privateChannel" className="text-xs text-[color:var(--text-muted)]">
               Make this channel private (invite-only)
             </label>
           </div>
@@ -74,14 +74,14 @@ export default function ChannelCreateModal({ open, onClose, onCreated }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1 border rounded hover:bg-slate-50 text-xs"
+              className="border border-[color:var(--border)] text-[color:var(--text-muted)] px-4 py-2 rounded-lg text-sm hover:text-[color:var(--text)] hover:border-[color:var(--border-strong)] transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || !name.trim()}
-              className="px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs disabled:bg-blue-300"
+              className="bg-[color:var(--primary)] text-[color:var(--primary-contrast)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[color:var(--primary-hover)] transition-colors disabled:opacity-50"
             >
               {loading ? "Creating..." : "Create"}
             </button>

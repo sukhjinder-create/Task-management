@@ -199,7 +199,7 @@ export default function Projects() {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="bg-[var(--surface)] border border-[color:var(--border)] rounded-[10px] p-4"
+              className="border border-[color:var(--border)] rounded-[10px] p-4"
             >
               <Skeleton className="h-3 w-1/3 mb-3" />
               <Skeleton className="h-5 w-3/4 mb-3" />
@@ -251,7 +251,7 @@ export default function Projects() {
             <article
               key={p.id}
               onClick={() => navigate(`/projects/${p.id}`)}
-              className="group cursor-pointer bg-[var(--surface)] border border-[color:var(--border)] hover:border-[color:var(--border-strong)] rounded-[10px] transition-colors overflow-hidden"
+              className="group cursor-pointer border border-[color:var(--border)] hover:border-[color:var(--border-strong)] rounded-[10px] transition-colors overflow-hidden"
             >
               <div className="p-4 flex items-start gap-3">
                 <div className="shrink-0 w-9 h-9 rounded-[8px] bg-[var(--primary-soft)] flex items-center justify-center">

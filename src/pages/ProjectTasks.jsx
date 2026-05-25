@@ -170,11 +170,11 @@ const quillFormats = [
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const TASK_TYPES = [
-  { value: "task",        label: "Task",        color: "text-slate-500",  bg: "bg-slate-100"  },
-  { value: "bug",         label: "Bug",         color: "text-red-600",    bg: "bg-red-50"     },
-  { value: "feature",     label: "Feature",     color: "text-indigo-600", bg: "bg-indigo-50"  },
-  { value: "improvement", label: "Improvement", color: "text-emerald-600",bg: "bg-emerald-50" },
-  { value: "chore",       label: "Chore",       color: "text-amber-600",  bg: "bg-amber-50"   },
+  { value: "task",        label: "Task",        color: "text-[color:var(--text-soft)]",    bg: "bg-[var(--surface-soft)]"  },
+  { value: "bug",         label: "Bug",         color: "text-[color:var(--score-danger)]", bg: "bg-[var(--surface-soft)]"  },
+  { value: "feature",     label: "Feature",     color: "text-[color:var(--primary)]",      bg: "bg-[var(--primary-soft)]"  },
+  { value: "improvement", label: "Improvement", color: "text-[color:var(--score-good)]",   bg: "bg-[var(--surface-soft)]"  },
+  { value: "chore",       label: "Chore",       color: "text-[color:var(--score-warning)]",bg: "bg-[var(--surface-soft)]"  },
 ];
 
 const STORY_POINTS = [1, 2, 3, 5, 8, 13, 21];
@@ -190,7 +190,7 @@ function TaskTypeIcon({ type, className = "w-3 h-3" }) {
 function TaskTypeBadge({ type }) {
   const t = TASK_TYPES.find(x => x.value === type) || TASK_TYPES[0];
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${t.bg} ${t.color}`}>
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-[color:var(--border)] ${t.color}`}>
       <TaskTypeIcon type={type} />
       {t.label}
     </span>
@@ -1662,7 +1662,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       )}
 
       {canEdit && (
-        <section className="rounded-[10px] border border-[color:var(--border)] bg-[var(--surface)] p-4">
+        <section className="rounded-[10px] border border-[color:var(--border)] p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-[13px] font-semibold tracking-tight text-[color:var(--text)]">
@@ -1758,7 +1758,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
 
 
       {/* ─── SPRINT PANEL ─────────────────────────────────── */}
-      <section className="rounded-[10px] border border-[color:var(--border)] bg-[var(--surface)] p-4">
+      <section className="rounded-[10px] border border-[color:var(--border)] p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Layers className="w-3.5 h-3.5 text-[color:var(--primary)]" />
@@ -1769,38 +1769,38 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               </span>
             )}
             {activeSprint && (
-              <span className="text-[10px] bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">
+              <span className="text-[10px] border border-[color:var(--border)] text-[color:var(--score-good)] font-semibold px-2 py-0.5 rounded-full">
                 Active: {activeSprint.name}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             {/* View switcher */}
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+            <div className="flex rounded-lg border border-[color:var(--border)] overflow-hidden text-[11px]">
               <button
-                className={`px-2 py-1 ${sprintView === "board" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`px-2 py-1 transition-colors ${sprintView === "board" ? "bg-[color:var(--primary)] text-white" : "text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}
                 onClick={() => setSprintView("board")}
               >
                 {activeSprint ? activeSprint.name : "All Tasks"}
               </button>
               <button
-                className={`px-2 py-1 ${sprintView === "backlog" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`px-2 py-1 border-l border-[color:var(--border)] transition-colors ${sprintView === "backlog" ? "bg-[color:var(--primary)] text-white" : "text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}
                 onClick={() => setSprintView("backlog")}
               >
                 Backlog ({tasks.filter(t => !t.sprint_id).length})
               </button>
             </div>
             {/* Board / List view toggle */}
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+            <div className="flex rounded-lg border border-[color:var(--border)] overflow-hidden text-[11px]">
               <button
-                className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "board" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`px-2 py-1 flex items-center gap-1 transition-colors ${taskViewMode === "board" ? "bg-[var(--surface-soft)] text-[color:var(--text)]" : "text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}
                 onClick={() => setTaskViewMode("board")}
                 title="Board view"
               >
                 <Layers className="w-3 h-3" /> Board
               </button>
               <button
-                className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "list" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`px-2 py-1 flex items-center gap-1 border-l border-[color:var(--border)] transition-colors ${taskViewMode === "list" ? "bg-[var(--surface-soft)] text-[color:var(--text)]" : "text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}
                 onClick={() => setTaskViewMode("list")}
                 title="List view"
               >
@@ -1808,21 +1808,21 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               </button>
             </div>
             {/* Swimlane toggle */}
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+            <div className="flex rounded-lg border border-[color:var(--border)] overflow-hidden text-[11px]">
               <button
-                className={`px-2 py-1 ${swimlaneMode === "none" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`px-2 py-1 transition-colors ${swimlaneMode === "none" ? "bg-[var(--surface-soft)] text-[color:var(--text)]" : "text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}
                 onClick={() => setSwimlaneMode("none")} title="No swimlanes"
               >
                 Flat
               </button>
               <button
-                className={`px-2 py-1 ${swimlaneMode === "assignee" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`px-2 py-1 border-l border-[color:var(--border)] transition-colors ${swimlaneMode === "assignee" ? "bg-[var(--surface-soft)] text-[color:var(--text)]" : "text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}
                 onClick={() => setSwimlaneMode("assignee")} title="Group by assignee"
               >
                 By Person
               </button>
               <button
-                className={`px-2 py-1 ${swimlaneMode === "type" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`px-2 py-1 border-l border-[color:var(--border)] transition-colors ${swimlaneMode === "type" ? "bg-[var(--surface-soft)] text-[color:var(--text)]" : "text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}
                 onClick={() => setSwimlaneMode("type")} title="Group by type"
               >
                 By Type
@@ -1830,12 +1830,12 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             </div>
             {/* Filter button */}
             <button
-              className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 ${showFilters || filterAssignee || filterType ? "bg-indigo-600 text-white border-indigo-600" : "text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+              className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 transition-colors ${showFilters || filterAssignee || filterType ? "bg-[color:var(--primary)] text-white border-[color:var(--primary)]" : "text-[color:var(--text-muted)] border-[color:var(--border)] hover:bg-[var(--surface-soft)]"}`}
               onClick={() => setShowFilters(v => !v)}
               title="Filter tasks (F)"
             >
               <Filter className="w-3 h-3" /> Filter
-              {(filterAssignee || filterType) && <span className="bg-white text-indigo-600 rounded-full w-3.5 h-3.5 text-[9px] flex items-center justify-center font-bold">{[filterAssignee, filterType].filter(Boolean).length}</span>}
+              {(filterAssignee || filterType) && <span className="bg-white text-[color:var(--primary)] rounded-full w-3.5 h-3.5 text-[9px] flex items-center justify-center font-bold">{[filterAssignee, filterType].filter(Boolean).length}</span>}
             </button>
             {/* Saved filters */}
             <SavedFiltersPanel
@@ -1849,7 +1849,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             />
             {canEdit && sprints.filter(s => s.status !== "completed").length > 0 && (
               <button
-                className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 ${showPlanningPanel ? "bg-emerald-600 text-white border-emerald-600" : "text-emerald-700 border-emerald-300 hover:bg-emerald-50"}`}
+                className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 transition-colors ${showPlanningPanel ? "bg-[color:var(--primary)] text-white border-[color:var(--primary)]" : "text-[color:var(--text-muted)] border-[color:var(--border)] hover:bg-[var(--surface-soft)]"}`}
                 onClick={() => {
                   setShowPlanningPanel(v => !v);
                   if (!planningSprintId && sprints.find(s => s.status !== "completed")) {
@@ -1861,14 +1861,14 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               </button>
             )}
             <button
-              className="text-[11px] text-slate-600 border border-slate-200 rounded-lg px-2 py-1 hover:bg-slate-50"
+              className="text-[11px] text-[color:var(--text-muted)] border border-[color:var(--border)] rounded-lg px-2 py-1 hover:bg-[var(--surface-soft)] transition-colors"
               onClick={() => setShowSprintPanel(v => !v)}
             >
               {showSprintPanel ? "Hide sprints" : "Manage sprints"}
             </button>
             {canEdit && (
               <button
-                className="text-[11px] text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1 flex items-center gap-1"
+                className="text-[11px] text-white bg-[color:var(--primary)] hover:opacity-90 rounded-lg px-2 py-1 flex items-center gap-1 transition-opacity"
                 onClick={handleOpenCreateSprint}
               >
                 <Plus className="w-3 h-3" /> New Sprint
@@ -1881,78 +1881,78 @@ const [loadingLogs, setLoadingLogs] = useState(false);
         {showSprintPanel && (
           <div className="space-y-2 mt-2">
             {loadingSprints ? (
-              <p className="text-xs text-slate-400">Loading sprints…</p>
+              <p className="text-xs text-[color:var(--text-muted)]">Loading sprints…</p>
             ) : sprints.length === 0 ? (
-              <p className="text-xs text-slate-400">No sprints yet. Create your first sprint to start planning.</p>
+              <p className="text-xs text-[color:var(--text-muted)]">No sprints yet. Create your first sprint to start planning.</p>
             ) : (
               sprints.map(sprint => {
                 const total = sprint.total_tasks || 0;
                 const done  = sprint.completed_tasks || 0;
                 const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
                 const statusColor =
-                  sprint.status === "active"    ? "bg-green-100 text-green-700" :
-                  sprint.status === "completed" ? "bg-gray-100 text-gray-500"  :
-                  "bg-yellow-50 text-yellow-700";
+                  sprint.status === "active"    ? "border-[color:var(--border)] text-[color:var(--score-good)]" :
+                  sprint.status === "completed" ? "border-[color:var(--border)] text-[color:var(--text-soft)]"  :
+                  "border-[color:var(--border)] text-[color:var(--score-warning)]";
 
                 return (
-                  <div key={sprint.id} className="border border-slate-200 rounded-lg p-3 flex items-start gap-3 hover:border-indigo-200 transition-colors">
+                  <div key={sprint.id} className="border border-[color:var(--border)] rounded-lg p-3 flex items-start gap-3 hover:border-[color:var(--border-strong)] transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-slate-800">{sprint.name}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColor}`}>
+                        <span className="text-sm font-medium text-[color:var(--text)]">{sprint.name}</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize border ${statusColor}`}>
                           {sprint.status}
                         </span>
                         {sprint.is_hidden && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 flex items-center gap-1">
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[color:var(--border)] text-[color:var(--score-warning)] flex items-center gap-1">
                             <EyeOff className="w-2.5 h-2.5" /> Hidden
                           </span>
                         )}
                         {sprint.start_date && (
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-[10px] text-[color:var(--text-soft)]">
                             {new Date(sprint.start_date).toLocaleDateString()} – {sprint.end_date ? new Date(sprint.end_date).toLocaleDateString() : "no end"}
                           </span>
                         )}
                       </div>
-                      {sprint.goal && <p className="text-xs text-slate-500 mt-0.5 truncate">{sprint.goal}</p>}
+                      {sprint.goal && <p className="text-xs text-[color:var(--text-muted)] mt-0.5 truncate">{sprint.goal}</p>}
                       <div className="mt-2 space-y-1.5">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-slate-100 rounded-full h-1.5">
-                            <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          <div className="flex-1 bg-[var(--surface-soft)] rounded-full h-1.5">
+                            <div className="bg-[color:var(--primary)] h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-[10px] text-slate-500 shrink-0">{done}/{total} tasks</span>
+                          <span className="text-[10px] text-[color:var(--text-soft)] shrink-0">{done}/{total} tasks</span>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           {sprint.total_points > 0 && (
-                            <span className="text-[10px] flex items-center gap-1 text-indigo-600 font-semibold">
+                            <span className="text-[10px] flex items-center gap-1 text-[color:var(--primary)] font-semibold">
                               <BarChart2 className="w-3 h-3" />
                               {sprint.completed_points}/{sprint.total_points} pts
                             </span>
                           )}
                           {sprint.blocked_tasks > 0 && (
-                            <span className="text-[10px] flex items-center gap-1 text-red-500 font-semibold">
+                            <span className="text-[10px] flex items-center gap-1 text-[color:var(--score-danger)] font-semibold">
                               <ShieldAlert className="w-3 h-3" /> {sprint.blocked_tasks} blocked
                             </span>
                           )}
                           {sprint.bug_count > 0 && (
-                            <span className="text-[10px] flex items-center gap-1 text-orange-500 font-semibold">
+                            <span className="text-[10px] flex items-center gap-1 text-[color:var(--score-warning)] font-semibold">
                               <Bug className="w-3 h-3" /> {sprint.bug_count} bug{sprint.bug_count > 1 ? "s" : ""}
                             </span>
                           )}
                           {sprint.overdue_tasks > 0 && (
-                            <span className="text-[10px] text-red-500 shrink-0">{sprint.overdue_tasks} overdue</span>
+                            <span className="text-[10px] text-[color:var(--score-danger)] shrink-0">{sprint.overdue_tasks} overdue</span>
                           )}
                         </div>
 
                         {/* Linked Goals — visible to all, clickable for admin/manager */}
                         {(sprint.linked_goals || []).length > 0 && (
                           <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                            <Target className="w-3 h-3 text-indigo-400 shrink-0" />
+                            <Target className="w-3 h-3 text-[color:var(--primary)] shrink-0" />
                             {(sprint.linked_goals).map(g => {
                               const goalStatusColor =
-                                g.goal_status === "done"      ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
-                                g.goal_status === "at_risk"   ? "bg-amber-50  text-amber-700  border-amber-200"  :
-                                g.goal_status === "off_track" ? "bg-red-50    text-red-600    border-red-200"    :
-                                                                "bg-green-50  text-green-700  border-green-200";
+                                g.goal_status === "done"      ? "text-[color:var(--primary)] border-[color:var(--border)]" :
+                                g.goal_status === "at_risk"   ? "text-[color:var(--score-warning)] border-[color:var(--border)]" :
+                                g.goal_status === "off_track" ? "text-[color:var(--score-danger)] border-[color:var(--border)]" :
+                                                                "text-[color:var(--score-good)] border-[color:var(--border)]";
                               const pill = (
                                 <span
                                   key={g.goal_id}
@@ -1979,7 +1979,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         {sprint.status === "planning" && (
                           <button
                             title="Start sprint"
-                            className="text-[10px] bg-green-600 text-white rounded px-2 py-0.5 hover:bg-green-700 flex items-center gap-1"
+                            className="text-[10px] border border-[color:var(--border)] text-[color:var(--score-good)] rounded px-2 py-0.5 hover:bg-[var(--surface-soft)] flex items-center gap-1 transition-colors"
                             onClick={() => handleStartSprint(sprint)}
                           >
                             <Play className="w-3 h-3" /> Start
@@ -1988,7 +1988,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         {sprint.status === "active" && (
                           <button
                             title="Complete sprint"
-                            className="text-[10px] bg-blue-600 text-white rounded px-2 py-0.5 hover:bg-blue-700 flex items-center gap-1"
+                            className="text-[10px] bg-[color:var(--primary)] text-white rounded px-2 py-0.5 hover:opacity-90 flex items-center gap-1 transition-opacity"
                             onClick={() => handleCompleteSprint(sprint)}
                           >
                             <Flag className="w-3 h-3" /> Complete
@@ -1997,7 +1997,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         {sprint.status !== "planning" && sprint.start_date && (
                           <button
                             title="View burndown chart"
-                            className="p-1 text-slate-400 hover:text-indigo-600 rounded"
+                            className="p-1 text-[color:var(--text-soft)] hover:text-[color:var(--primary)] rounded transition-colors"
                             onClick={() => setBurndownSprint(sprint)}
                           >
                             <TrendingDown className="w-3 h-3" />
@@ -2006,7 +2006,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         {sprint.status !== "completed" && (
                           <button
                             title="Edit sprint"
-                            className="p-1 text-slate-400 hover:text-indigo-600 rounded"
+                            className="p-1 text-[color:var(--text-soft)] hover:text-[color:var(--primary)] rounded transition-colors"
                             onClick={() => handleOpenEditSprint(sprint)}
                           >
                             <Edit2 className="w-3 h-3" />
@@ -2015,7 +2015,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         {role === "admin" && sprint.status !== "active" && (
                           <button
                             title="Delete sprint"
-                            className="p-1 text-slate-400 hover:text-red-500 rounded"
+                            className="p-1 text-[color:var(--text-soft)] hover:text-[color:var(--score-danger)] rounded transition-colors"
                             onClick={() => handleDeleteSprint(sprint)}
                           >
                             <Trash2 className="w-3 h-3" />
@@ -2038,9 +2038,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
           <Modal.Body>
             <form onSubmit={handleSaveSprint} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Sprint Name *</label>
+                <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Sprint Name *</label>
                 <input
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                  className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] outline-none transition-colors"
                   value={sprintForm.name}
                   onChange={e => setSprintForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Sprint 1"
@@ -2048,9 +2048,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Sprint Goal</label>
+                <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Sprint Goal</label>
                 <textarea
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none resize-none"
+                  className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] outline-none resize-none transition-colors"
                   rows={2}
                   value={sprintForm.goal}
                   onChange={e => setSprintForm(f => ({ ...f, goal: e.target.value }))}
@@ -2059,20 +2059,20 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Start Date</label>
+                  <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Start Date</label>
                   <input
                     type="date"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                    className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     value={sprintForm.start_date}
                     max={sprintForm.end_date || undefined}
                     onChange={e => setSprintForm(f => ({ ...f, start_date: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">End Date</label>
+                  <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">End Date</label>
                   <input
                     type="date"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                    className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     value={sprintForm.end_date}
                     min={sprintForm.start_date || undefined}
                     onChange={e => setSprintForm(f => ({ ...f, end_date: e.target.value }))}
@@ -2082,21 +2082,21 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               {/* Hidden sprint toggle — admin only */}
               {role === "admin" && (
                 <label className="flex items-center gap-3 cursor-pointer select-none py-1">
-                  <div className={`relative w-10 h-5 rounded-full transition-colors ${sprintForm.is_hidden ? "bg-amber-400" : "bg-slate-200"}`}
+                  <div className={`relative w-10 h-5 rounded-full transition-colors ${sprintForm.is_hidden ? "bg-[color:var(--score-warning)]" : "bg-[var(--surface-soft)]"}`}
                     onClick={() => setSprintForm(f => ({ ...f, is_hidden: !f.is_hidden }))}>
-                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${sprintForm.is_hidden ? "translate-x-5" : ""}`} />
+                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-[color:var(--text)] shadow transition-transform ${sprintForm.is_hidden ? "translate-x-5" : ""}`} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-slate-700">Hidden Sprint (Planning)</p>
-                    <p className="text-xs text-slate-500">Only admins can see this sprint — use for advance planning</p>
+                    <p className="text-sm font-medium text-[color:var(--text)]">Hidden Sprint (Planning)</p>
+                    <p className="text-xs text-[color:var(--text-muted)]">Only admins can see this sprint — use for advance planning</p>
                   </div>
                 </label>
               )}
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="text-sm text-slate-600 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50" onClick={() => setShowSprintModal(false)}>
+                <button type="button" className="text-sm text-[color:var(--text-muted)] border border-[color:var(--border)] rounded-lg px-3 py-1.5 hover:bg-[var(--surface-soft)] transition-colors" onClick={() => setShowSprintModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" disabled={savingSprint} className="text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-1.5 disabled:opacity-50">
+                <button type="submit" disabled={savingSprint} className="text-sm text-white bg-[color:var(--primary)] hover:opacity-90 rounded-lg px-4 py-1.5 disabled:opacity-50 transition-opacity">
                   {savingSprint ? "Saving…" : editingSprint ? "Save Changes" : "Create Sprint"}
                 </button>
               </div>
@@ -2107,17 +2107,17 @@ const [loadingLogs, setLoadingLogs] = useState(false);
 
       {/* ── SPRINT PLANNING PANEL ── */}
       {showPlanningPanel && canEdit && (
-        <section className="bg-white rounded-xl shadow p-4 border-2 border-emerald-200">
+        <section className="border border-[color:var(--border)] rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-emerald-600" />
-              <h2 className="text-sm font-semibold text-emerald-800">Sprint Planning</h2>
-              <span className="text-[10px] text-slate-500">Click a task to move it between backlog and sprint</span>
+              <Sparkles className="w-4 h-4 text-[color:var(--score-good)]" />
+              <h2 className="text-sm font-semibold text-[color:var(--text)]">Sprint Planning</h2>
+              <span className="text-[10px] text-[color:var(--text-soft)]">Click a task to move it between backlog and sprint</span>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-[11px] text-slate-600">Planning for:</label>
+              <label className="text-[11px] text-[color:var(--text-muted)]">Planning for:</label>
               <select
-                className="text-[11px] border border-slate-200 rounded px-2 py-1"
+                className="text-[11px] border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                 value={planningSprintId || ""}
                 onChange={e => setPlanningSprintId(e.target.value || null)}
               >
@@ -2137,29 +2137,29 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 {/* Backlog column */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-semibold text-slate-700">Backlog <span className="text-slate-400 font-normal">({backlogTasks.length})</span></h3>
-                    <span className="text-[10px] text-slate-400">{backlogTasks.reduce((s,t) => s + (t.story_points||0), 0)} pts</span>
+                    <h3 className="text-xs font-semibold text-[color:var(--text)]">Backlog <span className="text-[color:var(--text-soft)] font-normal">({backlogTasks.length})</span></h3>
+                    <span className="text-[10px] text-[color:var(--text-soft)]">{backlogTasks.reduce((s,t) => s + (t.story_points||0), 0)} pts</span>
                   </div>
                   <div className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1">
                     {backlogTasks.length === 0 ? (
-                      <p className="text-[11px] text-slate-400 text-center py-4">All tasks are in sprints</p>
+                      <p className="text-[11px] text-[color:var(--text-soft)] text-center py-4">All tasks are in sprints</p>
                     ) : backlogTasks.map(t => (
                       <div
                         key={t.id}
-                        className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50 cursor-pointer group transition-colors"
+                        className="flex items-center gap-2 p-2 rounded-lg border border-[color:var(--border)] hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-soft)] cursor-pointer group transition-colors"
                         onClick={() => handleAssignTaskToSprint(t.id, planningSprintId)}
                         title="Click to add to sprint"
                       >
-                        <Plus className="w-3.5 h-3.5 text-emerald-500 opacity-0 group-hover:opacity-100 shrink-0" />
+                        <Plus className="w-3.5 h-3.5 text-[color:var(--score-good)] opacity-0 group-hover:opacity-100 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {t.display_id && <span className="font-mono text-[10px] text-indigo-400">{t.display_id}</span>}
+                            {t.display_id && <span className="font-mono text-[10px] text-[color:var(--primary)]">{t.display_id}</span>}
                             <TaskTypeBadge type={t.task_type || "task"} />
                           </div>
-                          <p className="text-xs text-slate-700 truncate mt-0.5">{t.task}</p>
+                          <p className="text-xs text-[color:var(--text)] truncate mt-0.5">{t.task}</p>
                         </div>
                         {t.story_points != null && (
-                          <span className="text-[10px] font-bold bg-white border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full shrink-0">{t.story_points}</span>
+                          <span className="text-[10px] font-bold border border-[color:var(--border)] text-[color:var(--text-soft)] px-1.5 py-0.5 rounded-full shrink-0">{t.story_points}</span>
                         )}
                       </div>
                     ))}
@@ -2168,32 +2168,32 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 {/* Sprint column */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-semibold text-emerald-700">
-                      {selectedSprint?.name} <span className="text-slate-400 font-normal">({sprintTasks.length})</span>
+                    <h3 className="text-xs font-semibold text-[color:var(--score-good)]">
+                      {selectedSprint?.name} <span className="text-[color:var(--text-soft)] font-normal">({sprintTasks.length})</span>
                     </h3>
-                    <span className="text-[10px] font-semibold text-emerald-600">{sprintPoints} pts</span>
+                    <span className="text-[10px] font-semibold text-[color:var(--score-good)]">{sprintPoints} pts</span>
                   </div>
                   <div className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1">
                     {sprintTasks.length === 0 ? (
-                      <p className="text-[11px] text-slate-400 text-center py-4">No tasks in this sprint yet</p>
+                      <p className="text-[11px] text-[color:var(--text-soft)] text-center py-4">No tasks in this sprint yet</p>
                     ) : sprintTasks.map(t => (
                       <div
                         key={t.id}
-                        className="flex items-center gap-2 p-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:border-red-300 hover:bg-red-50 cursor-pointer group transition-colors"
+                        className="flex items-center gap-2 p-2 rounded-lg border border-[color:var(--border)] hover:border-[color:var(--score-danger-border)] hover:bg-[var(--surface-soft)] cursor-pointer group transition-colors"
                         onClick={() => handleAssignTaskToSprint(t.id, null)}
                         title="Click to remove from sprint (back to backlog)"
                       >
-                        <X className="w-3.5 h-3.5 text-red-400 opacity-0 group-hover:opacity-100 shrink-0" />
+                        <X className="w-3.5 h-3.5 text-[color:var(--score-danger)] opacity-0 group-hover:opacity-100 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {t.display_id && <span className="font-mono text-[10px] text-indigo-400">{t.display_id}</span>}
+                            {t.display_id && <span className="font-mono text-[10px] text-[color:var(--primary)]">{t.display_id}</span>}
                             <TaskTypeBadge type={t.task_type || "task"} />
-                            {t.is_blocked && <ShieldAlert className="w-3 h-3 text-red-500" />}
+                            {t.is_blocked && <ShieldAlert className="w-3 h-3 text-[color:var(--score-danger)]" />}
                           </div>
-                          <p className="text-xs text-slate-700 truncate mt-0.5">{t.task}</p>
+                          <p className="text-xs text-[color:var(--text)] truncate mt-0.5">{t.task}</p>
                         </div>
                         {t.story_points != null && (
-                          <span className="text-[10px] font-bold bg-white border border-emerald-300 text-emerald-700 px-1.5 py-0.5 rounded-full shrink-0">{t.story_points}</span>
+                          <span className="text-[10px] font-bold border border-[color:var(--border)] text-[color:var(--score-good)] px-1.5 py-0.5 rounded-full shrink-0">{t.story_points}</span>
                         )}
                       </div>
                     ))}
@@ -2206,22 +2206,22 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       )}
 
       {/* Tasks Board */}
-      <section className="bg-white rounded-xl shadow p-4">
+      <section className="border border-[color:var(--border)] rounded-lg p-4">
         <div className="flex justify-between items-center mb-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold">Tasks</h2>
+            <h2 className="text-sm font-semibold text-[color:var(--text)]">Tasks</h2>
             {sprintView === "backlog" ? (
-              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">Backlog</span>
+              <span className="border border-[color:var(--border)] rounded-full px-2 py-0.5 text-[10px] font-semibold text-[color:var(--text-soft)]">Backlog</span>
             ) : activeSprint ? (
-              <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{activeSprint.name}</span>
+              <span className="border border-[color:var(--border)] rounded-full px-2 py-0.5 text-[10px] font-semibold text-[color:var(--score-good)]">{activeSprint.name}</span>
             ) : null}
-            <span className="text-[10px] text-slate-400">{boardTasks.length} task{boardTasks.length !== 1 ? "s" : ""}</span>
+            <span className="text-[10px] text-[color:var(--text-soft)]">{boardTasks.length} task{boardTasks.length !== 1 ? "s" : ""}</span>
           </div>
           {canEdit && (
             <button
               type="button"
               onClick={() => setShowStatusEditor((v) => !v)}
-              className="text-[11px] text-blue-600 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-50"
+              className="text-[11px] text-[color:var(--primary)] border border-[color:var(--border)] rounded-lg px-2 py-1 hover:bg-[var(--surface-soft)] transition-colors"
             >
               {showStatusEditor
                 ? "Close column settings"
@@ -2232,10 +2232,10 @@ const [loadingLogs, setLoadingLogs] = useState(false);
 
         {/* Filter bar */}
         {showFilters && (
-          <div className="mb-3 flex items-center flex-wrap gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <span className="text-[11px] font-semibold text-slate-600">Filters:</span>
+          <div className="mb-3 flex items-center flex-wrap gap-2 p-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)]">
+            <span className="text-[11px] font-semibold text-[color:var(--text-muted)]">Filters:</span>
             <select
-              className="text-[11px] border rounded px-2 py-1"
+              className="text-[11px] border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
               value={filterAssignee}
               onChange={e => setFilterAssignee(e.target.value)}
             >
@@ -2243,7 +2243,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
             </select>
             <select
-              className="text-[11px] border rounded px-2 py-1"
+              className="text-[11px] border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
               value={filterType}
               onChange={e => setFilterType(e.target.value)}
             >
@@ -2251,7 +2251,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               {TASK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             <select
-              className="text-[11px] border rounded px-2 py-1"
+              className="text-[11px] border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
               value={filterSprint}
               onChange={e => setFilterSprint(e.target.value)}
             >
@@ -2260,24 +2260,24 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             </select>
             {(filterAssignee || filterType || filterSprint) && (
               <button
-                className="text-[11px] text-red-500 hover:underline"
+                className="text-[11px] text-[color:var(--score-danger)] hover:underline"
                 onClick={() => { setFilterAssignee(""); setFilterType(""); setFilterSprint(""); }}
               >
                 Clear
               </button>
             )}
-            <span className="text-[11px] text-slate-400 ml-auto">{boardTasks.length} tasks shown</span>
+            <span className="text-[11px] text-[color:var(--text-soft)] ml-auto">{boardTasks.length} tasks shown</span>
           </div>
         )}
 
         {/* Inline column customization panel */}
         {showStatusEditor && canEdit && (
-          <div className="mb-4 border border-slate-200 rounded-lg p-3 bg-slate-50">
-            <h3 className="text-xs font-semibold mb-2">
+          <div className="mb-4 border border-[color:var(--border)] rounded-lg p-3">
+            <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">
               Columns for this project
             </h3>
             {statusColumnsConfig.length === 0 ? (
-              <p className="text-[11px] text-slate-500 mb-2">
+              <p className="text-[11px] text-[color:var(--text-muted)] mb-2">
                 Default columns are created automatically for every project.
               </p>
             ) : (
@@ -2297,7 +2297,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       onDragEnd={handleStatusDragEnd}
                       onDragOver={(e) => handleStatusDragOver(e, col)}
                       onDrop={() => handleStatusDrop(col)}
-                      className={`flex items-center justify-between gap-2 border border-slate-200 rounded-md bg-white px-2 py-1 ${
+                      className={`flex items-center justify-between gap-2 border border-[color:var(--border)] rounded-md px-2 py-1 hover:bg-[var(--surface-soft)] transition-colors ${
                         !isEdgeLocked ? "cursor-grab active:cursor-grabbing" : ""
                       } ${
                         draggingStatusId === id ? "opacity-70" : ""
@@ -2306,7 +2306,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       {isEditingThis ? (
                         <>
                           <div className="flex-1 flex flex-col md:flex-row md:items-center gap-1">
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-[color:var(--text-soft)]">
                               Key: {col.key}
                             </span>
                             <input
@@ -2315,7 +2315,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                               onChange={(e) =>
                                 setEditStatusLabel(e.target.value)
                               }
-                              className="border rounded px-2 py-1 text-[11px] flex-1"
+                              className="border border-[color:var(--border)] rounded px-2 py-1 text-[11px] flex-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                               placeholder="Column label"
                             />
                           </div>
@@ -2325,7 +2325,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                               onClick={() =>
                                 handleSaveEditStatusColumn(col)
                               }
-                              className="text-[11px] text-green-700 border border-green-200 rounded px-2 py-[2px] hover:bg-green-50"
+                              className="text-[11px] text-[color:var(--score-good)] border border-[color:var(--border)] rounded px-2 py-[2px] hover:bg-[var(--surface-soft)] transition-colors"
                             >
                               Save
                             </button>
@@ -2334,7 +2334,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                               onClick={
                                 handleCancelEditStatusColumn
                               }
-                              className="text-[11px] text-slate-600 border border-slate-200 rounded px-2 py-[2px] hover:bg-slate-50"
+                              className="text-[11px] text-[color:var(--text-muted)] border border-[color:var(--border)] rounded px-2 py-[2px] hover:bg-[var(--surface-soft)] transition-colors"
                             >
                               Cancel
                             </button>
@@ -2343,17 +2343,17 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       ) : (
                         <>
                           <div className="flex-1">
-                            <span className="font-medium">
+                            <span className="font-medium text-[color:var(--text)]">
                               {col.label || statusLabel(col.key)}
                             </span>
-                            <span className="ml-1 text-slate-500">
+                            <span className="ml-1 text-[color:var(--text-muted)]">
                               ({taskCount})
                             </span>{" "}
-                            <span className="text-slate-400">
+                            <span className="text-[color:var(--text-soft)]">
                               ({col.key})
                             </span>
                             {isEdgeLocked && (
-                              <span className="ml-2 text-[10px] text-slate-400">
+                              <span className="ml-2 text-[10px] text-[color:var(--text-soft)]">
                                 locked
                               </span>
                             )}
@@ -2365,7 +2365,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                                 onClick={() =>
                                   handleStatusOrderChange(col, Math.max(2, (col.sort_order || 2) - 1))
                                 }
-                                className="text-[11px] text-slate-600 border border-slate-200 rounded px-2 py-[2px] hover:bg-slate-50"
+                                className="text-[11px] text-[color:var(--text-muted)] border border-[color:var(--border)] rounded px-2 py-[2px] hover:bg-[var(--surface-soft)] transition-colors"
                               >
                                 ↑
                               </button>
@@ -2376,7 +2376,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                                 onClick={() =>
                                   handleStatusOrderChange(col, Math.min(statusColumnsConfig.length - 1, (col.sort_order || 2) + 1))
                                 }
-                                className="text-[11px] text-slate-600 border border-slate-200 rounded px-2 py-[2px] hover:bg-slate-50"
+                                className="text-[11px] text-[color:var(--text-muted)] border border-[color:var(--border)] rounded px-2 py-[2px] hover:bg-[var(--surface-soft)] transition-colors"
                               >
                                 ↓
                               </button>
@@ -2387,7 +2387,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                                 onClick={() =>
                                   handleStartEditStatusColumn(col)
                                 }
-                                className="text-[11px] text-blue-600 border border-blue-200 rounded px-2 py-[2px] hover:bg-blue-50"
+                                className="text-[11px] text-[color:var(--primary)] border border-[color:var(--border)] rounded px-2 py-[2px] hover:bg-[var(--surface-soft)] transition-colors"
                               >
                                 Edit
                               </button>
@@ -2398,7 +2398,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                                 onClick={() =>
                                   handleDeleteStatusColumn(col)
                                 }
-                                className="text-[11px] text-red-600 border border-red-200 rounded px-2 py-[2px] hover:bg-red-50"
+                                className="text-[11px] text-[color:var(--score-danger)] border border-[color:var(--border)] rounded px-2 py-[2px] hover:bg-[var(--surface-soft)] transition-colors"
                               >
                                 Delete
                               </button>
@@ -2421,25 +2421,25 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 value={newStatusKey}
                 onChange={(e) => setNewStatusKey(e.target.value)}
                 placeholder="Internal key (e.g. in-review)"
-                className="border rounded px-2 py-1 flex-1"
+                className="border border-[color:var(--border)] rounded px-2 py-1 flex-1 bg-[var(--surface)] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] outline-none"
               />
               <input
                 type="text"
                 value={newStatusLabel}
                 onChange={(e) => setNewStatusLabel(e.target.value)}
                 placeholder="Label (e.g. In review)"
-                className="border rounded px-2 py-1 flex-1"
+                className="border border-[color:var(--border)] rounded px-2 py-1 flex-1 bg-[var(--surface)] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] outline-none"
               />
               <button
                 type="submit"
                 disabled={savingStatus}
-                className="bg-slate-800 text-white rounded px-3 py-1 disabled:opacity-50"
+                className="bg-[color:var(--primary)] text-white rounded px-3 py-1 disabled:opacity-50 hover:opacity-90 transition-opacity"
               >
                 {savingStatus ? "Adding..." : "Add column"}
               </button>
             </form>
 
-            <p className="mt-1 text-[10px] text-slate-400">
+            <p className="mt-1 text-[10px] text-[color:var(--text-soft)]">
               Backlog stays first, Completed stays last, and only middle
               columns can be reordered. Completed remains the scoring
               completion state.
@@ -2448,9 +2448,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
         )}
 
         {loadingTasks ? (
-          <div className="text-sm text-slate-500">Loading tasks...</div>
+          <div className="text-sm text-[color:var(--text-muted)]">Loading tasks...</div>
         ) : tasks.length === 0 ? (
-          <div className="text-sm text-slate-500">No tasks for this project yet.</div>
+          <div className="text-sm text-[color:var(--text-muted)]">No tasks for this project yet.</div>
         ) : taskViewMode === "list" ? (
           /* ── LIST VIEW ── */
           (() => {
@@ -2463,7 +2463,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             });
             const SortBtn = ({ col, label }) => (
               <button
-                className="flex items-center gap-0.5 hover:text-indigo-600"
+                className="flex items-center gap-0.5 hover:text-[color:var(--primary)] transition-colors"
                 onClick={() => setListSort(s => ({ col, dir: s.col === col && s.dir === "asc" ? "desc" : "asc" }))}
               >
                 {label}
@@ -2471,57 +2471,57 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               </button>
             );
             return (
-              <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <div className="border border-[color:var(--border)] rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wide">
+                  <thead className="bg-[var(--surface-soft)] border-b border-[color:var(--border)]">
                     <tr>
-                      <th className="px-3 py-2 text-left w-24">ID</th>
-                      <th className="px-3 py-2 text-left"><SortBtn col="task" label="Title" /></th>
-                      <th className="px-3 py-2 text-left w-24"><SortBtn col="task_type" label="Type" /></th>
-                      <th className="px-3 py-2 text-left w-24"><SortBtn col="status" label="Status" /></th>
-                      <th className="px-3 py-2 text-left w-24"><SortBtn col="priority" label="Priority" /></th>
-                      <th className="px-3 py-2 text-left w-16"><SortBtn col="story_points" label="Pts" /></th>
-                      <th className="px-3 py-2 text-left w-32"><SortBtn col="due_date" label="Due" /></th>
-                      <th className="px-3 py-2 text-left w-32">Assignee</th>
-                      <th className="px-3 py-2 text-left w-16">Flags</th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left w-24">ID</th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left"><SortBtn col="task" label="Title" /></th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left w-24"><SortBtn col="task_type" label="Type" /></th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left w-24"><SortBtn col="status" label="Status" /></th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left w-24"><SortBtn col="priority" label="Priority" /></th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left w-16"><SortBtn col="story_points" label="Pts" /></th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left w-32"><SortBtn col="due_date" label="Due" /></th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left w-32">Assignee</th>
+                      <th className="text-[color:var(--text-soft)] text-xs font-semibold uppercase tracking-wide px-4 py-2.5 text-left w-16">Flags</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {sortedList.map(t => (
                       <tr
                         key={t.id}
-                        className={`cursor-pointer hover:bg-slate-50 transition-colors ${isOverdue(t) ? "bg-red-50" : ""}`}
+                        className={`border-b border-[color:var(--border)] last:border-0 cursor-pointer hover:bg-[var(--surface-soft)] transition-colors ${isOverdue(t) ? "bg-[var(--score-danger-bg)]" : ""}`}
                         onClick={() => handleCardClick(t)}
                       >
-                        <td className="px-3 py-2 font-mono text-indigo-500 font-semibold text-[10px]">
+                        <td className="px-4 py-3 text-sm font-mono text-[color:var(--primary)] font-semibold">
                           {t.display_id || "—"}
                         </td>
-                        <td className="px-3 py-2 font-medium text-slate-800 max-w-xs truncate">
+                        <td className="px-4 py-3 text-sm font-medium text-[color:var(--text)] max-w-xs truncate">
                           {t.task}
                           {t.subtasks_total > 0 && (
-                            <span className="ml-1.5 text-[10px] text-slate-400">{t.subtasks_completed}/{t.subtasks_total} st</span>
+                            <span className="ml-1.5 text-[10px] text-[color:var(--text-soft)]">{t.subtasks_completed}/{t.subtasks_total} st</span>
                           )}
                         </td>
-                        <td className="px-3 py-2"><TaskTypeBadge type={t.task_type || "task"} /></td>
-                        <td className="px-3 py-2 capitalize text-slate-600">{statusLabel(t.status)}</td>
-                        <td className="px-3 py-2">
+                        <td className="px-4 py-3 text-sm"><TaskTypeBadge type={t.task_type || "task"} /></td>
+                        <td className="px-4 py-3 text-sm capitalize text-[color:var(--text-muted)]">{statusLabel(t.status)}</td>
+                        <td className="px-4 py-3 text-sm">
                           <Badge color={priorityBadgeColor(t.priority)} size="sm" variant="subtle">
                             {priorityLabel(t.priority)}
                           </Badge>
                         </td>
-                        <td className="px-3 py-2 text-center font-bold text-slate-600">
-                          {t.story_points != null ? t.story_points : <span className="text-slate-300">—</span>}
+                        <td className="px-4 py-3 text-sm text-center font-bold text-[color:var(--text-muted)]">
+                          {t.story_points != null ? t.story_points : <span className="text-[color:var(--text-soft)]">—</span>}
                         </td>
-                        <td className={`px-3 py-2 ${isOverdue(t) ? "text-red-600 font-semibold" : "text-slate-500"}`}>
+                        <td className={`px-4 py-3 text-sm ${isOverdue(t) ? "text-[color:var(--score-danger)] font-semibold" : "text-[color:var(--text-muted)]"}`}>
                           {t.due_date ? new Date(t.due_date).toLocaleDateString() : "—"}
                         </td>
-                        <td className="px-3 py-2 text-slate-600 truncate max-w-[120px]">
-                          {t.assigned_to ? getAssigneeLabel(t.assigned_to) : <span className="text-slate-300">Unassigned</span>}
+                        <td className="px-4 py-3 text-sm text-[color:var(--text-muted)] truncate max-w-[120px]">
+                          {t.assigned_to ? getAssigneeLabel(t.assigned_to) : <span className="text-[color:var(--text-soft)]">Unassigned</span>}
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-4 py-3 text-sm">
                           <div className="flex items-center gap-1">
-                            {t.is_blocked && <ShieldAlert className="w-3.5 h-3.5 text-red-500" title="Blocked" />}
-                            {isOverdue(t) && <AlertCircle className="w-3.5 h-3.5 text-red-400" title="Overdue" />}
+                            {t.is_blocked && <ShieldAlert className="w-3.5 h-3.5 text-[color:var(--score-danger)]" title="Blocked" />}
+                            {isOverdue(t) && <AlertCircle className="w-3.5 h-3.5 text-[color:var(--score-danger)]" title="Overdue" />}
                           </div>
                         </td>
                       </tr>
@@ -2532,7 +2532,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
             );
           })()
         ) : statusColumns.length === 0 ? (
-          <div className="text-sm text-slate-500">
+          <div className="text-sm text-[color:var(--text-muted)]">
             No status columns defined yet. Use &quot;Customize columns&quot; to add some.
           </div>
         ) : (
@@ -2548,7 +2548,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   return (
                     <button
                       key={assigneeId}
-                      className={`text-[11px] px-2 py-1 rounded-full border ${filterAssignee === assigneeId ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}
+                      className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${filterAssignee === assigneeId ? "bg-[color:var(--primary)] text-white border-[color:var(--primary)]" : "text-[color:var(--text-muted)] border-[color:var(--border)] hover:border-[color:var(--border-strong)]"}`}
                       onClick={() => setFilterAssignee(filterAssignee === assigneeId ? "" : assigneeId)}
                     >
                       {label} ({count})
@@ -2563,7 +2563,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   return (
                     <button
                       key={tt.value}
-                      className={`text-[11px] px-2 py-1 rounded-full border ${filterType === tt.value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}
+                      className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${filterType === tt.value ? "bg-[color:var(--primary)] text-white border-[color:var(--primary)]" : "text-[color:var(--text-muted)] border-[color:var(--border)] hover:border-[color:var(--border-strong)]"}`}
                       onClick={() => setFilterType(filterType === tt.value ? "" : tt.value)}
                     >
                       {tt.label} ({count})
@@ -2579,23 +2579,23 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 key={col.key}
                 className={`border rounded-lg min-h-[200px] p-2 transition-colors ${
                   wipLimits[col.key] && (grouped[col.key]?.length || 0) >= wipLimits[col.key]
-                    ? "border-red-300 bg-red-50"
-                    : "border-slate-200 bg-slate-50"
+                    ? "border-[color:var(--score-danger-border)]"
+                    : "border-[color:var(--border)]"
                 }`}
                 onDragOver={onDragOver}
                 onDrop={() => onDrop(col.key)}
               >
                 {/* Column header with + button */}
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold">
+                  <span className="text-xs font-semibold text-[color:var(--text)]">
                     {col.label}
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[10px] text-[color:var(--text-soft)]">
                       {grouped[col.key]?.length || 0} tasks
                     </span>
                     {wipLimits[col.key] && (
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${(grouped[col.key]?.length || 0) >= wipLimits[col.key] ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"}`}
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-[color:var(--border)] ${(grouped[col.key]?.length || 0) >= wipLimits[col.key] ? "text-[color:var(--score-danger)]" : "text-[color:var(--text-soft)]"}`}
                         title="WIP Limit">
                         WIP {wipLimits[col.key]}
                       </span>
@@ -2604,7 +2604,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       <button
                         type="button"
                         title="Add task in this column"
-                        className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-blue-100 hover:text-blue-700 text-xs"
+                        className="w-5 h-5 flex items-center justify-center rounded-full bg-[var(--surface-soft)] text-[color:var(--text-soft)] hover:bg-[var(--primary-soft)] hover:text-[color:var(--primary)] text-xs transition-colors"
                         onClick={() => {
                           const input =
                             document.getElementById(
@@ -2628,55 +2628,55 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       onDragStart={() => onDragStart(t.id)}
                       onDragEnd={onDragEnd}
                       className={
-                        "transition-all hover:shadow-md hover:-translate-y-0.5 " +
+                        "transition-colors " +
                         (canMoveTask(t)
                           ? "cursor-grab active:cursor-grabbing "
                           : "cursor-pointer ") +
                         (isOverdue(t)
-                          ? "border-danger-300 bg-danger-50"
-                          : "border-gray-200 hover:border-primary-200")
+                          ? "border-[color:var(--score-danger-border)]"
+                          : "border-[color:var(--border)] hover:border-[color:var(--border-strong)]")
                       }
                       onClick={() => handleCardClick(t)}
                     >
                       <Card.Content className="p-3 space-y-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {t.display_id && (
-                            <span className="text-[10px] font-mono text-indigo-500 font-semibold flex items-center gap-0.5">
+                            <span className="text-[10px] font-mono text-[color:var(--primary)] font-semibold flex items-center gap-0.5">
                               <Hash className="w-3 h-3" />{t.display_id}
                             </span>
                           )}
                           <TaskTypeBadge type={t.task_type || "task"} />
                           {t.is_blocked && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-[color:var(--border)] text-[color:var(--score-danger)]">
                               <ShieldAlert className="w-3 h-3" /> Blocked
                             </span>
                           )}
                           {t.story_points != null && (
-                            <span className="ml-auto text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+                            <span className="ml-auto text-[10px] font-bold border border-[color:var(--border)] text-[color:var(--text-soft)] px-1.5 py-0.5 rounded-full">
                               {t.story_points} pts
                             </span>
                           )}
                         </div>
-                        <div className="font-medium text-sm text-gray-900">
+                        <div className="font-medium text-sm text-[color:var(--text)]">
                           {t.task}
                         </div>
 
                         {t.subtasks_total > 0 && (
-                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <div className="flex items-center gap-1.5 text-xs text-[color:var(--text-muted)]">
                             <CheckCircle2 className="w-3 h-3" />
                             {t.subtasks_completed}/{t.subtasks_total} subtasks
                           </div>
                         )}
 
                         {t.due_date && (
-                          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <div className="flex items-center gap-1.5 text-xs text-[color:var(--text-soft)]">
                             <Calendar className="w-3 h-3" />
                             {new Date(t.due_date).toLocaleDateString()}
                           </div>
                         )}
 
                         {t.assigned_to && (
-                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <div className="flex items-center gap-1.5 text-xs text-[color:var(--text-muted)]">
                             <UserIcon className="w-3 h-3" />
                             {getAssigneeLabel(t.assigned_to)}
                           </div>
@@ -2691,7 +2691,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                             {priorityLabel(t.priority)}
                           </Badge>
                           {t.sprint_name && (
-                            <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                            <span className="text-[10px] border border-[color:var(--border)] text-[color:var(--primary)] px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
                               <Layers className="w-2.5 h-2.5" />
                               {t.sprint_name}
                             </span>
@@ -2708,7 +2708,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         {canEdit && sprints.filter(s => s.status !== "completed").length > 0 && (
                           <div className="mt-1" onClick={e => e.stopPropagation()}>
                             <select
-                              className="w-full border border-slate-200 rounded px-1.5 py-0.5 text-[11px] text-slate-600 bg-white focus:border-indigo-400 outline-none"
+                              className="w-full border border-[color:var(--border)] rounded px-1.5 py-0.5 text-[11px] text-[color:var(--text-muted)] bg-[var(--surface)] focus:border-[color:var(--primary)] outline-none"
                               value={t.sprint_id || ""}
                               onChange={e => handleAssignTaskToSprint(t.id, e.target.value || null)}
                             >
@@ -2720,10 +2720,10 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                           </div>
                         )}
 
-                        <div className="flex justify-between items-center mt-3 pt-2 border-t border-gray-200">
+                        <div className="flex justify-between items-center mt-3 pt-2 border-t border-[color:var(--border)]">
                           {canEdit && (
                             <select
-                              className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                              className="border border-[color:var(--border)] rounded-md px-2 py-1 text-sm bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                               value={t.status || ""}
                               onChange={(e) => {
                                 e.stopPropagation();
@@ -2744,7 +2744,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                           <Button
                             variant="ghost"
                             size="xs"
-                            className="text-primary-600"
+                            className="text-[color:var(--primary)]"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedTaskForComments(
@@ -2761,7 +2761,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         </div>
 
                         {selectedTaskForComments === t.id && (
-                          <div className="mt-2 border-t pt-2">
+                          <div className="mt-2 border-t border-[color:var(--border)] pt-2">
                             <CommentsSection taskId={t.id} />
                           </div>
                         )}
@@ -2772,11 +2772,11 @@ const [loadingLogs, setLoadingLogs] = useState(false);
 
                 {/* Quick-add section at bottom of column */}
                 {canEdit && (
-                  <div className="mt-3 pt-2 border-t border-dashed border-slate-200">
+                  <div className="mt-3 pt-2 border-t border-dashed border-[color:var(--border)]">
                     <input
                       id={`quick-input-${col.key}`}
                       type="text"
-                      className="w-full border rounded px-2 py-1 text-[11px] mb-1"
+                      className="w-full border border-[color:var(--border)] rounded px-2 py-1 text-[11px] mb-1 bg-[var(--surface)] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] outline-none"
                       placeholder={`Add task in "${col.label}"...`}
                       value={quickNewTitles[col.key] || ""}
                       onChange={(e) =>
@@ -2794,7 +2794,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     />
                     <button
                       type="button"
-                      className="w-full bg-blue-50 hover:bg-blue-100 text-[11px] text-blue-700 py-1 rounded disabled:opacity-50"
+                      className="w-full bg-[var(--surface-soft)] hover:bg-[var(--primary-soft)] text-[11px] text-[color:var(--text-muted)] hover:text-[color:var(--primary)] py-1 rounded disabled:opacity-50 transition-colors"
                       disabled={!!quickCreating[col.key]}
                       onClick={() => handleQuickCreateTask(col.key)}
                     >
@@ -2813,58 +2813,58 @@ const [loadingLogs, setLoadingLogs] = useState(false);
 
       {/* Task details MODAL + admin CRUD */}
       {selectedTaskDetails && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 overflow-y-auto">
           <div className="mt-16 mb-8 w-full max-w-3xl px-4">
-            <section className="bg-white rounded-xl shadow-lg p-4">
+            <section className="bg-[var(--surface)] border border-[color:var(--border)] rounded-xl p-4">
               <div className="flex justify-between items-start mb-2">
                 <div>
                   {/* Ticket ID + badges row */}
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     {selectedTaskDetails.display_id && (
-                      <span className="font-mono text-[11px] text-indigo-500 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
+                      <span className="font-mono text-[11px] text-[color:var(--primary)] font-bold border border-[color:var(--border)] px-1.5 py-0.5 rounded">
                         {selectedTaskDetails.display_id}
                       </span>
                     )}
                     <TaskTypeBadge type={selectedTaskDetails.task_type || "task"} />
                     {selectedTaskDetails.is_blocked && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-[color:var(--border)] text-[color:var(--score-danger)]">
                         <ShieldAlert className="w-3 h-3" /> Blocked
                       </span>
                     )}
                     {selectedTaskDetails.story_points != null && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold border border-[color:var(--border)] text-[color:var(--text-soft)] px-1.5 py-0.5 rounded-full">
                         <BarChart2 className="w-3 h-3" /> {selectedTaskDetails.story_points} pts
                       </span>
                     )}
                   </div>
-                  <h2 className="text-sm font-semibold">
+                  <h2 className="text-sm font-semibold text-[color:var(--text)]">
                     {selectedTaskDetails.task}{" "}
                     {selectedTaskDetails.subtasks_total > 0 && (
-                      <span className="ml-1 text-[11px] font-normal text-slate-500">
+                      <span className="ml-1 text-[11px] font-normal text-[color:var(--text-muted)]">
                         ({selectedTaskDetails.subtasks_completed}/{selectedTaskDetails.subtasks_total} subtasks)
                       </span>
                     )}
                   </h2>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                    <p className="text-[11px] text-slate-500">
-                      Status: <span className="font-medium text-slate-700">{statusLabel(selectedTaskDetails.status)}</span>
+                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                      Status: <span className="font-medium text-[color:var(--text)]">{statusLabel(selectedTaskDetails.status)}</span>
                     </p>
-                    <p className="text-[11px] text-slate-500">
-                      Priority: <span className="font-medium text-slate-700">{priorityLabel(selectedTaskDetails.priority || "medium")}</span>
+                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                      Priority: <span className="font-medium text-[color:var(--text)]">{priorityLabel(selectedTaskDetails.priority || "medium")}</span>
                     </p>
                     {selectedTaskDetails.due_date && (
-                      <p className="text-[11px] text-slate-500">
-                        Due: <span className="font-medium text-slate-700">{new Date(selectedTaskDetails.due_date).toLocaleDateString()}</span>
+                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                        Due: <span className="font-medium text-[color:var(--text)]">{new Date(selectedTaskDetails.due_date).toLocaleDateString()}</span>
                       </p>
                     )}
                     {selectedTaskDetails.assigned_to && (
-                      <p className="text-[11px] text-slate-500">
-                        Assigned: <span className="font-medium text-slate-700">{getAssigneeLabel(selectedTaskDetails.assigned_to)}</span>
+                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                        Assigned: <span className="font-medium text-[color:var(--text)]">{getAssigneeLabel(selectedTaskDetails.assigned_to)}</span>
                       </p>
                     )}
                     {selectedTaskDetails.sprint_name && (
-                      <p className="text-[11px] text-slate-500">
-                        Sprint: <span className="font-medium text-indigo-600">{selectedTaskDetails.sprint_name}</span>
+                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                        Sprint: <span className="font-medium text-[color:var(--primary)]">{selectedTaskDetails.sprint_name}</span>
                       </p>
                     )}
                   </div>
@@ -2874,7 +2874,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     <button
                       title={isEditing ? "Cancel edit" : "Edit task"}
                       onClick={() => setIsEditing((v) => !v)}
-                      className={`p-1.5 rounded hover:bg-slate-100 transition-colors ${isEditing ? "text-slate-500" : "text-blue-600"}`}
+                      className={`p-1.5 rounded hover:bg-[var(--surface-soft)] transition-colors ${isEditing ? "text-[color:var(--text-muted)]" : "text-[color:var(--primary)]"}`}
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -2883,7 +2883,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     <button
                       title="Delete task"
                       onClick={handleDeleteTask}
-                      className="p-1.5 rounded hover:bg-red-50 text-red-500 transition-colors"
+                      className="p-1.5 rounded hover:bg-[var(--surface-soft)] text-[color:var(--score-danger)] transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -2891,7 +2891,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   <button
                     title="Copy link"
                     onClick={handleCopyTaskLink}
-                    className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors"
+                    className="p-1.5 rounded hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)] transition-colors"
                   >
                     <LinkIcon className="w-4 h-4" />
                   </button>
@@ -2902,7 +2902,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       setAttachments([]);
                       setIsEditing(false);
                     }}
-                    className="p-1.5 rounded hover:bg-slate-100 text-slate-400 transition-colors"
+                    className="p-1.5 rounded hover:bg-[var(--surface-soft)] text-[color:var(--text-soft)] transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -2912,19 +2912,19 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               {/* Read-only description */}
               {!isEditing && (
                 <div className="mt-3">
-                  <h3 className="text-xs font-semibold mb-1">
+                  <h3 className="text-xs font-semibold mb-1 text-[color:var(--text)]">
                     Description
                   </h3>
                   {selectedTaskDetails.description ? (
                     <div
-                      className="prose prose-sm max-w-none text-xs"
+                      className="prose prose-sm max-w-none text-xs text-[color:var(--text-muted)]"
                       dangerouslySetInnerHTML={{
                         __html:
                           selectedTaskDetails.description,
                       }}
                     />
                   ) : (
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-[color:var(--text-soft)]">
                       No description provided.
                     </p>
                   )}
@@ -2933,29 +2933,29 @@ const [loadingLogs, setLoadingLogs] = useState(false);
 
               {/* Edit form with status dropdown bound to custom columns */}
               {isEditing && editTask && (
-                <div className="mt-3 border-t pt-3">
-                  <h3 className="text-xs font-semibold mb-2">
+                <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                  <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">
                     Edit task (admin / manager)
                   </h3>
                   <div className="grid md:grid-cols-2 gap-3 text-xs">
                     <div className="space-y-2">
-                      <label className="block">Title</label>
+                      <label className="block text-[color:var(--text-muted)]">Title</label>
                       <input
                         type="text"
                         name="task"
                         value={editTask.task}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className="w-full border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                       />
 
-                      <label className="block mt-2">
+                      <label className="block mt-2 text-[color:var(--text-muted)]">
                         Status
                       </label>
                       <select
                         name="status"
                         value={editTask.status || ""}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className="w-full border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                       >
                         <option value="">No status</option>
                         {statusColumns.map((col) => (
@@ -2968,47 +2968,47 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         ))}
                       </select>
 
-                      <label className="block mt-2">
+                      <label className="block mt-2 text-[color:var(--text-muted)]">
                         Priority
                       </label>
                       <select
                         name="priority"
                         value={editTask.priority || "medium"}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className="w-full border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                       >
                         <option value="high">High</option>
                         <option value="medium">Medium</option>
                         <option value="low">Low</option>
                       </select>
 
-                      <label className="block mt-2">Due date</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Due date</label>
                       <input
                         type="date"
                         name="due_date"
                         value={editTask.due_date || ""}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className="w-full border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                       />
 
-                      <label className="block mt-2">Type</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Type</label>
                       <select
                         name="task_type"
                         value={editTask.task_type || "task"}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className="w-full border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                       >
                         {TASK_TYPES.map(t => (
                           <option key={t.value} value={t.value}>{t.label}</option>
                         ))}
                       </select>
 
-                      <label className="block mt-2">Story Points</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Story Points</label>
                       <select
                         name="story_points"
                         value={editTask.story_points || ""}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className="w-full border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                       >
                         <option value="">No estimate</option>
                         {STORY_POINTS.map(p => (
@@ -3023,21 +3023,21 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                           name="is_blocked"
                           checked={editTask.is_blocked || false}
                           onChange={e => setEditTask(prev => ({ ...prev, is_blocked: e.target.checked }))}
-                          className="w-4 h-4 rounded border-gray-300 text-red-600"
+                          className="w-4 h-4 rounded border-[color:var(--border)] text-[color:var(--score-danger)]"
                         />
-                        <label htmlFor="is_blocked_edit" className="text-xs text-gray-700 flex items-center gap-1">
-                          <ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Mark as blocked
+                        <label htmlFor="is_blocked_edit" className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
+                          <ShieldAlert className="w-3.5 h-3.5 text-[color:var(--score-danger)]" /> Mark as blocked
                         </label>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <label className="block">Assign to</label>
+                      <label className="block text-[color:var(--text-muted)]">Assign to</label>
                       <select
                         name="assigned_to"
                         value={editTask.assigned_to || ""}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className="w-full border border-[color:var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none"
                       >
                         <option value="">Unassigned</option>
                         {users.map((u) => (
@@ -3070,7 +3070,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       type="button"
                       disabled={savingEdit}
                       onClick={handleSaveEdit}
-                      className="bg-blue-600 text-white text-[11px] rounded px-3 py-1 disabled:opacity-50"
+                      className="bg-[color:var(--primary)] text-white text-[11px] rounded px-3 py-1 disabled:opacity-50 hover:opacity-90 transition-opacity"
                     >
                       {savingEdit ? "Saving..." : "Save changes"}
                     </button>
@@ -3082,8 +3082,8 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               <Subtasks taskId={selectedTaskDetails.id} />
 
               {/* Comments for this task */}
-              <div className="mt-3 border-t pt-3">
-                <h3 className="text-xs font-semibold mb-1">
+              <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                <h3 className="text-xs font-semibold mb-1 text-[color:var(--text)]">
                   Comments
                 </h3>
                 <CommentsSection
@@ -3092,17 +3092,17 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               </div>
 
               {/* Attachments panel */}
-              <div className="mt-3 border-t pt-3">
-                <h3 className="text-xs font-semibold mb-1">
+              <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                <h3 className="text-xs font-semibold mb-1 text-[color:var(--text)]">
                   Attachments
                 </h3>
 
                 {loadingAttachments ? (
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-[color:var(--text-soft)]">
                     Loading attachments...
                   </p>
                 ) : attachments.length === 0 ? (
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-[color:var(--text-soft)]">
                     No attachments.
                   </p>
                 ) : (
@@ -3119,21 +3119,21 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                               <img
                                 src={fullUrl}
                                 alt={att.original_name}
-                                className="h-10 w-14 object-cover rounded border border-slate-200"
+                                className="h-10 w-14 object-cover rounded border border-[color:var(--border)]"
                               />
                             </a>
                           )}
                           <a
                             href={fullUrl}
                             download={att.original_name}
-                            className="text-blue-600 hover:underline truncate max-w-[200px]"
+                            className="text-[color:var(--primary)] hover:underline truncate max-w-[200px]"
                             target="_blank"
                             rel="noreferrer"
                           >
                             📎 {att.original_name}
                           </a>
                           {att.file_size && (
-                            <span className="text-slate-400">
+                            <span className="text-[color:var(--text-soft)]">
                               ({(att.file_size / 1024).toFixed(1)} KB)
                             </span>
                           )}
@@ -3158,7 +3158,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       type="button"
                       disabled={uploading}
                       onClick={handleUploadAttachment}
-                      className="bg-slate-800 text-white text-[11px] rounded px-3 py-1 disabled:opacity-50"
+                      className="bg-[color:var(--primary)] text-white text-[11px] rounded px-3 py-1 disabled:opacity-50 hover:opacity-90 transition-opacity"
                     >
                       {uploading
                         ? "Uploading..."
@@ -3168,17 +3168,17 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 )}
               </div>
               {/* Activity Timeline */}
-<div className="mt-4 border-t pt-3">
-  <h3 className="text-xs font-semibold mb-2">
+<div className="mt-4 border-t border-[color:var(--border)] pt-3">
+  <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">
     Activity Timeline
   </h3>
 
   {loadingLogs ? (
-    <p className="text-[11px] text-slate-400">
+    <p className="text-[11px] text-[color:var(--text-soft)]">
       Loading activity...
     </p>
   ) : activityLogs.length === 0 ? (
-    <p className="text-[11px] text-slate-400">
+    <p className="text-[11px] text-[color:var(--text-soft)]">
       No activity recorded.
     </p>
   ) : (
@@ -3186,13 +3186,13 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       {activityLogs.map((log) => (
         <div
           key={log.id}
-          className="border border-slate-200 rounded-lg px-2 py-2 text-[11px] bg-slate-50"
+          className="border border-[color:var(--border)] rounded-lg px-2 py-2 text-[11px]"
         >
-          <div className="font-medium text-slate-700">
+          <div className="font-medium text-[color:var(--text)]">
   {formatLogMessage(log)}
 </div>
 
-<div className="text-[10px] text-slate-400 mt-1">
+<div className="text-[10px] text-[color:var(--text-soft)] mt-1">
   {new Date(log.created_at).toLocaleString()}
 </div>
         </div>
@@ -3201,8 +3201,8 @@ const [loadingLogs, setLoadingLogs] = useState(false);
   )}
 </div>
               {/* Tags */}
-              <div className="mt-3 border-t pt-3">
-                <h3 className="text-xs font-semibold mb-2">Tags</h3>
+              <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">Tags</h3>
                 <TagPicker taskId={selectedTaskDetails.id} readOnly={!canEdit} />
               </div>
 
@@ -3230,11 +3230,11 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       )}
 
       {/* Keyboard shortcut hint */}
-      <div className="fixed bottom-4 right-4 z-10 text-[10px] text-slate-400 bg-white/80 backdrop-blur border border-slate-200 rounded-lg px-2 py-1 shadow hidden md:block">
-        <span className="mr-2"><kbd className="bg-slate-100 px-1 rounded">n</kbd> New</span>
-        <span className="mr-2"><kbd className="bg-slate-100 px-1 rounded">b</kbd> Board</span>
-        <span className="mr-2"><kbd className="bg-slate-100 px-1 rounded">l</kbd> List</span>
-        <span><kbd className="bg-slate-100 px-1 rounded">f</kbd> Filter</span>
+      <div className="fixed bottom-4 right-4 z-10 text-[10px] text-[color:var(--text-soft)] bg-[var(--surface)] backdrop-blur border border-[color:var(--border)] rounded-lg px-2 py-1 hidden md:block">
+        <span className="mr-2"><kbd className="bg-[var(--surface-soft)] px-1 rounded text-[color:var(--text-muted)]">n</kbd> New</span>
+        <span className="mr-2"><kbd className="bg-[var(--surface-soft)] px-1 rounded text-[color:var(--text-muted)]">b</kbd> Board</span>
+        <span className="mr-2"><kbd className="bg-[var(--surface-soft)] px-1 rounded text-[color:var(--text-muted)]">l</kbd> List</span>
+        <span><kbd className="bg-[var(--surface-soft)] px-1 rounded text-[color:var(--text-muted)]">f</kbd> Filter</span>
       </div>
 
       {/* Create Task Modal */}
@@ -3245,8 +3245,8 @@ const [loadingLogs, setLoadingLogs] = useState(false);
               <Modal.Title>Create New Task</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-              <div className="mb-5 p-3 rounded-lg border border-primary-200 bg-primary-50">
-                <label className="block text-sm font-medium text-gray-800 mb-2">
+              <div className="mb-5 p-3 rounded-lg border border-[color:var(--border)]">
+                <label className="block text-sm font-medium text-[color:var(--text)] mb-2">
                   Natural Language Task Creation
                 </label>
                 <div className="flex flex-col md:flex-row gap-2">
@@ -3255,7 +3255,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     value={nlCommand}
                     onChange={(e) => setNlCommand(e.target.value)}
                     placeholder='Type or speak: "Create 5 frontend tasks for login redesign, assign to Sarah, high priority, due Friday"'
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                    className="flex-1 border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     disabled={creating || creatingFromNL}
                   />
                   <Button
@@ -3292,7 +3292,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                               : v;
                       }
                     }}
-                    className="border border-gray-300 rounded-lg px-2 py-2 text-sm min-w-[150px] focus:border-primary-500 focus:ring-primary-500/20"
+                    className="border border-[color:var(--border)] rounded-lg px-2 py-2 text-sm min-w-[150px] bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     disabled={creating || creatingFromNL || isListening}
                   >
                     <option value="auto">Auto language</option>
@@ -3316,7 +3316,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                         localStorage.setItem("nlSpeechLangCustom", v);
                       }}
                       placeholder="BCP-47: ta-IN, bn-IN, ru-RU, etc."
-                      className="border border-gray-300 rounded-lg px-2 py-2 text-sm min-w-[220px] focus:border-primary-500 focus:ring-primary-500/20"
+                      className="border border-[color:var(--border)] rounded-lg px-2 py-2 text-sm min-w-[220px] bg-[var(--surface)] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] outline-none transition-colors"
                       disabled={creating || creatingFromNL || isListening}
                     />
                   )}
@@ -3332,16 +3332,16 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     Create With AI
                   </Button>
                 </div>
-                <p className="text-xs text-slate-600 mt-2">
+                <p className="text-xs text-[color:var(--text-muted)] mt-2">
                   Voice mode listens continuously and auto-creates after 2 seconds of silence.
                 </p>
               </div>
               {/* Template picker */}
               {templateList.length > 0 && (
                 <div className="mb-4">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Use Template</label>
+                  <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Use Template</label>
                   <select
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     onChange={e => {
                       const tpl = templateList.find(t => t.id === e.target.value);
                       if (tpl?.default_fields) setNewTask(prev => ({ ...prev, ...tpl.default_fields }));
@@ -3367,10 +3367,10 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     autoFocus
                   />
                   {dupeSuggestions.length > 0 && (
-                    <div className="mt-1 bg-amber-50 border border-amber-200 rounded p-2">
-                      <p className="text-[10px] text-amber-700 font-semibold mb-1">⚠ Similar tasks found:</p>
+                    <div className="mt-1 border border-[color:var(--border)] rounded p-2">
+                      <p className="text-[10px] text-[color:var(--score-warning)] font-semibold mb-1">Similar tasks found:</p>
                       {dupeSuggestions.map(d => (
-                        <p key={d.id} className="text-[11px] text-amber-600 truncate">
+                        <p key={d.id} className="text-[11px] text-[color:var(--score-warning)] truncate">
                           {d.display_id && <span className="font-mono mr-1">{d.display_id}</span>}
                           {d.task}
                         </p>
@@ -3389,14 +3389,14 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   />
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2">
                       Assign To
                     </label>
                     <select
                       name="assigned_to"
                       value={newTask.assigned_to}
                       onChange={handleNewTaskChange}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                      className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     >
                       <option value="">Unassigned</option>
                       {loadingUsers ? (
@@ -3412,14 +3412,14 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2">
                       Priority
                     </label>
                     <select
                       name="priority"
                       value={newTask.priority}
                       onChange={handleNewTaskChange}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                      className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     >
                       <option value="high">High</option>
                       <option value="medium">Medium</option>
@@ -3428,14 +3428,14 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2">
                       Type
                     </label>
                     <select
                       name="task_type"
                       value={newTask.task_type}
                       onChange={handleNewTaskChange}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                      className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     >
                       {TASK_TYPES.map(t => (
                         <option key={t.value} value={t.value}>{t.label}</option>
@@ -3444,14 +3444,14 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2">
                       Story Points
                     </label>
                     <select
                       name="story_points"
                       value={newTask.story_points}
                       onChange={handleNewTaskChange}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                      className="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                     >
                       <option value="">No estimate</option>
                       {STORY_POINTS.map(p => (
@@ -3467,10 +3467,10 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       name="is_blocked"
                       checked={newTask.is_blocked}
                       onChange={e => setNewTask(prev => ({ ...prev, is_blocked: e.target.checked }))}
-                      className="w-4 h-4 rounded border-gray-300 text-red-600"
+                      className="w-4 h-4 rounded border-[color:var(--border)] accent-[color:var(--score-danger)]"
                     />
-                    <label htmlFor="is_blocked_create" className="text-sm text-gray-700 flex items-center gap-1">
-                      <ShieldAlert className="w-4 h-4 text-red-500" /> Mark as blocked
+                    <label htmlFor="is_blocked_create" className="text-sm text-[color:var(--text-muted)] flex items-center gap-1">
+                      <ShieldAlert className="w-4 h-4 text-[color:var(--score-danger)]" /> Mark as blocked
                     </label>
                   </div>
                 </div>
@@ -3478,7 +3478,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 {/* Right Column - Description */}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2">
                       Description
                     </label>
                     <div className="quill-editor-wrapper">
@@ -3498,9 +3498,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                 </div>
 
                 {/* Subtasks Section - Full Width */}
-                <div className="md:col-span-2 border-t border-gray-200 pt-4 mt-2">
+                <div className="md:col-span-2 border-t border-[color:var(--border)] pt-4 mt-2">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-[color:var(--text-muted)]">
                       Subtasks (Optional)
                     </label>
                     <Button
@@ -3516,7 +3516,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   </div>
 
                   {newSubtasks.length === 0 ? (
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-[color:var(--text-soft)]">
                       No subtasks added. Click &quot;Add Subtask&quot; to break this task into smaller pieces.
                     </p>
                   ) : (
@@ -3524,7 +3524,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       {newSubtasks.map((st, index) => (
                         <div
                           key={index}
-                          className="flex flex-col md:flex-row gap-2 items-start md:items-center bg-gray-50 border border-gray-200 rounded-lg p-3"
+                          className="flex flex-col md:flex-row gap-2 items-start md:items-center border border-[color:var(--border)] rounded-lg p-3"
                         >
                           <input
                             type="text"
@@ -3537,7 +3537,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                               )
                             }
                             placeholder="Subtask title"
-                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                            className="flex-1 border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] outline-none transition-colors"
                           />
                           <select
                             value={st.assigned_to || ""}
@@ -3548,7 +3548,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                                 e.target.value
                               )
                             }
-                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[200px] focus:border-primary-500 focus:ring-primary-500/20"
+                            className="border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm min-w-[200px] bg-[var(--surface)] text-[color:var(--text)] focus:border-[color:var(--primary)] outline-none transition-colors"
                           >
                             <option value="">Unassigned</option>
                             {users.map((u) => (
@@ -3562,7 +3562,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                             onClick={() => handleRemoveSubtaskRow(index)}
                             variant="ghost"
                             size="sm"
-                            className="text-danger-600 hover:bg-danger-50"
+                            className="text-[color:var(--score-danger)] hover:bg-[var(--surface-soft)]"
                           >
                             <X className="w-4 h-4" />
                           </Button>

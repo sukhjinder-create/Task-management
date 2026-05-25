@@ -42,7 +42,7 @@ export function Modal({
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-[3px]" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[3px]" />
       <div
         className={cn(
           "relative w-full bg-[var(--surface)] text-[color:var(--text)]",
