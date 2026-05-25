@@ -89,8 +89,8 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
       "flex flex-col items-center justify-center gap-0.5 flex-1 py-2 relative",
       "text-xs font-medium transition-colors min-h-[56px]",
       isActive
-        ? "text-[var(--primary)]"
-        : "text-[var(--text-muted)]"
+        ? "text-[color:var(--primary)]"
+        : "text-[color:var(--text-soft)]"
     );
 
   return (
@@ -98,7 +98,7 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
       {/* ── More drawer backdrop ─────────────────────────── */}
       {moreOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50"
+          className="fixed inset-0 z-40 bg-black/60"
           onClick={() => setMoreOpen(false)}
         />
       )}
@@ -106,7 +106,7 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
       {/* ── More drawer (slides up) ──────────────────────── */}
       <div
         className={cn(
-          "fixed left-0 right-0 bottom-0 z-50 theme-surface rounded-t-2xl shadow-2xl",
+          "fixed left-0 right-0 bottom-0 z-50 bg-[var(--surface)] border border-[color:var(--border)] rounded-t-2xl",
           "transform transition-transform duration-300 ease-out",
           moreOpen ? "translate-y-0" : "translate-y-full"
         )}
@@ -118,17 +118,17 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b theme-border">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[color:var(--border)]">
           <div className="flex items-center gap-3">
             <Avatar name={auth?.user?.username} src={auth?.user?.avatar_url} size="md" />
             <div>
-              <p className="text-sm font-semibold theme-text">{auth?.user?.username}</p>
-              <p className="text-xs theme-text-muted capitalize">{auth?.user?.role}</p>
+              <p className="text-sm font-semibold text-[color:var(--text)]">{auth?.user?.username}</p>
+              <p className="text-xs text-[color:var(--text-muted)] capitalize">{auth?.user?.role}</p>
             </div>
           </div>
           <button
             onClick={() => setMoreOpen(false)}
-            className="p-2 rounded-full theme-text-muted hover:bg-[var(--surface-soft)]"
+            className="p-2 rounded-full text-[color:var(--text-soft)] hover:bg-[var(--surface-soft)]"
           >
             <X size={20} />
           </button>
@@ -145,8 +145,8 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
                 cn(
                   "flex flex-col items-center gap-2 p-4 rounded-xl transition-colors",
                   isActive
-                    ? "bg-[var(--primary)] text-white"
-                    : "theme-text-muted hover:bg-[var(--surface-soft)]"
+                    ? "bg-[color:var(--primary)] text-white"
+                    : "text-[color:var(--text-soft)] hover:bg-[var(--surface-soft)]"
                 )
               }
             >
@@ -179,7 +179,7 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
 
       {/* ── Bottom tab bar ───────────────────────────────── */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-30 theme-surface border-t theme-border
+        className="fixed bottom-0 left-0 right-0 z-30 bg-[var(--app-bg)] border-t border-[color:var(--border)]
                    flex items-stretch"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
@@ -220,7 +220,7 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
           className={cn(
             "flex flex-col items-center justify-center gap-0.5 flex-1 py-2",
             "text-xs font-medium transition-colors min-h-[56px]",
-            moreOpen ? "text-[var(--primary)]" : "text-[var(--text-muted)]"
+            moreOpen ? "text-[color:var(--primary)]" : "text-[color:var(--text-soft)]"
           )}
         >
           <MoreHorizontal size={22} strokeWidth={1.8} />

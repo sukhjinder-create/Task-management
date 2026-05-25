@@ -214,7 +214,7 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
       <Modal.Header>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <GitBranch className="w-5 h-5 text-primary-600" />
+            <GitBranch className="w-5 h-5 text-[color:var(--primary)]" />
             <Modal.Title>Git Automation - {projectName}</Modal.Title>
           </div>
           <Badge color={settings.enabled ? "success" : "neutral"} size="sm" variant="subtle">
@@ -226,14 +226,14 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
       <Modal.Body>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold theme-text">Project Automation Settings</h3>
+            <h3 className="text-sm font-semibold text-[color:var(--text)]">Project Automation Settings</h3>
 
             {loading ? (
-              <p className="text-sm theme-text-muted">Loading settings...</p>
+              <p className="text-sm text-[color:var(--text-muted)]">Loading settings...</p>
             ) : (
               <>
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm theme-text">
+                  <label className="flex items-center gap-2 text-sm text-[color:var(--text)]">
                     <input
                       type="checkbox"
                       checked={settings.enabled}
@@ -241,7 +241,7 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
                     />
                     Enable Git automation for this project
                   </label>
-                  <label className="flex items-center gap-2 text-sm theme-text">
+                  <label className="flex items-center gap-2 text-sm text-[color:var(--text)]">
                     <input
                       type="checkbox"
                       checked={settings.autoStatusEnabled}
@@ -249,7 +249,7 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
                     />
                     Auto-update task status from pushes
                   </label>
-                  <label className="flex items-center gap-2 text-sm theme-text">
+                  <label className="flex items-center gap-2 text-sm text-[color:var(--text)]">
                     <input
                       type="checkbox"
                       checked={settings.autoInferTasks}
@@ -257,7 +257,7 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
                     />
                     Auto-infer tasks from code changes (no manual task key required)
                   </label>
-                  <label className="flex items-center gap-2 text-sm theme-text">
+                  <label className="flex items-center gap-2 text-sm text-[color:var(--text)]">
                     <input
                       type="checkbox"
                       checked={settings.autoCompleteOnProd}
@@ -265,7 +265,7 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
                     />
                     Mark completed on prod branch transition
                   </label>
-                  <label className="flex items-center gap-2 text-sm theme-text">
+                  <label className="flex items-center gap-2 text-sm text-[color:var(--text)]">
                     <input
                       type="checkbox"
                       checked={settings.requireTaskKey}
@@ -310,10 +310,10 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
                 />
 
                 <div>
-                  <label className="block text-sm font-medium theme-text mb-1.5">Branch to Environment Map (JSON)</label>
+                  <label className="block text-sm font-medium text-[color:var(--text)] mb-1.5">Branch to Environment Map (JSON)</label>
                   <textarea
                     rows={7}
-                    className="w-full theme-input border theme-border rounded-lg px-3 py-2 text-sm font-mono"
+                    className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm font-mono"
                     value={settings.branchMapText}
                     onChange={(e) => setSettings((s) => ({ ...s, branchMapText: e.target.value }))}
                     placeholder='{"develop":"dev","staging":"stage","main":"prod"}'
@@ -336,14 +336,14 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold theme-text">Simulation & Event History</h3>
+            <h3 className="text-sm font-semibold text-[color:var(--text)]">Simulation & Event History</h3>
 
-            <div className="rounded-lg border p-3 space-y-3">
+            <div className="border border-[color:var(--border)] rounded-lg p-3 space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs theme-text-muted mb-1">Provider</label>
+                  <label className="block text-xs text-[color:var(--text-muted)] mb-1">Provider</label>
                   <select
-                    className="w-full theme-input border theme-border rounded-lg px-2 py-2 text-sm"
+                    className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-2 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm"
                     value={provider}
                     onChange={(e) => setProvider(e.target.value)}
                   >
@@ -353,9 +353,9 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs theme-text-muted mb-1">Branch</label>
+                  <label className="block text-xs text-[color:var(--text-muted)] mb-1">Branch</label>
                   <input
-                    className="w-full theme-input border theme-border rounded-lg px-2 py-2 text-sm"
+                    className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm"
                     value={simulateBranch}
                     onChange={(e) => setSimulateBranch(e.target.value)}
                     placeholder="develop"
@@ -363,9 +363,9 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
                 </div>
               </div>
               <div>
-                <label className="block text-xs theme-text-muted mb-1">Commit message</label>
+                <label className="block text-xs text-[color:var(--text-muted)] mb-1">Commit message</label>
                 <input
-                  className="w-full theme-input border theme-border rounded-lg px-2 py-2 text-sm"
+                  className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm"
                   value={simulateCommitMessage}
                   onChange={(e) => setSimulateCommitMessage(e.target.value)}
                   placeholder="Implement login validation and auth retry"
@@ -376,7 +376,7 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
               </Button>
 
               {simulationResult && (
-                <div className="text-xs rounded-md border theme-border p-2 theme-surface-soft space-y-1 theme-text">
+                <div className="text-xs border border-[color:var(--border)] rounded-lg p-2 space-y-1 text-[color:var(--text)]">
                   <div>Applied: {simulationResult.appliedCount || 0}</div>
                   <div>Linked: {simulationResult.linkedTasks || 0}</div>
                   <div>Skipped: {simulationResult.skippedCount || 0}</div>
@@ -394,25 +394,25 @@ export default function GitAutomationModal({ isOpen, onClose, project, canManage
               )}
             </div>
 
-            <div className="rounded-lg border p-3">
+            <div className="border border-[color:var(--border)] rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-sm font-medium theme-text">
+                <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--text)]">
                   <Activity className="w-4 h-4" />
                   Recent Git Automation Events
                 </div>
                 <Button variant="ghost" size="xs" onClick={loadEvents}>Refresh</Button>
               </div>
               {loadingEvents ? (
-                <p className="text-sm theme-text-muted">Loading events...</p>
+                <p className="text-sm text-[color:var(--text-muted)]">Loading events...</p>
               ) : events.length === 0 ? (
-                <p className="text-sm theme-text-muted">No events yet.</p>
+                <p className="text-sm text-[color:var(--text-muted)]">No events yet.</p>
               ) : (
                 <div className="max-h-64 overflow-auto space-y-2">
                   {events.map((ev) => (
-                    <div key={ev.id || `${ev.provider}-${ev.created_at}`} className="border rounded-md p-2 text-xs">
-                      <div className="font-medium">{ev.repo_full_name || "repo"} - {ev.branch_name || "branch"}</div>
-                      <div className="theme-text-muted">{new Date(ev.created_at).toLocaleString()}</div>
-                      <div>Applied {ev.applied_task_count || 0}, Linked {ev.linked_task_count || 0}, Skipped {ev.skipped_task_count || 0}</div>
+                    <div key={ev.id || `${ev.provider}-${ev.created_at}`} className="border border-[color:var(--border)] rounded-lg p-2 text-xs">
+                      <div className="font-medium text-[color:var(--text)]">{ev.repo_full_name || "repo"} - {ev.branch_name || "branch"}</div>
+                      <div className="text-[color:var(--text-muted)]">{new Date(ev.created_at).toLocaleString()}</div>
+                      <div className="text-[color:var(--text-soft)]">Applied {ev.applied_task_count || 0}, Linked {ev.linked_task_count || 0}, Skipped {ev.skipped_task_count || 0}</div>
                     </div>
                   ))}
                 </div>

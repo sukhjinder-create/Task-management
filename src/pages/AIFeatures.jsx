@@ -36,16 +36,16 @@ export default function AIFeatures() {
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold theme-text flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-indigo-500" /> AI Features
+        <h1 className="text-2xl font-bold text-[color:var(--text)] flex items-center gap-2">
+          <Sparkles className="w-6 h-6 text-[color:var(--primary)]" /> AI Features
         </h1>
-        <p className="theme-text-muted text-sm mt-1">AI-powered tools to supercharge your workflow</p>
+        <p className="text-[color:var(--text-muted)] text-sm mt-1">AI-powered tools to supercharge your workflow</p>
       </div>
 
-      <div className="flex gap-1 border-b theme-border mb-6 overflow-x-auto">
+      <div className="flex gap-1 border-b border-[color:var(--border)] mb-6 overflow-x-auto">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg whitespace-nowrap transition-colors ${tab === id ? "border-b-2 border-indigo-500 text-indigo-600 -mb-px" : "theme-text-muted hover:theme-text"}`}>
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg whitespace-nowrap transition-colors ${tab === id ? "border-b-2 border-[color:var(--primary)] text-[color:var(--primary)] -mb-px" : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"}`}>
             <Icon className="w-4 h-4" /> {label}
           </button>
         ))}
@@ -114,20 +114,24 @@ function MeetingNotesTab() {
     setCreating(false);
   };
 
-  const PRIORITY_COLOR = { high: "text-red-600 bg-red-50", medium: "text-amber-600 bg-amber-50", low: "text-blue-600 bg-blue-50" };
+  const PRIORITY_COLOR = {
+    high: "text-red-500 border border-red-500/40",
+    medium: "text-amber-500 border border-amber-500/40",
+    low: "text-[color:var(--primary)] border border-[color:var(--primary)]/40",
+  };
   const selectedCount = Object.values(selected).filter(Boolean).length;
 
   return (
     <div className="space-y-6">
-      <div className="theme-surface-card rounded-xl p-5 border theme-border">
-        <h2 className="font-semibold theme-text mb-2">Paste Meeting Notes</h2>
-        <p className="text-sm theme-text-muted mb-3">AI will extract action items and create tasks automatically.</p>
+      <div className="border border-[color:var(--border)] rounded-lg p-4">
+        <h2 className="font-semibold text-[color:var(--text)] mb-2">Paste Meeting Notes</h2>
+        <p className="text-sm text-[color:var(--text-muted)] mb-3">AI will extract action items and create tasks automatically.</p>
 
         {/* Project selector */}
         <div className="mb-3">
-          <label className="block text-xs font-medium theme-text-muted mb-1">Target Project *</label>
+          <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Target Project *</label>
           <select value={projectId} onChange={e => setProjectId(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text">
+            className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm">
             <option value="">— select a project —</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -137,9 +141,9 @@ function MeetingNotesTab() {
           value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="Paste your meeting notes, minutes, or transcript here…&#10;&#10;Example: John will set up the CI/CD pipeline by Friday. Sarah to review the design mockups by end of week."
           rows={8}
-          className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text"
+          className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm"
         />
-        <button onClick={extract} disabled={loading || !projectId} className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50">
+        <button onClick={extract} disabled={loading || !projectId} className="mt-3 bg-[color:var(--primary)] text-[color:var(--primary-contrast)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[color:var(--primary-hover)] transition-colors flex items-center gap-2 disabled:opacity-50">
           {loading ? <><RefreshCw className="w-4 h-4 animate-spin" />Extracting…</> : <><Sparkles className="w-4 h-4" />Extract Tasks</>}
         </button>
       </div>
@@ -147,23 +151,23 @@ function MeetingNotesTab() {
       {tasks.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold theme-text">{tasks.length} action items found</h3>
-            <button onClick={createSelected} disabled={creating || selectedCount === 0} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50">
+            <h3 className="font-semibold text-[color:var(--text)]">{tasks.length} action items found</h3>
+            <button onClick={createSelected} disabled={creating || selectedCount === 0} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold flex items-center gap-1 hover:bg-emerald-700 transition-colors disabled:opacity-50">
               <Plus className="w-4 h-4" /> {creating ? "Creating…" : `Create ${selectedCount} Task${selectedCount !== 1 ? "s" : ""}`}
             </button>
           </div>
           <div className="space-y-2">
             {tasks.map((task, i) => (
-              <div key={i} className={`flex items-start gap-3 theme-surface-card rounded-xl px-4 py-3 border transition-colors ${selected[i] ? "border-indigo-300 bg-indigo-50/30" : "theme-border"}`}>
+              <div key={i} className={`flex items-start gap-3 rounded-lg px-4 py-3 border transition-colors ${selected[i] ? "border-[color:var(--primary)]/50" : "border-[color:var(--border)]"}`}>
                 <input type="checkbox" checked={selected[i] || false} onChange={e => setSelected(s => ({ ...s, [i]: e.target.checked }))}
-                  className="mt-0.5 w-4 h-4 rounded accent-indigo-600" />
+                  className="mt-0.5 w-4 h-4 rounded accent-[color:var(--primary)]" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium theme-text">{task.title}</p>
-                  {task.description && <p className="text-xs theme-text-muted mt-0.5">{task.description}</p>}
+                  <p className="text-sm font-medium text-[color:var(--text)]">{task.title}</p>
+                  {task.description && <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{task.description}</p>}
                   <div className="flex flex-wrap gap-2 mt-1.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLOR[task.priority] || PRIORITY_COLOR.medium}`}>{task.priority}</span>
-                    {task.assignee_name && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">👤 {task.assignee_name}</span>}
-                    {task.due_date_hint && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">📅 {task.due_date_hint}</span>}
+                    {task.assignee_name && <span className="text-xs px-2 py-0.5 rounded-full border border-[color:var(--border)] text-[color:var(--text-muted)]">👤 {task.assignee_name}</span>}
+                    {task.due_date_hint && <span className="text-xs px-2 py-0.5 rounded-full border border-[color:var(--border)] text-[color:var(--text-muted)]">📅 {task.due_date_hint}</span>}
                   </div>
                 </div>
               </div>
@@ -193,17 +197,17 @@ function RiskHeatmapTab() {
   useEffect(() => { load(); }, []);
 
   const RISK_COLORS = {
-    critical: { bar: "bg-red-500",    badge: "bg-red-100 text-red-700",    icon: <AlertCircle className="w-4 h-4 text-red-500" /> },
-    high:     { bar: "bg-orange-400", badge: "bg-orange-100 text-orange-700", icon: <AlertTriangle className="w-4 h-4 text-orange-400" /> },
-    medium:   { bar: "bg-amber-400",  badge: "bg-amber-100 text-amber-700", icon: <Clock className="w-4 h-4 text-amber-400" /> },
-    low:      { bar: "bg-green-400",  badge: "bg-green-100 text-green-700", icon: <CheckCircle className="w-4 h-4 text-green-400" /> },
+    critical: { bar: "bg-red-500",    badge: "text-red-500 border border-red-500/40",    icon: <AlertCircle className="w-4 h-4 text-red-500" /> },
+    high:     { bar: "bg-orange-400", badge: "text-orange-400 border border-orange-400/40", icon: <AlertTriangle className="w-4 h-4 text-orange-400" /> },
+    medium:   { bar: "bg-amber-400",  badge: "text-amber-400 border border-amber-400/40", icon: <Clock className="w-4 h-4 text-amber-400" /> },
+    low:      { bar: "bg-emerald-400",  badge: "text-emerald-400 border border-emerald-400/40", icon: <CheckCircle className="w-4 h-4 text-emerald-400" /> },
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm theme-text-muted">{risks.length} tasks analysed for deadline risk</p>
-        <button onClick={load} disabled={loading} className="flex items-center gap-1 px-3 py-1.5 border theme-border rounded-lg text-sm theme-text">
+        <p className="text-sm text-[color:var(--text-muted)]">{risks.length} tasks analysed for deadline risk</p>
+        <button onClick={load} disabled={loading} className="border border-[color:var(--border)] text-[color:var(--text-muted)] px-4 py-2 rounded-lg text-sm hover:text-[color:var(--text)] hover:border-[color:var(--border-strong)] transition-colors flex items-center gap-1">
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Refresh
         </button>
       </div>
@@ -216,15 +220,15 @@ function RiskHeatmapTab() {
           <div key={level}>
             <div className="flex items-center gap-2 mb-2">
               {c.icon}
-              <h3 className="text-sm font-semibold theme-text capitalize">{level} Risk ({group.length})</h3>
+              <h3 className="text-sm font-semibold text-[color:var(--text)] capitalize">{level} Risk ({group.length})</h3>
             </div>
             <div className="space-y-2">
               {group.map((r, i) => (
-                <div key={i} className="theme-surface-card rounded-xl px-4 py-3 border theme-border">
+                <div key={i} className="border border-[color:var(--border)] rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="flex-1">
-                      <p className="text-sm font-medium theme-text">{r.taskTitle || "Task"}</p>
-                      <p className="text-xs theme-text-muted">
+                      <p className="text-sm font-medium text-[color:var(--text)]">{r.taskTitle || "Task"}</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">
                         {r.daysLeft !== null ? (r.daysLeft < 0 ? `${Math.abs(r.daysLeft)}d overdue` : `${r.daysLeft}d left`) : "No due date"}
                         {r.openSubtasks > 0 ? ` · ${r.openSubtasks} open subtasks` : ""}
                         {r.lateRate > 0 ? ` · ${r.lateRate}% late history` : ""}
@@ -238,7 +242,7 @@ function RiskHeatmapTab() {
                   {r.suggestions?.length > 0 && (
                     <ul className="mt-2 space-y-0.5">
                       {r.suggestions.map((s, j) => (
-                        <li key={j} className="text-xs theme-text-muted flex items-start gap-1">
+                        <li key={j} className="text-xs text-[color:var(--text-muted)] flex items-start gap-1">
                           <span className="mt-0.5">→</span> {s}
                         </li>
                       ))}
@@ -253,9 +257,9 @@ function RiskHeatmapTab() {
 
       {!loading && risks.length === 0 && (
         <div className="text-center py-12">
-          <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-300" />
-          <h3 className="font-medium theme-text">All clear!</h3>
-          <p className="text-sm theme-text-muted">No tasks with upcoming due dates found.</p>
+          <CheckCircle className="w-12 h-12 mx-auto mb-3 text-emerald-500/40" />
+          <h3 className="font-medium text-[color:var(--text)]">All clear!</h3>
+          <p className="text-sm text-[color:var(--text-muted)]">No tasks with upcoming due dates found.</p>
         </div>
       )}
     </div>
@@ -282,16 +286,16 @@ function DigestTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm theme-text-muted">AI-summarised notifications from the last 24 hours</p>
-        <button onClick={load} className="flex items-center gap-1 px-3 py-1.5 border theme-border rounded-lg text-sm theme-text">
+        <p className="text-sm text-[color:var(--text-muted)]">AI-summarised notifications from the last 24 hours</p>
+        <button onClick={load} className="border border-[color:var(--border)] text-[color:var(--text-muted)] px-4 py-2 rounded-lg text-sm hover:text-[color:var(--text)] hover:border-[color:var(--border-strong)] transition-colors flex items-center gap-1">
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Refresh
         </button>
       </div>
 
       {digest && (
         <div>
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4">
-            <p className="text-sm font-medium text-indigo-800 flex items-start gap-2">
+          <div className="border border-[color:var(--primary)]/30 rounded-lg p-4 mb-4">
+            <p className="text-sm font-medium text-[color:var(--primary)] flex items-start gap-2">
               <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
               {digest.summary}
             </p>
@@ -299,12 +303,12 @@ function DigestTab() {
 
           {Object.entries(digest.items || {}).map(([type, items]) => (
             <div key={type} className="mb-3">
-              <h3 className="text-xs font-semibold theme-text-muted uppercase tracking-wider mb-2">{type.replace(".", " ").replace("_", " ")}</h3>
+              <h3 className="text-xs font-semibold text-[color:var(--text-muted)] uppercase tracking-wider mb-2">{type.replace(".", " ").replace("_", " ")}</h3>
               {items.map(n => (
-                <div key={n.id} className="flex items-center gap-3 py-2 border-b theme-border last:border-0">
+                <div key={n.id} className="flex items-center gap-3 py-2 border-b border-[color:var(--border)] last:border-0">
                   <div className="flex-1">
-                    <p className="text-sm theme-text">{n.task_title || n.message || n.type}</p>
-                    <p className="text-xs theme-text-muted">{new Date(n.created_at).toLocaleString()}</p>
+                    <p className="text-sm text-[color:var(--text)]">{n.task_title || n.message || n.type}</p>
+                    <p className="text-xs text-[color:var(--text-muted)]">{new Date(n.created_at).toLocaleString()}</p>
                   </div>
                 </div>
               ))}
@@ -312,7 +316,7 @@ function DigestTab() {
           ))}
 
           {digest.total === 0 && (
-            <p className="text-center py-8 theme-text-muted text-sm">No new notifications in the last 24 hours</p>
+            <p className="text-center py-8 text-[color:var(--text-muted)] text-sm">No new notifications in the last 24 hours</p>
           )}
         </div>
       )}
@@ -360,12 +364,12 @@ function ReportTab() {
 
   return (
     <div className="space-y-4">
-      <div className="theme-surface-card rounded-xl p-5 border theme-border">
-        <h2 className="font-semibold theme-text mb-3">Generate AI Report</h2>
+      <div className="border border-[color:var(--border)] rounded-lg p-4">
+        <h2 className="font-semibold text-[color:var(--text)] mb-3">Generate AI Report</h2>
         <div className="flex gap-2 flex-wrap items-center">
           {reportTypes.map(t => (
             <button key={t} onClick={() => setType(t)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium capitalize border transition-colors ${type === t ? "bg-indigo-600 text-white border-indigo-600" : "theme-border theme-text"}`}>
+              className={`px-4 py-2 rounded-lg text-sm font-semibold capitalize border transition-colors ${type === t ? "bg-[color:var(--primary)] text-[color:var(--primary-contrast)] border-[color:var(--primary)] hover:bg-[color:var(--primary-hover)]" : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:text-[color:var(--text)] hover:border-[color:var(--border-strong)]"}`}>
               {t}
             </button>
           ))}
@@ -373,65 +377,65 @@ function ReportTab() {
             <select
               value={projectId}
               onChange={e => setProjectId(e.target.value)}
-              className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text"
+              className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm"
             >
               <option value="">— Select project —</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
-          <button onClick={generate} disabled={loading || (type === "project" && !projectId)} className="ml-auto px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50">
+          <button onClick={generate} disabled={loading || (type === "project" && !projectId)} className="ml-auto bg-[color:var(--primary)] text-[color:var(--primary-contrast)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[color:var(--primary-hover)] transition-colors flex items-center gap-2 disabled:opacity-50">
             {loading ? <><RefreshCw className="w-4 h-4 animate-spin" />Generating…</> : <><Sparkles className="w-4 h-4" />Generate</>}
           </button>
         </div>
       </div>
 
       {report && (
-        <div className="theme-surface-card rounded-xl p-6 border theme-border space-y-5">
-          <div className="flex items-center gap-3 pb-4 border-b theme-border">
-            <BarChart2 className="w-5 h-5 text-indigo-500" />
+        <div className="border border-[color:var(--border)] rounded-lg p-4 space-y-5">
+          <div className="flex items-center gap-3 pb-4 border-b border-[color:var(--border)]">
+            <BarChart2 className="w-5 h-5 text-[color:var(--primary)]" />
             <div>
-              <h2 className="font-semibold theme-text capitalize">
+              <h2 className="font-semibold text-[color:var(--text)] capitalize">
                 {report.type === "project" && report.projectName ? report.projectName : report.type} Report
               </h2>
-              <p className="text-xs theme-text-muted">Generated {new Date(report.generatedAt).toLocaleString()}</p>
+              <p className="text-xs text-[color:var(--text-muted)]">Generated {new Date(report.generatedAt).toLocaleString()}</p>
             </div>
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Completed", val: report.stats?.done || 0, color: "text-green-600" },
-              { label: "In Progress", val: report.stats?.in_progress || 0, color: "text-blue-600" },
-              { label: "To Do", val: report.stats?.todo || 0, color: "text-gray-600" },
-              { label: "Overdue", val: report.stats?.overdue || 0, color: "text-red-600" },
+              { label: "Completed", val: report.stats?.done || 0, color: "text-emerald-400" },
+              { label: "In Progress", val: report.stats?.in_progress || 0, color: "text-[color:var(--primary)]" },
+              { label: "To Do", val: report.stats?.todo || 0, color: "text-[color:var(--text-soft)]" },
+              { label: "Overdue", val: report.stats?.overdue || 0, color: "text-red-500" },
             ].map(s => (
-              <div key={s.label} className="bg-[var(--surface-soft)] rounded-xl p-3 text-center">
+              <div key={s.label} className="border border-[color:var(--border)] rounded-lg p-4 text-center">
                 <div className={`text-2xl font-bold ${s.color}`}>{s.val}</div>
-                <div className="text-xs theme-text-muted mt-0.5">{s.label}</div>
+                <div className="text-xs text-[color:var(--text-muted)] mt-0.5">{s.label}</div>
               </div>
             ))}
           </div>
 
           {/* AI narrative */}
           <div>
-            <h3 className="text-sm font-semibold theme-text mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-indigo-500" /> AI Analysis
+            <h3 className="text-sm font-semibold text-[color:var(--text)] mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-[color:var(--primary)]" /> AI Analysis
             </h3>
-            <div className="text-sm theme-text whitespace-pre-wrap leading-7">{report.report}</div>
+            <div className="text-sm text-[color:var(--text)] whitespace-pre-wrap leading-7">{report.report}</div>
           </div>
 
           {/* Top performers */}
           {report.topPerformers?.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold theme-text mb-2">Top Contributors</h3>
+              <h3 className="text-sm font-semibold text-[color:var(--text)] mb-2">Top Contributors</h3>
               {report.topPerformers.map(m => (
                 <div key={m.username} className="flex items-center gap-3 py-1.5">
-                  <span className="text-sm font-medium theme-text flex-1">{m.username}</span>
+                  <span className="text-sm font-medium text-[color:var(--text)] flex-1">{m.username}</span>
                   <div className="flex items-center gap-2">
                     <div className="w-24 h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${m.total > 0 ? (m.completed / m.total) * 100 : 0}%` }} />
+                      <div className="h-full bg-[color:var(--primary)] rounded-full" style={{ width: `${m.total > 0 ? (m.completed / m.total) * 100 : 0}%` }} />
                     </div>
-                    <span className="text-xs theme-text-muted">{m.completed}/{m.total}</span>
+                    <span className="text-xs text-[color:var(--text-muted)]">{m.completed}/{m.total}</span>
                   </div>
                 </div>
               ))}
@@ -491,21 +495,25 @@ function SmartParseTab() {
     setCreating(false);
   };
 
-  const PRIORITY_COLOR = { high: "text-red-600 bg-red-50", medium: "text-amber-600 bg-amber-50", low: "text-blue-600 bg-blue-50" };
+  const PRIORITY_COLOR = {
+    high: "text-red-500 border border-red-500/40",
+    medium: "text-amber-500 border border-amber-500/40",
+    low: "text-[color:var(--primary)] border border-[color:var(--primary)]/40",
+  };
 
   return (
     <div className="space-y-4">
-      <div className="theme-surface-card rounded-xl p-5 border theme-border">
-        <h2 className="font-semibold theme-text mb-1">Smart Task Parser</h2>
-        <p className="text-sm theme-text-muted mb-3">Type a task in natural language — AI will structure it for you.</p>
+      <div className="border border-[color:var(--border)] rounded-lg p-4">
+        <h2 className="font-semibold text-[color:var(--text)] mb-1">Smart Task Parser</h2>
+        <p className="text-sm text-[color:var(--text-muted)] mb-3">Type a task in natural language — AI will structure it for you.</p>
         <div className="flex gap-2">
           <input
             value={text} onChange={e => setText(e.target.value)}
             onKeyDown={e => e.key === "Enter" && parse()}
             placeholder="e.g. Assign the dashboard redesign to Sarah, high priority, due next Friday"
-            className="flex-1 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text"
+            className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors flex-1 text-sm"
           />
-          <button onClick={parse} disabled={loading} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-1">
+          <button onClick={parse} disabled={loading} className="bg-[color:var(--primary)] text-[color:var(--primary-contrast)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[color:var(--primary-hover)] transition-colors flex items-center gap-1 disabled:opacity-50">
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} Parse
           </button>
         </div>
@@ -515,7 +523,7 @@ function SmartParseTab() {
             "Review Q1 finances — high priority by end of month",
             "Schedule onboarding call with new client next week",
           ].map(ex => (
-            <button key={ex} onClick={() => setText(ex)} className="text-xs px-2 py-1 border theme-border rounded-full theme-text-muted hover:theme-text">
+            <button key={ex} onClick={() => setText(ex)} className="border border-[color:var(--border)] text-[color:var(--text-muted)] px-4 py-2 rounded-lg text-sm hover:text-[color:var(--text)] hover:border-[color:var(--border-strong)] transition-colors text-xs">
               {ex}
             </button>
           ))}
@@ -523,38 +531,38 @@ function SmartParseTab() {
       </div>
 
       {parsed && (
-        <div className="theme-surface-card rounded-xl p-5 border theme-border space-y-3">
-          <h3 className="font-semibold theme-text flex items-center gap-2"><Check className="w-4 h-4 text-green-500" />Parsed Result</h3>
+        <div className="border border-[color:var(--border)] rounded-lg p-4 space-y-3">
+          <h3 className="font-semibold text-[color:var(--text)] flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" />Parsed Result</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="sm:col-span-2">
-              <span className="text-xs theme-text-muted">Title</span>
-              <p className="font-medium theme-text mt-0.5">{parsed.title}</p>
+              <span className="text-xs text-[color:var(--text-muted)]">Title</span>
+              <p className="font-medium text-[color:var(--text)] mt-0.5">{parsed.title}</p>
             </div>
             <div>
-              <span className="text-xs theme-text-muted">Priority</span>
+              <span className="text-xs text-[color:var(--text-muted)]">Priority</span>
               <p className="mt-0.5"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLOR[parsed.priority]}`}>{parsed.priority}</span></p>
             </div>
             <div>
-              <span className="text-xs theme-text-muted">Assignee</span>
-              <p className="font-medium theme-text mt-0.5">{parsed.assignee_name || "Unassigned"}</p>
+              <span className="text-xs text-[color:var(--text-muted)]">Assignee</span>
+              <p className="font-medium text-[color:var(--text)] mt-0.5">{parsed.assignee_name || "Unassigned"}</p>
             </div>
             <div>
-              <span className="text-xs theme-text-muted">Project <span className="text-red-500">*</span></span>
+              <span className="text-xs text-[color:var(--text-muted)]">Project <span className="text-red-500">*</span></span>
               <select
                 value={selectedProjectId}
                 onChange={e => setSelectedProjectId(e.target.value)}
-                className="mt-0.5 w-full px-2 py-1 rounded border theme-border theme-surface text-sm theme-text"
+                className="mt-0.5 bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm"
               >
                 <option value="">— Select project —</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div>
-              <span className="text-xs theme-text-muted">Due Date Hint</span>
-              <p className="font-medium theme-text mt-0.5">{parsed.due_date_hint || "Not specified"}</p>
+              <span className="text-xs text-[color:var(--text-muted)]">Due Date Hint</span>
+              <p className="font-medium text-[color:var(--text)] mt-0.5">{parsed.due_date_hint || "Not specified"}</p>
             </div>
           </div>
-          <button onClick={create} disabled={creating || !selectedProjectId} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50">
+          <button onClick={create} disabled={creating || !selectedProjectId} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold flex items-center gap-1 hover:bg-emerald-700 transition-colors disabled:opacity-50">
             <Plus className="w-4 h-4" /> {creating ? "Creating…" : "Create Task"}
           </button>
         </div>

@@ -19,7 +19,7 @@ function ModeToggle({ mode, onChange }) {
       <div className="flex rounded-lg border theme-border overflow-hidden text-xs font-medium">
         {["skip", "replace"].map((m) => (
           <button key={m} onClick={() => onChange(m)}
-            className={`px-3 py-1.5 capitalize transition-colors ${mode === m ? "bg-primary-600 text-white" : "theme-surface theme-text-muted"}`}>
+            className={`px-3 py-1.5 capitalize transition-colors ${mode === m ? "bg-[var(--surface-soft)] text-[color:var(--primary)]" : "theme-text-muted hover:bg-[var(--surface-soft)]"}`}>
             {m}
           </button>
         ))}
@@ -75,7 +75,7 @@ function ImportHistory({ source, onDeleted }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs theme-text-muted">{history.length} import{history.length !== 1 ? "s" : ""} total</span>
-        <button onClick={load} className="text-xs text-primary-600 flex items-center gap-1">
+        <button onClick={load} className="text-xs text-[color:var(--primary)] flex items-center gap-1">
           <RefreshCw size={11} /> Refresh
         </button>
       </div>
@@ -85,7 +85,7 @@ function ImportHistory({ source, onDeleted }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-semibold theme-text">Import #{rec.import_number}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${rec.status === "completed" ? "bg-green-100 text-green-700" : rec.status === "running" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border border-[color:var(--border)] font-medium ${rec.status === "completed" ? "text-[color:var(--primary)]" : rec.status === "running" ? "text-[color:var(--primary)]" : "text-red-400"}`}>
                   {rec.status}
                 </span>
               </div>
@@ -95,13 +95,13 @@ function ImportHistory({ source, onDeleted }) {
               </div>
             </div>
             <button onClick={() => handleDelete(rec.id, rec.import_number)} disabled={deleting === rec.id}
-              className="shrink-0 flex items-center gap-1 text-xs text-red-500 border border-red-200 px-2.5 py-1.5 rounded-lg disabled:opacity-50 active:opacity-70">
+              className="shrink-0 flex items-center gap-1 text-xs text-red-400 border border-red-800 px-2.5 py-1.5 rounded-lg disabled:opacity-50 active:opacity-70">
               {deleting === rec.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
               Del
             </button>
           </div>
           {rec.status === "running" && (
-            <div className="flex items-center gap-1.5 text-xs text-blue-600 mb-2">
+            <div className="flex items-center gap-1.5 text-xs text-[color:var(--primary)] mb-2">
               <Loader2 size={11} className="animate-spin" /> Importing in background…
             </div>
           )}
@@ -233,7 +233,7 @@ function SlackPanel({ onImportDone }) {
       <div className="flex items-center gap-1.5 mb-5 overflow-x-auto pb-1 scrollbar-none">
         {SLACK_STEPS.map((label, i) => (
           <div key={i} className="flex items-center gap-1 shrink-0">
-            <div className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full ${i === step ? "bg-primary-600 text-white" : i < step ? "bg-green-100 text-green-700" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
+            <div className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border ${i === step ? "border-[color:var(--primary)] bg-[var(--surface-soft)] text-[color:var(--primary)]" : i < step ? "border-[color:var(--border)] text-[color:var(--primary)]" : "border-[color:var(--border)] theme-text-muted"}`}>
               {i < step && <CheckCircle size={10} />}
               {label}
             </div>
@@ -247,18 +247,18 @@ function SlackPanel({ onImportDone }) {
         <div className="space-y-4">
           <div className="theme-surface border theme-border rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Recommended</span>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full border border-[color:var(--border)] text-[color:var(--primary)]">Recommended</span>
               <h3 className="font-semibold theme-text text-sm">Option A — User OAuth Token</h3>
             </div>
             <p className="text-xs theme-text-muted">No need to create a Slack App. Use your own account token.</p>
             <ol className="space-y-2 list-none">
               {[
-                <>Go to <a href="https://api.slack.com/apps" target="_blank" rel="noreferrer" className="text-primary-600 underline inline-flex items-center gap-1">api.slack.com/apps <ExternalLink size={10}/></a> → <strong>Create New App → From scratch</strong></>,
+                <>Go to <a href="https://api.slack.com/apps" target="_blank" rel="noreferrer" className="text-[color:var(--primary)] underline inline-flex items-center gap-1">api.slack.com/apps <ExternalLink size={10}/></a> → <strong>Create New App → From scratch</strong></>,
                 <>Name it anything, pick your workspace</>,
                 <>Go to <strong>OAuth & Permissions → User Token Scopes</strong> and add:</>,
               ].map((text, i) => (
                 <li key={i} className="flex gap-2 text-xs theme-text-muted">
-                  <span className="shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center">{i+1}</span>
+                  <span className="shrink-0 w-5 h-5 rounded-full border border-[color:var(--border)] text-[color:var(--primary)] text-xs font-bold flex items-center justify-center">{i+1}</span>
                   <span>{text}</span>
                 </li>
               ))}
@@ -266,7 +266,7 @@ function SlackPanel({ onImportDone }) {
             <div className="rounded-xl border theme-border overflow-hidden text-xs">
               {USER_SCOPES.map((s) => (
                 <div key={s.scope} className="flex border-b theme-border last:border-0 px-3 py-2 gap-3">
-                  <code className="shrink-0 text-primary-600 font-mono">{s.scope}</code>
+                  <code className="shrink-0 text-[color:var(--primary)] font-mono">{s.scope}</code>
                   <span className="theme-text-muted">{s.why}</span>
                 </div>
               ))}
@@ -277,7 +277,7 @@ function SlackPanel({ onImportDone }) {
                 <>Copy the <strong>User OAuth Token</strong> (<code className="text-xs bg-[var(--surface-soft)] px-1 rounded">xoxp-</code>)</>,
               ].map((text, i) => (
                 <li key={i} className="flex gap-2 text-xs theme-text-muted">
-                  <span className="shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center">{i+4}</span>
+                  <span className="shrink-0 w-5 h-5 rounded-full border border-[color:var(--border)] text-[color:var(--primary)] text-xs font-bold flex items-center justify-center">{i+4}</span>
                   <span>{text}</span>
                 </li>
               ))}
@@ -290,14 +290,14 @@ function SlackPanel({ onImportDone }) {
             <div className="rounded-xl border theme-border overflow-hidden text-xs">
               {BOT_SCOPES.map((s) => (
                 <div key={s.scope} className="flex border-b theme-border last:border-0 px-3 py-2 gap-3">
-                  <code className="shrink-0 text-primary-600 font-mono">{s.scope}</code>
+                  <code className="shrink-0 text-[color:var(--primary)] font-mono">{s.scope}</code>
                   <span className="theme-text-muted">{s.why}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <button onClick={() => setStep(1)} className="w-full py-3 bg-primary-600 active:bg-primary-700 text-white font-semibold rounded-2xl text-sm">
+          <button onClick={() => setStep(1)} className="w-full py-3 bg-[var(--primary)] active:opacity-80 text-[color:var(--primary-contrast)] font-semibold rounded-2xl text-sm">
             I have my token →
           </button>
         </div>
@@ -313,7 +313,7 @@ function SlackPanel({ onImportDone }) {
               placeholder="xoxp-... or xoxb-..."
               className="w-full border theme-border rounded-xl px-3 py-2.5 text-sm theme-text theme-surface font-mono" />
             {validateError && (
-              <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">
+              <div className="flex items-start gap-2 text-sm text-red-400 border border-red-800 rounded-xl px-3 py-2">
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />{validateError}
               </div>
             )}
@@ -321,7 +321,7 @@ function SlackPanel({ onImportDone }) {
           <div className="flex gap-3">
             <button onClick={() => setStep(0)} className="px-4 py-2.5 border theme-border rounded-xl text-sm theme-text active:opacity-70">Back</button>
             <button onClick={handleValidate} disabled={(!token.startsWith("xoxb-") && !token.startsWith("xoxp-")) || validating}
-              className="flex-1 py-2.5 bg-primary-600 active:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2">
+              className="flex-1 py-2.5 bg-[var(--primary)] active:opacity-80 disabled:opacity-50 text-[color:var(--primary-contrast)] font-semibold rounded-xl text-sm flex items-center justify-center gap-2">
               {validating ? <><Loader2 size={14} className="animate-spin"/>Connecting…</> : "Connect & Preview →"}
             </button>
           </div>
@@ -332,18 +332,18 @@ function SlackPanel({ onImportDone }) {
       {step === 2 && preview && (
         <div className="space-y-4">
           {preview.historyAccess && !preview.historyAccess.ok && preview.historyAccess.error === "missing_scope" && (
-            <div className="border border-red-300 bg-red-50 rounded-2xl p-4">
+            <div className="border border-red-800 rounded-2xl p-4">
               <div className="flex items-start gap-2">
-                <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
+                <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-400" />
                 <div>
-                  <p className="text-sm font-semibold text-red-700">Missing scope: channels:history</p>
-                  <p className="text-xs text-red-600 mt-1">Add <code className="bg-red-100 px-1 rounded">channels:history</code> under User Token Scopes, reinstall, and copy the new <code className="bg-red-100 px-1 rounded">xoxp-</code> token.</p>
+                  <p className="text-sm font-semibold text-red-400">Missing scope: channels:history</p>
+                  <p className="text-xs text-red-300 mt-1">Add <code className="bg-[var(--surface-soft)] px-1 rounded">channels:history</code> under User Token Scopes, reinstall, and copy the new <code className="bg-[var(--surface-soft)] px-1 rounded">xoxp-</code> token.</p>
                 </div>
               </div>
             </div>
           )}
           {preview.historyAccess?.ok && (
-            <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+            <div className="flex items-center gap-2 text-xs text-[color:var(--primary)] border border-[color:var(--border)] rounded-xl px-3 py-2">
               <CheckCircle size={13} /> Message history access confirmed
             </div>
           )}
@@ -351,7 +351,7 @@ function SlackPanel({ onImportDone }) {
           <div className="grid grid-cols-3 gap-3">
             {[{ icon: Users, label: "Users", value: preview.userCount }, { icon: Hash, label: "Channels", value: preview.channelCount }, { icon: MessageSquare, label: "Messages", value: "All" }].map(({ icon: Icon, label, value }) => (
               <div key={label} className="theme-surface border theme-border rounded-2xl p-3 text-center">
-                <Icon size={16} className="mx-auto mb-1 text-primary-500" />
+                <Icon size={16} className="mx-auto mb-1 text-[color:var(--primary)]" />
                 <div className="text-lg font-bold theme-text">{value}</div>
                 <div className="text-xs theme-text-muted">{label}</div>
               </div>
@@ -362,9 +362,9 @@ function SlackPanel({ onImportDone }) {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm theme-text">Select channels</h3>
               <div className="flex gap-2 text-xs">
-                <button onClick={() => setSelectedChannels(preview.channels.map((c) => c.id))} className="text-primary-600">All</button>
+                <button onClick={() => setSelectedChannels(preview.channels.map((c) => c.id))} className="text-[color:var(--primary)]">All</button>
                 <span className="theme-text-muted">·</span>
-                <button onClick={() => setSelectedChannels([])} className="text-primary-600">None</button>
+                <button onClick={() => setSelectedChannels([])} className="text-[color:var(--primary)]">None</button>
               </div>
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -391,10 +391,10 @@ function SlackPanel({ onImportDone }) {
                           <label key={ch.id} className={`flex items-center gap-2.5 px-4 py-2 cursor-pointer ${!ch.isMember ? "opacity-50" : ""}`}>
                             <input type="checkbox" checked={selectedChannels?.includes(ch.id) ?? true}
                               onChange={() => toggleChannel(ch.id)} className="accent-primary-600" disabled={!ch.isMember} />
-                            <Hash size={12} className="text-gray-400 shrink-0" />
+                            <Hash size={12} className="text-[color:var(--text-soft)] shrink-0" />
                             <span className="text-sm theme-text flex-1">{ch.name}</span>
                             {ch.isArchived && <span className="text-[10px] bg-[var(--surface-soft)] theme-text-muted px-1.5 py-0.5 rounded">archived</span>}
-                            {!ch.isMember && <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">not member</span>}
+                            {!ch.isMember && <span className="text-[10px] border border-amber-800 text-amber-400 px-1.5 py-0.5 rounded">not member</span>}
                           </label>
                         ))}
                       </div>
@@ -418,12 +418,12 @@ function SlackPanel({ onImportDone }) {
             </label>
           )}
 
-          <div className="theme-surface border border-amber-200 bg-amber-50 rounded-2xl p-3 text-xs text-amber-800">
+          <div className="border border-amber-800 rounded-2xl p-3 text-xs text-amber-400">
             New users will be created with a temporary password. They can reset it via email.
           </div>
 
           {migrateError && (
-            <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">
+            <div className="flex items-start gap-2 text-sm text-red-400 border border-red-800 rounded-xl px-3 py-2">
               <AlertCircle size={14} className="shrink-0 mt-0.5" />{migrateError}
             </div>
           )}
@@ -431,7 +431,7 @@ function SlackPanel({ onImportDone }) {
           <div className="flex gap-3">
             <button onClick={() => setStep(1)} className="px-4 py-2.5 border theme-border rounded-xl text-sm theme-text active:opacity-70">Back</button>
             <button onClick={handleMigrate} disabled={migrating || !selectedChannels?.length}
-              className="flex-1 py-2.5 bg-primary-600 active:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2">
+              className="flex-1 py-2.5 bg-[var(--primary)] active:opacity-80 disabled:opacity-50 text-[color:var(--primary-contrast)] font-semibold rounded-xl text-sm flex items-center justify-center gap-2">
               {migrating ? <><Loader2 size={14} className="animate-spin"/>Migrating…</> : `Import ${selectedChannels?.length ?? preview.channelCount} channels →`}
             </button>
           </div>
@@ -443,21 +443,21 @@ function SlackPanel({ onImportDone }) {
         <div className="space-y-4">
           {runningImport ? (
             <div className="theme-surface border theme-border rounded-2xl p-8 text-center space-y-4">
-              <Loader2 size={40} className="mx-auto animate-spin text-primary-500" />
+              <Loader2 size={40} className="mx-auto animate-spin text-[color:var(--primary)]" />
               <h3 className="text-base font-bold theme-text">Importing your Slack workspace…</h3>
               <p className="text-sm theme-text-muted">Running in background. Check the History tab to see when it finishes.</p>
               <p className="text-xs theme-text-muted">Import #{runningImport.importNumber} · polling every 3s…</p>
             </div>
           ) : migrateResult ? (
             <>
-              <div className="theme-surface border border-green-200 bg-green-50 rounded-2xl p-5 text-center">
-                <CheckCircle size={36} className="mx-auto mb-2 text-green-500" />
+              <div className="border border-[color:var(--border)] rounded-2xl p-5 text-center">
+                <CheckCircle size={36} className="mx-auto mb-2 text-[color:var(--primary)]" />
                 <h3 className="text-base font-bold theme-text">Migration complete</h3>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {[{ label: "Users created", value: migrateResult.usersCreated }, { label: "Users linked", value: migrateResult.usersLinked }, { label: "Channels", value: migrateResult.channelsCreated }, { label: "Messages", value: migrateResult.messagesImported }].map(({ label, value }) => (
                   <div key={label} className="theme-surface border theme-border rounded-2xl p-4 text-center">
-                    <div className="text-2xl font-bold text-primary-600">{value ?? "—"}</div>
+                    <div className="text-2xl font-bold text-[color:var(--primary)]">{value ?? "—"}</div>
                     <div className="text-xs theme-text-muted">{label}</div>
                   </div>
                 ))}
@@ -477,7 +477,7 @@ function SlackPanel({ onImportDone }) {
               className="flex-1 py-2.5 border theme-border rounded-xl text-sm theme-text active:opacity-70">
               Import another
             </button>
-            <a href="/chat" className="flex-1 py-2.5 bg-primary-600 active:bg-primary-700 text-white font-semibold rounded-xl text-sm text-center flex items-center justify-center">
+            <a href="/chat" className="flex-1 py-2.5 bg-[var(--primary)] active:opacity-80 text-[color:var(--primary-contrast)] font-semibold rounded-xl text-sm text-center flex items-center justify-center">
               Go to Chat →
             </a>
           </div>
@@ -557,7 +557,7 @@ function AsanaPanel({ onImportDone, autoConnect }) {
 
   if (status === "disconnected") return (
     <div className="text-center py-10 space-y-4">
-      <FolderKanban size={40} className="mx-auto text-gray-300" />
+      <FolderKanban size={40} className="mx-auto text-[color:var(--text-soft)]" />
       <div>
         <h3 className="font-semibold theme-text mb-1">Connect Asana</h3>
         <p className="text-sm theme-text-muted">Authorize this app to access your Asana workspace.</p>
@@ -580,7 +580,7 @@ function AsanaPanel({ onImportDone, autoConnect }) {
       </div>
 
       <div className="relative">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--text-soft)]" />
         <input value={search} onChange={(e) => handleSearchChange(e.target.value)} placeholder="Search tasks…"
           className="w-full pl-8 pr-3 py-2.5 border theme-border rounded-xl text-sm theme-text theme-surface" />
       </div>
@@ -588,12 +588,12 @@ function AsanaPanel({ onImportDone, autoConnect }) {
       <ModeToggle mode={mode} onChange={setMode} />
 
       {migrateResult && (
-        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 text-sm text-[color:var(--primary)] border border-[color:var(--border)] rounded-xl px-3 py-2">
           <CheckCircle size={14} /> Imported {migrateResult.importedTasks} tasks (Import #{migrateResult.importNumber})
         </div>
       )}
       {migrateError && (
-        <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">
+        <div className="flex items-start gap-2 text-sm text-red-400 border border-red-800 rounded-xl px-3 py-2">
           <AlertCircle size={14} className="shrink-0 mt-0.5" />{migrateError}
         </div>
       )}
@@ -601,7 +601,7 @@ function AsanaPanel({ onImportDone, autoConnect }) {
       <div className="flex items-center justify-between">
         <span className="text-xs theme-text-muted">{tasks.length} tasks</span>
         <button onClick={handleMigrate} disabled={migrating}
-          className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 active:bg-primary-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl">
+          className="flex items-center gap-1.5 px-4 py-2 bg-[var(--primary)] active:opacity-80 disabled:opacity-50 text-[color:var(--primary-contrast)] text-xs font-semibold rounded-xl">
           {migrating ? <><Loader2 size={12} className="animate-spin" />Importing…</> : "Import project →"}
         </button>
       </div>
@@ -627,7 +627,7 @@ function AsanaPanel({ onImportDone, autoConnect }) {
                       setTasks((prev) => prev.map((x) => x.gid === t.gid ? { ...x, completed: !x.completed } : x));
                     } catch {}
                   }}
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold ${t.completed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  className={`shrink-0 px-2.5 py-1 rounded-full border border-[color:var(--border)] text-[11px] font-semibold ${t.completed ? "text-[color:var(--primary)]" : "text-amber-400"}`}>
                   {t.completed ? "Done" : "Mark Done"}
                 </button>
               </div>
@@ -653,7 +653,7 @@ function AsanaPanel({ onImportDone, autoConnect }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-sm theme-text-muted">{projects?.length ?? 0} project{projects?.length !== 1 ? "s" : ""}</span>
-        <button onClick={checkConnection} className="text-xs text-primary-600 flex items-center gap-1"><RefreshCw size={11} /> Refresh</button>
+        <button onClick={checkConnection} className="text-xs text-[color:var(--primary)] flex items-center gap-1"><RefreshCw size={11} /> Refresh</button>
       </div>
       {projects?.length === 0 && <p className="text-center py-6 text-sm theme-text-muted">No projects found in your Asana workspace.</p>}
       <div className="flex flex-col gap-2">
@@ -772,13 +772,13 @@ function YouTrackPanel({ onImportDone }) {
             className="w-full border theme-border rounded-xl px-3 py-2.5 text-sm theme-text theme-surface font-mono" />
         </div>
         {connectError && (
-          <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">
+          <div className="flex items-start gap-2 text-sm text-red-400 border border-red-800 rounded-xl px-3 py-2">
             <AlertCircle size={14} className="shrink-0 mt-0.5" />{connectError}
           </div>
         )}
       </div>
       <button onClick={handleConnect} disabled={!baseUrl || !ytToken || connecting}
-        className="w-full py-3 bg-primary-600 active:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-2xl text-sm flex items-center justify-center gap-2">
+        className="w-full py-3 bg-[var(--primary)] active:opacity-80 disabled:opacity-50 text-[color:var(--primary-contrast)] font-semibold rounded-2xl text-sm flex items-center justify-center gap-2">
         {connecting ? <><Loader2 size={14} className="animate-spin"/>Connecting…</> : "Connect & Load Projects"}
       </button>
     </div>
@@ -796,7 +796,7 @@ function YouTrackPanel({ onImportDone }) {
       </div>
 
       <div className="relative">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--text-soft)]" />
         <input value={search} onChange={(e) => handleSearchChange(e.target.value)} placeholder="Search issues…"
           className="w-full pl-8 pr-3 py-2.5 border theme-border rounded-xl text-sm theme-text theme-surface" />
       </div>
@@ -804,12 +804,12 @@ function YouTrackPanel({ onImportDone }) {
       <ModeToggle mode={mode} onChange={setMode} />
 
       {migrateResult && (
-        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 text-sm text-[color:var(--primary)] border border-[color:var(--border)] rounded-xl px-3 py-2">
           <CheckCircle size={14} /> Imported {migrateResult.importedTasks} tasks (Import #{migrateResult.importNumber})
         </div>
       )}
       {migrateError && (
-        <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">
+        <div className="flex items-start gap-2 text-sm text-red-400 border border-red-800 rounded-xl px-3 py-2">
           <AlertCircle size={14} className="shrink-0 mt-0.5" />{migrateError}
         </div>
       )}
@@ -817,7 +817,7 @@ function YouTrackPanel({ onImportDone }) {
       <div className="flex items-center justify-between">
         <span className="text-xs theme-text-muted">{tasks.length} issues</span>
         <button onClick={handleMigrate} disabled={migrating}
-          className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 active:bg-primary-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl">
+          className="flex items-center gap-1.5 px-4 py-2 bg-[var(--primary)] active:opacity-80 disabled:opacity-50 text-[color:var(--primary-contrast)] text-xs font-semibold rounded-xl">
           {migrating ? <><Loader2 size={12} className="animate-spin" />Importing…</> : "Import project →"}
         </button>
       </div>
@@ -845,7 +845,7 @@ function YouTrackPanel({ onImportDone }) {
                       setTasks((prev) => prev.map((x) => x.id === t.id ? { ...x, completed: !x.completed } : x));
                     } catch {}
                   }}
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold ${t.completed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  className={`shrink-0 px-2.5 py-1 rounded-full border border-[color:var(--border)] text-[11px] font-semibold ${t.completed ? "text-[color:var(--primary)]" : "text-amber-400"}`}>
                   {t.completed ? "Done" : "Mark Done"}
                 </button>
               </div>
@@ -871,7 +871,7 @@ function YouTrackPanel({ onImportDone }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-green-600"><CheckCircle size={13} /> Connected to YouTrack</div>
-        <button onClick={loadProjects} disabled={loadingProjects} className="text-xs text-primary-600 flex items-center gap-1">
+        <button onClick={loadProjects} disabled={loadingProjects} className="text-xs text-[color:var(--primary)] flex items-center gap-1">
           <RefreshCw size={11} /> Refresh
         </button>
       </div>
@@ -908,7 +908,7 @@ function SourceTab({ source, ImportPanel, autoConnect }) {
       <div className="flex gap-1 mb-5">
         {["import", "history"].map((t) => (
           <button key={t} onClick={() => setSubTab(t)}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold capitalize transition-colors ${subTab === t ? "bg-primary-600 text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold capitalize transition-colors ${subTab === t ? "bg-[var(--surface-soft)] text-[color:var(--primary)]" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
             {t}
           </button>
         ))}
@@ -923,9 +923,9 @@ function SourceTab({ source, ImportPanel, autoConnect }) {
    ROOT PAGE
 ───────────────────────────────────────────── */
 const SOURCES = [
-  { id: "slack",    label: "Slack",    icon: Hash,           color: "text-purple-600", Panel: SlackPanel },
-  { id: "asana",   label: "Asana",    icon: FolderKanban,   color: "text-pink-600",   Panel: AsanaPanel },
-  { id: "youtrack",label: "YouTrack", icon: ArrowRightLeft,  color: "text-blue-600",   Panel: YouTrackPanel },
+  { id: "slack",    label: "Slack",    icon: Hash,           color: "text-[color:var(--primary)]", Panel: SlackPanel },
+  { id: "asana",   label: "Asana",    icon: FolderKanban,   color: "text-[color:var(--primary)]", Panel: AsanaPanel },
+  { id: "youtrack",label: "YouTrack", icon: ArrowRightLeft,  color: "text-[color:var(--primary)]", Panel: YouTrackPanel },
 ];
 
 export default function Migrations() {
@@ -946,8 +946,8 @@ export default function Migrations() {
       {/* Header */}
       <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
         <div className="flex items-center gap-2 mb-3">
-          <div className="p-2 bg-primary-50 rounded-lg">
-            <ArrowRightLeft className="w-5 h-5 text-primary-600" />
+          <div className="p-2 border border-[color:var(--border)] rounded-lg">
+            <ArrowRightLeft className="w-5 h-5 text-[color:var(--primary)]" />
           </div>
           <div>
             <h1 className="text-lg font-bold theme-text leading-tight">Migrations</h1>
@@ -959,8 +959,8 @@ export default function Migrations() {
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           {SOURCES.map(({ id, label, icon: Icon, color }) => (
             <button key={id} onClick={() => setActiveSource(id)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${activeSource === id ? "bg-primary-600 text-white border-primary-600" : `theme-surface theme-border theme-text-muted`}`}>
-              <Icon size={14} className={activeSource === id ? "text-white" : color} />
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${activeSource === id ? "bg-[var(--surface-soft)] text-[color:var(--primary)] border-[color:var(--primary)]" : `theme-border theme-text-muted hover:bg-[var(--surface-soft)]`}`}>
+              <Icon size={14} className={activeSource === id ? "text-[color:var(--primary)]" : color} />
               {label}
             </button>
           ))}

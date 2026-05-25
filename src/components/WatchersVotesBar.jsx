@@ -41,14 +41,14 @@ export default function WatchersVotesBar({ taskId }) {
   };
 
   return (
-    <div className="flex items-center gap-3 mt-2 pt-2 border-t">
+    <div className="flex items-center gap-3 mt-2 pt-2 border-t border-[color:var(--border)]">
       {/* Vote button */}
       <button
         onClick={toggleVote}
         className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors ${
           voteData.voted
-            ? "bg-indigo-100 border-indigo-300 text-indigo-700"
-            : "bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600"
+            ? "bg-[var(--surface-soft)] border-[color:var(--primary)] text-[color:var(--primary)]"
+            : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:border-[color:var(--primary)] hover:text-[color:var(--primary)]"
         }`}
         title={voteData.voted ? "Remove vote" : "Upvote this issue"}
       >
@@ -61,8 +61,8 @@ export default function WatchersVotesBar({ taskId }) {
         onClick={toggleWatch}
         className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors ${
           watchData.watching
-            ? "bg-amber-50 border-amber-300 text-amber-700"
-            : "bg-white border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600"
+            ? "bg-[var(--surface-soft)] border-[color:var(--primary)] text-[color:var(--primary)]"
+            : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:border-[color:var(--primary)] hover:text-[color:var(--primary)]"
         }`}
         title={watchData.watching ? "Stop watching" : "Watch this task"}
       >
@@ -73,7 +73,7 @@ export default function WatchersVotesBar({ taskId }) {
       {/* Watchers list */}
       {watchData.watchers.length > 0 && (
         <button
-          className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600"
+          className="flex items-center gap-1 text-[11px] text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
           onClick={() => setShowWatchers(v => !v)}
           title="View watchers"
         >
@@ -84,9 +84,9 @@ export default function WatchersVotesBar({ taskId }) {
 
       {/* Watcher names */}
       {showWatchers && watchData.watchers.length > 0 && (
-        <div className="absolute mt-8 z-20 bg-white border border-slate-200 rounded-lg shadow-lg p-2 text-[11px] space-y-1 min-w-[140px]">
+        <div className="absolute mt-8 z-20 bg-[var(--surface)] border border-[color:var(--border)] rounded-lg p-2 text-[11px] space-y-1 min-w-[140px]">
           {watchData.watchers.map(w => (
-            <div key={w.user_id} className="text-slate-700">{w.name || w.email}</div>
+            <div key={w.user_id} className="text-[color:var(--text-soft)]">{w.name || w.email}</div>
           ))}
         </div>
       )}

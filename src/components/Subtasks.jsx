@@ -168,10 +168,10 @@ export default function Subtasks({ taskId }) {
   };
 
   return (
-    <div className="mt-4 border-t border-gray-200 pt-4">
+    <div className="mt-4 border-t border-[color:var(--border)] pt-4">
       <div className="flex items-center gap-2 mb-3">
-        <ListTodo className="w-4 h-4 text-gray-500" />
-        <h3 className="text-sm font-semibold text-gray-900">Subtasks</h3>
+        <ListTodo className="w-4 h-4 text-[color:var(--text-muted)]" />
+        <h3 className="text-sm font-semibold text-[color:var(--text)]">Subtasks</h3>
         {subtasks.length > 0 && (
           <Badge color="neutral" size="sm">
             {subtasks.filter(s => s.status === "completed").length}/{subtasks.length}
@@ -181,22 +181,22 @@ export default function Subtasks({ taskId }) {
 
       {/* Existing subtasks list */}
       {loading ? (
-        <p className="text-sm text-gray-400">Loading subtasks...</p>
+        <p className="text-sm text-[color:var(--text-muted)]">Loading subtasks...</p>
       ) : subtasks.length === 0 ? (
-        <p className="text-sm text-gray-400 mb-3">No subtasks yet. Add one below!</p>
+        <p className="text-sm text-[color:var(--text-muted)] mb-3">No subtasks yet. Add one below!</p>
       ) : (
         <div className="space-y-2 mb-4">
           {subtasks.map((s) => (
             <div
               key={s.id}
-              className="flex items-center gap-3 text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 hover:bg-white transition-colors"
+              className="flex items-center gap-3 text-sm border border-[color:var(--border)] rounded-lg px-3 py-2.5 hover:bg-[var(--surface-soft)] transition-colors"
             >
               {/* Checkbox + title */}
               <label className="flex items-center gap-3 flex-1 cursor-pointer group">
                 <div className="relative">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    className="w-4 h-4 rounded border-[color:var(--border)] bg-[var(--surface)] focus:outline-none accent-[color:var(--primary)]"
                     checked={s.status === "completed"}
                     onChange={() => handleToggleStatus(s)}
                   />
@@ -208,8 +208,8 @@ export default function Subtasks({ taskId }) {
                   className={
                     "truncate " +
                     (s.status === "completed"
-                      ? "line-through text-gray-400"
-                      : "text-gray-900 group-hover:text-primary-600")
+                      ? "line-through text-[color:var(--text-muted)]"
+                      : "text-[color:var(--text)] group-hover:text-[color:var(--primary)]")
                   }
                   title={s.title || s.subtask}
                 >
@@ -217,7 +217,7 @@ export default function Subtasks({ taskId }) {
                 </span>
               </label>
 
-              {/* Assignee */}
+              {/* Assignee avatar */}
               {s.assigned_to && (
                 <Avatar
                   name={users.find(u => u.id === s.assigned_to)?.username || "User"}
@@ -229,7 +229,7 @@ export default function Subtasks({ taskId }) {
 
               {/* Assignee dropdown */}
               <select
-                className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+                className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-md px-2 py-1 text-sm focus:outline-none focus:border-[color:var(--primary)]"
                 value={s.assigned_to || ""}
                 onChange={(e) =>
                   handleChangeAssignee(s, e.target.value || null)
@@ -249,7 +249,7 @@ export default function Subtasks({ taskId }) {
                 onClick={() => handleDeleteSubtask(s.id)}
                 variant="ghost"
                 size="xs"
-                className="text-danger-600 hover:bg-danger-50 shrink-0"
+                className="text-red-400 hover:text-red-300 shrink-0"
                 title="Delete subtask"
               >
                 <Trash2 className="w-4 h-4" />
@@ -263,14 +263,14 @@ export default function Subtasks({ taskId }) {
       <div className="flex items-center gap-2">
         <input
           type="text"
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+          className="flex-1 bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--primary)] placeholder:text-[color:var(--text-muted)]"
           placeholder="New subtask"
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAddSubtask()}
         />
         <select
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500/20"
+          className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--primary)]"
           value={newAssignedTo}
           onChange={(e) => setNewAssignedTo(e.target.value)}
         >

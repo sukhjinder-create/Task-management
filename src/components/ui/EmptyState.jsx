@@ -1,18 +1,40 @@
 import { cn } from '../../utils/cn';
 
-export function EmptyState({ icon, title, description, action, className }) {
+/**
+ * EmptyState — quiet, deliberate, premium.
+ * Sits flat on the canvas (no card), pairs an outlined icon mark with
+ * a tight title and supporting sentence. Renders an optional action.
+ */
+export function EmptyState({ icon, title, description, action, className, compact = false }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center py-12 px-4 text-center', className)}>
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center text-center",
+        compact ? "py-8 px-4" : "py-14 px-6",
+        className
+      )}
+    >
       {icon && (
-        <div className="w-16 h-16 rounded-full theme-surface-soft flex items-center justify-center theme-text-soft mb-4">
+        <div
+          className={cn(
+            "flex items-center justify-center mb-4",
+            compact ? "w-10 h-10" : "w-12 h-12",
+            "rounded-[10px] border border-[color:var(--border)]",
+            "bg-[var(--surface-soft)] text-[color:var(--text-muted)]"
+          )}
+        >
           {icon}
         </div>
       )}
       {title && (
-        <h3 className="text-lg font-semibold theme-text mb-2">{title}</h3>
+        <h3 className="text-sm font-semibold text-[color:var(--text)] tracking-tight mb-1.5">
+          {title}
+        </h3>
       )}
       {description && (
-        <p className="text-sm theme-text-muted max-w-sm mb-6">{description}</p>
+        <p className="text-xs text-[color:var(--text-muted)] max-w-sm leading-relaxed mb-5">
+          {description}
+        </p>
       )}
       {action && <div>{action}</div>}
     </div>

@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { FolderKanban, Plus, Edit2, Trash2, Users as UsersIcon, GitBranch, ChevronRight } from "lucide-react";
+import {
+  FolderKanban, Plus, Edit2, Trash2, Users as UsersIcon,
+  GitBranch, ChevronRight, Search, AlertTriangle, ArrowUpRight,
+} from "lucide-react";
 import toast from "react-hot-toast";
-import { Modal, Input, Button } from "../components/ui";
+import { Modal, Input, Button, EmptyState, Skeleton } from "../components/ui";
 import GitAutomationModal from "../components/GitAutomationModal";
 
 export default function Projects() {
@@ -15,6 +18,7 @@ export default function Projects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
 
   const [newProject, setNewProject] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -49,6 +53,16 @@ export default function Projects() {
     }
     fetchProjects();
   }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter(
+      (p) =>
+        p.name?.toLowerCase().includes(q) ||
+        p.added_by?.toLowerCase().includes(q)
+    );
+  }, [projects, query]);
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
@@ -106,175 +120,204 @@ export default function Projects() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col gap-5 max-w-[1400px] mx-auto w-full">
+      {/* Header */}
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+            Workspace
+          </p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">
+            Projects
+          </h1>
+          <p className="text-[13px] text-[color:var(--text-muted)] mt-1">
+            {loading
+              ? "Loading…"
+              : `${projects.length} active ${projects.length === 1 ? "project" : "projects"} across the workspace.`}
+          </p>
+        </div>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-primary-50 rounded-lg">
-              <FolderKanban className="w-5 h-5 text-primary-600" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold theme-text leading-tight">Projects</h1>
-              <p className="text-xs theme-text-muted">
-                {loading ? "Loading…" : `${projects.length} ${projects.length === 1 ? "project" : "projects"}`}
-              </p>
-            </div>
-          </div>
+        <div className="flex items-center gap-2">
+          {auth.user.role === "admin" && (
+            <Button
+              variant="secondary"
+              size="md"
+              leftIcon={<UsersIcon className="w-4 h-4" />}
+              onClick={() => navigate("/admin/users")}
+            >
+              Admin
+            </Button>
+          )}
+          {canManageProjects && (
+            <Button
+              variant="primary"
+              size="md"
+              leftIcon={<Plus className="w-4 h-4" />}
+              onClick={() => setShowCreateModal(true)}
+            >
+              New project
+            </Button>
+          )}
+        </div>
+      </header>
 
-          <div className="flex items-center gap-2">
-            {auth.user.role === "admin" && (
-              <button
-                onClick={() => navigate("/admin/users")}
-                className="p-2.5 rounded-xl theme-surface border theme-border theme-text active:opacity-70 transition-opacity"
-                title="Admin panel"
-              >
-                <UsersIcon className="w-4 h-4" />
-              </button>
-            )}
-            {canManageProjects && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold active:bg-primary-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Project</span>
-                <span className="sm:hidden">New</span>
-              </button>
-            )}
-          </div>
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-[420px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[color:var(--text-soft)] pointer-events-none" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search projects…"
+            className="w-full h-9 pl-9 pr-3 text-sm bg-[var(--surface)] border border-[color:var(--border)] rounded-[8px] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)] transition-[border-color,box-shadow] duration-150"
+          />
+        </div>
+        <div className="text-[11px] text-[color:var(--text-soft)]">
+          {filtered.length} of {projects.length}
         </div>
       </div>
 
-      {/* ── Permission notice ──────────────────────────────────────────────── */}
-      {!canManageProjects && (
-        <div className="mx-4 mt-3 px-3 py-2.5 rounded-xl bg-yellow-50 border border-yellow-200">
-          <p className="text-xs text-yellow-700">
-            View-only — contact an admin or manager to make changes.
+      {/* Notice rows */}
+      {!canManageProjects && !loading && (
+        <div className="flex items-start gap-2.5 px-3 py-2 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[color:var(--score-warning)]" />
+          <p className="text-xs text-[color:var(--text-muted)] leading-relaxed">
+            View-only access. Contact an admin or manager to create or modify projects.
           </p>
         </div>
       )}
-
-      {/* ── Error ─────────────────────────────────────────────────────────── */}
       {error && (
-        <div className="mx-4 mt-3 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200">
-          <p className="text-xs text-red-700">{error}</p>
+        <div className="flex items-start gap-2.5 px-3 py-2 rounded-[8px] border border-[color:var(--score-danger-border)] bg-[color:var(--score-danger-bg)]">
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[color:var(--score-danger)]" />
+          <p className="text-xs text-[color:var(--score-danger)] leading-relaxed">{error}</p>
         </div>
       )}
 
-      {/* ── Content ───────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-
-        {/* Loading */}
-        {loading && (
-          <div className="flex flex-col gap-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 rounded-2xl theme-surface border theme-border animate-pulse" />
-            ))}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && projects.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 gap-4">
-            <div className="p-5 rounded-full bg-[var(--surface-soft)]">
-              <FolderKanban className="w-10 h-10 theme-text-muted" />
+      {/* Loading state */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="border border-[color:var(--border)] rounded-[10px] p-4"
+            >
+              <Skeleton className="h-3 w-1/3 mb-3" />
+              <Skeleton className="h-5 w-3/4 mb-3" />
+              <Skeleton className="h-3 w-1/2" />
             </div>
-            <div className="text-center">
-              <p className="font-semibold theme-text mb-1">No projects yet</p>
-              <p className="text-sm theme-text-muted">
-                {canManageProjects
-                  ? 'Tap "New" to create your first project'
-                  : "Projects will appear here once created"}
-              </p>
-            </div>
-            {canManageProjects && (
-              <button
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && projects.length === 0 && (
+        <EmptyState
+          icon={<FolderKanban className="w-5 h-5" />}
+          title="No projects yet"
+          description={
+            canManageProjects
+              ? "Spin up your first project to start tracking work and assigning tasks."
+              : "Projects created in this workspace will appear here."
+          }
+          action={
+            canManageProjects && (
+              <Button
+                variant="primary"
+                size="md"
+                leftIcon={<Plus className="w-4 h-4" />}
                 onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold active:bg-primary-700 transition-colors"
               >
-                <Plus className="w-4 h-4" />
-                Create First Project
-              </button>
-            )}
-          </div>
-        )}
+                Create your first project
+              </Button>
+            )
+          }
+        />
+      )}
 
-        {/* Project list */}
-        {!loading && projects.length > 0 && (
-          <div className="flex flex-col gap-3 md:grid md:grid-cols-2 lg:grid-cols-3">
-            {projects.map((p) => (
-              <div
-                key={p.id}
-                className="theme-surface border theme-border rounded-2xl overflow-hidden active:opacity-80 transition-opacity cursor-pointer"
-                onClick={() => navigate(`/projects/${p.id}`)}
-              >
-                <div className="flex items-center gap-3 p-4">
-                  {/* Icon */}
-                  <div className="shrink-0 p-2.5 rounded-xl bg-primary-50">
-                    <FolderKanban className="w-5 h-5 text-primary-600" />
-                  </div>
+      {/* No-results state */}
+      {!loading && projects.length > 0 && filtered.length === 0 && (
+        <EmptyState
+          compact
+          icon={<Search className="w-5 h-5" />}
+          title="No matching projects"
+          description={`Nothing matches "${query}". Try a different search.`}
+        />
+      )}
 
-                  {/* Name + meta */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold theme-text truncate">{p.name}</p>
-                    <p className="text-xs theme-text-muted mt-0.5">
-                      {p.added_by}
-                      {p.created_at ? ` · ${new Date(p.created_at).toLocaleDateString()}` : ""}
-                    </p>
-                  </div>
-
-                  {/* Chevron (tap area) */}
-                  <ChevronRight className="w-4 h-4 theme-text-muted shrink-0" />
+      {/* Project grid */}
+      {!loading && filtered.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map((p) => (
+            <article
+              key={p.id}
+              onClick={() => navigate(`/projects/${p.id}`)}
+              className="group cursor-pointer border border-[color:var(--border)] hover:border-[color:var(--border-strong)] rounded-[10px] transition-colors overflow-hidden"
+            >
+              <div className="p-4 flex items-start gap-3">
+                <div className="shrink-0 w-9 h-9 rounded-[8px] bg-[var(--primary-soft)] flex items-center justify-center">
+                  <FolderKanban className="w-4 h-4 text-[color:var(--primary)]" />
                 </div>
-
-                {/* Action row — only shown when user can manage */}
-                {(canManageProjects || auth.user.role === "admin") && (
-                  <div
-                    className="flex items-center border-t theme-border px-3 py-2 gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {canManageProjects && (
-                      <button
-                        onClick={() => { setSelectedProjectForGit(p); setShowGitModal(true); }}
-                        className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg theme-text-muted hover:bg-[var(--surface-soft)] active:bg-[var(--surface-soft)] transition-colors text-xs"
-                        title="Git automation"
-                      >
-                        <GitBranch className="w-3.5 h-3.5" />
-                        <span>Git</span>
-                      </button>
-                    )}
-                    {canManageProjects && (
-                      <button
-                        onClick={() => openEditModal(p)}
-                        className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg theme-text-muted hover:bg-[var(--surface-soft)] active:bg-[var(--surface-soft)] transition-colors text-xs"
-                        title="Rename"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        <span>Rename</span>
-                      </button>
-                    )}
-                    {auth.user.role === "admin" && (
-                      <button
-                        onClick={() => openDeleteModal(p)}
-                        className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-red-500 hover:bg-red-50 active:bg-red-50 transition-colors text-xs"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
-                      </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[13px] font-semibold text-[color:var(--text)] truncate tracking-tight">
+                      {p.name}
+                    </p>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-[color:var(--text-soft)] group-hover:text-[color:var(--primary)] transition-colors shrink-0" />
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-[11px] text-[color:var(--text-soft)]">
+                    <span className="truncate">by {p.added_by || "—"}</span>
+                    {p.created_at && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono whitespace-nowrap">
+                          {new Date(p.created_at).toLocaleDateString()}
+                        </span>
+                      </>
                     )}
                   </div>
-                )}
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* ── Modals ─────────────────────────────────────────────────────────── */}
+              {(canManageProjects || auth.user.role === "admin") && (
+                <div
+                  className="flex border-t border-[color:var(--border)] bg-[var(--surface-soft)] divide-x divide-[color:var(--border)]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {canManageProjects && (
+                    <button
+                      onClick={() => { setSelectedProjectForGit(p); setShowGitModal(true); }}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-[11.5px] font-medium text-[color:var(--text-muted)] hover:text-[color:var(--text)] hover:bg-[var(--surface-strong)] transition-colors"
+                    >
+                      <GitBranch className="w-3 h-3" />
+                      Git
+                    </button>
+                  )}
+                  {canManageProjects && (
+                    <button
+                      onClick={() => openEditModal(p)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-[11.5px] font-medium text-[color:var(--text-muted)] hover:text-[color:var(--text)] hover:bg-[var(--surface-strong)] transition-colors"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      Rename
+                    </button>
+                  )}
+                  {auth.user.role === "admin" && (
+                    <button
+                      onClick={() => openDeleteModal(p)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-[11.5px] font-medium text-[color:var(--score-danger)] hover:bg-[color:var(--score-danger-bg)] transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Delete
+                    </button>
+                  )}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
 
+      {/* Modals */}
       {showGitModal && selectedProjectForGit && (
         <GitAutomationModal
           isOpen={showGitModal}
@@ -288,11 +331,11 @@ export default function Projects() {
         <Modal isOpen={true} onClose={() => !renaming && setShowEditModal(false)}>
           <form onSubmit={handleRenameProject}>
             <Modal.Header>
-              <Modal.Title>Rename Project</Modal.Title>
+              <Modal.Title>Rename project</Modal.Title>
             </Modal.Header>
             <Modal.Body>
               <Input
-                label="Project Name"
+                label="Project name"
                 type="text"
                 placeholder="Enter project name"
                 value={editName}
@@ -314,13 +357,17 @@ export default function Projects() {
       )}
 
       {showDeleteModal && deletingProject && (
-        <Modal isOpen={true} onClose={() => setShowDeleteModal(false)}>
+        <Modal isOpen={true} onClose={() => setShowDeleteModal(false)} size="sm">
           <Modal.Header>
-            <Modal.Title>Delete Project</Modal.Title>
+            <Modal.Title>Delete project</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <p className="text-sm theme-text">
-              Delete <strong>{deletingProject.name}</strong>? This cannot be undone.
+            <p className="text-sm text-[color:var(--text-muted)] leading-relaxed">
+              Delete{" "}
+              <span className="text-[color:var(--text)] font-semibold">
+                {deletingProject.name}
+              </span>
+              ? This action cannot be undone — all associated tasks will also be removed.
             </p>
           </Modal.Body>
           <Modal.Footer>
@@ -328,23 +375,23 @@ export default function Projects() {
               Cancel
             </Button>
             <Button type="button" onClick={handleDeleteProject} variant="danger">
-              Delete
+              Delete project
             </Button>
           </Modal.Footer>
         </Modal>
       )}
 
       {showCreateModal && (
-        <Modal isOpen={true} onClose={() => !creating && setShowCreateModal(false)}>
+        <Modal isOpen={true} onClose={() => !creating && setShowCreateModal(false)} size="sm">
           <form onSubmit={handleCreateProject}>
             <Modal.Header>
-              <Modal.Title>Create New Project</Modal.Title>
+              <Modal.Title>Create new project</Modal.Title>
             </Modal.Header>
             <Modal.Body>
               <Input
-                label="Project Name"
+                label="Project name"
                 type="text"
-                placeholder="Enter project name"
+                placeholder="e.g. Platform Migration Q3"
                 value={newProject}
                 onChange={(e) => setNewProject(e.target.value)}
                 autoFocus
@@ -355,9 +402,14 @@ export default function Projects() {
               <Button type="button" onClick={() => setShowCreateModal(false)} variant="secondary" disabled={creating}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" loading={creating} disabled={creating} className="gap-2">
-                <Plus className="w-4 h-4" />
-                Create
+              <Button
+                type="submit"
+                variant="primary"
+                loading={creating}
+                disabled={creating}
+                leftIcon={<Plus className="w-4 h-4" />}
+              >
+                Create project
               </Button>
             </Modal.Footer>
           </form>

@@ -49,11 +49,11 @@ function humanizeActionType(type) {
 
 function StatusPill({ status }) {
   const cls = { 
-    executed: "bg-[color:var(--gradient-success-from)]/20 text-[color:var(--gradient-success-from)]", 
-    rejected: "bg-[color:var(--gradient-danger-from)]/20 text-[color:var(--gradient-danger-from)]", 
-    auto_approved: "bg-[color:var(--gradient-from)]/20 text-[color:var(--gradient-from)]", 
-    approved: "bg-[color:var(--primary)]/20 text-[color:var(--primary)]", 
-    pending: "bg-[color:var(--gradient-from)]/20 text-[color:var(--gradient-from)]" 
+    executed: "border border-[color:var(--border)] text-[color:var(--gradient-success-from)]", 
+    rejected: "border border-[color:var(--border)] text-[color:var(--gradient-danger-from)]", 
+    auto_approved: "border border-[color:var(--border)] text-[color:var(--gradient-from)]", 
+    approved: "border border-[color:var(--border)] text-[color:var(--primary)]", 
+    pending: "border border-[color:var(--border)] text-[color:var(--gradient-from)]" 
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls[status] || "bg-[var(--surface-soft)] theme-text-muted"}`}>
@@ -69,7 +69,7 @@ function renderInline(text) {
     if (/^\*\*([^*]+)\*\*$/.test(part)) return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
     if (/@\w+/.test(part)) {
       const subs = part.split(/(@\w+)/g);
-      return subs.map((sp, j) => /@\w+/.test(sp) ? <span key={j} className="text-blue-600 font-medium">{sp}</span> : sp);
+      return subs.map((sp, j) => /@\w+/.test(sp) ? <span key={j} className="text-[color:var(--primary)] font-medium">{sp}</span> : sp);
     }
     return part;
   });
@@ -84,7 +84,7 @@ function StandupMarkdown({ content }) {
     const line = raw.trimEnd();
     if (/^# (.+)/.test(line)) elements.push(<h1 key={key++} className="text-sm font-bold theme-text mt-1 mb-1">{renderInline(line.replace(/^# /, ""))}</h1>);
     else if (/^## (.+)/.test(line)) elements.push(<h2 key={key++} className="text-xs font-bold theme-text mt-3 mb-1 border-b theme-border pb-0.5">{renderInline(line.replace(/^## /, ""))}</h2>);
-    else if (/^> (.+)/.test(line)) elements.push(<div key={key++} className="text-xs text-[color:var(--primary)] bg-[color:var(--primary)]/10 rounded px-2 py-1 my-1 border-l-2 border-[color:var(--primary)]/30">{renderInline(line.replace(/^> /, ""))}</div>);
+    else if (/^> (.+)/.test(line)) elements.push(<div key={key++} className="text-xs text-[color:var(--primary)] rounded px-2 py-1 my-1 border-l-2 border-[color:var(--primary)]/30">{renderInline(line.replace(/^> /, ""))}</div>);
     else if (/^---+$/.test(line)) elements.push(<hr key={key++} className="border-[var(--border)] my-2" />);
     else if (/^[\-•] (.+)/.test(line)) {
       const text = line.replace(/^[\-•] /, "");
@@ -264,7 +264,7 @@ export default function Autopilot() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[color:var(--gradient-from)]"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[color:var(--primary)]"></div>
       </div>
     );
   }
@@ -284,24 +284,25 @@ export default function Autopilot() {
     <div className="flex flex-col h-full">
 
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 theme-surface border-b theme-border shrink-0">
+      <div className="px-4 pt-4 pb-3 border-b border-[color:var(--border)] shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg gradient-primary">
-              <Bot className="w-5 h-5 text-white" />
+            <div className="p-2 rounded-lg bg-[color:var(--primary)]/15">
+              <Bot className="w-5 h-5 text-[color:var(--primary)]" />
             </div>
             <div>
-              <h1 className="text-lg font-bold theme-text leading-tight">AI Autopilot</h1>
-              <p className="text-xs theme-text-muted">{user?.username ? `· ${user.username}` : "Autonomous task management"}</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-0.5">Automation</p>
+              <h1 className="text-lg font-bold text-[color:var(--text)] leading-tight">AI Autopilot</h1>
+              <p className="text-xs text-[color:var(--text-muted)]">{user?.username ? `· ${user.username}` : "Autonomous task management"}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${settings?.enabled ? "bg-[color:var(--gradient-success-from)]/20 text-[color:var(--gradient-success-from)]" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border border-[color:var(--border)] ${settings?.enabled ? "text-[color:var(--gradient-success-from)]" : "text-[color:var(--text-muted)]"}`}>
               {settings?.enabled ? "Active" : "Disabled"}
             </span>
             <button
               onClick={() => toggleAutopilot(!settings?.enabled)}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${settings?.enabled ? "bg-[color:var(--gradient-danger-from)]/20 text-[color:var(--gradient-danger-from)] active:bg-[color:var(--gradient-danger-from)]/30" : "bg-[color:var(--gradient-from)] text-white active:bg-[color:var(--gradient-to)]"}`}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${settings?.enabled ? "border border-[color:var(--border)] text-[color:var(--gradient-danger-from)] hover:bg-[var(--surface-soft)]" : "bg-[color:var(--primary)] text-[color:var(--primary-contrast)] hover:opacity-90"}`}
             >
               {settings?.enabled ? "Disable" : "Enable"}
             </button>
@@ -315,7 +316,7 @@ export default function Autopilot() {
             <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
               {RANGE_OPTIONS.map(({ key, label }) => (
                 <button key={key} onClick={() => setStatsRange(key)}
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${statsRange === key ? "bg-[color:var(--gradient-from)] text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
+                  className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${statsRange === key ? "bg-[color:var(--primary)] text-[color:var(--primary-contrast)]" : "bg-[var(--surface-soft)] text-[color:var(--text-muted)]"}`}>
                   {label}
                 </button>
               ))}
@@ -323,9 +324,9 @@ export default function Autopilot() {
             {statsRange === "custom" && (
               <div className="flex gap-2 mt-2">
                 <input type="date" value={statsCustomFrom} max={statsCustomTo || TODAY} onChange={(e) => setStatsCustomFrom(e.target.value)}
-                  className="flex-1 border theme-border rounded-lg px-2 py-1.5 text-xs theme-surface theme-text" />
+                  className="flex-1 border border-[color:var(--border)] rounded-lg px-2 py-1.5 text-xs bg-[var(--surface)] text-[color:var(--text)]" />
                 <input type="date" value={statsCustomTo} min={statsCustomFrom || undefined} max={TODAY} onChange={(e) => setStatsCustomTo(e.target.value)}
-                  className="flex-1 border theme-border rounded-lg px-2 py-1.5 text-xs theme-surface theme-text" />
+                  className="flex-1 border border-[color:var(--border)] rounded-lg px-2 py-1.5 text-xs bg-[var(--surface)] text-[color:var(--text)]" />
               </div>
             )}
             <div className="grid grid-cols-3 gap-2 mt-2">
@@ -342,7 +343,7 @@ export default function Autopilot() {
         <div className="flex gap-1 mt-3">
           {TABS.map(({ key, label }) => (
             <button key={key} onClick={() => setActiveTab(key)}
-              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === key ? "bg-[color:var(--gradient-from)] text-white" : "theme-text-muted bg-[var(--surface-soft)]"}`}>
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === key ? "bg-[color:var(--primary)] text-[color:var(--primary-contrast)]" : "text-[color:var(--text-muted)] bg-[var(--surface-soft)]"}`}>
               {label}
             </button>
           ))}
@@ -366,18 +367,18 @@ export default function Autopilot() {
                   { key: "create_standup", label: `Standup (${actionTypeCounts.create_standup})` },
                 ].map(({ key, label }) => (
                   <button key={key} onClick={() => setActionFilter(key)}
-                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${actionFilter === key ? "bg-[color:var(--gradient-from)] text-white" : "bg-[var(--surface-soft)] theme-text-muted"}`}>
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${actionFilter === key ? "bg-[color:var(--primary)] text-[color:var(--primary-contrast)]" : "bg-[var(--surface-soft)] text-[color:var(--text-muted)]"}`}>
                     {label}
                   </button>
                 ))}
               </div>
               <div className="flex gap-2">
                 <button onClick={approveVisibleActions} disabled={bulkApproving || filteredActions.length === 0}
-                  className="flex-1 py-2.5 rounded-xl bg-[color:var(--gradient-success-from)] text-white text-xs font-semibold active:bg-[color:var(--gradient-success-to)] disabled:opacity-50">
+                  className="flex-1 py-2.5 rounded-xl bg-[color:var(--primary)] text-[color:var(--primary-contrast)] text-xs font-semibold active:opacity-80 disabled:opacity-50">
                   {bulkApproving ? "Approving…" : `Approve All (${filteredActions.length})`}
                 </button>
                 <button onClick={runAnalysis} disabled={runningAnalysis || !settings?.enabled}
-                  className="flex-1 py-2.5 rounded-xl bg-[color:var(--gradient-from)] text-white text-xs font-semibold active:bg-[color:var(--gradient-to)] disabled:opacity-50 flex items-center justify-center gap-1.5">
+                  className="flex-1 py-2.5 rounded-xl bg-[color:var(--primary)] text-[color:var(--primary-contrast)] text-xs font-semibold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5">
                   {runningAnalysis ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Running…</> : <><Play className="w-3.5 h-3.5" />Run Analysis</>}
                 </button>
               </div>
@@ -408,18 +409,18 @@ export default function Autopilot() {
         {activeTab === "history" && (
           <div className="flex flex-col gap-3">
             {/* Filters */}
-            <div className="theme-surface border theme-border rounded-2xl p-3 space-y-2">
+            <div className="border border-[color:var(--border)] rounded-lg p-3 space-y-2">
               <div className="relative">
-                <Search className="w-4 h-4 theme-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-[color:var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
                 <input value={historyFilters.search}
                   onChange={(e) => setHistoryFilters((p) => ({ ...p, search: e.target.value }))}
                   placeholder="Search task, reason, type…"
-                  className="w-full pl-9 pr-3 py-2 border theme-border rounded-xl text-sm theme-surface theme-text" />
+                  className="w-full pl-9 pr-3 py-2 border border-[color:var(--border)] rounded-xl text-sm bg-[var(--surface)] text-[color:var(--text)]" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <select value={historyFilters.status}
                   onChange={(e) => setHistoryFilters((p) => ({ ...p, status: e.target.value }))}
-                  className="border theme-border rounded-xl px-3 py-2 text-sm theme-surface theme-text">
+                  className="border border-[color:var(--border)] rounded-xl px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)]">
                   <option value="all">All statuses</option>
                   <option value="executed">Executed</option>
                   <option value="rejected">Rejected</option>
@@ -428,50 +429,50 @@ export default function Autopilot() {
                 </select>
                 <select value={historyFilters.limit}
                   onChange={(e) => setHistoryFilters((p) => ({ ...p, limit: parseInt(e.target.value, 10) }))}
-                  className="border theme-border rounded-xl px-3 py-2 text-sm theme-surface theme-text">
+                  className="border border-[color:var(--border)] rounded-xl px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)]">
                   <option value={10}>10 / page</option>
                   <option value={20}>20 / page</option>
                   <option value={50}>50 / page</option>
                 </select>
                 <input type="date" value={historyFilters.fromDate} max={historyFilters.toDate || TODAY}
                   onChange={(e) => setHistoryFilters((p) => ({ ...p, fromDate: e.target.value }))}
-                  className="border theme-border rounded-xl px-3 py-2 text-sm theme-surface theme-text" />
+                  className="border border-[color:var(--border)] rounded-xl px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)]" />
                 <input type="date" value={historyFilters.toDate} min={historyFilters.fromDate || undefined} max={TODAY}
                   onChange={(e) => setHistoryFilters((p) => ({ ...p, toDate: e.target.value }))}
-                  className="border theme-border rounded-xl px-3 py-2 text-sm theme-surface theme-text" />
+                  className="border border-[color:var(--border)] rounded-xl px-3 py-2 text-sm bg-[var(--surface)] text-[color:var(--text)]" />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs theme-text-muted">{historyPagination.total} records</span>
+                <span className="text-xs text-[color:var(--text-muted)]">{historyPagination.total} records</span>
                 <button onClick={() => fetchHistory(historyPagination.page)}
-                  className="flex items-center gap-1 text-xs theme-text-muted active:opacity-70">
+                  className="flex items-center gap-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text)] active:opacity-70">
                   <RefreshCw className="w-3.5 h-3.5" />Refresh
                 </button>
               </div>
             </div>
 
             {historyLoading ? (
-              <div className="flex flex-col gap-3">{[1,2,3].map((i) => <div key={i} className="h-20 rounded-2xl theme-surface border theme-border animate-pulse" />)}</div>
+              <div className="flex flex-col gap-3">{[1,2,3].map((i) => <div key={i} className="h-20 rounded-lg border border-[color:var(--border)] animate-pulse" />)}</div>
             ) : historyItems.length === 0 ? (
-              <div className="text-center py-12 theme-text-muted text-sm">No historical actions found.</div>
+              <div className="text-center py-12 text-[color:var(--text-muted)] text-sm">No historical actions found.</div>
             ) : (
               <div className="flex flex-col gap-2">
                 {historyItems.map((row) => (
-                  <div key={row.id} className="theme-surface border theme-border rounded-2xl p-3">
+                  <div key={row.id} className="border border-[color:var(--border)] rounded-lg p-3">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold theme-text truncate">{row.task_title || "N/A"}</p>
-                        {row.project_name && <p className="text-xs theme-text-muted">{row.project_name}</p>}
+                        <p className="text-sm font-semibold text-[color:var(--text)] truncate">{row.task_title || "N/A"}</p>
+                        {row.project_name && <p className="text-xs text-[color:var(--text-muted)]">{row.project_name}</p>}
                       </div>
                       <StatusPill status={row.status} />
                     </div>
                     <div className="flex items-center gap-2 flex-wrap mt-1">
-                      <span className="text-xs theme-text-muted">{humanizeActionType(row.action_type)}</span>
-                      <span className="text-xs theme-text-muted">·</span>
-                      <span className="text-xs theme-text-muted">{row.approved_by_username || row.decision_by_username || "system"}</span>
-                      <span className="text-xs theme-text-muted">·</span>
-                      <span className="text-xs theme-text-muted">{formatDateTime(row.executed_at || row.approved_at || row.created_at)}</span>
+                      <span className="text-xs text-[color:var(--text-muted)]">{humanizeActionType(row.action_type)}</span>
+                      <span className="text-xs text-[color:var(--text-muted)]">·</span>
+                      <span className="text-xs text-[color:var(--text-muted)]">{row.approved_by_username || row.decision_by_username || "system"}</span>
+                      <span className="text-xs text-[color:var(--text-muted)]">·</span>
+                      <span className="text-xs text-[color:var(--text-muted)]">{formatDateTime(row.executed_at || row.approved_at || row.created_at)}</span>
                     </div>
-                    {row.reason && <p className="text-xs theme-text-muted mt-1 line-clamp-2">{row.reason}</p>}
+                    {row.reason && <p className="text-xs text-[color:var(--text-muted)] mt-1 line-clamp-2">{row.reason}</p>}
                   </div>
                 ))}
               </div>
@@ -479,12 +480,12 @@ export default function Autopilot() {
 
             {/* Pagination */}
             <div className="flex items-center justify-between pt-1">
-              <span className="text-xs theme-text-muted">Page {historyPagination.page} of {historyPagination.totalPages}</span>
+              <span className="text-xs text-[color:var(--text-muted)]">Page {historyPagination.page} of {historyPagination.totalPages}</span>
               <div className="flex gap-2">
                 <button onClick={() => fetchHistory(Math.max(historyPagination.page - 1, 1))} disabled={!historyPagination.hasPrev}
-                  className="px-3 py-2 border theme-border rounded-xl text-xs theme-text disabled:opacity-40 active:opacity-70">Prev</button>
+                  className="px-3 py-2 border border-[color:var(--border)] rounded-xl text-xs text-[color:var(--text)] disabled:opacity-40 active:opacity-70">Prev</button>
                 <button onClick={() => fetchHistory(historyPagination.page + 1)} disabled={!historyPagination.hasNext}
-                  className="px-3 py-2 border theme-border rounded-xl text-xs theme-text disabled:opacity-40 active:opacity-70">Next</button>
+                  className="px-3 py-2 border border-[color:var(--border)] rounded-xl text-xs text-[color:var(--text)] disabled:opacity-40 active:opacity-70">Next</button>
               </div>
             </div>
           </div>
@@ -500,15 +501,15 @@ export default function Autopilot() {
 }
 
 function MiniStat({ label, value, color, icon: Icon }) {
-  const cls = { 
-    yellow: "bg-[color:var(--gradient-from)]/20 text-[color:var(--gradient-from)]", 
-    green: "bg-[color:var(--gradient-success-from)]/20 text-[color:var(--gradient-success-from)]", 
-    red: "bg-[color:var(--gradient-danger-from)]/20 text-[color:var(--gradient-danger-from)]", 
-    purple: "bg-[color:var(--primary)]/20 text-[color:var(--primary)]", 
-    blue: "bg-[color:var(--primary)]/20 text-[color:var(--primary)]" 
+  const cls = {
+    yellow: "border border-[color:var(--border)] text-[color:var(--gradient-from)]",
+    green: "border border-[color:var(--border)] text-[color:var(--gradient-success-from)]",
+    red: "border border-[color:var(--border)] text-[color:var(--gradient-danger-from)]",
+    purple: "border border-[color:var(--border)] text-[color:var(--primary)]",
+    blue: "border border-[color:var(--border)] text-[color:var(--primary)]"
   };
   return (
-    <div className={`rounded-xl p-2.5 flex items-center gap-2 ${cls[color]}`}>
+    <div className={`rounded-lg p-2.5 flex items-center gap-2 ${cls[color]}`}>
       <Icon className="w-4 h-4 shrink-0" />
       <div>
         <p className="text-base font-bold leading-tight">{value}</p>
@@ -530,10 +531,10 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
   const pc = action.proposed_changes || {};
 
   return (
-    <div className={`theme-surface border rounded-2xl overflow-hidden ${isStandup ? "border-blue-200" : "theme-border"}`}>
+    <div className="border border-[color:var(--border)] rounded-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 p-4">
-        <div className={`shrink-0 p-2 rounded-xl ${isStandup ? "bg-[color:var(--primary)]/20" : "bg-[var(--surface-soft)]"}`}>
+        <div className={`shrink-0 p-2 rounded-xl ${isStandup ? "" : "bg-[var(--surface-soft)]"}`}>
           <Icon className={`w-5 h-5 ${isStandup ? "text-[color:var(--primary)]" : "theme-text"}`} />
         </div>
         <div className="flex-1 min-w-0">
@@ -551,10 +552,10 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
       {/* Standup stats */}
       {isStandup && (
         <div className="px-4 pb-2 flex gap-2 flex-wrap">
-          {cs.sprint_name && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[color:var(--primary)]/20 text-[color:var(--primary)]">Sprint: {cs.sprint_name}</span>}
-          {cs.status_changes != null && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[color:var(--primary)]/20 text-[color:var(--primary)]">{cs.status_changes} moves</span>}
-          {cs.stuck_tasks > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[color:var(--gradient-from)]/20 text-[color:var(--gradient-from)]">{cs.stuck_tasks} stuck</span>}
-          {cs.overdue_count > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[color:var(--gradient-danger-from)]/20 text-[color:var(--gradient-danger-from)]">{cs.overdue_count} overdue</span>}
+          {cs.sprint_name && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[color:var(--primary)]">Sprint: {cs.sprint_name}</span>}
+          {cs.status_changes != null && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[color:var(--primary)]">{cs.status_changes} moves</span>}
+          {cs.stuck_tasks > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[color:var(--border)] text-[color:var(--gradient-from)]">{cs.stuck_tasks} stuck</span>}
+          {cs.overdue_count > 0 && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[color:var(--border)] text-[color:var(--gradient-danger-from)]">{cs.overdue_count} overdue</span>}
         </div>
       )}
 
@@ -566,7 +567,7 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
       {/* Expand toggle */}
       <div className="px-4 pb-3">
         <button onClick={() => setExpanded(!expanded)}
-          className="inline-flex items-center gap-1 text-xs text-[color:var(--gradient-from)] font-semibold active:opacity-70">
+          className="inline-flex items-center gap-1 text-xs text-[color:var(--primary)] font-semibold active:opacity-70">
           {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           {isStandup ? (expanded ? "Hide" : "Preview") + " content" : (expanded ? "Hide" : "Show") + " details"}
         </button>
@@ -591,9 +592,9 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
       )}
 
       {/* Action buttons */}
-      <div className="flex items-center border-t theme-border px-3 py-2 gap-1">
+      <div className="flex items-center border-t border-[color:var(--border)] px-3 py-2 gap-1">
         <button onClick={onApprove} disabled={processing}
-          className={`flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-white text-xs font-semibold active:opacity-80 disabled:opacity-50 ${isStandup ? "bg-[color:var(--primary)]" : "bg-[color:var(--gradient-success-from)]"}`}>
+          className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-xs font-semibold active:opacity-80 disabled:opacity-50 bg-[color:var(--primary)] text-[color:var(--primary-contrast)]">
           <Check className="w-3.5 h-3.5" />
           {processing ? (isStandup ? "Posting…" : "Processing…") : (isStandup ? "Post" : "Approve")}
         </button>
@@ -603,7 +604,7 @@ function ActionCard({ action, onApprove, onReject, processing = false }) {
           if (reason === null) return;
           onReject(reason || null);
         }} disabled={processing}
-          className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg theme-text-muted bg-[var(--surface-soft)] text-xs font-semibold active:opacity-70 disabled:opacity-40">
+          className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-[color:var(--text-muted)] bg-[var(--surface-soft)] text-xs font-semibold active:opacity-70 disabled:opacity-40 hover:bg-[var(--surface-soft)] hover:text-[color:var(--text)]">
           <X className="w-3.5 h-3.5" />
           {isStandup ? "Dismiss" : "Reject"}
         </button>
@@ -640,32 +641,32 @@ function SettingsPanel({ settings, onSave, apiClient }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="theme-surface border theme-border rounded-2xl p-4 space-y-4">
-        <p className="font-semibold theme-text">Operation Mode</p>
+      <div className="border border-[color:var(--border)] rounded-lg p-4 space-y-4">
+        <p className="font-semibold text-[color:var(--text)]">Operation Mode</p>
         <select value={local.mode || "assisted"} onChange={(e) => set("mode", e.target.value)}
-          className="w-full border theme-border rounded-xl px-3 py-2.5 text-sm theme-surface theme-text">
+          className="w-full border border-[color:var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-[color:var(--text)]">
           <option value="monitoring">Monitoring Only</option>
           <option value="assisted">Assisted (Require approval)</option>
           <option value="autonomous">Autonomous (Auto-execute)</option>
         </select>
       </div>
 
-      <div className="theme-surface border theme-border rounded-2xl p-4 space-y-2">
-        <p className="font-semibold theme-text mb-2">Features</p>
+      <div className="border border-[color:var(--border)] rounded-lg p-4 space-y-2">
+        <p className="font-semibold text-[color:var(--text)] mb-2">Features</p>
         <Toggle label="Auto-assign unassigned tasks" checked={local.auto_assign ?? true} onChange={(v) => set("auto_assign", v)} />
         <Toggle label="Auto-adjust deadlines" checked={local.auto_deadline_adjust ?? true} onChange={(v) => set("auto_deadline_adjust", v)} />
         <Toggle label="Auto-escalate blocked tasks" checked={local.auto_escalate_blockers ?? true} onChange={(v) => set("auto_escalate_blockers", v)} />
         <Toggle label="Auto-generate daily standup" checked={local.auto_generate_standup ?? true} onChange={(v) => set("auto_generate_standup", v)} />
       </div>
 
-      <div className="theme-surface border theme-border rounded-2xl p-4 space-y-3">
-        <p className="font-semibold theme-text">Thresholds</p>
+      <div className="border border-[color:var(--border)] rounded-lg p-4 space-y-3">
+        <p className="font-semibold text-[color:var(--text)]">Thresholds</p>
         <SettingInput label="Max tasks per user" type="number" value={local.max_tasks_per_user || 10} onChange={(v) => set("max_tasks_per_user", v)} />
         <SettingInput label="Blocker threshold (hours)" type="number" value={local.blocker_threshold_hours || 48} onChange={(v) => set("blocker_threshold_hours", v)} />
       </div>
 
-      <div className="theme-surface border theme-border rounded-2xl p-4 space-y-3">
-        <p className="font-semibold theme-text">Approval Settings</p>
+      <div className="border border-[color:var(--border)] rounded-lg p-4 space-y-3">
+        <p className="font-semibold text-[color:var(--text)]">Approval Settings</p>
         <Toggle label="Require approval for actions" checked={local.require_approval ?? true} onChange={(v) => set("require_approval", v)} />
         {local.require_approval && (
           <SettingInput label="Auto-approve after (hours)" type="number" value={local.auto_approve_after_hours || 24} onChange={(v) => set("auto_approve_after_hours", v)} />
@@ -673,7 +674,7 @@ function SettingsPanel({ settings, onSave, apiClient }) {
       </div>
 
       <button onClick={handleSave} disabled={saving}
-        className="w-full py-3 rounded-2xl bg-[color:var(--gradient-from)] text-white font-semibold text-sm active:bg-[color:var(--gradient-to)] disabled:opacity-50">
+        className="w-full py-3 rounded-lg bg-[color:var(--primary)] text-[color:var(--primary-contrast)] font-semibold text-sm hover:opacity-90 disabled:opacity-50">
         {saving ? "Saving…" : "Save Settings"}
       </button>
     </div>
@@ -683,8 +684,8 @@ function SettingsPanel({ settings, onSave, apiClient }) {
 function Toggle({ label, checked, onChange }) {
   return (
     <label className="flex items-center justify-between py-2 cursor-pointer">
-      <span className="text-sm theme-text">{label}</span>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="w-4 h-4" />
+      <span className="text-sm text-[color:var(--text)]">{label}</span>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="w-4 h-4 accent-[color:var(--primary)]" />
     </label>
   );
 }
@@ -692,9 +693,9 @@ function Toggle({ label, checked, onChange }) {
 function SettingInput({ label, type, value, onChange }) {
   return (
     <div>
-      <label className="block text-xs theme-text-muted mb-1">{label}</label>
+      <label className="block text-xs text-[color:var(--text-muted)] mb-1">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full border theme-border rounded-xl px-3 py-2.5 text-sm theme-surface theme-text" />
+        className="w-full border border-[color:var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-[color:var(--text)]" />
     </div>
   );
 }

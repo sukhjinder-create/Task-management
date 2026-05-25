@@ -57,34 +57,34 @@ export default function SavedFiltersPanel({ projectId, currentFilters, onApply }
   return (
     <div className="relative">
       <button
-        className="flex items-center gap-1.5 text-[11px] border border-slate-200 rounded-lg px-2 py-1 hover:bg-slate-50 text-slate-600"
+        className="flex items-center gap-1.5 text-[11px] border border-[color:var(--border)] rounded-lg px-2 py-1 hover:border-[color:var(--primary)] text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors"
         onClick={() => setShowSave(v => !v)}
         title="Saved filters"
       >
         <Bookmark className="w-3 h-3" />
         Saved
-        {filters.length > 0 && <span className="text-slate-400">({filters.length})</span>}
+        {filters.length > 0 && <span className="text-[color:var(--text-soft)]">({filters.length})</span>}
       </button>
 
       {showSave && (
-        <div className="absolute right-0 top-8 z-30 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs">
-          <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2">Saved Filters</p>
+        <div className="absolute right-0 top-8 z-30 w-64 bg-[var(--surface)] border border-[color:var(--border)] rounded-xl p-3 text-xs shadow-xl">
+          <p className="text-[10px] uppercase tracking-wide text-[color:var(--text-muted)] font-semibold mb-2">Saved Filters</p>
 
           {filters.length === 0 ? (
-            <p className="text-slate-400 text-center py-2 text-[11px]">No saved filters yet</p>
+            <p className="text-[color:var(--text-soft)] text-center py-2 text-[11px]">No saved filters yet</p>
           ) : (
             <div className="space-y-1 mb-2 max-h-40 overflow-y-auto">
               {filters.map(f => (
                 <div key={f.id} className="flex items-center gap-1 group">
                   <button
-                    className="flex-1 text-left px-2 py-1 rounded hover:bg-indigo-50 hover:text-indigo-700 text-[11px] flex items-center gap-1.5"
+                    className="flex-1 text-left px-2 py-1 rounded hover:bg-[var(--surface-soft)] hover:text-[color:var(--primary)] text-[color:var(--text-muted)] text-[11px] flex items-center gap-1.5 transition-colors"
                     onClick={() => { onApply(f.filter_config); setShowSave(false); }}
                   >
-                    {f.is_shared && <Share2 className="w-2.5 h-2.5 text-slate-400" />}
+                    {f.is_shared && <Share2 className="w-2.5 h-2.5 text-[color:var(--text-soft)]" />}
                     <span className="truncate">{f.name}</span>
                   </button>
                   <button
-                    className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 p-0.5"
+                    className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-500 p-0.5 transition-colors"
                     onClick={() => handleDelete(f.id)}
                   >
                     <Trash2 className="w-3 h-3" />
@@ -94,15 +94,15 @@ export default function SavedFiltersPanel({ projectId, currentFilters, onApply }
             </div>
           )}
 
-          <div className="border-t pt-2">
+          <div className="border-t border-[color:var(--border)] pt-2">
             <form onSubmit={handleSave} className="space-y-1.5">
               <input
-                className="w-full border rounded px-2 py-1 text-[11px]"
+                className="w-full bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:border-[color:var(--primary)]"
                 placeholder="Filter name..."
                 value={name}
                 onChange={e => setName(e.target.value)}
               />
-              <label className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
+              <label className="flex items-center gap-1.5 text-[11px] text-[color:var(--text-muted)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isShared}
@@ -114,7 +114,7 @@ export default function SavedFiltersPanel({ projectId, currentFilters, onApply }
               <button
                 type="submit"
                 disabled={saving || !name.trim()}
-                className="w-full text-[11px] bg-indigo-600 text-white rounded py-1 disabled:opacity-50 flex items-center justify-center gap-1"
+                className="w-full text-[11px] bg-[color:var(--primary)] text-white rounded-lg py-1 disabled:opacity-50 flex items-center justify-center gap-1 hover:opacity-90 transition-opacity"
               >
                 <Plus className="w-3 h-3" />
                 {saving ? "Saving…" : "Save current filters"}

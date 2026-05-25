@@ -53,17 +53,21 @@ export default function AsanaViewerModal({ open, onClose }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex">
+    <div className="fixed inset-0 bg-black/60 z-50 flex">
 
       {/* LEFT — PROJECTS */}
-      <div className="w-72 bg-white border-r overflow-y-auto">
-        <div className="p-4 font-semibold">Asana Projects</div>
+      <div className="w-72 bg-[var(--surface)] border-r border-[color:var(--border)] overflow-y-auto">
+        <div className="p-4 font-semibold text-[color:var(--text)]">Asana Projects</div>
 
         {projects.map(p => (
           <div
             key={p.gid}
             onClick={() => setSelectedProject(p.gid)}
-            className="px-4 py-2 hover:bg-slate-100 cursor-pointer text-sm"
+            className={`px-4 py-2 cursor-pointer text-sm transition-colors ${
+              selectedProject === p.gid
+                ? "text-[color:var(--primary)] bg-[var(--surface-soft)]"
+                : "text-[color:var(--text-muted)] hover:text-[color:var(--text)] hover:bg-[var(--surface-soft)]"
+            }`}
           >
             {p.name}
           </div>
@@ -71,14 +75,14 @@ export default function AsanaViewerModal({ open, onClose }) {
       </div>
 
       {/* CENTER — TASKS */}
-      <div className="flex-1 bg-slate-50 overflow-y-auto">
-        <div className="p-4 flex justify-between items-center">
+      <div className="flex-1 bg-[#0a0a0b] overflow-y-auto">
+        <div className="p-4 flex justify-between items-center border-b border-[color:var(--border)]">
 
-  <h2 className="font-semibold">
+  <h2 className="font-semibold text-[color:var(--text)]">
     Tasks ({tasks.length})
   </h2>
 
-  <div className="text-xs text-red-500">
+  <div className="text-xs text-[color:var(--text-muted)]">
   Selected: {selectedProject || "NONE"}
 </div>
 
@@ -88,17 +92,17 @@ export default function AsanaViewerModal({ open, onClose }) {
       <button
         onClick={migrateProject}
         disabled={migrating}
-        className="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 disabled:opacity-50"
+        className="bg-[color:var(--primary)] text-[color:var(--primary-contrast)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[color:var(--primary-hover)] transition-colors disabled:opacity-50"
       >
         {migrating
           ? "Importing..."
           : migrationDone
           ? "Imported ✓"
-          : "Import 🚀"}
+          : "Import"}
       </button>
     )}
 
-    <button onClick={onClose}>✕</button>
+    <button onClick={onClose} className="text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">✕</button>
 
   </div>
 </div>
@@ -107,10 +111,10 @@ export default function AsanaViewerModal({ open, onClose }) {
           {tasks.map(t => (
             <div
               key={t.gid}
-              className="bg-white border rounded p-3 text-sm"
+              className="border border-[color:var(--border)] rounded-lg p-3 text-sm"
             >
-              <div className="font-medium">{t.name}</div>
-              <div className="text-xs text-slate-500">
+              <div className="font-medium text-[color:var(--text)]">{t.name}</div>
+              <div className="text-xs text-[color:var(--text-muted)]">
                 {t.completed ? "✅ Completed" : "⏳ Active"}
               </div>
             </div>

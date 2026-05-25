@@ -50,11 +50,11 @@ function isOverdue(task) {
 }
 
 const TASK_TYPES = [
-  { value: "task",        label: "Task",        color: "text-slate-500",   bg: "bg-slate-100"   },
-  { value: "bug",         label: "Bug",         color: "text-red-600",     bg: "bg-red-50"      },
-  { value: "feature",     label: "Feature",     color: "text-indigo-600",  bg: "bg-indigo-50"   },
-  { value: "improvement", label: "Improvement", color: "text-emerald-600", bg: "bg-emerald-50"  },
-  { value: "chore",       label: "Chore",       color: "text-amber-600",   bg: "bg-amber-50"    },
+  { value: "task",        label: "Task",        color: "text-[color:var(--text-muted)]",   bg: "bg-[var(--surface-soft)]"   },
+  { value: "bug",         label: "Bug",         color: "text-red-400",                     bg: "bg-[var(--surface-soft)]"   },
+  { value: "feature",     label: "Feature",     color: "text-[color:var(--primary)]",      bg: "bg-[var(--surface-soft)]"   },
+  { value: "improvement", label: "Improvement", color: "text-emerald-400",                 bg: "bg-[var(--surface-soft)]"   },
+  { value: "chore",       label: "Chore",       color: "text-amber-400",                   bg: "bg-[var(--surface-soft)]"   },
 ];
 
 const STORY_POINTS = [1, 2, 3, 5, 8, 13, 21];
@@ -197,15 +197,13 @@ export default function MyTasks() {
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // 🔹 Helper: map assigned_to ID to username (email)
+  // Helper: map assigned_to ID to username (email)
   const getAssigneeLabel = (id) => {
     if (!id) return null;
-    // If it's the logged-in user, we can resolve immediately
     if (user && id === user.id) {
       return `${user.username} (${user.email})`;
     }
     const u = users.find((usr) => usr.id === id);
-    // Fallback to id if user not found (shouldn't usually happen)
     return u ? `${u.username} (${u.email})` : id;
   };
 
@@ -214,14 +212,12 @@ export default function MyTasks() {
     async function load() {
       setLoading(true);
       try {
-        // All three requests fire simultaneously
         const [tasksRes, projectsRes, statusesRes] = await Promise.allSettled([
           api.get("/tasks/all"),
           api.get("/projects"),
           api.get("/project-statuses/global"),
         ]);
 
-        // 1) Tasks — single bulk query replaces N sequential requests
         if (tasksRes.status === "fulfilled") {
           setTasks(tasksRes.value.data || []);
         } else {
@@ -229,12 +225,10 @@ export default function MyTasks() {
           toast.error("Failed to load tasks");
         }
 
-        // 2) Projects (for filter dropdown)
         if (projectsRes.status === "fulfilled") {
           setProjects(projectsRes.value.data || []);
         }
 
-        // 3) Global statuses
         if (statusesRes.status === "fulfilled") {
           const rows = statusesRes.value.data || [];
           if (rows.length > 0) {
@@ -281,9 +275,8 @@ export default function MyTasks() {
     }
   }, [user, api]);
 
-  // ===== Load users for assignee labels (admin/manager usually need this) =====
+  // ===== Load users for assignee labels =====
   useEffect(() => {
-    // It's still safe for normal users; if /users is restricted, they'll just see IDs.
     async function loadUsers() {
       setLoadingUsers(true);
       try {
@@ -291,7 +284,6 @@ export default function MyTasks() {
         setUsers(res.data || []);
       } catch (err) {
         console.error("Error fetching users for labels:", err);
-        // Avoid toast spam here; it's a non-critical enhancement.
       } finally {
         setLoadingUsers(false);
       }
@@ -306,12 +298,10 @@ export default function MyTasks() {
   const filteredTasks = useMemo(() => {
     let list = tasks;
 
-    // "My Tasks" tab: show only tasks assigned to the current user (admin/manager)
     if (isAdminOrManager && activeTab === "mine") {
       list = list.filter((t) => t.assigned_to === user.id);
     }
 
-    // "Overdue" tab: show only non-completed past-due tasks
     if (activeTab === "overdue") {
       list = list.filter((t) => isOverdue(t));
     }
@@ -339,19 +329,18 @@ export default function MyTasks() {
     [projectOptions, selectedProjects]
   );
 
-  // Compact styling so project select looks like normal inputs
+  // Dark-themed react-select styles
   const projectSelectStyles = {
     control: (base, state) => ({
       ...base,
       minHeight: 32,
-      // no fixed height, allow multi-line chips inside the border
       borderRadius: 6,
-      borderColor: state.isFocused ? "#0f172a" : "#e2e8f0",
-      boxShadow: "none",
-      "&:hover": { borderColor: "#cbd5f5" },
+      backgroundColor: "var(--surface)",
+      borderColor: state.isFocused ? "var(--primary)" : "var(--border)",
+      boxShadow: state.isFocused ? "0 0 0 3px var(--ring)" : "none",
+      "&:hover": { borderColor: "var(--border-strong)" },
       fontSize: 11,
     }),
-
     valueContainer: (base) => ({
       ...base,
       paddingTop: 0,
@@ -363,42 +352,55 @@ export default function MyTasks() {
     multiValue: (base) => ({
       ...base,
       borderRadius: 9999,
-      backgroundColor: "#e5edff",
+      backgroundColor: "var(--surface-soft)",
     }),
     multiValueLabel: (base) => ({
       ...base,
       fontSize: 11,
+      color: "var(--text)",
     }),
     multiValueRemove: (base) => ({
       ...base,
+      color: "var(--text-muted)",
       ":hover": {
         backgroundColor: "transparent",
-        color: "#ef4444",
+        color: "var(--score-danger)",
       },
     }),
     placeholder: (base) => ({
       ...base,
       fontSize: 11,
-      color: "#9ca3af",
+      color: "var(--text-soft)",
     }),
     input: (base) => ({
       ...base,
       fontSize: 11,
       margin: 0,
       padding: 0,
+      color: "var(--text)",
     }),
     menu: (base) => ({
       ...base,
       fontSize: 11,
       zIndex: 40,
+      backgroundColor: "var(--surface)",
+      border: "1px solid var(--border)",
     }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isFocused ? "var(--surface-soft)" : "transparent",
+      color: "var(--text)",
+    }),
+    singleValue: (base) => ({ ...base, color: "var(--text)" }),
     dropdownIndicator: (base) => ({
       ...base,
       padding: 4,
+      color: "var(--text-muted)",
     }),
     clearIndicator: (base) => ({
       ...base,
       padding: 4,
+      color: "var(--text-muted)",
     }),
     indicatorSeparator: () => ({
       display: "none",
@@ -530,18 +532,18 @@ export default function MyTasks() {
   };
 
   const loadLogsForTask = async (taskId) => {
-  setLoadingLogs(true);
-  setActivityLogs([]);
-  try {
-    const res = await api.get(`/tasks/${taskId}/logs`);
-    setActivityLogs(res.data || []);
-  } catch (err) {
-    console.error("Failed to load activity logs:", err);
+    setLoadingLogs(true);
     setActivityLogs([]);
-  } finally {
-    setLoadingLogs(false);
-  }
-};
+    try {
+      const res = await api.get(`/tasks/${taskId}/logs`);
+      setActivityLogs(res.data || []);
+    } catch (err) {
+      console.error("Failed to load activity logs:", err);
+      setActivityLogs([]);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
 
   const handleCardClick = (task) => {
     setSelectedTaskDetails(task);
@@ -741,219 +743,238 @@ export default function MyTasks() {
   };
 
   const formatLogMessage = (log) => {
-  const user = log.actor_username || "Someone";
+    const user = log.actor_username || "Someone";
 
-  const parse = (value) => {
-    if (!value) return null;
-    try {
-      return typeof value === "string" ? JSON.parse(value) : value;
-    } catch {
-      return value;
+    const parse = (value) => {
+      if (!value) return null;
+      try {
+        return typeof value === "string" ? JSON.parse(value) : value;
+      } catch {
+        return value;
+      }
+    };
+
+    const oldVal = parse(log.old_value);
+    const newVal = parse(log.new_value);
+
+    switch (log.action_type) {
+      case "STATUS_CHANGED": {
+        const oldStatus = oldVal?.status || oldVal;
+        const newStatus = newVal?.status || newVal;
+        return `Status changed from "${oldStatus}" to "${newStatus}" by ${user}`;
+      }
+
+      case "PRIORITY_CHANGED": {
+        const oldPriority = oldVal?.priority || oldVal;
+        const newPriority = newVal?.priority || newVal;
+        return `Priority changed from "${oldPriority}" to "${newPriority}" by ${user}`;
+      }
+
+      case "ASSIGNEE_CHANGED": {
+        const from = log.old_assignee_username || "Unassigned";
+        const to = log.new_assignee_username || "Unassigned";
+        const actor = log.actor_username || "Someone";
+        return `Assignee changed from "${from}" to "${to}" by ${actor}`;
+      }
+
+      case "DESCRIPTION_UPDATED":
+        return `Description updated by ${user}`;
+
+      case "TITLE_CHANGED": {
+        const oldTitle = oldVal?.task || oldVal;
+        const newTitle = newVal?.task || newVal;
+        return `Title changed from "${oldTitle}" to "${newTitle}" by ${user}`;
+      }
+
+      case "COMMENT_ADDED":
+        return `Comment added by ${user}`;
+
+      case "TASK_CREATED":
+        return `Task created by ${user}`;
+
+      case "TASK_DELETED":
+        return `Task deleted by ${user}`;
+
+      default:
+        return `${log.action_type} by ${user}`;
     }
   };
 
-  const oldVal = parse(log.old_value);
-  const newVal = parse(log.new_value);
-
-  switch (log.action_type) {
-    case "STATUS_CHANGED": {
-      const oldStatus = oldVal?.status || oldVal;
-      const newStatus = newVal?.status || newVal;
-      return `Status changed from "${oldStatus}" to "${newStatus}" by ${user}`;
-    }
-
-    case "PRIORITY_CHANGED": {
-      const oldPriority = oldVal?.priority || oldVal;
-      const newPriority = newVal?.priority || newVal;
-      return `Priority changed from "${oldPriority}" to "${newPriority}" by ${user}`;
-    }
-
-    case "ASSIGNEE_CHANGED": {
-  const from = log.old_assignee_username || "Unassigned";
-  const to = log.new_assignee_username || "Unassigned";
-  const actor = log.actor_username || "Someone";
-
-  return `Assignee changed from "${from}" to "${to}" by ${actor}`;
-}
-
-    case "DESCRIPTION_UPDATED":
-      return `Description updated by ${user}`;
-
-    case "TITLE_CHANGED": {
-      const oldTitle = oldVal?.task || oldVal;
-      const newTitle = newVal?.task || newVal;
-      return `Title changed from "${oldTitle}" to "${newTitle}" by ${user}`;
-    }
-
-    case "COMMENT_ADDED":
-      return `Comment added by ${user}`;
-
-    case "TASK_CREATED":
-      return `Task created by ${user}`;
-
-    case "TASK_DELETED":
-      return `Task deleted by ${user}`;
-
-    default:
-      return `${log.action_type} by ${user}`;
-  }
-};
+  // Shared input class for edit form fields
+  const inputCls = "w-full bg-[var(--surface)] border border-[color:var(--border)] rounded-[6px] px-2.5 py-1.5 text-[12px] text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]";
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <section className="bg-white rounded-xl shadow p-4 flex flex-col gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">{title}</h1>
-          <p className="text-xs text-slate-500">{subtitle}</p>
-
-          {/* Tab switcher */}
-          <div className="flex gap-1 mt-3 p-1 bg-slate-100 rounded-lg w-fit">
-            {/* All Tasks — admin/manager only */}
-            {isAdminOrManager && (
-              <button
-                onClick={() => setActiveTab("all")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  activeTab === "all"
-                    ? "bg-white text-slate-800 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                All Tasks
-              </button>
-            )}
-
-            {/* My Tasks — admin/manager only */}
-            {isAdminOrManager && (
-              <button
-                onClick={() => setActiveTab("mine")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  activeTab === "mine"
-                    ? "bg-white text-slate-800 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                My Tasks
-              </button>
-            )}
-
-            {/* Overdue — all roles */}
-            <button
-              onClick={() => setActiveTab("overdue")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
-                activeTab === "overdue"
-                  ? "bg-red-500 text-white shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              Overdue
-              {tasks.filter(t => isOverdue(t)).length > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  activeTab === "overdue" ? "bg-red-400 text-white" : "bg-red-100 text-red-600"
-                }`}>
-                  {tasks.filter(t => isOverdue(t)).length}
-                </span>
-              )}
-            </button>
-          </div>
-          {filteredTasks.length > 0 && (
-            <p className="mt-1 text-[11px] text-slate-600">
-              Total: <b>{stats.total}</b>
-              {visibleStatusColumns.length > 0 && " • "}
-              {visibleStatusColumns.map((col, idx) => (
-                <span key={`${col.key}-${idx}`}>
-                  {col.label}: {stats.perStatus[col.key] ?? 0}
-                  {idx < visibleStatusColumns.length - 1 ? " • " : ""}
-                </span>
-              ))}
-              {" • "}
-              Overdue:{" "}
-              <span
-                className={
-                  stats.overdue > 0
-                    ? "text-red-500 font-semibold"
-                    : "text-slate-400"
-                }
-              >
-                {stats.overdue}
-              </span>
-            </p>
-          )}
+    <div className="max-w-[1400px] mx-auto w-full space-y-5">
+      {/* ── Page header ───────────────────────────────────────── */}
+      <header className="flex items-end justify-between gap-4 flex-wrap mb-6">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+            Workload
+          </p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">
+            {title}
+          </h1>
+          <p className="text-[13px] text-[color:var(--text-muted)] mt-1">{subtitle}</p>
         </div>
 
-        {/* Filters */}
-        <section className="bg-white rounded-xl shadow p-4">
-          <div className="flex flex-wrap gap-4 items-start text-[11px]">
-            {/* Projects */}
-            <div className="flex flex-col gap-1 min-w-[220px] max-w-xs">
-              <span className="text-slate-600">Projects (multi-select)</span>
-              <Select
-                isMulti
-                options={projectOptions}
-                value={selectedProjectOptions}
-                onChange={handleProjectFilterChange}
-                styles={projectSelectStyles}
-                className="min-w-[220px] text-[11px]"
-                classNamePrefix="rs"
-                placeholder="Select..."
-              />
-              <span className="text-[10px] text-slate-400">
-                Leave empty for all.
-              </span>
-            </div>
-
-            {/* Status search */}
-            <div className="flex flex-col gap-1 min-w-[220px] max-w-xs">
-              <span className="text-slate-600">Status search</span>
-              <input
-                type="text"
-                placeholder="Search status..."
-                value={statusSearch}
-                onChange={(e) => setStatusSearch(e.target.value)}
-                className="border rounded px-2 py-[6px] text-[11px] min-w-[220px]"
-              />
-              {/* Invisible helper to match height */}
-              <span className="text-[10px] text-slate-400 opacity-0">
-                Leave empty for all.
-              </span>
-            </div>
-
-            {/* Button */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] opacity-0">placeholder</span>
-              <button
-                type="button"
-                onClick={() => setHideEmpty((v) => !v)}
-                className="inline-flex items-center gap-1 border rounded px-3 py-1 text-[11px] text-slate-700 bg-slate-50 hover:bg-slate-100 h-8"
+        {/* Right cluster — segmented tab control */}
+        <div className="inline-flex items-center border border-[color:var(--border)] rounded-[8px] p-0.5 h-9">
+          {isAdminOrManager && (
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`px-3 h-8 text-xs font-medium rounded-[6px] transition-colors ${
+                activeTab === "all"
+                  ? "text-[color:var(--primary)] border-b-2 border-[color:var(--primary)]"
+                  : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
+              }`}
+            >
+              All
+            </button>
+          )}
+          {isAdminOrManager && (
+            <button
+              onClick={() => setActiveTab("mine")}
+              className={`px-3 h-8 text-xs font-medium rounded-[6px] transition-colors ${
+                activeTab === "mine"
+                  ? "text-[color:var(--primary)] border-b-2 border-[color:var(--primary)]"
+                  : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
+              }`}
+            >
+              Mine
+            </button>
+          )}
+          <button
+            onClick={() => setActiveTab("overdue")}
+            className={`inline-flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-[6px] transition-colors ${
+              activeTab === "overdue"
+                ? "text-[color:var(--score-danger)] border-b-2 border-[color:var(--score-danger)]"
+                : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
+            }`}
+          >
+            Overdue
+            {tasks.filter((t) => isOverdue(t)).length > 0 && (
+              <span
+                className={`inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[10px] font-bold leading-none border border-[color:var(--border)] ${
+                  activeTab === "overdue"
+                    ? "text-[color:var(--score-danger)]"
+                    : "text-[color:var(--score-danger)]"
+                }`}
               >
-                {hideEmpty ? "Show empty columns" : "Hide empty columns"}
-              </button>
-            </div>
-          </div>
-        </section>
+                {tasks.filter((t) => isOverdue(t)).length}
+              </span>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* ── Stats strip ─────────────────────────────────────── */}
+      {filteredTasks.length > 0 && (
+        <div className="flex items-center flex-wrap gap-x-5 gap-y-1 text-[11.5px] text-[color:var(--text-muted)]">
+          <span>
+            <span className="text-[color:var(--text-soft)] uppercase tracking-[0.12em] text-[10px] font-semibold mr-1.5">Total</span>
+            <span className="text-[color:var(--text)] font-semibold font-mono">{stats.total}</span>
+          </span>
+          {visibleStatusColumns.map((col, idx) => (
+            <span key={`${col.key}-${idx}`}>
+              <span className="text-[color:var(--text-soft)] uppercase tracking-[0.12em] text-[10px] font-semibold mr-1.5">
+                {col.label}
+              </span>
+              <span className="text-[color:var(--text)] font-mono">{stats.perStatus[col.key] ?? 0}</span>
+            </span>
+          ))}
+          <span>
+            <span className="text-[color:var(--text-soft)] uppercase tracking-[0.12em] text-[10px] font-semibold mr-1.5">Overdue</span>
+            <span
+              className={`font-mono ${
+                stats.overdue > 0
+                  ? "text-[color:var(--score-danger)] font-semibold"
+                  : "text-[color:var(--text-soft)]"
+              }`}
+            >
+              {stats.overdue}
+            </span>
+          </span>
+        </div>
+      )}
+
+      {/* ── Filter rail ─────────────────────────────────────── */}
+      <section className="flex flex-wrap items-end gap-3 px-3 py-3 rounded-[10px] border border-[color:var(--border)]">
+        <div className="flex flex-col gap-1.5 min-w-[220px] max-w-xs">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-soft)]">
+            Projects
+          </span>
+          <Select
+            isMulti
+            options={projectOptions}
+            value={selectedProjectOptions}
+            onChange={handleProjectFilterChange}
+            styles={projectSelectStyles}
+            className="min-w-[220px] text-[12px]"
+            classNamePrefix="rs"
+            placeholder="All projects"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 min-w-[220px] max-w-xs">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-soft)]">
+            Status search
+          </span>
+          <input
+            type="text"
+            placeholder="Filter columns…"
+            value={statusSearch}
+            onChange={(e) => setStatusSearch(e.target.value)}
+            className="h-8 bg-[var(--surface)] border border-[color:var(--border)] rounded-[6px] px-2.5 text-[12px] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] opacity-0">.</span>
+          <button
+            type="button"
+            onClick={() => setHideEmpty((v) => !v)}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[6px] border border-[color:var(--border)] text-[12px] font-medium text-[color:var(--text-muted)] hover:text-[color:var(--text)] hover:border-[color:var(--border-strong)] transition-colors"
+          >
+            {hideEmpty ? "Show empty columns" : "Hide empty columns"}
+          </button>
+        </div>
       </section>
 
       {/* Board / List */}
-      <section className="bg-white rounded-xl shadow p-4">
+      <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">Tasks</h2>
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text)]">
+            Tasks
+          </h2>
           <div className="flex items-center gap-2">
             <button
-              className={`text-[11px] border rounded-lg px-2 py-1 flex items-center gap-1 ${showFilters || filterType || filterProject ? "bg-indigo-600 text-white border-indigo-600" : "text-slate-600 border-slate-200 hover:bg-slate-50"}`}
-              onClick={() => setShowFilters(v => !v)}
+              className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[6px] text-[11.5px] font-medium border transition-colors ${
+                showFilters || filterType || filterProject
+                  ? "bg-[var(--primary)] text-[color:var(--primary-contrast)] border-[color:var(--primary)]"
+                  : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:text-[color:var(--text)] hover:border-[color:var(--border-strong)]"
+              }`}
+              onClick={() => setShowFilters((v) => !v)}
               title="Filter (f)"
             >
               <Filter className="w-3 h-3" /> Filter
             </button>
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px]">
+            <div className="inline-flex h-8 rounded-[6px] border border-[color:var(--border)] overflow-hidden text-[11.5px] p-0.5 gap-0.5">
               <button
-                className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "board" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 rounded-[5px] font-medium transition-colors ${
+                  taskViewMode === "board"
+                    ? "text-[color:var(--primary)] border-b-2 border-[color:var(--primary)]"
+                    : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
+                }`}
                 onClick={() => setTaskViewMode("board")}
               >
                 <Layers className="w-3 h-3" /> Board
               </button>
               <button
-                className={`px-2 py-1 flex items-center gap-1 ${taskViewMode === "list" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 rounded-[5px] font-medium transition-colors ${
+                  taskViewMode === "list"
+                    ? "text-[color:var(--primary)] border-b-2 border-[color:var(--primary)]"
+                    : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
+                }`}
                 onClick={() => setTaskViewMode("list")}
               >
                 <Flag className="w-3 h-3" /> List
@@ -964,23 +985,38 @@ export default function MyTasks() {
 
         {/* Filter bar */}
         {showFilters && (
-          <div className="mb-3 flex items-center flex-wrap gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <span className="text-[11px] font-semibold text-slate-600">Filters:</span>
+          <div className="mb-3 flex items-center flex-wrap gap-2 px-3 py-2 rounded-[8px] border border-[color:var(--border)]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-soft)]">
+              Filters
+            </span>
             <select
-              className="text-[11px] border rounded px-2 py-1"
+              className="h-7 text-[11.5px] bg-[var(--surface)] border border-[color:var(--border)] rounded-[6px] px-2 text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]"
               value={filterType}
-              onChange={e => setFilterType(e.target.value)}
+              onChange={(e) => setFilterType(e.target.value)}
             >
               <option value="">All types</option>
-              {TASK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              {TASK_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
             </select>
             {(filterType || filterProject) && (
-              <button className="text-[11px] text-red-500 hover:underline" onClick={() => { setFilterType(""); setFilterProject(""); }}>Clear</button>
+              <button
+                className="text-[11px] font-medium text-[color:var(--score-danger)] hover:underline"
+                onClick={() => {
+                  setFilterType("");
+                  setFilterProject("");
+                }}
+              >
+                Clear
+              </button>
             )}
           </div>
         )}
+
         {loading ? (
-          <div className="text-sm text-slate-500">Loading tasks...</div>
+          <div className="text-sm text-[color:var(--text-muted)] py-4">Loading tasks…</div>
         ) : taskViewMode === "list" ? (
           (() => {
             const sortedList = [...filteredTasks].sort((a, b) => {
@@ -992,16 +1028,16 @@ export default function MyTasks() {
             });
             const SortBtn = ({ col, label }) => (
               <button
-                className="flex items-center gap-0.5 hover:text-indigo-600"
+                className="flex items-center gap-0.5 hover:text-[color:var(--primary)] transition-colors"
                 onClick={() => setListSort(s => ({ col, dir: s.col === col && s.dir === "asc" ? "desc" : "asc" }))}
               >
                 {label}{listSort.col === col ? (listSort.dir === "asc" ? " ↑" : " ↓") : ""}
               </button>
             );
             return (
-              <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <div className="overflow-x-auto border border-[color:var(--border)] rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wide">
+                  <thead className="border-b border-[color:var(--border)] text-[11px] text-[color:var(--text-muted)] uppercase tracking-wide">
                     <tr>
                       <th className="px-3 py-2 text-left w-24">ID</th>
                       <th className="px-3 py-2 text-left"><SortBtn col="task" label="Title" /></th>
@@ -1015,38 +1051,38 @@ export default function MyTasks() {
                       <th className="px-3 py-2 text-left w-16">Flags</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-[color:var(--border)]">
                     {sortedList.map(t => (
                       <tr
                         key={t.id}
-                        className={`cursor-pointer hover:bg-slate-50 transition-colors ${isOverdue(t) ? "bg-red-50" : ""}`}
+                        className={`cursor-pointer hover:bg-[var(--surface-soft)] transition-colors border-b border-[color:var(--border)] ${isOverdue(t) ? "border-l-2 border-l-red-800/60" : ""}`}
                         onClick={() => handleCardClick(t)}
                       >
-                        <td className="px-3 py-2 font-mono text-indigo-500 font-semibold text-[10px]">{t.display_id || "—"}</td>
-                        <td className="px-3 py-2 font-medium text-slate-800 max-w-[200px] truncate">
+                        <td className="px-3 py-2 font-mono text-[color:var(--primary)] font-semibold text-[10px]">{t.display_id || "—"}</td>
+                        <td className="px-3 py-2 font-medium text-[color:var(--text)] max-w-[200px] truncate">
                           {t.task}
                           {(t.subtasks_total ?? 0) > 0 && (
-                            <span className="ml-1.5 text-[10px] text-slate-400">{t.subtasks_completed}/{t.subtasks_total} st</span>
+                            <span className="ml-1.5 text-[10px] text-[color:var(--text-muted)]">{t.subtasks_completed}/{t.subtasks_total} st</span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-indigo-500 text-[11px] truncate">{t.project_name}</td>
+                        <td className="px-3 py-2 text-[color:var(--primary)] text-[11px] truncate">{t.project_name}</td>
                         <td className="px-3 py-2"><TaskTypeBadge type={t.task_type || "task"} /></td>
-                        <td className="px-3 py-2 capitalize text-slate-600">{statusLabel(t.status)}</td>
+                        <td className="px-3 py-2 capitalize text-[color:var(--text-muted)]">{statusLabel(t.status)}</td>
                         <td className="px-3 py-2">
                           <Badge color={priorityBadgeColor(t.priority)} size="sm" variant="subtle">{priorityLabel(t.priority)}</Badge>
                         </td>
-                        <td className="px-3 py-2 text-center font-bold text-slate-600">
-                          {t.story_points != null ? t.story_points : <span className="text-slate-300">—</span>}
+                        <td className="px-3 py-2 text-center font-bold text-[color:var(--text-muted)]">
+                          {t.story_points != null ? t.story_points : <span className="text-[color:var(--text-soft)]">—</span>}
                         </td>
-                        <td className={`px-3 py-2 ${isOverdue(t) ? "text-red-600 font-semibold" : "text-slate-500"}`}>
+                        <td className={`px-3 py-2 ${isOverdue(t) ? "text-red-400 font-semibold" : "text-[color:var(--text-muted)]"}`}>
                           {t.due_date ? new Date(t.due_date).toLocaleDateString() : "—"}
                         </td>
-                        <td className="px-3 py-2 text-slate-600 truncate max-w-[120px]">
-                          {t.assigned_to ? getAssigneeLabel(t.assigned_to) : <span className="text-slate-300">Unassigned</span>}
+                        <td className="px-3 py-2 text-[color:var(--text-muted)] truncate max-w-[120px]">
+                          {t.assigned_to ? getAssigneeLabel(t.assigned_to) : <span className="text-[color:var(--text-soft)]">Unassigned</span>}
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1">
-                            {t.is_blocked && <ShieldAlert className="w-3.5 h-3.5 text-red-500" title="Blocked" />}
+                            {t.is_blocked && <ShieldAlert className="w-3.5 h-3.5 text-red-400" title="Blocked" />}
                             {isOverdue(t) && <AlertCircle className="w-3.5 h-3.5 text-red-400" title="Overdue" />}
                           </div>
                         </td>
@@ -1058,7 +1094,7 @@ export default function MyTasks() {
             );
           })()
         ) : statusColumns.length === 0 ? (
-          <div className="text-sm text-slate-500">
+          <div className="text-sm text-[color:var(--text-muted)]">
             No status columns defined for your projects yet.
           </div>
         ) : (
@@ -1070,99 +1106,96 @@ export default function MyTasks() {
               return (
                 <div
                   key={col.key}
-                  className="border border-slate-200 rounded-lg min-h-[200px] p-2 bg-slate-50"
+                  className="border border-[color:var(--border)] rounded-lg min-h-[200px] p-2"
                   onDragOver={onDragOver}
                   onDrop={() => onDrop(col.key)}
                 >
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-semibold">{col.label}</span>
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-xs font-semibold text-[color:var(--text)]">{col.label}</span>
+                    <span className="text-[10px] text-[color:var(--text-muted)]">
                       {colTasks.length} tasks
                     </span>
                   </div>
 
                   <div className="space-y-2">
                     {colTasks.map((t) => (
-                      <Card
+                      <div
                         key={t.id}
                         draggable={canDrag}
                         onDragStart={() => onDragStart(t.id)}
                         onDragEnd={onDragEnd}
-                        className={
-                          "transition-all " +
-                          (canDrag
-                            ? "cursor-grab active:cursor-grabbing hover:shadow-md hover:-translate-y-0.5 "
-                            : "cursor-default ") +
-                          (isOverdue(t)
-                            ? "border-danger-300 bg-danger-50"
-                            : "border-gray-200 hover:border-primary-200")
-                        }
                         onClick={() => handleCardClick(t)}
+                        className={
+                          "border rounded-lg p-3 space-y-2 transition-all " +
+                          "border-[color:var(--border)] " +
+                          (canDrag
+                            ? "cursor-grab active:cursor-grabbing hover:border-[color:var(--primary)] hover:-translate-y-0.5 "
+                            : "cursor-default ") +
+                          (isOverdue(t) ? "border-red-800/60 " : "")
+                        }
                       >
-                        <Card.Content className="p-3 space-y-2">
-                          {/* ID + type + blocked + points row */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {t.display_id && (
-                              <span className="text-[10px] font-mono text-indigo-500 font-semibold flex items-center gap-0.5">
-                                <Hash className="w-3 h-3" />{t.display_id}
-                              </span>
-                            )}
-                            <TaskTypeBadge type={t.task_type || "task"} />
-                            {t.is_blocked && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">
-                                <ShieldAlert className="w-3 h-3" /> Blocked
-                              </span>
-                            )}
-                            {t.story_points != null && (
-                              <span className="ml-auto text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
-                                {t.story_points} pts
-                              </span>
-                            )}
+                        {/* ID + type + blocked + points row */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {t.display_id && (
+                            <span className="text-[10px] font-mono text-[color:var(--primary)] font-semibold flex items-center gap-0.5">
+                              <Hash className="w-3 h-3" />{t.display_id}
+                            </span>
+                          )}
+                          <TaskTypeBadge type={t.task_type || "task"} />
+                          {t.is_blocked && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-red-800/60 text-red-400">
+                              <ShieldAlert className="w-3 h-3" /> Blocked
+                            </span>
+                          )}
+                          {t.story_points != null && (
+                            <span className="ml-auto text-[10px] font-bold border border-[color:var(--border)] text-[color:var(--text-muted)] px-1.5 py-0.5 rounded-full">
+                              {t.story_points} pts
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="font-medium text-sm text-[color:var(--text)]">{t.task}</div>
+
+                        <div className="text-[11px] text-[color:var(--primary)] font-medium">{t.project_name}</div>
+
+                        {t.assigned_to && (
+                          <div className="flex items-center gap-1.5 text-xs text-[color:var(--text-muted)]">
+                            <UserIcon className="w-3 h-3" />
+                            {getAssigneeLabel(t.assigned_to)}
                           </div>
+                        )}
 
-                          <div className="font-medium text-sm text-gray-900">{t.task}</div>
+                        {(t.subtasks_total ?? 0) > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs text-[color:var(--text-muted)]">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {t.subtasks_completed ?? 0}/{t.subtasks_total ?? 0} subtasks
+                          </div>
+                        )}
 
-                          <div className="text-[11px] text-indigo-500 font-medium">{t.project_name}</div>
+                        {t.due_date && (
+                          <div className="flex items-center gap-1.5 text-xs text-[color:var(--text-muted)]">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(t.due_date).toLocaleDateString()}
+                          </div>
+                        )}
 
-                          {t.assigned_to && (
-                            <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                              <UserIcon className="w-3 h-3" />
-                              {getAssigneeLabel(t.assigned_to)}
-                            </div>
+                        <div className="mt-2 flex items-center justify-between flex-wrap gap-1">
+                          <Badge color={priorityBadgeColor(t.priority)} size="sm" variant="subtle">
+                            {priorityLabel(t.priority)}
+                          </Badge>
+                          {t.sprint_name && (
+                            <span className="text-[10px] text-[color:var(--primary)] px-1.5 py-0.5 rounded font-medium flex items-center gap-1 border border-[color:var(--border)]">
+                              <Layers className="w-2.5 h-2.5" />
+                              {t.sprint_name}
+                            </span>
                           )}
-
-                          {(t.subtasks_total ?? 0) > 0 && (
-                            <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                              <CheckCircle2 className="w-3 h-3" />
-                              {t.subtasks_completed ?? 0}/{t.subtasks_total ?? 0} subtasks
-                            </div>
-                          )}
-
-                          {t.due_date && (
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(t.due_date).toLocaleDateString()}
-                            </div>
-                          )}
-
-                          <div className="mt-2 flex items-center justify-between flex-wrap gap-1">
-                            <Badge color={priorityBadgeColor(t.priority)} size="sm" variant="subtle">
-                              {priorityLabel(t.priority)}
+                          {isOverdue(t) && (
+                            <Badge color="danger" size="sm" variant="solid" className="gap-1">
+                              <AlertCircle className="w-3 h-3" /> Overdue
                             </Badge>
-                            {t.sprint_name && (
-                              <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
-                                <Layers className="w-2.5 h-2.5" />
-                                {t.sprint_name}
-                              </span>
-                            )}
-                            {isOverdue(t) && (
-                              <Badge color="danger" size="sm" variant="solid" className="gap-1">
-                                <AlertCircle className="w-3 h-3" /> Overdue
-                              </Badge>
-                            )}
-                          </div>
-                        </Card.Content>
-                      </Card>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1174,65 +1207,65 @@ export default function MyTasks() {
 
       {/* Task details panel */}
       {selectedTaskDetails && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 overflow-y-auto">
           <div className="mt-16 mb-8 w-full max-w-3xl px-4">
-            <section className="bg-white rounded-xl shadow-lg p-4">
+            <section className="bg-[var(--surface)] border border-[color:var(--border)] rounded-xl p-4">
               <div className="flex justify-between items-start mb-2">
                 <div>
                   {/* Ticket ID + badges row */}
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     {selectedTaskDetails.display_id && (
-                      <span className="font-mono text-[11px] text-indigo-500 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
+                      <span className="font-mono text-[11px] text-[color:var(--primary)] font-bold border border-[color:var(--border)] px-1.5 py-0.5 rounded">
                         {selectedTaskDetails.display_id}
                       </span>
                     )}
                     <TaskTypeBadge type={selectedTaskDetails.task_type || "task"} />
                     {selectedTaskDetails.is_blocked && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-red-800/60 text-red-400">
                         <ShieldAlert className="w-3 h-3" /> Blocked
                       </span>
                     )}
                     {selectedTaskDetails.story_points != null && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold border border-[color:var(--border)] text-[color:var(--text-muted)] px-1.5 py-0.5 rounded-full">
                         <BarChart2 className="w-3 h-3" /> {selectedTaskDetails.story_points} pts
                       </span>
                     )}
                   </div>
-                  <h2 className="text-sm font-semibold">
+                  <h2 className="text-sm font-semibold text-[color:var(--text)]">
                     {selectedTaskDetails.task}{" "}
                     {(selectedTaskDetails.subtasks_total ?? 0) > 0 && (
-                      <span className="ml-1 text-[11px] font-normal text-slate-500">
+                      <span className="ml-1 text-[11px] font-normal text-[color:var(--text-muted)]">
                         ({selectedTaskDetails.subtasks_completed ?? 0}/{selectedTaskDetails.subtasks_total ?? 0} subtasks)
                       </span>
                     )}
                   </h2>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                    <p className="text-[11px] text-slate-500">
-                      Status: <span className="font-medium text-slate-700">{statusLabel(selectedTaskDetails.status)}</span>
+                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                      Status: <span className="font-medium text-[color:var(--text)]">{statusLabel(selectedTaskDetails.status)}</span>
                     </p>
-                    <p className="text-[11px] text-slate-500">
-                      Priority: <span className="font-medium text-slate-700">{priorityLabel(selectedTaskDetails.priority || "medium")}</span>
+                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                      Priority: <span className="font-medium text-[color:var(--text)]">{priorityLabel(selectedTaskDetails.priority || "medium")}</span>
                     </p>
                     {selectedTaskDetails.project_name && (
-                      <p className="text-[11px] text-slate-500">
-                        Project: <span className="font-medium text-slate-700">{selectedTaskDetails.project_name}</span>
+                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                        Project: <span className="font-medium text-[color:var(--text)]">{selectedTaskDetails.project_name}</span>
                       </p>
                     )}
                     {selectedTaskDetails.due_date && (
-                      <p className="text-[11px] text-slate-500">
-                        Due: <span className={`font-medium ${isOverdue(selectedTaskDetails) ? "text-red-600" : "text-slate-700"}`}>
+                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                        Due: <span className={`font-medium ${isOverdue(selectedTaskDetails) ? "text-red-400" : "text-[color:var(--text)]"}`}>
                           {new Date(selectedTaskDetails.due_date).toLocaleDateString()}
                         </span>
                       </p>
                     )}
                     {selectedTaskDetails.assigned_to && (
-                      <p className="text-[11px] text-slate-500">
-                        Assigned: <span className="font-medium text-slate-700">{getAssigneeLabel(selectedTaskDetails.assigned_to)}</span>
+                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                        Assigned: <span className="font-medium text-[color:var(--text)]">{getAssigneeLabel(selectedTaskDetails.assigned_to)}</span>
                       </p>
                     )}
                     {selectedTaskDetails.sprint_name && (
-                      <p className="text-[11px] text-slate-500">
-                        Sprint: <span className="font-medium text-indigo-600">{selectedTaskDetails.sprint_name}</span>
+                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                        Sprint: <span className="font-medium text-[color:var(--primary)]">{selectedTaskDetails.sprint_name}</span>
                       </p>
                     )}
                   </div>
@@ -1242,7 +1275,7 @@ export default function MyTasks() {
                     <button
                       title={isEditing ? "Cancel edit" : "Edit task"}
                       onClick={() => setIsEditing((v) => !v)}
-                      className={`p-1.5 rounded hover:bg-slate-100 transition-colors ${isEditing ? "text-slate-500" : "text-blue-600"}`}
+                      className={`p-1.5 rounded hover:bg-[var(--surface-soft)] transition-colors ${isEditing ? "text-[color:var(--text-muted)]" : "text-[color:var(--primary)]"}`}
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -1251,7 +1284,7 @@ export default function MyTasks() {
                     <button
                       title="Delete task"
                       onClick={handleDeleteTask}
-                      className="p-1.5 rounded hover:bg-red-50 text-red-500 transition-colors"
+                      className="p-1.5 rounded hover:bg-[var(--surface-soft)] text-red-400 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1259,7 +1292,7 @@ export default function MyTasks() {
                   <button
                     title="Copy link"
                     onClick={handleCopyTaskLink}
-                    className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors"
+                    className="p-1.5 rounded hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)] transition-colors"
                   >
                     <LinkIcon className="w-4 h-4" />
                   </button>
@@ -1270,7 +1303,7 @@ export default function MyTasks() {
                       setAttachments([]);
                       setIsEditing(false);
                     }}
-                    className="p-1.5 rounded hover:bg-slate-100 text-slate-400 transition-colors"
+                    className="p-1.5 rounded hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)] transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1280,39 +1313,39 @@ export default function MyTasks() {
               {/* Read-only description */}
               {!isEditing && (
                 <div className="mt-3">
-                  <h3 className="text-xs font-semibold mb-1">Description</h3>
+                  <h3 className="text-xs font-semibold mb-1 text-[color:var(--text)]">Description</h3>
                   {selectedTaskDetails.description ? (
                     <div
-                      className="prose prose-sm max-w-none text-xs"
+                      className="prose prose-sm prose-invert max-w-none text-xs text-[color:var(--text-muted)]"
                       dangerouslySetInnerHTML={{ __html: selectedTaskDetails.description }}
                     />
                   ) : (
-                    <p className="text-[11px] text-slate-500">No description provided.</p>
+                    <p className="text-[11px] text-[color:var(--text-muted)]">No description provided.</p>
                   )}
                 </div>
               )}
 
               {/* Edit form */}
               {isEditing && editTask && (
-                <div className="mt-3 border-t pt-3">
-                  <h3 className="text-xs font-semibold mb-2">Edit task</h3>
+                <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                  <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">Edit task</h3>
                   <div className="grid md:grid-cols-2 gap-3 text-xs">
                     <div className="space-y-2">
-                      <label className="block">Title</label>
+                      <label className="block text-[color:var(--text-muted)]">Title</label>
                       <input
                         type="text"
                         name="task"
                         value={editTask.task}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className={inputCls}
                       />
 
-                      <label className="block mt-2">Status</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Status</label>
                       <select
                         name="status"
                         value={editTask.status || ""}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className={inputCls}
                       >
                         <option value="">No status</option>
                         {statusColumns.map((col) => (
@@ -1320,45 +1353,45 @@ export default function MyTasks() {
                         ))}
                       </select>
 
-                      <label className="block mt-2">Priority</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Priority</label>
                       <select
                         name="priority"
                         value={editTask.priority || "medium"}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className={inputCls}
                       >
                         <option value="high">High</option>
                         <option value="medium">Medium</option>
                         <option value="low">Low</option>
                       </select>
 
-                      <label className="block mt-2">Due date</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Due date</label>
                       <input
                         type="date"
                         name="due_date"
                         value={editTask.due_date || ""}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className={inputCls}
                       />
 
-                      <label className="block mt-2">Type</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Type</label>
                       <select
                         name="task_type"
                         value={editTask.task_type || "task"}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className={inputCls}
                       >
                         {TASK_TYPES.map(t => (
                           <option key={t.value} value={t.value}>{t.label}</option>
                         ))}
                       </select>
 
-                      <label className="block mt-2">Story Points</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Story Points</label>
                       <select
                         name="story_points"
                         value={editTask.story_points || ""}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className={inputCls}
                       >
                         <option value="">No estimate</option>
                         {STORY_POINTS.map(p => (
@@ -1372,21 +1405,21 @@ export default function MyTasks() {
                           id="is_blocked_mytasks"
                           checked={editTask.is_blocked || false}
                           onChange={e => setEditTask(prev => ({ ...prev, is_blocked: e.target.checked }))}
-                          className="w-4 h-4 rounded border-gray-300 text-red-600"
+                          className="w-4 h-4 rounded border-[color:var(--border)] accent-[var(--primary)]"
                         />
-                        <label htmlFor="is_blocked_mytasks" className="text-xs text-gray-700 flex items-center gap-1">
-                          <ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Mark as blocked
+                        <label htmlFor="is_blocked_mytasks" className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
+                          <ShieldAlert className="w-3.5 h-3.5 text-red-400" /> Mark as blocked
                         </label>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <label className="block">Assign to</label>
+                      <label className="block text-[color:var(--text-muted)]">Assign to</label>
                       <select
                         name="assigned_to"
                         value={editTask.assigned_to || ""}
                         onChange={handleEditFieldChange}
-                        className="w-full border rounded px-2 py-1"
+                        className={inputCls}
                       >
                         <option value="">Unassigned</option>
                         {users.map((u) => (
@@ -1394,7 +1427,7 @@ export default function MyTasks() {
                         ))}
                       </select>
 
-                      <label className="block mt-2">Description</label>
+                      <label className="block mt-2 text-[color:var(--text-muted)]">Description</label>
                       <div className="quill-editor">
                         <ReactQuill
                           ref={editEditorRef}
@@ -1414,7 +1447,7 @@ export default function MyTasks() {
                       type="button"
                       disabled={savingEdit}
                       onClick={handleSaveEdit}
-                      className="bg-blue-600 text-white text-[11px] rounded px-3 py-1 disabled:opacity-50"
+                      className="bg-[var(--primary)] text-[color:var(--primary-contrast)] text-[11px] rounded-[6px] px-3 py-1.5 font-medium disabled:opacity-50 transition-opacity"
                     >
                       {savingEdit ? "Saving..." : "Save changes"}
                     </button>
@@ -1423,27 +1456,27 @@ export default function MyTasks() {
               )}
 
               {/* Subtasks */}
-              <div className="border-t border-gray-200 pt-3 mt-3">
+              <div className="border-t border-[color:var(--border)] pt-3 mt-3">
                 <Subtasks taskId={selectedTaskDetails.id} />
               </div>
 
               {/* Comments */}
-              <div className="border-t border-gray-200 pt-3 mt-3">
+              <div className="border-t border-[color:var(--border)] pt-3 mt-3">
                 <CommentsSection taskId={selectedTaskDetails.id} />
               </div>
 
               {/* Attachments */}
-              <div className="border-t border-gray-200 pt-3 mt-3">
-                <h3 className="text-xs font-semibold mb-2">Attachments</h3>
+              <div className="border-t border-[color:var(--border)] pt-3 mt-3">
+                <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">Attachments</h3>
                 {loadingAttachments ? (
-                  <p className="text-[11px] text-slate-400">Loading attachments...</p>
+                  <p className="text-[11px] text-[color:var(--text-muted)]">Loading attachments...</p>
                 ) : attachments.length === 0 ? (
-                  <p className="text-[11px] text-slate-400">No attachments yet.</p>
+                  <p className="text-[11px] text-[color:var(--text-muted)]">No attachments yet.</p>
                 ) : (
                   <ul className="space-y-1.5 mb-3">
                     {attachments.map((att) => (
-                      <li key={att.id} className="flex items-center gap-2 text-[11px] text-gray-700 bg-gray-50 rounded px-2 py-1.5">
-                        <Upload className="w-3.5 h-3.5 text-gray-400" />
+                      <li key={att.id} className="flex items-center gap-2 text-[11px] text-[color:var(--text-muted)] border border-[color:var(--border)] rounded px-2 py-1.5">
+                        <Upload className="w-3.5 h-3.5 text-[color:var(--text-soft)]" />
                         {att.original_name}
                       </li>
                     ))}
@@ -1452,14 +1485,14 @@ export default function MyTasks() {
                 <div className="flex items-center gap-2">
                   <input
                     type="file"
-                    className="text-[11px] flex-1"
+                    className="text-[11px] flex-1 text-[color:var(--text-muted)]"
                     onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   />
                   <button
                     type="button"
                     disabled={uploading}
                     onClick={handleUploadAttachment}
-                    className="bg-slate-700 text-white text-[11px] rounded px-3 py-1 disabled:opacity-50 flex items-center gap-1"
+                    className="border border-[color:var(--border)] text-[color:var(--text)] text-[11px] rounded-[6px] px-3 py-1 disabled:opacity-50 flex items-center gap-1 hover:border-[color:var(--border-strong)] transition-colors"
                   >
                     <Upload className="w-3 h-3" />
                     {uploading ? "Uploading..." : "Upload"}
@@ -1468,18 +1501,18 @@ export default function MyTasks() {
               </div>
 
               {/* Activity Timeline */}
-              <div className="border-t border-gray-200 pt-3 mt-3">
-                <h3 className="text-xs font-semibold mb-2">Activity Timeline</h3>
+              <div className="border-t border-[color:var(--border)] pt-3 mt-3">
+                <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">Activity Timeline</h3>
                 {loadingLogs ? (
-                  <p className="text-[11px] text-slate-400">Loading activity...</p>
+                  <p className="text-[11px] text-[color:var(--text-muted)]">Loading activity...</p>
                 ) : activityLogs.length === 0 ? (
-                  <p className="text-[11px] text-slate-400">No activity recorded.</p>
+                  <p className="text-[11px] text-[color:var(--text-muted)]">No activity recorded.</p>
                 ) : (
                   <div className="space-y-2 max-h-60 overflow-y-auto">
                     {activityLogs.map((log) => (
-                      <div key={log.id} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
-                        <div className="text-[11px] font-medium text-gray-700">{formatLogMessage(log)}</div>
-                        <div className="text-[10px] text-gray-400 mt-1">{new Date(log.created_at).toLocaleString()}</div>
+                      <div key={log.id} className="border border-[color:var(--border)] rounded-lg px-3 py-2.5">
+                        <div className="text-[11px] font-medium text-[color:var(--text)]">{formatLogMessage(log)}</div>
+                        <div className="text-[10px] text-[color:var(--text-muted)] mt-1">{new Date(log.created_at).toLocaleString()}</div>
                       </div>
                     ))}
                   </div>
@@ -1487,8 +1520,8 @@ export default function MyTasks() {
               </div>
 
               {/* Tags */}
-              <div className="mt-3 border-t pt-3">
-                <h3 className="text-xs font-semibold mb-2">Tags</h3>
+              <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">Tags</h3>
                 <TagPicker taskId={selectedTaskDetails.id} readOnly={!canAdminEdit} />
               </div>
 
@@ -1507,9 +1540,9 @@ export default function MyTasks() {
       )}
 
       {/* Keyboard shortcut hint */}
-      <div className="fixed bottom-4 right-4 z-10 text-[10px] text-slate-400 bg-white/80 backdrop-blur border border-slate-200 rounded-lg px-2 py-1 shadow hidden md:block">
-        <span className="mr-2"><kbd className="bg-slate-100 px-1 rounded">Esc</kbd> Close</span>
-        <span><kbd className="bg-slate-100 px-1 rounded">f</kbd> Filter</span>
+      <div className="fixed bottom-4 right-4 z-10 text-[10px] text-[color:var(--text-muted)] bg-[var(--surface)]/90 backdrop-blur border border-[color:var(--border)] rounded-lg px-2 py-1 hidden md:block">
+        <span className="mr-2"><kbd className="border border-[color:var(--border)] px-1 rounded">Esc</kbd> Close</span>
+        <span><kbd className="border border-[color:var(--border)] px-1 rounded">f</kbd> Filter</span>
       </div>
     </div>
   );

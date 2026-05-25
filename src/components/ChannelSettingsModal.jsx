@@ -159,27 +159,27 @@ export default function ChannelSettingsModal({
   const availableUsers = allUsers.filter((u) => !memberIds.has(u.id));
 
   return (
-    <div className="fixed inset-0 z-[999] bg-black/40 flex items-center justify-center p-4">
-      <div className="theme-dialog-panel w-full max-w-[440px] p-5 text-sm">
-        <h2 className="text-base font-semibold mb-2 flex justify-between items-center">
+    <div className="bg-black/60 fixed inset-0 flex items-center justify-center z-50 p-4">
+      <div className="bg-[var(--surface)] border border-[color:var(--border)] rounded-xl p-6 shadow-xl w-full max-w-[440px] text-sm">
+        <h2 className="text-base font-semibold mb-2 flex justify-between items-center text-[color:var(--text)]">
           Channel Settings
-          <button onClick={onClose} className="text-xs px-2 py-1">
+          <button onClick={onClose} className="text-xs px-2 py-1 text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">
             ✖
           </button>
         </h2>
 
-        <p className="text-slate-500 text-xs mb-4">
+        <p className="text-[color:var(--text-muted)] text-xs mb-4">
           {channel.name} ({channel.is_private ? "Private" : "Public"})
         </p>
 
         {/* Members list */}
-        <div className="border rounded p-3 mb-4 max-h-52 overflow-y-auto">
-          <div className="text-[11px] text-slate-500 mb-2">Members</div>
+        <div className="border border-[color:var(--border)] rounded-lg p-3 mb-4 max-h-52 overflow-y-auto">
+          <div className="text-[11px] text-[color:var(--text-muted)] mb-2">Members</div>
 
           {membersLoading ? (
-            <div className="text-[11px] text-slate-400">Loading…</div>
+            <div className="text-[11px] text-[color:var(--text-muted)]">Loading…</div>
           ) : members.length === 0 ? (
-            <div className="text-[11px] text-slate-400">No members yet.</div>
+            <div className="text-[11px] text-[color:var(--text-muted)]">No members yet.</div>
           ) : (
             members.map((m) => {
               const user = allUsers.find(
@@ -192,13 +192,13 @@ export default function ChannelSettingsModal({
               return (
                 <div
                   key={user.id}
-                  className="flex items-center justify-between border-b py-1 text-xs"
+                  className="flex items-center justify-between border-b border-[color:var(--border)] py-1 text-xs"
                 >
-                  <span>{user.username}</span>
+                  <span className="text-[color:var(--text)]">{user.username}</span>
 
                   <div className="flex gap-2 items-center">
                     {isUserAdmin && (
-                      <span className="bg-blue-100 text-blue-600 px-2 py-[2px] rounded text-[10px]">
+                      <span className="text-[color:var(--primary)] border border-[color:var(--primary)] px-2 py-[2px] rounded text-[10px]">
                         Admin
                       </span>
                     )}
@@ -208,14 +208,14 @@ export default function ChannelSettingsModal({
                         {isUserAdmin ? (
                           <button
                             onClick={() => handleDemote(user.id)}
-                            className="text-[10px] underline text-slate-500"
+                            className="text-[10px] underline text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
                           >
                             Remove admin
                           </button>
                         ) : (
                           <button
                             onClick={() => handlePromote(user.id)}
-                            className="text-[10px] underline text-slate-500"
+                            className="text-[10px] underline text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
                           >
                             Make admin
                           </button>
@@ -239,12 +239,12 @@ export default function ChannelSettingsModal({
         {/* Add member dropdown */}
         {isAdmin && (
           <div className="mb-4">
-            <div className="text-[11px] text-slate-500 mb-1">Add member</div>
+            <div className="text-[11px] text-[color:var(--text-muted)] mb-1">Add member</div>
             <div className="flex gap-2">
               <select
                 value={selectedUser}
                 onChange={(e) => setSelectedUser(e.target.value)}
-                className="border px-2 py-1 rounded flex-1 text-xs"
+                className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-2 py-1 flex-1 text-xs focus:outline-none focus:border-[color:var(--primary)] transition-colors"
               >
                 <option value="">Select user...</option>
                 {availableUsers.map((u) => (
@@ -256,7 +256,7 @@ export default function ChannelSettingsModal({
               <button
                 onClick={handleAddMember}
                 disabled={addingUser || !selectedUser}
-                className="bg-blue-600 text-white px-3 py-1 rounded text-xs disabled:bg-blue-300"
+                className="bg-[color:var(--primary)] text-[color:var(--primary-contrast)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[color:var(--primary-hover)] transition-colors disabled:opacity-50"
               >
                 {addingUser ? "Adding…" : "Add"}
               </button>
@@ -267,7 +267,7 @@ export default function ChannelSettingsModal({
         <div className="flex justify-between mt-6">
           <button
             onClick={handleLeave}
-            className="text-xs px-3 py-1 border border-slate-300 rounded hover:bg-slate-50"
+            className="border border-[color:var(--border)] text-[color:var(--text-muted)] px-4 py-2 rounded-lg text-sm hover:text-[color:var(--text)] hover:border-[color:var(--border-strong)] transition-colors"
           >
             Leave channel
           </button>
@@ -275,7 +275,7 @@ export default function ChannelSettingsModal({
           {isAdmin && (
             <button
               onClick={handleDeleteChannel}
-              className="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
             >
               Delete channel
             </button>

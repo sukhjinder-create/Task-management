@@ -21,8 +21,21 @@ export default function UserPerformance() {
     return () => (mounted = false);
   }, [month]);
 
-  if (loading) return <div>Loading performance...</div>;
-  if (!data) return <div>No performance data available.</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-[color:var(--text-muted)] py-8">
+        <span className="animate-pulse">Loading performance…</span>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="border border-[color:var(--border)] rounded-lg p-6 text-sm text-[color:var(--text-muted)]">
+        No performance data available.
+      </div>
+    );
+  }
 
   const score = data.score || 0;
   const previousScore = data.previousScore || 0;
@@ -33,43 +46,64 @@ export default function UserPerformance() {
   const circumference = 2 * Math.PI * 70;
   const offset = circumference - (score / 100) * circumference;
 
-  const scoreColor =
+  const scoreColorClass =
     score >= 75
-      ? "text-emerald-600"
+      ? "text-[color:var(--score-good)]"
       : score >= 50
-      ? "text-amber-600"
-      : "text-red-600";
+      ? "text-[color:var(--score-warning)]"
+      : "text-[color:var(--score-danger)]";
+
+  const scoreStroke =
+    score >= 75 ? "var(--score-good)" : score >= 50 ? "var(--score-warning)" : "var(--score-danger)";
+
+  const deltaColorClass =
+    delta > 0 ? "text-[color:var(--score-good)]" : "text-[color:var(--score-danger)]";
+
+  function barColorClass(value) {
+    if (value >= 75) return "bg-[var(--score-good)]";
+    if (value >= 50) return "bg-[var(--score-warning)]";
+    return "bg-[var(--score-danger)]";
+  }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
 
-      {/* =======================
-          SCORE SECTION
-      ======================== */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border flex items-center justify-between">
-
+      {/* Header */}
+      <header className="flex items-end justify-between gap-4 flex-wrap mb-6">
         <div>
-          <h2 className="text-xl font-semibold">
-            Monthly Performance – {month}
-          </h2>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+            Intelligence
+          </p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">
+            My Performance
+          </h1>
+          <p className="text-[13px] text-[color:var(--text-muted)] mt-1">
+            Monthly score breakdown — {month}
+          </p>
+        </div>
+      </header>
 
-          <div className="mt-2 text-sm text-slate-500">
-            {delta !== 0 && (
-              <span className={delta > 0 ? "text-emerald-600" : "text-red-600"}>
-                {delta > 0 ? "↑" : "↓"} {Math.abs(delta)} from last month
-              </span>
-            )}
-          </div>
+      {/* Score section */}
+      <div className="border border-[color:var(--border)] rounded-lg p-5 flex items-center justify-between gap-6 flex-wrap">
+        <div>
+          <p className="text-sm text-[color:var(--text-muted)] mb-1">
+            Monthly Performance
+          </p>
+          {delta !== 0 && (
+            <span className={`text-sm font-medium ${deltaColorClass}`}>
+              {delta > 0 ? "↑" : "↓"} {Math.abs(delta)} from last month
+            </span>
+          )}
         </div>
 
         {/* Circular Meter */}
-        <div className="relative w-40 h-40">
+        <div className="relative w-40 h-40 shrink-0">
           <svg className="transform -rotate-90" width="160" height="160">
             <circle
               cx="80"
               cy="80"
               r="70"
-              stroke="#e5e7eb"
+              stroke="var(--surface-soft)"
               strokeWidth="12"
               fill="transparent"
             />
@@ -77,7 +111,7 @@ export default function UserPerformance() {
               cx="80"
               cy="80"
               r="70"
-              stroke="#3b82f6"
+              stroke={scoreStroke}
               strokeWidth="12"
               fill="transparent"
               strokeDasharray={circumference}
@@ -87,38 +121,46 @@ export default function UserPerformance() {
             />
           </svg>
 
-          <div className={`absolute inset-0 flex items-center justify-center text-3xl font-bold ${scoreColor}`}>
+          <div className={`absolute inset-0 flex items-center justify-center text-3xl font-bold ${scoreColorClass}`}>
             {score}
           </div>
         </div>
       </div>
 
-      {/* =======================
-          BREAKDOWN SECTION
-      ======================== */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border">
-        <h3 className="font-semibold mb-6">Score Breakdown</h3>
+      {/* Breakdown section */}
+      <div className="border border-[color:var(--border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold text-[color:var(--text)] mb-5">
+          Score Breakdown
+        </h3>
 
         <div className="space-y-5">
           {Object.entries(breakdown).map(([key, value]) => (
             <div key={key}>
               <div className="flex justify-between text-sm mb-1">
-                <span className="capitalize text-slate-700">
+                <span className="capitalize text-[color:var(--text-muted)]">
                   {key.replace(/([A-Z])/g, " $1")}
                 </span>
-                <span className="font-medium">{value}</span>
+                <span className={`font-medium ${
+                  value >= 75
+                    ? "text-[color:var(--score-good)]"
+                    : value >= 50
+                    ? "text-[color:var(--score-warning)]"
+                    : "text-[color:var(--score-danger)]"
+                }`}>
+                  {value}
+                </span>
               </div>
 
-              <div className="w-full bg-slate-200 rounded-full h-2">
+              <div className="w-full bg-[var(--surface-soft)] rounded-full h-1">
                 <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-700"
+                  className={`${barColorClass(value)} h-1 rounded-full transition-all duration-700`}
                   style={{ width: `${value}%` }}
                 />
               </div>
 
               {/* Explanation per metric if available */}
               {data.reasoning?.evidence?.[key] && (
-                <div className="text-xs text-slate-500 mt-1">
+                <div className="text-xs text-[color:var(--text-soft)] mt-1">
                   {data.reasoning.evidence[key]}
                 </div>
               )}
@@ -127,68 +169,77 @@ export default function UserPerformance() {
         </div>
       </div>
 
-      {/* =======================
-          OVERALL EXPLANATION
-      ======================== */}
+      {/* Overall explanation */}
       {data.reasoning?.explanation && (
-        <div className="bg-white p-8 rounded-2xl shadow-sm border">
-          <h3 className="font-semibold mb-3">Detailed Explanation</h3>
-          <p className="text-sm text-slate-600 leading-relaxed">
+        <div className="border border-[color:var(--border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold text-[color:var(--text)] mb-3">
+            Detailed Explanation
+          </h3>
+          <p className="text-sm text-[color:var(--text-muted)] leading-relaxed">
             {data.reasoning.explanation}
           </p>
         </div>
       )}
 
-      {/* =======================
-    PROJECT PERFORMANCE
-======================= */}
-{Array.isArray(data.projectScores) && data.projectScores.length > 0 && (
-  <div className="bg-white p-8 rounded-2xl shadow-sm border">
-    <h3 className="font-semibold mb-6">Project Performance</h3>
+      {/* Project performance */}
+      {Array.isArray(data.projectScores) && data.projectScores.length > 0 && (
+        <div className="border border-[color:var(--border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold text-[color:var(--text)] mb-5">
+            Project Performance
+          </h3>
 
-    <div className="space-y-5">
-      {data.projectScores.map((proj) => (
-        <div key={proj.projectId}>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-slate-700 font-medium">
-              {proj.project_name || proj.projectName}
-            </span>
-            <span className="font-semibold">
-              {proj.score || 0}
-            </span>
-          </div>
+          <div className="space-y-5">
+            {data.projectScores.map((proj) => {
+              const ps = proj.score || 0;
+              return (
+                <div key={proj.projectId}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-[color:var(--text-muted)] font-medium">
+                      {proj.project_name || proj.projectName}
+                    </span>
+                    <span className={`font-semibold ${
+                      ps >= 75
+                        ? "text-[color:var(--score-good)]"
+                        : ps >= 50
+                        ? "text-[color:var(--score-warning)]"
+                        : "text-[color:var(--score-danger)]"
+                    }`}>
+                      {ps}
+                    </span>
+                  </div>
 
-          <div className="w-full bg-slate-200 rounded-full h-2">
-            <div
-              className="bg-indigo-500 h-2 rounded-full transition-all duration-700"
-              style={{ width: `${proj.score}%` }}
-            />
+                  <div className="w-full bg-[var(--surface-soft)] rounded-full h-1">
+                    <div
+                      className={`${barColorClass(ps)} h-1 rounded-full transition-all duration-700`}
+                      style={{ width: `${ps}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-      ))}
-    </div>
-  </div>
-)}
+      )}
 
-      {/* =======================
-          COACHING NUDGES
-      ======================== */}
+      {/* Coaching nudges */}
       {Array.isArray(data.coaching) && data.coaching.length > 0 && (
-        <div className="bg-white p-8 rounded-2xl shadow-sm border">
-          <h3 className="font-semibold mb-6">Coaching Suggestions</h3>
+        <div className="border border-[color:var(--border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold text-[color:var(--text)] mb-5">
+            Coaching Suggestions
+          </h3>
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-3">
             {data.coaching.map((nudge, index) => (
               <div
                 key={index}
-                className="border rounded-xl p-4 bg-slate-50"
+                className="border border-[color:var(--border)] rounded-lg p-4 bg-[var(--surface-soft)]"
               >
-                <div className="text-sm font-medium text-slate-800">
+                <div className="text-sm font-medium text-[color:var(--text)]">
                   {nudge.message}
                 </div>
 
                 {nudge.expectedImpact && (
-                  <div className="text-xs text-slate-500 mt-1">
+                  <div className="text-xs text-[color:var(--text-muted)] mt-1">
                     Expected impact: {nudge.expectedImpact}
                   </div>
                 )}

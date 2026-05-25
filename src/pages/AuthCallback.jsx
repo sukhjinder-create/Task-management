@@ -81,12 +81,12 @@ export default function AuthCallback() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="min-h-screen flex items-center justify-center theme-bg">
-      <div className="theme-surface border theme-border rounded-xl shadow p-8 w-full max-w-sm text-center">
+    <div className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center p-4">
+      <div className="border border-[color:var(--border)] rounded-xl p-8 w-full max-w-sm text-center">
         <div className="flex justify-center mb-4">
-          <div className="w-10 h-10 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
+          <div className="w-10 h-10 rounded-full border-4 border-[color:var(--primary)] border-t-transparent animate-spin" />
         </div>
-        <p className="theme-text text-sm">{status}</p>
+        <p className="text-sm text-[color:var(--text-muted)]">{status}</p>
       </div>
     </div>
   );

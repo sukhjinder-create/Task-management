@@ -4,7 +4,28 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0b" />
+    <meta name="color-scheme" content="dark light" />
     <title>Asystence</title>
+    <!-- Apply persisted theme synchronously to avoid a flash of light UI -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('app_theme');
+          var allowed = ['system','light','dark','ocean','forest','sunset','yellow'];
+          var theme = allowed.indexOf(stored) !== -1 ? stored : 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.colorScheme =
+            theme === 'system' ? 'light dark' :
+            (theme === 'light' ? 'light' : 'dark');
+          document.documentElement.style.background =
+            theme === 'light' ? '#fafafa' : '#0a0a0b';
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.style.background = '#0a0a0b';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

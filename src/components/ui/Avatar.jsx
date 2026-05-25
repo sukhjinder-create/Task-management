@@ -6,23 +6,29 @@ const BACKEND_URL = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://
 
 function resolveAvatarUrl(src) {
   if (!src) return null;
-  // On mobile, localhost refers to the device itself — remap to configured backend
   if (src.startsWith('http://localhost') || src.startsWith('http://127.0.0.1')) {
     const path = src.replace(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, '');
     return `${BACKEND_URL}${path}`;
   }
-  if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('blob:') || src.startsWith('data:')) return src;
+  if (
+    src.startsWith('http://') ||
+    src.startsWith('https://') ||
+    src.startsWith('blob:') ||
+    src.startsWith('data:')
+  ) return src;
   return `${BACKEND_URL}${src}`;
 }
 
-// Fetches image via JS fetch (Capacitor-intercepted, same network stack as API calls).
-// Falls back to direct URL if fetch fails (e.g. web browser with CORS).
 function useFetchedImage(resolvedSrc) {
   const [blobUrl, setBlobUrl] = useState(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!resolvedSrc) { setBlobUrl(null); setFailed(false); return; }
+    if (!resolvedSrc) {
+      setBlobUrl(null);
+      setFailed(false);
+      return;
+    }
     let active = true;
     let objectUrl = null;
 
@@ -38,7 +44,10 @@ function useFetchedImage(resolvedSrc) {
         setFailed(false);
       })
       .catch(() => {
-        if (active) { setBlobUrl(null); setFailed(true); }
+        if (active) {
+          setBlobUrl(null);
+          setFailed(true);
+        }
       });
 
     return () => {
@@ -50,8 +59,6 @@ function useFetchedImage(resolvedSrc) {
   return { blobUrl, failed };
 }
 
-// Drop-in <img> replacement that loads via fetch (works in Capacitor WebView).
-// Shows nothing while loading; caller is responsible for fallback UI.
 export function FetchImg({ src, alt, className }) {
   const { blobUrl, failed } = useFetchedImage(src);
   if (!blobUrl || failed) return null;
@@ -59,11 +66,11 @@ export function FetchImg({ src, alt, className }) {
 }
 
 const avatarSizes = {
-  xs: 'w-6 h-6 text-xs',
-  sm: 'w-8 h-8 text-sm',
-  md: 'w-10 h-10 text-base',
-  lg: 'w-12 h-12 text-lg',
-  xl: 'w-16 h-16 text-2xl',
+  xs: 'w-6 h-6 text-[10px]',
+  sm: 'w-7 h-7 text-xs',
+  md: 'w-8 h-8 text-xs',
+  lg: 'w-10 h-10 text-sm',
+  xl: 'w-14 h-14 text-base',
 };
 
 function getInitials(name) {
@@ -76,21 +83,38 @@ function getInitials(name) {
     .slice(0, 2);
 }
 
+// Deterministic muted background per username so colleagues are
+// recognizable in tight spaces without going neon.
+function hueFromName(name) {
+  if (!name) return 24;
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+
 export function Avatar({ name, src, alt, size = 'md', status, className, ...props }) {
   const initials = getInitials(name || alt);
   const resolvedSrc = resolveAvatarUrl(src);
   const { blobUrl, failed } = useFetchedImage(resolvedSrc);
-
   const showImage = blobUrl && !failed;
+
+  const hue = hueFromName(name);
+  const fallbackStyle = !showImage
+    ? {
+        background: `hsl(${hue} 55% 22%)`,
+        color: `hsl(${hue} 90% 78%)`,
+      }
+    : undefined;
 
   return (
     <div className={cn('relative inline-block', className)} {...props}>
       <div
         className={cn(
-          'rounded-full overflow-hidden bg-primary-100 text-primary-700',
-          'flex items-center justify-center font-medium',
+          "rounded-full overflow-hidden flex items-center justify-center font-semibold tracking-tight",
+          "ring-1 ring-[color:var(--border)]",
           avatarSizes[size]
         )}
+        style={fallbackStyle}
       >
         {showImage ? (
           <img
@@ -105,20 +129,19 @@ export function Avatar({ name, src, alt, size = 'md', status, className, ...prop
         )}
       </div>
 
-      {/* Status indicator */}
       {status && (
         <span
           className={cn(
-            'absolute bottom-0 right-0 block rounded-full ring-2 ring-white',
+            "absolute bottom-0 right-0 block rounded-full ring-2 ring-[var(--app-bg)]",
             size === 'xs' && 'w-1.5 h-1.5',
-            size === 'sm' && 'w-2 h-2',
-            size === 'md' && 'w-2.5 h-2.5',
-            size === 'lg' && 'w-3 h-3',
-            size === 'xl' && 'w-4 h-4',
-            status === 'online' && 'bg-success-500',
-            status === 'offline' && 'bg-gray-400',
-            status === 'away' && 'bg-warning-500',
-            status === 'busy' && 'bg-danger-500'
+            size === 'sm' && 'w-2   h-2',
+            size === 'md' && 'w-2   h-2',
+            size === 'lg' && 'w-2.5 h-2.5',
+            size === 'xl' && 'w-3   h-3',
+            status === 'online'  && 'bg-[color:var(--score-good)]',
+            status === 'offline' && 'bg-[color:var(--text-soft)]',
+            status === 'away'    && 'bg-[color:var(--score-warning)]',
+            status === 'busy'    && 'bg-[color:var(--score-danger)]'
           )}
         />
       )}
@@ -131,21 +154,22 @@ export function AvatarGroup({ users = [], max = 3, size = 'md', className }) {
   const remaining = users.length - max;
 
   return (
-    <div className={cn('flex -space-x-2', className)}>
+    <div className={cn('flex -space-x-1.5', className)}>
       {displayUsers.map((user, index) => (
         <Avatar
           key={index}
           name={user.name || user.username}
           src={user.avatar_url || user.avatar || user.profilePicture}
           size={size}
-          className="ring-2 ring-white"
+          className="ring-2 ring-[var(--app-bg)] rounded-full"
         />
       ))}
       {remaining > 0 && (
         <div
           className={cn(
-            'rounded-full bg-gray-200 text-gray-600',
-            'flex items-center justify-center font-medium ring-2 ring-white',
+            "rounded-full bg-[var(--surface-soft)] text-[color:var(--text-muted)]",
+            "flex items-center justify-center font-semibold ring-2 ring-[var(--app-bg)]",
+            "border border-[color:var(--border)]",
             avatarSizes[size]
           )}
         >

@@ -19,15 +19,15 @@ function getSuperadminAxios() {
 }
 
 const PLAN_COLOR = {
-  basic:      "bg-gray-500/10 text-gray-500",
-  pro:        "bg-blue-500/10 text-blue-500",
-  enterprise: "bg-indigo-500/10 text-indigo-500",
+  basic:      "border border-[color:var(--border)] text-[color:var(--text-muted)]",
+  pro:        "border border-[color:var(--border)] text-[color:var(--text-muted)]",
+  enterprise: "border border-[color:var(--border)] text-[color:var(--primary)]",
 };
 
 const STATUS_COLOR = {
-  active:    "bg-green-500/10 text-green-500",
-  suspended: "bg-amber-500/10 text-amber-500",
-  deleted:   "bg-red-500/10 text-red-500",
+  active:    "border border-[color:var(--border)] text-green-500",
+  suspended: "border border-[color:var(--border)] text-amber-500",
+  deleted:   "border border-[color:var(--border)] text-red-500",
 };
 
 function relativeDate(iso) {
@@ -47,7 +47,7 @@ export default function SuperAdminWorkspaces() {
   const [showCreate, setShowCreate]     = useState(false);
   const [editWs, setEditWs]             = useState(null);
   const [detailWs, setDetailWs]         = useState(null);
-  const [assignPlanWs, setAssignPlanWs] = useState(null); // workspace to assign plan to
+  const [assignPlanWs, setAssignPlanWs] = useState(null);
   const [menuId, setMenuId]             = useState(null);
 
   const axiosSuper = getSuperadminAxios();
@@ -97,39 +97,42 @@ export default function SuperAdminWorkspaces() {
   return (
     <div className="space-y-6">
 
-      {/* ── Stats bar ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard icon={<Building2 className="w-4 h-4" />} label="Total Workspaces"  value={stats?.total_workspaces  ?? "—"} color="indigo" />
-        <StatCard icon={<CheckCircle className="w-4 h-4" />} label="Active"          value={stats?.active_workspaces  ?? "—"} color="green"  />
-        <StatCard icon={<XCircle className="w-4 h-4" />}    label="Suspended"        value={stats?.suspended_workspaces ?? "—"} color="amber" />
-        <StatCard icon={<Users className="w-4 h-4" />}      label="Total Users"      value={stats?.total_users        ?? "—"} color="blue"  />
-      </div>
-
-      {/* ── Header + New button ───────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <header className="flex items-end justify-between gap-4 flex-wrap mb-6">
         <div>
-          <h1 className="text-lg font-bold theme-text">Workspaces</h1>
-          <p className="text-xs theme-text-muted mt-0.5">
-            {stats?.new_this_month ? `${stats.new_this_month} new this month` : "All client workspaces"}
-          </p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">Superadmin</p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">Workspaces</h1>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700"
+          className="flex items-center gap-1.5 px-3 py-2 bg-[color:var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[color:var(--primary-hover)] transition-colors"
         >
           <Plus className="w-4 h-4" /> New Workspace
         </button>
+      </header>
+
+      {/* ── Stats bar ─────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard icon={<Building2 className="w-4 h-4" />} label="Total Workspaces"  value={stats?.total_workspaces  ?? "—"} color="primary" />
+        <StatCard icon={<CheckCircle className="w-4 h-4" />} label="Active"          value={stats?.active_workspaces  ?? "—"} color="success"  />
+        <StatCard icon={<XCircle className="w-4 h-4" />}    label="Suspended"        value={stats?.suspended_workspaces ?? "—"} color="warn" />
+        <StatCard icon={<Users className="w-4 h-4" />}      label="Total Users"      value={stats?.total_users        ?? "—"} color="muted"  />
       </div>
+
+      {/* Sub-heading */}
+      <p className="text-xs text-[color:var(--text-muted)]">
+        {stats?.new_this_month ? `${stats.new_this_month} new this month` : "All client workspaces"}
+      </p>
 
       {/* ── Workspace list ────────────────────────────────────────────────── */}
       {loading && !workspaces.length ? (
         <div className="space-y-2">
           {[1,2,3].map(i => (
-            <div key={i} className="h-20 rounded-xl bg-[var(--surface-soft)] animate-pulse" />
+            <div key={i} className="h-20 rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] animate-pulse" />
           ))}
         </div>
       ) : workspaces.length === 0 ? (
-        <div className="text-center py-20 theme-text-muted text-sm">
+        <div className="text-center py-20 text-[color:var(--text-muted)] text-sm">
           No workspaces yet. Create the first one.
         </div>
       ) : (
@@ -139,17 +142,17 @@ export default function SuperAdminWorkspaces() {
             return (
               <div
                 key={ws.id}
-                className="theme-surface-card rounded-xl border theme-border p-4 flex items-center gap-4"
+                className="rounded-lg border border-[color:var(--border)] p-4 flex items-center gap-4 hover:bg-[var(--surface-soft)] transition-colors"
               >
                 {/* Icon */}
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
-                  <Building2 className="w-5 h-5 text-indigo-500" />
+                <div className="w-10 h-10 rounded-lg border border-[color:var(--border)] flex items-center justify-center shrink-0">
+                  <Building2 className="w-5 h-5 text-[color:var(--primary)]" />
                 </div>
 
                 {/* Main info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold theme-text truncate">{ws.name}</p>
+                    <p className="font-semibold text-[color:var(--text)] truncate">{ws.name}</p>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${PLAN_COLOR[ws.billing_plan || ws.plan] || PLAN_COLOR.basic}`}>
                       {ws.billing_plan || ws.plan || "basic"}
                     </span>
@@ -159,14 +162,14 @@ export default function SuperAdminWorkspaces() {
                   </div>
                   <div className="flex items-center gap-3 mt-1 flex-wrap">
                     {ws.owner_email && (
-                      <span className="text-xs theme-text-muted flex items-center gap-1">
+                      <span className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
                         <Crown className="w-3 h-3" /> {ws.owner_email}
                       </span>
                     )}
-                    <span className="text-xs theme-text-muted flex items-center gap-1">
+                    <span className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
                       <Users className="w-3 h-3" /> {ws.user_count ?? 0}{(ws.max_members ?? ws.member_limit) > 0 ? ` / ${ws.max_members ?? ws.member_limit}` : " / ∞"} users
                     </span>
-                    <span className="text-xs theme-text-muted flex items-center gap-1">
+                    <span className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
                       <Calendar className="w-3 h-3" /> {relativeDate(ws.created_at)}
                     </span>
                   </div>
@@ -176,20 +179,20 @@ export default function SuperAdminWorkspaces() {
                 <div className="relative shrink-0">
                   <button
                     onClick={() => setMenuId(menuId === ws.id ? null : ws.id)}
-                    className="p-2 rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted hover:theme-text"
+                    className="p-2 rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors"
                   >
                     <MoreVertical className="w-4 h-4" />
                   </button>
 
                   {menuId === ws.id && (
-                    <div className="absolute right-0 top-9 z-20 w-44 theme-surface rounded-xl border theme-border shadow-xl py-1">
+                    <div className="absolute right-0 top-9 z-20 w-44 bg-[var(--surface)] rounded-lg border border-[color:var(--border)] py-1">
                       <MenuItem icon={<UserCog className="w-3.5 h-3.5" />} label="View Users"
                         onClick={() => { setDetailWs(ws); setMenuId(null); }} />
                       <MenuItem icon={<Pencil className="w-3.5 h-3.5" />} label="Edit"
                         onClick={() => { setEditWs(ws); setMenuId(null); }} />
                       {!ws.billing_plan && (
                         <MenuItem icon={<CreditCard className="w-3.5 h-3.5" />} label="Assign Plan"
-                          onClick={() => { setAssignPlanWs(ws); setMenuId(null); }} className="text-indigo-500" />
+                          onClick={() => { setAssignPlanWs(ws); setMenuId(null); }} className="text-[color:var(--primary)]" />
                       )}
                       {ws.is_active
                         ? <MenuItem icon={<ShieldOff className="w-3.5 h-3.5" />} label="Suspend"
@@ -197,7 +200,7 @@ export default function SuperAdminWorkspaces() {
                         : <MenuItem icon={<ShieldCheck className="w-3.5 h-3.5" />} label="Activate"
                             onClick={() => setStatus(ws, "active")} className="text-green-500" />
                       }
-                      <div className="border-t theme-border my-1" />
+                      <div className="border-t border-[color:var(--border)] my-1" />
                       <MenuItem icon={<Trash2 className="w-3.5 h-3.5" />} label="Delete"
                         onClick={() => deleteWs(ws)} className="text-red-500" />
                     </div>
@@ -288,33 +291,33 @@ function AssignPlanModal({ ws, axiosSuper, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="theme-surface rounded-2xl border theme-border w-full max-w-sm shadow-2xl">
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b theme-border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-[var(--surface)] rounded-xl border border-[color:var(--border)] w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[color:var(--border)]">
           <div>
-            <h2 className="font-semibold theme-text text-sm">Assign Plan</h2>
-            <p className="text-xs theme-text-muted mt-0.5">{ws.name}</p>
+            <h2 className="font-semibold text-[color:var(--text)] text-sm">Assign Plan</h2>
+            <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{ws.name}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] theme-text-muted">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)] transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="p-5 space-y-4">
           {loading ? (
-            <div className="flex items-center justify-center py-6 theme-text-muted text-sm">Loading plans…</div>
+            <div className="flex items-center justify-center py-6 text-[color:var(--text-muted)] text-sm">Loading plans…</div>
           ) : plans.length === 0 ? (
-            <p className="text-sm theme-text-muted text-center py-4">No active plans found. Create a plan first.</p>
+            <p className="text-sm text-[color:var(--text-muted)] text-center py-4">No active plans found. Create a plan first.</p>
           ) : (
             <>
               <div className="space-y-2">
                 {plans.map(plan => (
                   <label
                     key={plan.id}
-                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                       selected === plan.slug
-                        ? "border-indigo-500 bg-indigo-50"
-                        : "theme-border hover:bg-[var(--surface-soft)]"
+                        ? "border-[color:var(--primary)] bg-[var(--surface-soft)]"
+                        : "border-[color:var(--border)] hover:bg-[var(--surface-soft)]"
                     }`}
                   >
                     <input
@@ -323,12 +326,12 @@ function AssignPlanModal({ ws, axiosSuper, onClose, onSaved }) {
                       value={plan.slug}
                       checked={selected === plan.slug}
                       onChange={() => setSelected(plan.slug)}
-                      className="mt-0.5 accent-indigo-600"
+                      className="mt-0.5 accent-[var(--primary)]"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold theme-text">{plan.name}</p>
-                      {plan.tagline && <p className="text-xs theme-text-muted mt-0.5">{plan.tagline}</p>}
-                      <div className="flex items-center gap-3 mt-1 text-xs theme-text-muted">
+                      <p className="text-sm font-semibold text-[color:var(--text)]">{plan.name}</p>
+                      {plan.tagline && <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{plan.tagline}</p>}
+                      <div className="flex items-center gap-3 mt-1 text-xs text-[color:var(--text-muted)]">
                         <span>₹{((plan.price_monthly_paise || 0) / 100).toLocaleString("en-IN")}/mo</span>
                         {plan.member_limit && <span>· {plan.member_limit} members</span>}
                         {Array.isArray(plan.features) && (
@@ -340,7 +343,7 @@ function AssignPlanModal({ ws, axiosSuper, onClose, onSaved }) {
                 ))}
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
+              <div className="border border-[color:var(--border)] rounded-lg px-3 py-2 text-xs text-amber-500">
                 This bypasses payment — the workspace gets plan access immediately without a subscription.
               </div>
             </>
@@ -348,13 +351,13 @@ function AssignPlanModal({ ws, axiosSuper, onClose, onSaved }) {
         </div>
 
         <div className="flex gap-2 px-5 pb-5">
-          <button onClick={onClose} className="flex-1 py-2 rounded-xl border theme-border text-sm theme-text hover:bg-[var(--surface-soft)]">
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-[color:var(--border)] text-sm text-[color:var(--text)] hover:bg-[var(--surface-soft)] transition-colors">
             Cancel
           </button>
           <button
             onClick={handleAssign}
             disabled={!selected || saving || loading || plans.length === 0}
-            className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+            className="flex-1 py-2 rounded-lg bg-[color:var(--primary)] text-white text-sm font-medium hover:bg-[color:var(--primary-hover)] disabled:opacity-50 transition-colors"
           >
             {saving ? "Assigning…" : "Assign Plan"}
           </button>
@@ -368,7 +371,6 @@ function AssignPlanModal({ ws, axiosSuper, onClose, onSaved }) {
 function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
   const [users, setUsers]             = useState([]);
   const [loading, setLoading]         = useState(true);
-  // active inline action: { type: "reset" | "edit", user }
   const [action, setAction]           = useState(null);
   const [newPassword, setNewPassword] = useState("");
   const [editForm, setEditForm]       = useState({ username: "", email: "", role: "" });
@@ -435,41 +437,38 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
   };
 
   const ROLE_COLOR = {
-    admin: "bg-indigo-500/10 text-indigo-500",
-    owner: "bg-purple-500/10 text-purple-500",
-    user:  "bg-gray-500/10 text-gray-500",
+    admin: "border border-[color:var(--border)] text-[color:var(--primary)]",
+    owner: "border border-[color:var(--border)] text-[color:var(--text-muted)]",
+    user:  "border border-[color:var(--border)] text-[color:var(--text-muted)]",
   };
 
   return (
     <Modal title={`${ws.name} — Users (${users.length}${(ws.max_members ?? ws.member_limit) > 0 ? ` / ${ws.max_members ?? ws.member_limit}` : ""})`} onClose={onClose}>
       {loading ? (
-        <div className="py-8 text-center text-sm theme-text-muted">Loading…</div>
+        <div className="py-8 text-center text-sm text-[color:var(--text-muted)]">Loading…</div>
       ) : users.length === 0 ? (
-        <div className="py-8 text-center text-sm theme-text-muted">No users in this workspace</div>
+        <div className="py-8 text-center text-sm text-[color:var(--text-muted)]">No users in this workspace</div>
       ) : (
         <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
           {users.map(u => (
-            <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border theme-border hover:bg-[var(--surface-soft)]">
+            <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[color:var(--border)] hover:bg-[var(--surface-soft)] transition-colors">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium theme-text truncate">{u.username}</p>
-                <p className="text-xs theme-text-muted truncate">{u.email}</p>
+                <p className="text-sm font-medium text-[color:var(--text)] truncate">{u.username}</p>
+                <p className="text-xs text-[color:var(--text-muted)] truncate">{u.email}</p>
               </div>
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${ROLE_COLOR[u.role] || ROLE_COLOR.user}`}>
                 {u.role}
               </span>
-              {/* Edit */}
               <button onClick={() => openEdit(u)}
-                className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-indigo-500 shrink-0"
+                className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--primary)] shrink-0"
                 title="Edit user">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
-              {/* Reset password */}
               <button onClick={() => openReset(u)}
                 className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-amber-500 shrink-0"
                 title="Reset password">
                 <KeyRound className="w-3.5 h-3.5" />
               </button>
-              {/* Delete */}
               <button onClick={() => handleDeleteUser(u)}
                 className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-red-500 shrink-0"
                 title="Delete user">
@@ -482,19 +481,19 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
 
       {/* Edit user inline form */}
       {action?.type === "edit" && (
-        <form onSubmit={handleEditUser} className="mt-4 p-3 rounded-xl border theme-border bg-[var(--surface-soft)] space-y-2">
-          <p className="text-xs font-semibold theme-text">
-            Edit <span className="text-indigo-500">{action.user.username}</span>
+        <form onSubmit={handleEditUser} className="mt-4 p-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] space-y-2">
+          <p className="text-xs font-semibold text-[color:var(--text)]">
+            Edit <span className="text-[color:var(--primary)]">{action.user.username}</span>
           </p>
           <div className="grid grid-cols-2 gap-2">
             <input value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))}
               placeholder="Username"
-              className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
             <input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
               placeholder="Email"
-              className="px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
             <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
-              className="col-span-2 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+              className="col-span-2 px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]">
               <option value="user">User</option>
               <option value="admin">Admin</option>
               <option value="owner">Owner</option>
@@ -502,11 +501,11 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving}
-              className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+              className="px-3 py-2 bg-[color:var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[color:var(--primary-hover)] disabled:opacity-60 transition-colors">
               {saving ? "…" : "Save"}
             </button>
             <button type="button" onClick={closeAction}
-              className="px-3 py-2 border theme-border rounded-lg text-sm theme-text">
+              className="px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)] hover:bg-[var(--surface-soft)] transition-colors">
               Cancel
             </button>
           </div>
@@ -515,8 +514,8 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
 
       {/* Password reset inline form */}
       {action?.type === "reset" && (
-        <form onSubmit={handleResetPassword} className="mt-4 p-3 rounded-xl border theme-border bg-[var(--surface-soft)] space-y-2">
-          <p className="text-xs font-semibold theme-text">
+        <form onSubmit={handleResetPassword} className="mt-4 p-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] space-y-2">
+          <p className="text-xs font-semibold text-[color:var(--text)]">
             Reset password for <span className="text-amber-500">{action.user.username}</span>
           </p>
           <div className="flex gap-2">
@@ -525,14 +524,14 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
               placeholder="New password (min 6 chars)"
-              className="flex-1 px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+              className="flex-1 px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-amber-500"
             />
             <button type="submit" disabled={saving}
-              className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-60">
+              className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-60 transition-colors">
               {saving ? "…" : "Reset"}
             </button>
             <button type="button" onClick={closeAction}
-              className="px-3 py-2 border theme-border rounded-lg text-sm theme-text">
+              className="px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)] hover:bg-[var(--surface-soft)] transition-colors">
               Cancel
             </button>
           </div>
@@ -571,43 +570,48 @@ function CreateModal({ onClose, onCreated, axiosSuper }) {
         <div className="grid grid-cols-2 gap-3">
           <Field label="Workspace Name" className="col-span-2">
             <input value={form.name} onChange={e => set("name", e.target.value)}
-              placeholder="Acme Corp" className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              placeholder="Acme Corp"
+              className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
           </Field>
           <Field label="Plan" className="col-span-2">
-            <select value={form.plan} onChange={e => set("plan", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+            <select value={form.plan} onChange={e => set("plan", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]">
               <option value="trial">Free Trial (7 days — all features)</option>
               <option value="basic">Basic</option>
               <option value="pro">Pro</option>
               <option value="enterprise">Enterprise</option>
             </select>
             {form.plan === "trial" && (
-              <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                ⚠️ One free trial per email domain. If this domain already used a trial, creation will fail.
+              <p className="mt-1.5 text-xs text-amber-500 border border-[color:var(--border)] rounded-lg px-3 py-2">
+                One free trial per email domain. If this domain already used a trial, creation will fail.
               </p>
             )}
           </Field>
           <Field label="Admin Email" className="col-span-2">
             <input type="email" value={form.ownerEmail}
               onChange={e => set("ownerEmail", e.target.value)}
-              placeholder="admin@company.com" className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              placeholder="admin@company.com"
+              className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
           </Field>
           <Field label="Admin Password" className="col-span-2">
             <input type="password" value={form.ownerPassword}
               onChange={e => set("ownerPassword", e.target.value)}
-              placeholder="Temporary password" className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              placeholder="Temporary password"
+              className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
           </Field>
           <Field label="Admin Name (optional)" className="col-span-2">
             <input value={form.ownerName} onChange={e => set("ownerName", e.target.value)}
-              placeholder="John Smith" className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+              placeholder="John Smith"
+              className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
           </Field>
         </div>
         <div className="flex gap-2 pt-2">
           <button type="submit" disabled={saving}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+            className="px-4 py-2 bg-[color:var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[color:var(--primary-hover)] disabled:opacity-60 transition-colors">
             {saving ? "Creating…" : "Create Workspace"}
           </button>
           <button type="button" onClick={onClose}
-            className="px-4 py-2 border theme-border rounded-lg text-sm theme-text">
+            className="px-4 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)] hover:bg-[var(--surface-soft)] transition-colors">
             Cancel
           </button>
         </div>
@@ -642,10 +646,12 @@ function EditModal({ ws, onClose, onSaved, axiosSuper }) {
       <form onSubmit={submit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Workspace Name" className="col-span-2">
-            <input value={form.name} onChange={e => set("name", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40" />
+            <input value={form.name} onChange={e => set("name", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
           </Field>
           <Field label="Plan" className="col-span-2">
-            <select value={form.plan} onChange={e => set("plan", e.target.value)} className="w-full px-3 py-2 rounded-lg border theme-border theme-surface text-sm theme-text focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+            <select value={form.plan} onChange={e => set("plan", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]">
               <option value="basic">Basic</option>
               <option value="pro">Pro</option>
               <option value="enterprise">Enterprise</option>
@@ -654,11 +660,11 @@ function EditModal({ ws, onClose, onSaved, axiosSuper }) {
         </div>
         <div className="flex gap-2 pt-2">
           <button type="submit" disabled={saving}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+            className="px-4 py-2 bg-[color:var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[color:var(--primary-hover)] disabled:opacity-60 transition-colors">
             {saving ? "Saving…" : "Save Changes"}
           </button>
           <button type="button" onClick={onClose}
-            className="px-4 py-2 border theme-border rounded-lg text-sm theme-text">
+            className="px-4 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)] hover:bg-[var(--surface-soft)] transition-colors">
             Cancel
           </button>
         </div>
@@ -670,11 +676,11 @@ function EditModal({ ws, onClose, onSaved, axiosSuper }) {
 // ─── Shared components ────────────────────────────────────────────────────────
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="theme-surface rounded-2xl border theme-border w-full max-w-lg shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b theme-border">
-          <h3 className="font-semibold theme-text">{title}</h3>
-          <button onClick={onClose} className="theme-text-muted hover:theme-text">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-[var(--surface)] rounded-xl border border-[color:var(--border)] w-full max-w-lg">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)]">
+          <h3 className="font-semibold text-[color:var(--text)]">{title}</h3>
+          <button onClick={onClose} className="text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -687,7 +693,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, children, className = "" }) {
   return (
     <div className={className}>
-      <label className="block text-xs font-medium theme-text-muted mb-1">{label}</label>
+      <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">{label}</label>
       {children}
     </div>
   );
@@ -697,7 +703,7 @@ function MenuItem({ icon, label, onClick, className = "" }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-[var(--surface-soft)] transition-colors theme-text ${className}`}
+      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-[var(--surface-soft)] transition-colors text-[color:var(--text)] ${className}`}
     >
       {icon} {label}
     </button>
@@ -706,17 +712,17 @@ function MenuItem({ icon, label, onClick, className = "" }) {
 
 function StatCard({ icon, label, value, color }) {
   const colors = {
-    indigo: "bg-indigo-500/10 text-indigo-500",
-    green:  "bg-green-500/10 text-green-500",
-    amber:  "bg-amber-500/10 text-amber-500",
-    blue:   "bg-blue-500/10 text-blue-500",
+    primary: "text-[color:var(--primary)]",
+    success: "text-green-500",
+    warn:    "text-amber-500",
+    muted:   "text-[color:var(--text-muted)]",
   };
   return (
-    <div className="theme-surface-card rounded-xl border theme-border px-4 py-3 flex items-center gap-3">
-      <div className={`p-2 rounded-lg ${colors[color]}`}>{icon}</div>
+    <div className="rounded-lg border border-[color:var(--border)] px-4 py-3 flex items-center gap-3">
+      <div className={`p-2 rounded-lg border border-[color:var(--border)] ${colors[color] ?? colors.muted}`}>{icon}</div>
       <div>
-        <p className="text-lg font-bold theme-text">{value}</p>
-        <p className="text-xs theme-text-muted">{label}</p>
+        <p className="text-lg font-bold text-[color:var(--text)]">{value}</p>
+        <p className="text-xs text-[color:var(--text-muted)]">{label}</p>
       </div>
     </div>
   );
