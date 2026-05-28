@@ -95,7 +95,8 @@ export default function Login() {
     const slug = user?.workspace_slug;
     const isProduction = window.location.hostname.endsWith("asystence.com");
     if (slug && isProduction) {
-      window.location.href = `https://${slug}.asystence.com/projects?_t=${token}`;
+      const refreshParam = refreshToken ? `&_r=${encodeURIComponent(refreshToken)}` : "";
+      window.location.href = `https://${slug}.asystence.com/projects?_t=${encodeURIComponent(token)}${refreshParam}`;
     } else {
       navigate("/projects", { replace: true });
     }
@@ -287,10 +288,18 @@ export default function Login() {
       )}
 
       {!mfaRequired && (
-        <p className="text-center text-sm text-[color:var(--text-muted)] mt-6 leading-6">
-          Imported via Slack or another tool?{" "}
-          <span className="brand-orange-text">Check your email for your access link.</span>
-        </p>
+        <div className="mt-6 space-y-3 text-center text-sm text-[color:var(--text-muted)] leading-6">
+          <p>
+            New workspace?{" "}
+            <Link to="/signup" className="brand-orange-text hover:opacity-80 transition-opacity">
+              Start a free trial
+            </Link>
+          </p>
+          <p>
+            Imported via Slack or another tool?{" "}
+            <span className="brand-orange-text">Check your email for your access link.</span>
+          </p>
+        </div>
       )}
     </>
   );

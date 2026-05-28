@@ -25,11 +25,12 @@ export default function AuthCallback() {
     } catch (_) {}
   };
 
-  const redirectToWorkspace = (user, token) => {
+  const redirectToWorkspace = (user, token, refreshToken = null) => {
     const slug = user?.workspace_slug;
     const isProduction = window.location.hostname.endsWith("asystence.com");
     if (slug && isProduction) {
-      window.location.href = `https://${slug}.asystence.com/projects?_t=${token}`;
+      const refreshParam = refreshToken ? `&_r=${encodeURIComponent(refreshToken)}` : "";
+      window.location.href = `https://${slug}.asystence.com/projects?_t=${encodeURIComponent(token)}${refreshParam}`;
     } else {
       navigate("/projects", { replace: true });
     }
@@ -39,22 +40,24 @@ export default function AuthCallback() {
     async function handle() {
       try {
         // ── Flow 1: Google SSO (only token passed in URL, fetch user from API) ──
+        const isMagicPath = window.location.pathname.endsWith("/auth/magic");
         const urlToken = searchParams.get("token");
+        const urlRefreshToken = searchParams.get("refreshToken");
 
-        if (urlToken) {
+        if (urlToken && !isMagicPath) {
           const meRes = await axios.get(`${API_BASE_URL}/users/me`, {
             headers: { Authorization: `Bearer ${urlToken}` },
           });
           const user = meRes.data;
-          safePersistAuth(user, urlToken, null);
-          login(user, urlToken, null);
+          safePersistAuth(user, urlToken, urlRefreshToken || null);
+          login(user, urlToken, urlRefreshToken || null);
           toast.success(`Welcome, ${user.username}!`);
-          redirectToWorkspace(user, urlToken);
+          redirectToWorkspace(user, urlToken, urlRefreshToken || null);
           return;
         }
 
         // ── Flow 2: Magic link (token is query param, exchange with backend) ──
-        const magicToken = searchParams.get("token");
+        const magicToken = isMagicPath ? searchParams.get("token") : null;
         if (magicToken) {
           const res = await axios.get(`${API_BASE_URL}/auth/magic`, {
             params: { token: magicToken },
@@ -63,7 +66,7 @@ export default function AuthCallback() {
           safePersistAuth(user, token, refreshToken);
           login(user, token, refreshToken);
           toast.success(`Welcome, ${user.username}! You're now logged in.`);
-          redirectToWorkspace(user, token);
+          redirectToWorkspace(user, token, refreshToken);
           return;
         }
 

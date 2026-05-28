@@ -39,12 +39,14 @@ export function AuthProvider({ children }) {
       // Check for token passed via URL (cross-subdomain redirect)
       const params = new URLSearchParams(window.location.search);
       const urlToken = params.get("_t");
+      const urlRefreshToken = params.get("_r");
       const urlUser = params.get("_u");
 
       if (urlToken) {
         window.__AUTH_TOKEN__ = urlToken;
         // Clean token from URL immediately
         params.delete("_t");
+        params.delete("_r");
         params.delete("_u");
         const newSearch = params.toString();
         const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
@@ -56,7 +58,7 @@ export function AuthProvider({ children }) {
         })
           .then((r) => r.json())
           .then((user) => {
-            const authData = { token: urlToken, user, refreshToken: null };
+            const authData = { token: urlToken, user, refreshToken: urlRefreshToken || null };
             localStorage.setItem("auth", JSON.stringify(authData));
             window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || null;
             window.dispatchEvent(new CustomEvent("auth:updated", { detail: { user, token: urlToken } }));
