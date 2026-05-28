@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { isCapacitor } from "../utils/native";
 
-const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const BACKEND_URL = API_BASE_URL;
 
 const PRODUCT_FEATURES = [
   {
