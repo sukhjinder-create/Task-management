@@ -6,7 +6,7 @@ import {
   Hash, CheckCircle, AlertCircle, ExternalLink, Loader2,
   ChevronRight, Users, MessageSquare, Trash2, Clock,
   FolderKanban, RefreshCw, ChevronDown, ChevronUp, ArrowLeft,
-  Search, ArrowRightLeft,
+  Search, ArrowRightLeft, Webhook, Copy,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────
@@ -34,6 +34,147 @@ function ModeToggle({ mode, onChange }) {
 /* ─────────────────────────────────────────────
    SHARED: Import History Panel
 ───────────────────────────────────────────── */
+function CopyButton({ value, label = "Copy" }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {}
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      disabled={!value}
+      className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border theme-border text-xs theme-text disabled:opacity-40"
+    >
+      <Copy size={12} /> {copied ? "Copied" : label}
+    </button>
+  );
+}
+
+function WebhookSetup({ provider }) {
+  const api = useApi();
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [settingUp, setSettingUp] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.get(`/integrations/webhooks/${provider}/status`);
+      setStatus(res.data || null);
+    } catch (err) {
+      setError(err.response?.data?.error || "Webhook status unavailable");
+    }
+    setLoading(false);
+  }, [api, provider]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleSetup() {
+    setSettingUp(true);
+    setError("");
+    try {
+      await api.post(`/integrations/webhooks/${provider}/setup`);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.error || "Webhook setup failed");
+    }
+    setSettingUp(false);
+  }
+
+  async function rotateYouTrackToken() {
+    setSettingUp(true);
+    setError("");
+    try {
+      const res = await api.post("/integrations/webhooks/youtrack/setup", { rotate: true });
+      setStatus(res.data || null);
+    } catch (err) {
+      setError(err.response?.data?.error || "Token rotation failed");
+    }
+    setSettingUp(false);
+  }
+
+  if (loading) {
+    return (
+      <div className="theme-surface border theme-border rounded-2xl p-4 flex items-center gap-2 text-sm theme-text-muted">
+        <Loader2 size={14} className="animate-spin" /> Loading webhook status...
+      </div>
+    );
+  }
+
+  const isActive = status?.status === "active" || status?.status === "partial";
+  const isManual = provider === "youtrack";
+  const subscriptions = status?.subscriptions || [];
+
+  return (
+    <div className="theme-surface border theme-border rounded-2xl p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Webhook size={15} className="text-[color:var(--primary)]" />
+            <h3 className="text-sm font-semibold theme-text">Webhooks</h3>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${isActive ? "text-green-600 border-green-600/40" : "theme-text-muted theme-border"}`}>
+              {status?.status || "not_setup"}
+            </span>
+          </div>
+          <p className="text-xs theme-text-muted mt-1">
+            {isManual ? "Use these values in YouTrack Webhook Triggers." : `${subscriptions.length} project hook${subscriptions.length === 1 ? "" : "s"} configured.`}
+          </p>
+        </div>
+        <button
+          onClick={handleSetup}
+          disabled={settingUp}
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--primary)] text-[color:var(--primary-contrast)] text-xs font-semibold disabled:opacity-50"
+        >
+          {settingUp ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          {isManual ? "Generate" : "Set up"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 text-sm text-red-400 border border-red-800 rounded-xl px-3 py-2">
+          <AlertCircle size={14} className="shrink-0 mt-0.5" />{error}
+        </div>
+      )}
+
+      {isManual && status?.targetUrl && (
+        <div className="space-y-2">
+          {[
+            ["URL", status.targetUrl],
+            ["Header", status.headerName],
+            ["Token", status.token],
+          ].map(([itemLabel, value]) => (
+            <div key={itemLabel} className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] uppercase theme-text-muted mb-1">{itemLabel}</div>
+                <div className="truncate rounded-lg border theme-border px-2.5 py-2 text-xs font-mono theme-text">
+                  {value || "-"}
+                </div>
+              </div>
+              <CopyButton value={value} />
+            </div>
+          ))}
+          <button
+            onClick={rotateYouTrackToken}
+            disabled={settingUp}
+            className="text-xs text-[color:var(--primary)] font-semibold"
+          >
+            Rotate token
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ImportHistory({ source, onDeleted }) {
   const api = useApi();
   const [history, setHistory] = useState([]);
@@ -655,6 +796,7 @@ function AsanaPanel({ onImportDone, autoConnect }) {
         <span className="text-sm theme-text-muted">{projects?.length ?? 0} project{projects?.length !== 1 ? "s" : ""}</span>
         <button onClick={checkConnection} className="text-xs text-[color:var(--primary)] flex items-center gap-1"><RefreshCw size={11} /> Refresh</button>
       </div>
+      <WebhookSetup provider="asana" />
       {projects?.length === 0 && <p className="text-center py-6 text-sm theme-text-muted">No projects found in your Asana workspace.</p>}
       <div className="flex flex-col gap-2">
         {(projects || []).map((p) => (
@@ -876,6 +1018,7 @@ function YouTrackPanel({ onImportDone }) {
         </button>
       </div>
       {loadingProjects && <div className="flex items-center justify-center py-8 gap-2 text-sm theme-text-muted"><Loader2 size={14} className="animate-spin" />Loading projects…</div>}
+      <WebhookSetup provider="youtrack" />
       {!loadingProjects && projects?.length === 0 && <p className="text-center py-6 text-sm theme-text-muted">No projects found.</p>}
       <div className="flex flex-col gap-2">
         {(projects || []).map((p) => {
