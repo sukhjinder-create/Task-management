@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useAuth } from "../context/AuthContext";
 import { API_BASE_URL } from "../api";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import {
   ArrowRight,
   Building2,
   CheckCircle2,
+  CreditCard,
   Eye,
   EyeOff,
   Lock,
   Mail,
   ShieldCheck,
+  Sparkles,
   User,
 } from "lucide-react";
 import { isCapacitor } from "../utils/native";
@@ -21,24 +22,28 @@ import { isCapacitor } from "../utils/native";
 const BACKEND_URL = API_BASE_URL;
 
 export default function Signup() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
 
   const [workspaceName, setWorkspaceName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [interval, setBillingInterval] = useState("monthly");
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     const err = searchParams.get("error");
+    const cancelled = searchParams.get("cancelled");
+    if (cancelled) toast("Signup cancelled. Your workspace was not created.");
     if (!err || err === "google_cancelled") return;
-    const message = err === "workspace_required"
-      ? "Name your workspace before continuing with Google."
-      : decodeURIComponent(err);
+    const message =
+      err === "workspace_required"
+        ? "Name your workspace before continuing with Google."
+        : err === "billing_consent_required"
+          ? "Accept the trial billing consent before continuing with Google."
+          : decodeURIComponent(err);
     toast.error(message);
   }, [searchParams]);
 
@@ -46,37 +51,10 @@ export default function Signup() {
     const params = new URLSearchParams({
       mode: "signup",
       workspaceName: workspaceName.trim(),
+      trialBillingConsent: consentAccepted ? "1" : "0",
     });
     return `${BACKEND_URL}/auth/google?${params.toString()}`;
-  }, [workspaceName]);
-
-  const safePersistAuth = (user, token, refreshToken = null) => {
-    const payload = { token, user, refreshToken };
-    localStorage.setItem("auth", JSON.stringify(payload));
-    try {
-      window.__AUTH_TOKEN__ = token;
-      window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || "GLOBAL";
-    } catch {}
-    window.dispatchEvent(new Event("auth:updated"));
-  };
-
-  const redirectToWorkspace = (user, token, refreshToken = null) => {
-    const slug = user?.workspace_slug;
-    const isProduction = window.location.hostname.endsWith("asystence.com");
-    if (slug && isProduction) {
-      const refreshParam = refreshToken ? `&_r=${encodeURIComponent(refreshToken)}` : "";
-      window.location.href = `https://${slug}.asystence.com/projects?_t=${encodeURIComponent(token)}${refreshParam}`;
-    } else {
-      navigate("/projects", { replace: true });
-    }
-  };
-
-  const completeSignup = (token, user, refreshToken = null) => {
-    safePersistAuth(user, token, refreshToken);
-    login(user, token, refreshToken);
-    toast.success("Workspace created. Your free trial is active.");
-    redirectToWorkspace(user, token, refreshToken);
-  };
+  }, [workspaceName, consentAccepted]);
 
   const validateRequired = () => {
     if (!workspaceName.trim()) {
@@ -95,6 +73,10 @@ export default function Signup() {
       toast.error("Password must be at least 8 characters");
       return false;
     }
+    if (!consentAccepted) {
+      toast.error("Please accept the trial billing consent to continue.");
+      return false;
+    }
     return true;
   };
 
@@ -109,8 +91,14 @@ export default function Signup() {
         name,
         email,
         password,
+        interval,
+        consentAccepted,
       });
-      completeSignup(res.data.token, res.data.user, res.data.refreshToken || null);
+      if (res.data?.url) {
+        window.location.assign(res.data.url);
+        return;
+      }
+      toast.error("Stripe checkout could not be started. Please try again.");
     } catch (err) {
       toast.error(err.response?.data?.error || "Could not create workspace");
     } finally {
@@ -123,7 +111,10 @@ export default function Signup() {
       toast.error("Workspace name is required before Google signup");
       return;
     }
-    setGoogleLoading(true);
+    if (!consentAccepted) {
+      toast.error("Please accept the trial billing consent to continue.");
+      return;
+    }
     window.location.href = googleSignupUrl;
   };
 
@@ -152,21 +143,21 @@ export default function Signup() {
               </div>
 
               <p className="text-[10px] uppercase tracking-[0.18em] brand-orange-text font-semibold mb-3">
-                Free trial workspace
+                Card-required trial workspace
               </p>
               <h1 className="max-w-3xl text-[34px] sm:text-[44px] xl:text-[54px] font-semibold tracking-tight leading-[1.05] text-[color:var(--text)]">
-                Create the workspace your team will run from.
+                Create your workspace after Stripe verifies the card.
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-[color:var(--text-muted)]">
-                Start with one admin account, then invite managers and users from inside the app when you are ready.
+                Start with one admin account, a 7-day Pro trial, and clear consent for automatic billing after the trial unless cancelled first.
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
               {[
                 ["7 days", "Full feature trial"],
-                ["1 admin", "You own the workspace"],
-                ["Stripe", "International billing ready"],
+                ["INR 1", "Refunded verification"],
+                ["Stripe", "Card billing consent"],
               ].map(([value, label]) => (
                 <div key={label} className="border border-[color:var(--border)] rounded-lg p-4">
                   <p className="text-lg font-semibold brand-orange-text">{value}</p>
@@ -181,9 +172,9 @@ export default function Signup() {
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[color:var(--text)]">Trial billing rules stay intact</p>
+                  <p className="text-sm font-semibold text-[color:var(--text)]">Stripe-hosted checkout</p>
                   <p className="text-xs text-[color:var(--text-muted)]">
-                    The first admin is counted as a trial seat and your workspace follows the same upgrade flow.
+                    The card verification charge is refunded automatically after confirmation, and billing can be cancelled before renewal.
                   </p>
                 </div>
                 <CheckCircle2 className="ml-auto hidden sm:block h-5 w-5 brand-orange-text" />
@@ -197,12 +188,12 @@ export default function Signup() {
             <div className="mb-7 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-soft)] font-semibold">
-                  Start free trial
+                  Start card trial
                 </p>
-                <p className="mt-1 text-sm text-[color:var(--text-muted)]">Create workspace</p>
+                <p className="mt-1 text-sm text-[color:var(--text-muted)]">Stripe checkout</p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-lg border brand-orange-border">
-                <Building2 className="h-4 w-4 brand-orange-text" />
+                <CreditCard className="h-4 w-4 brand-orange-text" />
               </div>
             </div>
 
@@ -281,12 +272,46 @@ export default function Signup() {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2 tracking-tight">
+                  Billing interval
+                </label>
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] p-1">
+                  {["monthly", "yearly"].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setBillingInterval(value)}
+                      className={`h-11 rounded-md text-sm font-semibold transition-colors ${
+                        interval === value
+                          ? "bg-[var(--primary)] text-[color:var(--primary-contrast)]"
+                          : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
+                      }`}
+                    >
+                      {value === "monthly" ? "Monthly" : "Yearly"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex items-start gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] p-4">
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(event) => setConsentAccepted(event.target.checked)}
+                  className="mt-1 h-4 w-4 accent-[var(--primary)]"
+                />
+                <span className="text-sm leading-6 text-[color:var(--text-muted)]">
+                  I authorize automatic billing after the free trial unless I cancel before it ends. I agree that Stripe may charge INR 1.00 now to verify my card and refund it automatically after confirmation.
+                </span>
+              </label>
+
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full h-16 inline-flex items-center justify-center gap-2 bg-[var(--primary)] text-[color:var(--primary-contrast)] rounded-lg text-[17px] font-semibold hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors"
               >
-                {loading ? "Creating workspace..." : (<>Create free trial <ArrowRight className="w-4 h-4" /></>)}
+                {loading ? "Opening Stripe..." : (<>Continue to Stripe <ArrowRight className="w-4 h-4" /></>)}
               </button>
             </form>
 
@@ -303,16 +328,10 @@ export default function Signup() {
                 <button
                   type="button"
                   onClick={handleGoogleSignup}
-                  disabled={googleLoading}
                   className="flex items-center justify-center gap-2.5 w-full h-16 bg-[var(--surface)] hover:bg-[var(--surface-soft)] border border-[color:var(--border)] hover:border-[color:var(--border-strong)] text-[color:var(--text)] rounded-lg text-[17px] font-medium transition-colors disabled:opacity-50"
                 >
-                  <svg width="16" height="16" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  </svg>
-                  {googleLoading ? "Opening Google..." : "Sign up with Google"}
+                  <Sparkles className="w-4 h-4 brand-orange-text" />
+                  Sign up with Google
                 </button>
               </>
             )}
