@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "../api";
 import ThemeSwitcher from "../components/ThemeSwitcher";
@@ -21,7 +21,19 @@ import { isCapacitor } from "../utils/native";
 
 const BACKEND_URL = API_BASE_URL;
 
+function loadRazorpayCheckout() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 export default function Signup() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [workspaceName, setWorkspaceName] = useState("");
@@ -55,6 +67,85 @@ export default function Signup() {
     });
     return `${BACKEND_URL}/auth/google?${params.toString()}`;
   }, [workspaceName, consentAccepted]);
+
+  const safePersistAuth = (user, token, refreshToken = null) => {
+    try {
+      const payload = { token, user, refreshToken };
+      localStorage.setItem("auth", JSON.stringify(payload));
+      try {
+        window.__AUTH_TOKEN__ = token;
+        window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || "GLOBAL";
+      } catch {}
+      window.dispatchEvent(new Event("auth:updated"));
+    } catch (err) {
+      console.warn("Failed to persist auth to localStorage:", err);
+    }
+  };
+
+  const completeSignup = (data) => {
+    const token = data?.token;
+    const user = data?.user;
+    if (!token || !user) throw new Error("Signup completed but the login token was missing.");
+
+    safePersistAuth(user, token, data.refreshToken || null);
+    toast.success("Workspace created. Your verification charge refund has been started.");
+    const slug = user?.workspace_slug;
+    const isProduction = window.location.hostname.endsWith("asystence.com");
+    if (slug && isProduction) {
+      const refreshParam = data.refreshToken ? `&_r=${encodeURIComponent(data.refreshToken)}` : "";
+      window.location.href = `https://${slug}.asystence.com/projects?_t=${encodeURIComponent(token)}${refreshParam}`;
+      return;
+    }
+    navigate("/projects", { replace: true });
+  };
+
+  const openRazorpaySignupCheckout = async (checkout) => {
+    const loaded = await loadRazorpayCheckout();
+    if (!loaded) throw new Error("Razorpay checkout could not be loaded. Please check your connection.");
+    if (!checkout?.keyId || !checkout?.subscriptionId) {
+      throw new Error("Razorpay checkout could not be started. Please try again.");
+    }
+
+    const pendingSignupId = checkout.notes?.pending_signup_id || checkout.pendingSignupId || null;
+    await new Promise((resolve, reject) => {
+      const options = {
+        key: checkout.keyId,
+        subscription_id: checkout.subscriptionId,
+        name: "Asystence",
+        description: `${checkout.trialDays || 7}-day Pro trial with refundable card verification`,
+        prefill: checkout.prefill || { name, email },
+        notes: {
+          pending_signup_id: pendingSignupId || "",
+          billing_plan: checkout.plan || "pro",
+          billing_interval: checkout.interval || interval,
+        },
+        theme: { color: "#ffa500" },
+        modal: {
+          ondismiss: () => reject(new Error("dismissed")),
+        },
+        handler: async (response) => {
+          try {
+            const { data } = await axios.post(`${API_BASE_URL}/auth/signup/workspace/complete/razorpay`, {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_subscription_id: response.razorpay_subscription_id,
+              razorpay_signature: response.razorpay_signature,
+              pendingSignupId,
+            });
+            completeSignup(data);
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (response) => {
+        reject(new Error(response.error?.description || "Payment failed. Please try another card."));
+      });
+      rzp.open();
+    });
+  };
 
   const validateRequired = () => {
     if (!workspaceName.trim()) {
@@ -94,13 +185,21 @@ export default function Signup() {
         interval,
         consentAccepted,
       });
+      if (res.data?.provider === "razorpay") {
+        await openRazorpaySignupCheckout(res.data);
+        return;
+      }
       if (res.data?.url) {
         window.location.assign(res.data.url);
         return;
       }
-      toast.error("Stripe checkout could not be started. Please try again.");
+      toast.error("Payment checkout could not be started. Please try again.");
     } catch (err) {
-      toast.error(err.response?.data?.error || "Could not create workspace");
+      if (err?.message === "dismissed") {
+        toast("Signup payment cancelled. Your workspace was not created.");
+      } else {
+        toast.error(err.response?.data?.error || err.message || "Could not create workspace");
+      }
     } finally {
       setLoading(false);
     }
@@ -146,7 +245,7 @@ export default function Signup() {
                 Card-required trial workspace
               </p>
               <h1 className="max-w-3xl text-[34px] sm:text-[44px] xl:text-[54px] font-semibold tracking-tight leading-[1.05] text-[color:var(--text)]">
-                Create your workspace after Stripe verifies the card.
+                Create your workspace after Razorpay verifies the card.
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-[color:var(--text-muted)]">
                 Start with one admin account, a 7-day Pro trial, and clear consent for automatic billing after the trial unless cancelled first.
@@ -157,7 +256,7 @@ export default function Signup() {
               {[
                 ["7 days", "Full feature trial"],
                 ["INR 1", "Refunded verification"],
-                ["Stripe", "Card billing consent"],
+                ["Razorpay", "Card billing consent"],
               ].map(([value, label]) => (
                 <div key={label} className="border border-[color:var(--border)] rounded-lg p-4">
                   <p className="text-lg font-semibold brand-orange-text">{value}</p>
@@ -172,7 +271,7 @@ export default function Signup() {
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[color:var(--text)]">Stripe-hosted checkout</p>
+                  <p className="text-sm font-semibold text-[color:var(--text)]">Razorpay-secured checkout</p>
                   <p className="text-xs text-[color:var(--text-muted)]">
                     The card verification charge is refunded automatically after confirmation, and billing can be cancelled before renewal.
                   </p>
@@ -190,7 +289,7 @@ export default function Signup() {
                 <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-soft)] font-semibold">
                   Start card trial
                 </p>
-                <p className="mt-1 text-sm text-[color:var(--text-muted)]">Stripe checkout</p>
+                <p className="mt-1 text-sm text-[color:var(--text-muted)]">Razorpay checkout</p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-lg border brand-orange-border">
                 <CreditCard className="h-4 w-4 brand-orange-text" />
@@ -302,7 +401,7 @@ export default function Signup() {
                   className="mt-1 h-4 w-4 accent-[var(--primary)]"
                 />
                 <span className="text-sm leading-6 text-[color:var(--text-muted)]">
-                  I authorize automatic billing after the free trial unless I cancel before it ends. I agree that Stripe may charge INR 1.00 now to verify my card and refund it automatically after confirmation.
+                  I authorize automatic billing after the free trial unless I cancel before it ends. I agree that Razorpay may charge INR 1.00 now to verify my card and refund it automatically after confirmation.
                 </span>
               </label>
 
@@ -311,7 +410,7 @@ export default function Signup() {
                 disabled={loading}
                 className="w-full h-16 inline-flex items-center justify-center gap-2 bg-[var(--primary)] text-[color:var(--primary-contrast)] rounded-lg text-[17px] font-semibold hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors"
               >
-                {loading ? "Opening Stripe..." : (<>Continue to Stripe <ArrowRight className="w-4 h-4" /></>)}
+                {loading ? "Opening Razorpay..." : (<>Continue to Razorpay <ArrowRight className="w-4 h-4" /></>)}
               </button>
             </form>
 
