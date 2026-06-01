@@ -102,7 +102,7 @@ export default function Signup() {
   const openRazorpaySignupCheckout = async (checkout) => {
     const loaded = await loadRazorpayCheckout();
     if (!loaded) throw new Error("Razorpay checkout could not be loaded. Please check your connection.");
-    if (!checkout?.keyId || !checkout?.subscriptionId) {
+    if (!checkout?.keyId || (!checkout?.subscriptionId && !checkout?.orderId)) {
       throw new Error("Razorpay checkout could not be started. Please try again.");
     }
 
@@ -110,9 +110,10 @@ export default function Signup() {
     await new Promise((resolve, reject) => {
       const options = {
         key: checkout.keyId,
-        subscription_id: checkout.subscriptionId,
         name: "Asystence",
         description: `${checkout.trialDays || 7}-day Pro trial with refundable card verification`,
+        amount: checkout.amount || checkout.verificationAmount,
+        currency: String(checkout.currency || "INR").toUpperCase(),
         prefill: checkout.prefill || { name, email },
         notes: {
           pending_signup_id: pendingSignupId || "",
@@ -128,6 +129,7 @@ export default function Signup() {
             const { data } = await axios.post(`${API_BASE_URL}/auth/signup/workspace/complete/razorpay`, {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_subscription_id: response.razorpay_subscription_id,
+              razorpay_order_id: response.razorpay_order_id,
               razorpay_signature: response.razorpay_signature,
               pendingSignupId,
             });
@@ -138,6 +140,8 @@ export default function Signup() {
           }
         },
       };
+      if (checkout.orderId) options.order_id = checkout.orderId;
+      else options.subscription_id = checkout.subscriptionId;
 
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (response) => {
