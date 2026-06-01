@@ -635,7 +635,6 @@ export default function WorkspaceBilling() {
           name:            "Asystence",
           description:     `${data.planName} — ${interval === "yearly" ? "Yearly" : "Monthly"}`,
           image:           "/logo.png",
-          currency:        "INR",
           prefill: {
             name:  data.prefill?.name  || user?.username || "",
             email: data.prefill?.email || user?.email    || "",

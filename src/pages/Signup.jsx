@@ -112,8 +112,6 @@ export default function Signup() {
         key: checkout.keyId,
         name: "Asystence",
         description: `${checkout.trialDays || 7}-day Pro trial with refundable card verification`,
-        amount: checkout.amount || checkout.verificationAmount,
-        currency: String(checkout.currency || "INR").toUpperCase(),
         prefill: checkout.prefill || { name, email },
         notes: {
           pending_signup_id: pendingSignupId || "",
@@ -140,8 +138,13 @@ export default function Signup() {
           }
         },
       };
-      if (checkout.orderId) options.order_id = checkout.orderId;
-      else options.subscription_id = checkout.subscriptionId;
+      if (checkout.orderId) {
+        options.order_id = checkout.orderId;
+        options.amount = checkout.amount || checkout.verificationAmount;
+        options.currency = String(checkout.currency || "INR").toUpperCase();
+      } else {
+        options.subscription_id = checkout.subscriptionId;
+      }
 
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (response) => {
