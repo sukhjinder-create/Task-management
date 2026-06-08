@@ -178,6 +178,21 @@ function countStreamTracks(stream) {
   return stream?.getTracks?.().length || 0;
 }
 
+function createIceCandidateFromSignal(data = {}) {
+  const raw = data?.candidate;
+  if (!raw) return null;
+
+  if (typeof raw === "string") {
+    return new RTCIceCandidate({
+      candidate: raw,
+      sdpMid: data.sdpMid ?? data.id ?? null,
+      sdpMLineIndex: data.sdpMLineIndex ?? data.label ?? null,
+    });
+  }
+
+  return new RTCIceCandidate(raw);
+}
+
 // Prefetch on module load so it's ready before the first call
 fetchIceConfig();
 
@@ -193,6 +208,7 @@ export function useMeshMediaProvider({ currentUser }) {
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [subtitles, setSubtitles] = useState({});
+  const [error, setError] = useState("");
 
   const peerConnectionsRef = useRef({});
   const remoteStreamsRef = useRef({});
@@ -214,11 +230,13 @@ export function useMeshMediaProvider({ currentUser }) {
   const userRef = useRef(currentUser);
   const inCallRef = useRef(false);
   const startingRef = useRef(false);
+  const remotePeersRef = useRef([]);
   const initLocalMediaPromiseRef = useRef(null);
   const providerMetricsRef = useRef(createInitialMeshMetrics());
 
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
   useEffect(() => { inCallRef.current = inCall; }, [inCall]);
+  useEffect(() => { remotePeersRef.current = remotePeers; }, [remotePeers]);
 
   const mediaStateV2 = useMemo(() => buildMeshMediaStateV2({
     currentUser,
@@ -427,6 +445,9 @@ export function useMeshMediaProvider({ currentUser }) {
         inboundStreamsRef.current[uid].addTrack(event.track);
         stream = inboundStreamsRef.current[uid];
       }
+      if (event.track) {
+        event.track.onended = () => markRemotePeerReconnecting(uid);
+      }
       if (stream) updateRemotePeerStream(uid, stream);
     };
 
@@ -561,6 +582,7 @@ export function useMeshMediaProvider({ currentUser }) {
     if (!socket) return;
 
     try {
+      setError("");
       await initLocalMedia();
       const pc = createPeerConnection(uid);
       if (!pc) return;
@@ -568,7 +590,7 @@ export function useMeshMediaProvider({ currentUser }) {
 
       setRemotePeers(prev => {
         if (prev.find(p => String(p.userId) === uid)) return prev;
-        return [...prev, { userId: uid, username: peerUsername || "", stream: remoteStreamsRef.current[uid] || null, isMuted: false, isCameraOff: false, isScreenSharing: false }];
+        return [...prev, { userId: uid, username: peerUsername || "", stream: remoteStreamsRef.current[uid] || null, isMuted: false, isCameraOff: false, isScreenSharing: false, connectionState: "connecting" }];
       });
 
       const offer = await pc.createOffer();
@@ -581,9 +603,55 @@ export function useMeshMediaProvider({ currentUser }) {
         data: { type: "offer", sdp: offer.sdp, fromUsername: userRef.current?.username || "" },
       });
     } catch (err) {
+      setError(err?.name === "NotAllowedError"
+        ? "Camera or microphone permission was blocked."
+        : "Could not start Huddle media.");
       console.error("[huddle] sendOffer error for", uid, ":", err);
     }
   }, [createPeerConnection, initLocalMedia]);
+
+  const requestMeshResync = useCallback(async () => {
+    if (!inCallRef.current || !channelIdRef.current || !huddleIdRef.current) return;
+    const socket = getSocketSafe();
+    if (!socket?.connected) return;
+
+    socket.emit("huddle:join", {
+      channelId: channelIdRef.current,
+      huddleId: huddleIdRef.current,
+    });
+
+    const peerIds = new Set([
+      ...remotePeersRef.current.map((peer) => String(peer.userId)),
+      ...Object.keys(peerConnectionsRef.current),
+      ...Object.keys(remoteStreamsRef.current),
+    ]);
+
+    for (const peerId of peerIds) {
+      if (!peerId || peerId === String(userRef.current?.id || "")) continue;
+      await sendOffer(
+        peerId,
+        remotePeersRef.current.find((peer) => String(peer.userId) === peerId)?.username
+      );
+    }
+  }, [sendOffer]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return undefined;
+
+    const handleOnline = () => {
+      requestMeshResync();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") requestMeshResync();
+    };
+
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [requestMeshResync]);
 
   // ── Start call ──────────────────────────────────────────────────────────────
   const startCall = useCallback(async () => {
@@ -605,6 +673,7 @@ export function useMeshMediaProvider({ currentUser }) {
     setConnecting(true);
     inCallRef.current = true;
     setInCall(true);
+    setError("");
 
     socket.emit("huddle:join", {
       channelId: channelIdRef.current,
@@ -615,6 +684,9 @@ export function useMeshMediaProvider({ currentUser }) {
       await initLocalMedia();
     } catch (err) {
       console.error("[huddle] media access failed:", err.message);
+      setError(err?.name === "NotAllowedError"
+        ? "Camera or microphone permission was blocked."
+        : "Could not start Huddle media.");
       providerMetricsRef.current.failures = [
         ...providerMetricsRef.current.failures.slice(-49),
         {
@@ -1015,7 +1087,7 @@ export function useMeshMediaProvider({ currentUser }) {
             const fromUsername = data.fromUsername || "";
             setRemotePeers((prev) => {
               if (prev.find((p) => String(p.userId) === peerId)) return prev;
-              return [...prev, { userId: fromUserId, username: fromUsername, stream: remoteStreamsRef.current[peerId] || null, isMuted: false, isCameraOff: false, isScreenSharing: false }];
+              return [...prev, { userId: fromUserId, username: fromUsername, stream: remoteStreamsRef.current[peerId] || null, isMuted: false, isCameraOff: false, isScreenSharing: false, connectionState: "connecting" }];
             });
 
             await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: data.sdp }));
@@ -1038,7 +1110,8 @@ export function useMeshMediaProvider({ currentUser }) {
             }
 
           } else if (type === "candidate" && data.candidate) {
-            const candidate = new RTCIceCandidate(data.candidate);
+            const candidate = createIceCandidateFromSignal(data);
+            if (!candidate) return;
             if (pc.remoteDescription) {
               try { await pc.addIceCandidate(candidate); } catch { /* Ignore stale ICE candidates from the existing mesh flow. */ }
             } else {
@@ -1181,6 +1254,7 @@ export function useMeshMediaProvider({ currentUser }) {
     toggleSubtitles,
     activeSpeakerId,
     networkQuality,
+    error,
     mediaStateV2,
     diagnostics: mediaStateV2.diagnostics,
     startRecording,

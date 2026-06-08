@@ -160,9 +160,9 @@ export function HuddleProvider({ children }) {
     if (incomingHuddle.huddleId) call.setHuddleId(incomingHuddle.huddleId);
     activeHuddleRef.current = incomingHuddle;
     incomingHuddleRef.current = null;
-    setActiveHuddle(incomingHuddle);
+    publishActiveHuddle(incomingHuddle);
     setIncomingHuddle(null);
-  }, [incomingHuddle, call]);
+  }, [incomingHuddle, call, publishActiveHuddle]);
 
   // ---------------------------
   // Decline incoming huddle invite — notify initiator via socket
@@ -238,7 +238,7 @@ export function HuddleProvider({ children }) {
     networkQuality: call.networkQuality,
     joined: call.inCall,
     connecting: call.connecting,
-    error: "",
+    error: call.error || "",
     toggleMute: call.toggleMic,
     toggleCamera: call.toggleCamera,
     startScreenShare: call.startScreenShare,

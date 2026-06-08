@@ -306,6 +306,11 @@ export default function GlobalHuddleWindow() {
 
       {/* ── VIDEO AREA ────────────────────────────────────────────────────── */}
       <div className="flex-1 relative bg-[#0f111a] overflow-hidden min-h-0" style={{ height: videoAreaH }}>
+        {rtc?.error && (
+          <div className="absolute top-2 left-2 right-2 z-30 rounded-md border border-red-400/40 bg-red-950/85 px-3 py-2 text-xs text-red-100 shadow-lg">
+            {rtc.error}
+          </div>
+        )}
         {isOneOnOne ? (
           /* ── WhatsApp-style 1-on-1 ── */
           <>
