@@ -22,7 +22,7 @@ const STATUS_META = {
   completed:    { label: "Completed",   color: "#22c55e" },
   stage:        { label: "Stage",       color: "#a855f7" },
 };
-const FALLBACK_COLORS = ["#ffa500", "#ec4899", "#06b6d4", "#ef4444"];
+const FALLBACK_COLORS = ["#f97316", "#ec4899", "#06b6d4", "#ef4444"];
 
 function getStatusMeta(key, idx = 0) {
   const base = STATUS_META[key] || {};
@@ -502,7 +502,7 @@ export default function Reports() {
       {/* ── KPI CARDS ── */}
       {report && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KpiCard icon={BarChart2}    label="Total Tasks"   value={summary.total ?? 0}       accentColor="#ffa500" />
+          <KpiCard icon={BarChart2}    label="Total Tasks"   value={summary.total ?? 0}       accentColor="#f97316" />
           <KpiCard icon={CheckCircle2} label="Completed"     value={summary.completed ?? 0}   sub={`${completionPct}% completion rate`} accentColor="#22c55e" />
           <KpiCard icon={Clock}        label="In Progress"   value={summary.in_progress ?? 0} accentColor="#3b82f6" />
           <KpiCard icon={AlertCircle}  label="Overdue"       value={summary.overdue ?? 0}     accentColor="#ef4444" />

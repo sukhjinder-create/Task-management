@@ -305,7 +305,7 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
           description: `Activate ${selected.length} user${selected.length > 1 ? "s" : ""} — ${cost.proRatedDays} days`,
           prefill:  { name: user?.username || "", email: user?.email || "" },
           notes:    { type: "user_activation" },
-          theme:    { color: "#ffa500" },
+          theme:    { color: "#f97316" },
           modal: {
             ondismiss: () => {
               toast("Activation cancelled.", { icon: "ℹ️" });
@@ -640,7 +640,7 @@ export default function WorkspaceBilling() {
             email: data.prefill?.email || user?.email    || "",
           },
           notes: { plan: data.planSlug, interval },
-          theme: { color: "#ffa500" },
+          theme: { color: "#f97316" },
           modal: {
             ondismiss: () => {
               toast("Checkout cancelled. You can try again anytime.", { icon: "ℹ️" });

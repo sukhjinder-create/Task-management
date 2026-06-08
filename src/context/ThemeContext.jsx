@@ -4,7 +4,7 @@ const ThemeContext = createContext(null);
 
 const STORAGE_KEY = "app_theme";
 const BRAND_VERSION_KEY = "app_theme_brand_version";
-const BRAND_THEME_VERSION = "dark-orange-2026-06";
+const BRAND_THEME_VERSION = "vivid-orange-2026-06-08";
 const THEME_OPTIONS = [
   "system",
   "light",

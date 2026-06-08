@@ -118,7 +118,7 @@ export default function Signup() {
           billing_plan: checkout.plan || "pro",
           billing_interval: checkout.interval || interval,
         },
-        theme: { color: "#ffa500" },
+        theme: { color: "#f97316" },
         modal: {
           ondismiss: () => reject(new Error("dismissed")),
         },

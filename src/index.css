@@ -214,12 +214,12 @@ optgroup,
   --text: #0a0a0b;
   --text-muted: #52525b;
   --text-soft: #71717a;
-  --brand-orange: #ffa500;
-  --primary: #ffa500;
-  --primary-hover: #ffb733;
-  --primary-soft: rgba(255, 165, 0, 0.08);
+  --brand-orange: #f97316;
+  --primary: #ea580c;
+  --primary-hover: #f97316;
+  --primary-soft: rgba(234, 88, 12, 0.08);
   --primary-contrast: #ffffff;
-  --ring: rgba(255, 165, 0, 0.30);
+  --ring: rgba(234, 88, 12, 0.30);
   --score-good: #16a34a;
   --score-good-bg: color-mix(in srgb, var(--score-good) 10%, var(--surface));
   --score-good-border: color-mix(in srgb, var(--score-good) 28%, var(--border));
@@ -300,12 +300,12 @@ html[data-theme="dark"] {
   --text: #e7e7ea;
   --text-muted: #8e8e96;
   --text-soft: #5a5a62;
-  --brand-orange: #ffa500;
-  --primary: #ffa500;
-  --primary-hover: #ffb733;
-  --primary-soft: transparent;
+  --brand-orange: #f97316;
+  --primary: #f97316;
+  --primary-hover: #fb923c;
+  --primary-soft: rgba(249, 115, 22, 0.12);
   --primary-contrast: #0a0a0b;
-  --ring: rgba(255, 165, 0, 0.42);
+  --ring: rgba(249, 115, 22, 0.45);
   --score-good: #22c55e;
   --score-good-bg: transparent;
   --score-good-border: var(--border);
@@ -328,11 +328,11 @@ html[data-theme="dark"] {
   --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text);
   --sidebar-hover: var(--surface-soft);
-  --sidebar-active: var(--surface-soft);
+  --sidebar-active: color-mix(in srgb, var(--primary) 14%, var(--sidebar-bg));
   --sidebar-badge: var(--primary);
   --sidebar-badge-text: var(--primary-contrast);
   --sidebar-icon-bg: var(--surface-soft);
-  --sidebar-icon-active-bg: var(--surface-soft);
+  --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 18%, var(--sidebar-bg));
   --sidebar-input-bg: var(--surface-soft);
   --sidebar-footer-bg: var(--sidebar-bg);
   --sidebar-toggle-off: var(--surface-strong);
@@ -379,12 +379,12 @@ html[data-theme="system"] {
   --text: #0a0a0b;
   --text-muted: #52525b;
   --text-soft: #71717a;
-  --brand-orange: #ffa500;
-  --primary: #ffa500;
-  --primary-hover: #ffb733;
-  --primary-soft: rgba(255, 165, 0, 0.08);
+  --brand-orange: #f97316;
+  --primary: #ea580c;
+  --primary-hover: #f97316;
+  --primary-soft: rgba(234, 88, 12, 0.08);
   --primary-contrast: #ffffff;
-  --ring: rgba(255, 165, 0, 0.30);
+  --ring: rgba(234, 88, 12, 0.30);
   --score-good: #16a34a;
   --score-good-bg: color-mix(in srgb, var(--score-good) 10%, var(--surface));
   --score-good-border: color-mix(in srgb, var(--score-good) 28%, var(--border));
@@ -452,19 +452,19 @@ html[data-theme="system"] {
     --text: #e7e7ea;
     --text-muted: #8e8e96;
     --text-soft: #5a5a62;
-    --brand-orange: #ffa500;
-    --primary: #ffa500;
-    --primary-hover: #ffb733;
-    --primary-soft: transparent;
+    --brand-orange: #f97316;
+    --primary: #f97316;
+    --primary-hover: #fb923c;
+    --primary-soft: rgba(249, 115, 22, 0.12);
     --primary-contrast: #0a0a0b;
-    --ring: rgba(255, 165, 0, 0.42);
+    --ring: rgba(249, 115, 22, 0.45);
     --score-good: #22c55e;
     --score-warning: #f59e0b;
     --score-danger: #ef4444;
     --sidebar-bg: #0a0a0b;
     --sidebar-border: #1c1c20;
-    --sidebar-active: var(--surface-soft);
-    --sidebar-icon-active-bg: var(--surface-soft);
+    --sidebar-active: color-mix(in srgb, var(--primary) 14%, var(--sidebar-bg));
+    --sidebar-icon-active-bg: color-mix(in srgb, var(--primary) 18%, var(--sidebar-bg));
     --shadow-xs: 0 1px 0 rgba(0,0,0,0.4);
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
     --shadow-md: 0 4px 16px rgba(0,0,0,0.55);
@@ -567,17 +567,17 @@ html[data-theme="sunset"] {
   --text: #e9e4e1;
   --text-muted: #a6938a;
   --text-soft: #786a5e;
-  --brand-orange: #ffa500;
-  --primary: #ffa500;
-  --primary-hover: #ffb733;
-  --primary-soft: rgba(255, 165, 0, 0.12);
+  --brand-orange: #f97316;
+  --primary: #f97316;
+  --primary-hover: #fb923c;
+  --primary-soft: rgba(249, 115, 22, 0.12);
   --primary-contrast: #100a08;
-  --ring: rgba(255, 165, 0, 0.42);
+  --ring: rgba(249, 115, 22, 0.45);
   --score-good: #22c55e; --score-warning: #f59e0b; --score-danger: #ef4444;
   --sidebar-bg: #100a08; --sidebar-border: #1a120e;
   --sidebar-text: var(--text-soft); --sidebar-text-muted: var(--text-muted);
   --sidebar-text-active: var(--text); --sidebar-hover: var(--surface-soft);
-  --sidebar-active: var(--surface-soft);
+  --sidebar-active: color-mix(in srgb, var(--primary) 16%, var(--sidebar-bg));
   --sidebar-badge: var(--primary); --sidebar-badge-text: var(--primary-contrast);
   --sidebar-icon-bg: var(--surface-soft);
   --sidebar-icon-active-bg: var(--surface-soft);
@@ -1225,18 +1225,10 @@ html[data-theme="dark"] [class*="bg-[color:var(--score-good-bg)]"],
 html[data-theme="dark"] [class*="bg-[color:var(--score-warning-bg)]"],
 html[data-theme="dark"] [class*="bg-[color:var(--score-danger-bg)]"],
 html[data-theme="dark"] [class*="bg-[color:var(--overdue-bg)]"],
-html[data-theme="dark"] [class*="bg-[color:var(--danger-bg)]"],
-html[data-theme="dark"] [class*="bg-[var(--primary-soft)]"],
-html[data-theme="dark"] [class*="bg-[color:var(--primary-soft)]"] {
+html[data-theme="dark"] [class*="bg-[color:var(--danger-bg)]"] {
   background-color: transparent !important;
 }
 
-/* Tailwind alpha-modifier patterns (e.g. bg-[color:var(--primary)]/10).
-   These bypass CSS variables entirely — kill them in dark mode so
-   no tinted fills leak through. Borders and text are unaffected. */
-html[data-theme="dark"] [class*="bg-[color:var(--primary)]/"] {
-  background-color: transparent !important;
-}
 
 /* Keep legacy Tailwind orange utilities aligned with the brand token.
    Amber stays untouched for warnings/status states. */
@@ -1257,19 +1249,19 @@ html[data-theme="dark"] [class*="bg-[color:var(--primary)]/"] {
 }
 
 .brand-orange-text {
-  color: var(--brand-orange, #ffa500) !important;
+  color: var(--brand-orange, #f97316) !important;
 }
 .brand-orange-bg {
-  background-color: var(--brand-orange, #ffa500) !important;
+  background-color: var(--brand-orange, #f97316) !important;
 }
 .brand-orange-border {
-  border-color: var(--brand-orange, #ffa500) !important;
+  border-color: var(--brand-orange, #f97316) !important;
 }
 .brand-orange-fill {
-  fill: var(--brand-orange, #ffa500) !important;
+  fill: var(--brand-orange, #f97316) !important;
 }
 .brand-orange-stroke {
-  stroke: var(--brand-orange, #ffa500) !important;
+  stroke: var(--brand-orange, #f97316) !important;
 }
 
 
@@ -1310,3 +1302,4 @@ html[data-theme="dark"] [class*="bg-[color:var(--primary)]/"] {
 input, textarea, select {
   font-size: inherit;
 }
+
