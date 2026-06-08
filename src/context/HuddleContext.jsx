@@ -8,6 +8,38 @@ import toast from "react-hot-toast";
 const HuddleContext = createContext(null);
 const ACTIVE_HUDDLE_STORAGE_KEY = "asystence.activeHuddle.v1";
 const ACTIVE_HUDDLE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const HUDDLE_PROVIDER_LIVEKIT = "livekit";
+const HUDDLE_PROVIDER_MESH = "mesh";
+
+function safeString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function providerFromProviderLock(providerLock = {}) {
+  const lock = providerLock || {};
+  const provider = safeString(
+    lock.effectiveProvider ||
+    lock.lockedProvider ||
+    lock.providerType ||
+    lock.selectedProvider ||
+    lock.provider
+  ).toLowerCase();
+  return provider === HUDDLE_PROVIDER_LIVEKIT || provider === HUDDLE_PROVIDER_MESH
+    ? provider
+    : null;
+}
+
+function normalizeHuddleProvider(value) {
+  const provider = safeString(value).toLowerCase();
+  return provider === HUDDLE_PROVIDER_LIVEKIT || provider === HUDDLE_PROVIDER_MESH
+    ? provider
+    : null;
+}
+
+function providerJoinOptions(huddle = {}) {
+  const provider = normalizeHuddleProvider(huddle.provider);
+  return provider ? { provider } : {};
+}
 
 function readStoredActiveHuddle(userId) {
   if (typeof window === "undefined" || !userId) return null;
@@ -110,6 +142,7 @@ export function HuddleProvider({ children }) {
       channelId: activeHuddle.channelId,
       huddleId: activeHuddle.huddleId,
       sessionId: activeHuddle.sessionId || activeHuddle.huddleId,
+      ...providerJoinOptions(activeHuddle),
     });
   }, [activeHuddle?.huddleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -310,6 +343,9 @@ export function HuddleProvider({ children }) {
         const huddleData = {
           huddleId: payload.huddleId,
           channelId: payload.channelId,
+          sessionId: payload.sessionId || payload.mediaSessionId || payload.huddleSessionId || payload.huddleId,
+          provider: providerFromProviderLock(payload.providerLock) || normalizeHuddleProvider(payload.provider),
+          providerLock: payload.providerLock || null,
           startedBy: { userId: startedById, username: startedByName },
           at: payload.at,
         };
@@ -380,7 +416,7 @@ export function HuddleProvider({ children }) {
         socket.emit("huddle:sync");
         const huddle = activeHuddleRef.current;
         if (huddle?.channelId && huddle?.huddleId) {
-          emitJoinHuddle(huddle.channelId, huddle.huddleId);
+          emitJoinHuddle(huddle.channelId, huddle.huddleId, providerJoinOptions(huddle));
         }
       };
       syncHuddle();

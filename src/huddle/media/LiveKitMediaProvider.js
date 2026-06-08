@@ -93,6 +93,39 @@ function safeMetadata(value) {
   return typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function isProviderIdentity(value) {
+  const identity = safeString(value).toLowerCase();
+  return (
+    identity.startsWith("livekit:") ||
+    identity.includes(":workspace:") ||
+    identity.includes(":huddle:")
+  );
+}
+
+function safeHumanName(...values) {
+  for (const value of values) {
+    const displayName = safeString(value);
+    if (displayName && !isProviderIdentity(displayName)) {
+      return displayName.slice(0, 80);
+    }
+  }
+  return "";
+}
+
+function providerIdentitySegment(identity, segment) {
+  const parts = safeString(identity).split(":");
+  const index = parts.findIndex((part) => part === segment);
+  return index >= 0 ? safeString(parts[index + 1]) || null : null;
+}
+
+function userIdFromProviderIdentity(identity) {
+  return providerIdentitySegment(identity, "user");
+}
+
+function deviceIdFromProviderIdentity(identity) {
+  return providerIdentitySegment(identity, "device");
+}
+
 function resolveLocalWorkspaceId({ currentUser = null, workspaceId = null } = {}) {
   return (
     safeString(workspaceId) ||
@@ -171,7 +204,7 @@ function streamIdFromPublication(publication = {}) {
   );
 }
 
-function mediaStreamFromPublications(publications = []) {
+function mediaStreamFromPublications(publications = [], cacheKey = null, streamCache = null) {
   if (typeof MediaStream === "undefined") return null;
   const mediaTracks = [];
   const seen = new Set();
@@ -184,30 +217,57 @@ function mediaStreamFromPublications(publications = []) {
     mediaTracks.push(track);
   });
 
-  return mediaTracks.length ? new MediaStream(mediaTracks) : null;
+  if (!mediaTracks.length) {
+    if (cacheKey && streamCache?.delete) streamCache.delete(cacheKey);
+    return null;
+  }
+
+  const trackKey = mediaTracks
+    .map((track, index) => `${safeString(track.kind) || "track"}:${safeString(track.id) || index}`)
+    .sort()
+    .join("|");
+  const cached = cacheKey && streamCache?.get ? streamCache.get(cacheKey) : null;
+  if (cached?.trackKey === trackKey && cached?.stream) return cached.stream;
+
+  const stream = new MediaStream(mediaTracks);
+  if (cacheKey && streamCache?.set) {
+    streamCache.set(cacheKey, { trackKey, stream });
+  }
+  return stream;
 }
 
-function liveKitLocalStream(room) {
-  return mediaStreamFromPublications(uniqueTrackPublications(room?.localParticipant));
+function liveKitLocalStream(room, streamCache = null) {
+  return mediaStreamFromPublications(
+    uniqueTrackPublications(room?.localParticipant),
+    "local",
+    streamCache
+  );
 }
 
-function liveKitRemoteStream(participant = {}) {
+function liveKitRemoteStream(participant = {}, streamCache = null) {
   const subscribedPublications = uniqueTrackPublications(participant).filter((publication) => (
     publication.isSubscribed === true ||
     Boolean(publication.track) ||
     Boolean(mediaStreamTrackFromPublication(publication))
   ));
-  return mediaStreamFromPublications(subscribedPublications);
+  return mediaStreamFromPublications(
+    subscribedPublications,
+    `remote:${participantIdentity(participant)}:${safeString(participant.sid) || "unknown"}`,
+    streamCache
+  );
 }
 
 function liveKitParticipantUsername(participant = {}) {
   const metadata = safeMetadata(participant.metadata);
   return (
-    safeString(participant.name) ||
-    safeString(metadata.username) ||
-    safeString(metadata.name) ||
-    safeString(participant.identity) ||
-    ""
+    safeHumanName(
+      participant.name,
+      metadata.displayName,
+      metadata.username,
+      metadata.name,
+      metadata.userName
+    ) ||
+    "Teammate"
   );
 }
 
@@ -243,11 +303,11 @@ function liveKitParticipantScreenSharing(participant = {}) {
   );
 }
 
-export function createLiveKitRemotePeers(remoteParticipants = []) {
+export function createLiveKitRemotePeers(remoteParticipants = [], streamCache = null) {
   return (remoteParticipants || []).map((participant) => createRemotePeerState({
     userId: participantIdentity(participant),
     username: liveKitParticipantUsername(participant),
-    stream: liveKitRemoteStream(participant),
+    stream: liveKitRemoteStream(participant, streamCache),
     isMuted: liveKitParticipantMuted(participant),
     isCameraOff: liveKitParticipantCameraOff(participant),
     isScreenSharing: liveKitParticipantScreenSharing(participant),
@@ -496,11 +556,12 @@ function connectionStateFromRoomState(roomState) {
 function participantIdentity(participant = {}) {
   const metadata = safeMetadata(participant.metadata);
   return (
-    safeString(participant.identity) ||
-    safeString(participant.sid) ||
     safeString(participant.participantId) ||
     safeString(participant.userId) ||
     safeString(metadata.participantId) ||
+    safeString(metadata.userId) ||
+    userIdFromProviderIdentity(participant.identity) ||
+    safeString(participant.sid) ||
     "unknown"
   );
 }
@@ -514,7 +575,12 @@ export function createLiveKitProviderIdentityMapping({
   identityKind = null,
 } = {}) {
   const metadata = safeMetadata(participant.metadata);
-  const resolvedUserId = safeString(userId) || safeString(participant.userId) || safeString(metadata.userId) || null;
+  const resolvedUserId =
+    safeString(userId) ||
+    safeString(participant.userId) ||
+    safeString(metadata.userId) ||
+    userIdFromProviderIdentity(participant.identity) ||
+    null;
   const resolvedGuestId = safeString(guestId) || safeString(participant.guestId) || safeString(metadata.guestId) || null;
   const resolvedKind =
     safeString(identityKind) ||
@@ -528,7 +594,8 @@ export function createLiveKitProviderIdentityMapping({
     safeString(deviceId) ||
     safeString(participant.deviceId) ||
     safeString(metadata.deviceId) ||
-    `livekit:${participantId}:device`;
+    deviceIdFromProviderIdentity(participant.identity) ||
+    `${participantId}:device`;
 
   return {
     provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
@@ -967,9 +1034,7 @@ export function adaptLiveKitParticipant({
       participantId,
       userId,
       username:
-        safeString(participant.name) ||
-        safeString(metadata.username) ||
-        "",
+        liveKitParticipantUsername(participant),
       isLocal,
       devices: [deviceId],
       tracks: tracks.map((track) => track.trackId),
@@ -1186,6 +1251,7 @@ export function useLiveKitMediaProvider({
   const huddleIdRef = useRef(null);
   const connectedRoomRef = useRef(null);
   const providerMetricsRef = useRef(createInitialLiveKitMetrics());
+  const streamCacheRef = useRef(new Map());
   const [connectedRoom, setConnectedRoom] = useState(null);
   const [connectionResult, setConnectionResult] = useState(null);
   const [publicationDiagnostics, setPublicationDiagnostics] = useState(null);
@@ -1245,12 +1311,15 @@ export function useLiveKitMediaProvider({
   [activeSpeakerDiagnostics, canary, connectedRoom, connectionPlan, connectionResult, networkQualityDiagnostics, resolvedWorkspaceId, roomState, sdkDiagnostics, revision]);
   const localStream = useMemo(() => {
     void revision;
-    return liveKitLocalStream(connectedRoom);
+    return liveKitLocalStream(connectedRoom, streamCacheRef.current);
   }, [connectedRoom, revision]);
   const remotePeers = useMemo(
     () => {
       void revision;
-      return createLiveKitRemotePeers(remoteParticipantsFromRoom(connectedRoom));
+      return createLiveKitRemotePeers(
+        remoteParticipantsFromRoom(connectedRoom),
+        streamCacheRef.current
+      );
     },
     [connectedRoom, revision]
   );
@@ -1356,6 +1425,7 @@ export function useLiveKitMediaProvider({
     const disconnected = () => {
       metrics.roomEndedAt = metricNow();
       recordAndBump("disconnected");
+      streamCacheRef.current.clear();
       setConnectedRoom(null);
       connectedRoomRef.current = null;
     };
@@ -1516,6 +1586,7 @@ export function useLiveKitMediaProvider({
         ...createInitialLiveKitMetrics(),
         joinStartedAt: metricNow(),
       };
+      streamCacheRef.current.clear();
       let result = await connectLiveKitRoom({
         canary,
         workspaceId: resolvedWorkspaceId,
@@ -1600,6 +1671,7 @@ export function useLiveKitMediaProvider({
     providerMetricsRef.current.roomEndedAt = metricNow();
     recordMetricTransition(providerMetricsRef.current, "leaveCall");
     connectedRoomRef.current = null;
+    streamCacheRef.current.clear();
     setConnectedRoom(null);
     setPublicationDiagnostics(null);
     setScreenShareDiagnostics(null);

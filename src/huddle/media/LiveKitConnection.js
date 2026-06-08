@@ -29,6 +29,31 @@ function safeString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function createLiveKitRoomOptions(sdk = {}) {
+  const videoPresets = sdk.VideoPresets || {};
+  const layers = [
+    videoPresets.h180,
+    videoPresets.h360,
+    videoPresets.h720 || videoPresets.h540,
+  ].filter(Boolean);
+  const h720Resolution =
+    videoPresets.h720?.resolution ||
+    videoPresets.h540?.resolution ||
+    { width: 1280, height: 720, frameRate: 30 };
+
+  return {
+    adaptiveStream: true,
+    dynacast: true,
+    videoCaptureDefaults: {
+      resolution: h720Resolution,
+    },
+    publishDefaults: {
+      simulcast: true,
+      videoSimulcastLayers: layers,
+    },
+  };
+}
+
 function createDisabledRoomDiagnostic({
   workspaceId = null,
   sessionId = null,
@@ -310,10 +335,8 @@ export async function connectLiveKitRoom(params = {}) {
   }
 
   try {
-    const liveKitRoom = new prepared.sdk.Room({
-      adaptiveStream: true,
-      dynacast: true,
-    });
+    const roomOptions = createLiveKitRoomOptions(prepared.sdk);
+    const liveKitRoom = new prepared.sdk.Room(roomOptions);
     const connectStartedAt = metricNow();
     await liveKitRoom.connect(liveKitUrl, token);
     const connectLatencyMs = elapsedMs(connectStartedAt);
@@ -353,6 +376,10 @@ export async function connectLiveKitRoom(params = {}) {
         connection: {
           state: liveKitRoom.state || HUDDLE_MEDIA_CONNECTION_STATES.joined,
           roomName: tokenDescriptor.liveKit.roomName,
+          adaptiveStream: roomOptions.adaptiveStream,
+          dynacast: roomOptions.dynacast,
+          videoCaptureResolution: roomOptions.videoCaptureDefaults?.resolution || null,
+          simulcastLayerCount: roomOptions.publishDefaults?.videoSimulcastLayers?.length || 0,
         },
       },
     };
