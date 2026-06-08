@@ -2282,15 +2282,6 @@ useEffect(() => {
     const huddleId = createUniqueId("huddle");
     startHuddle(activeChannelKey, huddleId);
 
-    if (setActiveHuddle) {
-      setActiveHuddle({
-        channelId: activeChannelKey,
-        huddleId,
-        startedBy: { userId: user.id, username: user.username },
-        at: new Date().toISOString(),
-      });
-    }
-
   };
 
   const handleToggleReaction = (messageId, emoji) => {
