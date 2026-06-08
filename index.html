@@ -2,7 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png" href="/asystence-logo.png?v=dark-orange-2026-06" />
+    <link rel="apple-touch-icon" href="/asystence-logo.png?v=dark-orange-2026-06" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0a0b" />
     <meta name="color-scheme" content="dark light" />
@@ -11,9 +12,15 @@
     <script>
       (function () {
         try {
+          var brandVersion = 'dark-orange-2026-06';
+          var storedVersion = localStorage.getItem('app_theme_brand_version');
           var stored = localStorage.getItem('app_theme');
           var allowed = ['system','light','dark','ocean','forest','sunset','yellow'];
-          var theme = allowed.indexOf(stored) !== -1 ? stored : 'dark';
+          var theme = storedVersion === brandVersion && allowed.indexOf(stored) !== -1 ? stored : 'dark';
+          if (storedVersion !== brandVersion) {
+            localStorage.setItem('app_theme', 'dark');
+            localStorage.setItem('app_theme_brand_version', brandVersion);
+          }
           document.documentElement.setAttribute('data-theme', theme);
           document.documentElement.style.colorScheme =
             theme === 'system' ? 'light dark' :

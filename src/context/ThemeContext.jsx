@@ -3,6 +3,8 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 const ThemeContext = createContext(null);
 
 const STORAGE_KEY = "app_theme";
+const BRAND_VERSION_KEY = "app_theme_brand_version";
+const BRAND_THEME_VERSION = "dark-orange-2026-06";
 const THEME_OPTIONS = [
   "system",
   "light",
@@ -28,6 +30,12 @@ function resolveTheme(theme) {
 
 function readInitialTheme() {
   try {
+    const storedVersion = localStorage.getItem(BRAND_VERSION_KEY);
+    if (storedVersion !== BRAND_THEME_VERSION) {
+      localStorage.setItem(STORAGE_KEY, "dark");
+      localStorage.setItem(BRAND_VERSION_KEY, BRAND_THEME_VERSION);
+      return "dark";
+    }
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && THEME_OPTIONS.includes(stored)) return stored;
   } catch {}
@@ -42,6 +50,7 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, theme);
+      localStorage.setItem(BRAND_VERSION_KEY, BRAND_THEME_VERSION);
     } catch {}
   }, [theme]);
 
