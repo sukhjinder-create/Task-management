@@ -64,10 +64,11 @@ function useMutedVideoRef(stream, shouldMute) {
 }
 
 // ── Single video tile ────────────────────────────────────────────────────────
-function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false, compact = false }) {
+function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false, compact = false, connectionState = "connected" }) {
   const { setRef } = useMutedVideoRef(stream, isLocal);
   const initials = (name || "?")[0].toUpperCase();
   const showAvatar = !stream || isCameraOff;
+  const reconnecting = connectionState === "reconnecting";
 
   return (
     <div
@@ -88,7 +89,7 @@ function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal
           <div className={`rounded-full bg-slate-600 flex items-center justify-center font-semibold text-white ${compact ? "w-10 h-10 text-base" : "w-16 h-16 text-2xl"}`}>
             {initials}
           </div>
-          {!compact && <span className="text-slate-400 text-xs">{name || "User"}</span>}
+          {!compact && <span className="text-slate-400 text-xs">{reconnecting ? "Reconnecting..." : (name || "User")}</span>}
         </div>
       )}
 
@@ -173,11 +174,11 @@ export default function GlobalHuddleWindow() {
   // 1-on-1 mode: one remote peer — use WhatsApp-style layout
   const isOneOnOne = remotePeers.length === 1;
   const remoteParticipant = isOneOnOne
-    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, isMuted: remotePeers[0].isMuted, isCameraOff: remotePeers[0].isCameraOff, isLocal: false }
+    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, isMuted: remotePeers[0].isMuted, isCameraOff: remotePeers[0].isCameraOff, connectionState: remotePeers[0].connectionState, isLocal: false }
     : null;
 
   // Grid layout for group calls
-  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, isMuted: p.isMuted, isCameraOff: p.isCameraOff, isLocal: false }))];
+  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, isMuted: p.isMuted, isCameraOff: p.isCameraOff, connectionState: p.connectionState, isLocal: false }))];
   const count = participants.length;
   const gridCols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
 
@@ -305,6 +306,11 @@ export default function GlobalHuddleWindow() {
 
       {/* ── VIDEO AREA ────────────────────────────────────────────────────── */}
       <div className="flex-1 relative bg-[#0f111a] overflow-hidden min-h-0" style={{ height: videoAreaH }}>
+        {rtc?.error && (
+          <div className="absolute top-2 left-2 right-2 z-30 rounded-md border border-red-400/40 bg-red-950/85 px-3 py-2 text-xs text-red-100 shadow-lg">
+            {rtc.error}
+          </div>
+        )}
         {isOneOnOne ? (
           /* ── WhatsApp-style 1-on-1 ── */
           <>
@@ -317,6 +323,7 @@ export default function GlobalHuddleWindow() {
                 isCameraOff={remoteParticipant.isCameraOff}
                 isLocal={false}
                 isActiveSpeaker={activeSpeakerId === remoteParticipant.userId}
+                connectionState={remoteParticipant.connectionState}
               />
             </div>
 
@@ -354,6 +361,7 @@ export default function GlobalHuddleWindow() {
                 isCameraOff={p.isCameraOff}
                 isLocal={p.isLocal}
                 isActiveSpeaker={activeSpeakerId === (p.isLocal ? "local" : p.userId)}
+                connectionState={p.connectionState}
               />
             ))}
           </div>

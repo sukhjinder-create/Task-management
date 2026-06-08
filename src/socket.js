@@ -1,4 +1,10 @@
 import { io } from "socket.io-client";
+import { resolveLiveKitCanaryConfig } from "./huddle/media/LiveKitCanary";
+import { createWebHuddleClientCapabilities } from "./huddle/media/clientCapabilities";
+import {
+  HUDDLE_MEDIA_PROVIDER_LIVEKIT,
+  HUDDLE_MEDIA_PROVIDER_MESH,
+} from "./huddle/media/mediaState";
 
 let socket = null;
 
@@ -155,16 +161,44 @@ export function sendReaction(payload) {
    HUDDLE
 ------------------------------------------------- */
 
-export function startHuddle(channelId, huddleId) {
-  socket?.emit("huddle:start", { channelId, huddleId });
+function createHuddleMediaSocketPayload(options = {}) {
+  const requestedProvider = options.provider || options.providerType || null;
+  const canary = resolveLiveKitCanaryConfig({
+    requestedProvider,
+    workspaceId: options.workspaceId || window.__WORKSPACE_ID__ || null,
+  });
+  const provider = canary.providerCanActivate
+    ? HUDDLE_MEDIA_PROVIDER_LIVEKIT
+    : HUDDLE_MEDIA_PROVIDER_MESH;
+
+  if (provider !== HUDDLE_MEDIA_PROVIDER_LIVEKIT) return {};
+
+  const clientCapabilities = createWebHuddleClientCapabilities({ provider });
+  return {
+    provider,
+    platform: clientCapabilities.platform,
+    clientCapabilities,
+  };
+}
+
+export function startHuddle(channelId, huddleId, options = {}) {
+  socket?.emit("huddle:start", {
+    channelId,
+    huddleId,
+    ...createHuddleMediaSocketPayload(options),
+  });
 }
 
 export function endHuddle(channelId, huddleId) {
   socket?.emit("huddle:end", { channelId, huddleId });
 }
 
-export function joinHuddle(channelId, huddleId) {
-  socket?.emit("huddle:join", { channelId, huddleId });
+export function joinHuddle(channelId, huddleId, options = {}) {
+  socket?.emit("huddle:join", {
+    channelId,
+    huddleId,
+    ...createHuddleMediaSocketPayload(options),
+  });
 }
 
 export function leaveHuddle(channelId, huddleId) {
