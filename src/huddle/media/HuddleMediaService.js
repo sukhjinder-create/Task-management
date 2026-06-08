@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { joinHuddle as emitJoinHuddle } from "../../socket";
 import { useMeshMediaProvider } from "./MeshMediaProvider";
 import { assertMediaProviderContract } from "./MediaProvider";
 import {
@@ -143,7 +144,14 @@ export function useHuddleMediaService({
   const liveKitCanaryProvider = useMemo(() => {
     const startCall = async (params = {}) => {
       const result = await liveKitProvider.startCall(params);
-      if (result?.ok) return result;
+      if (result?.ok) {
+        const channelId = safeString(params.channelId);
+        const huddleId = safeString(params.huddleId);
+        if (channelId && huddleId) {
+          emitJoinHuddle(channelId, huddleId, { provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT });
+        }
+        return result;
+      }
 
       if (!selection.canFallbackToMesh) return result;
 

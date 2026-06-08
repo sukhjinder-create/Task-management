@@ -1,7 +1,7 @@
 // src/context/HuddleContext.jsx
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useHuddleCall } from "../hooks/useHuddleCall";
-import { getSocket } from "../socket";
+import { getSocket, joinHuddle as emitJoinHuddle } from "../socket";
 import { useAuth } from "./AuthContext";
 import toast from "react-hot-toast";
 
@@ -106,7 +106,11 @@ export function HuddleProvider({ children }) {
     }
     if (joinedHuddleRef.current === activeHuddle.huddleId) return;
     joinedHuddleRef.current = activeHuddle.huddleId;
-    call.startCall();
+    call.startCall({
+      channelId: activeHuddle.channelId,
+      huddleId: activeHuddle.huddleId,
+      sessionId: activeHuddle.sessionId || activeHuddle.huddleId,
+    });
   }, [activeHuddle?.huddleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
@@ -376,10 +380,7 @@ export function HuddleProvider({ children }) {
         socket.emit("huddle:sync");
         const huddle = activeHuddleRef.current;
         if (huddle?.channelId && huddle?.huddleId) {
-          socket.emit("huddle:join", {
-            channelId: huddle.channelId,
-            huddleId: huddle.huddleId,
-          });
+          emitJoinHuddle(huddle.channelId, huddle.huddleId);
         }
       };
       syncHuddle();

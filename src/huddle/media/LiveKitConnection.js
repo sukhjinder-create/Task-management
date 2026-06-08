@@ -4,6 +4,7 @@ import {
   HUDDLE_MEDIA_PROVIDER_MESH,
 } from "./mediaState";
 import api from "../../api";
+import { createWebHuddleClientCapabilities } from "./clientCapabilities";
 import {
   LIVEKIT_SDK_STATUSES,
   createLiveKitSdkDiagnostics,
@@ -153,6 +154,9 @@ async function fetchLiveKitRoomDescriptor({
   workspaceId,
   deviceId,
 } = {}) {
+  const clientCapabilities = createWebHuddleClientCapabilities({
+    provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
+  });
   const { data } = await api.post("/huddle/media/livekit/room", {
     provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
     channelId,
@@ -160,6 +164,8 @@ async function fetchLiveKitRoomDescriptor({
     sessionId,
     workspaceId,
     deviceId,
+    platform: clientCapabilities.platform,
+    clientCapabilities,
   });
   return data;
 }
@@ -172,6 +178,9 @@ async function fetchLiveKitToken({
   deviceId,
   providerRoomId,
 } = {}) {
+  const clientCapabilities = createWebHuddleClientCapabilities({
+    provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
+  });
   const { data } = await api.post("/huddle/media/livekit/token", {
     provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
     channelId,
@@ -180,6 +189,8 @@ async function fetchLiveKitToken({
     workspaceId,
     deviceId,
     providerRoomId,
+    platform: clientCapabilities.platform,
+    clientCapabilities,
   });
   return data;
 }
