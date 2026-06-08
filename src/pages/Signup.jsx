@@ -112,6 +112,7 @@ export default function Signup() {
         key: checkout.keyId,
         name: "Asystence",
         description: `${checkout.trialDays || 7}-day Pro trial with refundable card verification`,
+        image: "/asystence-logo.png",
         prefill: checkout.prefill || { name, email },
         notes: {
           pending_signup_id: pendingSignupId || "",

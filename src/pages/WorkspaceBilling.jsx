@@ -303,6 +303,7 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
           currency: "INR",
           name:     "Asystence",
           description: `Activate ${selected.length} user${selected.length > 1 ? "s" : ""} — ${cost.proRatedDays} days`,
+          image:    "/asystence-logo.png",
           prefill:  { name: user?.username || "", email: user?.email || "" },
           notes:    { type: "user_activation" },
           theme:    { color: "#f97316" },
@@ -634,7 +635,7 @@ export default function WorkspaceBilling() {
           subscription_id: data.subscriptionId,
           name:            "Asystence",
           description:     `${data.planName} — ${interval === "yearly" ? "Yearly" : "Monthly"}`,
-          image:           "/logo.png",
+          image:           "/asystence-logo.png",
           prefill: {
             name:  data.prefill?.name  || user?.username || "",
             email: data.prefill?.email || user?.email    || "",
