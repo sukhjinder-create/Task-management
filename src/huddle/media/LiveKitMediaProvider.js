@@ -76,6 +76,18 @@ export const LIVEKIT_MEDIA_PUBLICATION_REASONS = Object.freeze({
 
 const noop = () => {};
 
+const LIVEKIT_CAMERA_CAPTURE_OPTIONS = Object.freeze({
+  resolution: {
+    width: 1280,
+    height: 720,
+    frameRate: 30,
+  },
+});
+
+const LIVEKIT_CAMERA_PUBLISH_OPTIONS = Object.freeze({
+  simulcast: true,
+});
+
 function safeString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -178,6 +190,32 @@ function uniqueTrackPublications(participant = {}) {
   );
 }
 
+function publicationTrackKind(publication = {}) {
+  return safeString(
+    publication.kind ||
+    publication.track?.kind ||
+    publication.track?.mediaStreamTrack?.kind ||
+    publication.mediaStreamTrack?.kind
+  ).toLowerCase();
+}
+
+function displayPublicationPriority(publication = {}) {
+  const source = trackSource(publication);
+  const kind = publicationTrackKind(publication);
+  if (kind === "audio") return 30;
+  if (source === HUDDLE_MEDIA_TRACK_SOURCES.screen) return 0;
+  if (source === HUDDLE_MEDIA_TRACK_SOURCES.camera) return 10;
+  return 20;
+}
+
+function displayTrackPublications(participant = {}) {
+  return uniqueTrackPublications(participant).sort((a, b) => {
+    const priorityDiff = displayPublicationPriority(a) - displayPublicationPriority(b);
+    if (priorityDiff !== 0) return priorityDiff;
+    return publicationKey(a).localeCompare(publicationKey(b));
+  });
+}
+
 function mediaTrackFromPublication(publication = {}) {
   return (
     publication.track?.mediaStreamTrack ||
@@ -238,14 +276,14 @@ function mediaStreamFromPublications(publications = [], cacheKey = null, streamC
 
 function liveKitLocalStream(room, streamCache = null) {
   return mediaStreamFromPublications(
-    uniqueTrackPublications(room?.localParticipant),
+    displayTrackPublications(room?.localParticipant),
     "local",
     streamCache
   );
 }
 
 function liveKitRemoteStream(participant = {}, streamCache = null) {
-  const subscribedPublications = uniqueTrackPublications(participant).filter((publication) => (
+  const subscribedPublications = displayTrackPublications(participant).filter((publication) => (
     publication.isSubscribed === true ||
     Boolean(publication.track) ||
     Boolean(mediaStreamTrackFromPublication(publication))
@@ -776,7 +814,11 @@ export async function publishInitialLiveKitMedia(room) {
 
   try {
     const cameraStartedAt = metricNow();
-    const cameraPublication = await room?.localParticipant?.setCameraEnabled?.(true);
+    const cameraPublication = await room?.localParticipant?.setCameraEnabled?.(
+      true,
+      LIVEKIT_CAMERA_CAPTURE_OPTIONS,
+      LIVEKIT_CAMERA_PUBLISH_OPTIONS
+    );
     diagnostics.camera = {
       ok: Boolean(cameraPublication || room?.localParticipant?.isCameraEnabled),
       published: Boolean(cameraPublication || room?.localParticipant?.isCameraEnabled),
@@ -1724,7 +1766,11 @@ export function useLiveKitMediaProvider({
 
     const nextEnabled = !(room.localParticipant.isCameraEnabled ?? true);
     try {
-      const publication = await room.localParticipant.setCameraEnabled(nextEnabled);
+      const publication = await room.localParticipant.setCameraEnabled(
+        nextEnabled,
+        nextEnabled ? LIVEKIT_CAMERA_CAPTURE_OPTIONS : undefined,
+        nextEnabled ? LIVEKIT_CAMERA_PUBLISH_OPTIONS : undefined
+      );
       setPublicationDiagnostics((previous) => ({
         ...(previous || {}),
         cameraToggle: {
@@ -1844,6 +1890,7 @@ export function useLiveKitMediaProvider({
     micEnabled,
     camEnabled,
     screenSharing,
+    subtitlesSupported: false,
     subtitlesEnabled: false,
     subtitles: {},
     activeSpeakerId,

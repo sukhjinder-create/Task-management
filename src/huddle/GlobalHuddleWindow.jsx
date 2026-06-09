@@ -27,6 +27,48 @@ function useCallTimer(startedAt) {
 // property) but does NOT add the `muted` HTML attribute to the DOM. Android
 // WebView checks the HTML attribute specifically when deciding whether to allow
 // autoplay — without it the video is treated as unmuted → autoplay blocked.
+// Viewport helpers keep the mobile call window and controls inside the screen.
+function getViewportSize() {
+  if (typeof window === "undefined") return { w: 390, h: 844 };
+  const visualViewport = window.visualViewport;
+  return {
+    w: Math.round(visualViewport?.width || window.innerWidth || 390),
+    h: Math.round(visualViewport?.height || window.innerHeight || 844),
+  };
+}
+
+function isMobileViewport() {
+  return getViewportSize().w < 768;
+}
+
+function getFullWindowLayout() {
+  const viewport = getViewportSize();
+  return { pos: { x: 0, y: 0 }, size: { w: viewport.w, h: viewport.h } };
+}
+
+function getMobileCompactLayout() {
+  const viewport = getViewportSize();
+  const w = Math.min(Math.max(300, viewport.w - 16), 380);
+  const h = Math.min(Math.max(280, Math.round(viewport.h * 0.42)), viewport.h - 16);
+  return {
+    pos: {
+      x: Math.max(8, viewport.w - w - 8),
+      y: Math.max(8, viewport.h - h - 8),
+    },
+    size: { w, h },
+  };
+}
+
+function clampWindowLayout(pos, size, { reserveBottom = 8 } = {}) {
+  const viewport = getViewportSize();
+  const maxX = Math.max(0, viewport.w - size.w);
+  const maxY = Math.max(0, viewport.h - size.h - reserveBottom);
+  return {
+    x: Math.min(Math.max(0, pos.x), maxX),
+    y: Math.min(Math.max(0, pos.y), maxY),
+  };
+}
+
 function useMutedVideoRef(stream, shouldMute) {
   const ref = useRef(null);
   const streamRef = useRef(stream);
@@ -107,17 +149,18 @@ function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal
 }
 
 // ── Control button ────────────────────────────────────────────────────────────
-function CtrlBtn({ onClick, title, active = false, danger = false, wide = false, children }) {
+function CtrlBtn({ onClick, title, active = false, danger = false, wide = false, disabled = false, children }) {
   const isMob = typeof window !== "undefined" && window.innerWidth < 768;
   let cls = "flex items-center justify-center rounded-full transition-colors font-medium ";
-  if (wide) cls += `gap-2 px-5 ${isMob ? "h-14 text-base" : "h-11 text-sm"} `;
-  else cls += isMob ? "w-14 h-14 " : "w-11 h-11 ";
-  if (danger) cls += "bg-red-600 active:bg-red-500 text-white";
+  if (wide) cls += `gap-2 ${isMob ? "h-12 px-3 text-sm min-w-0" : "h-11 px-5 text-sm"} `;
+  else cls += isMob ? "w-12 h-12 shrink-0 " : "w-11 h-11 ";
+  if (disabled) cls += "bg-slate-800 text-slate-500 cursor-not-allowed opacity-60";
+  else if (danger) cls += "bg-red-600 active:bg-red-500 text-white";
   else if (active) cls += "bg-blue-600 active:bg-blue-500 text-white";
   else cls += "bg-slate-700 active:bg-slate-600 text-white";
 
   return (
-    <button type="button" onClick={onClick} title={title} className={cls}>
+    <button type="button" onClick={onClick} title={title} className={cls} disabled={disabled}>
       {children}
     </button>
   );
@@ -136,22 +179,38 @@ export default function GlobalHuddleWindow() {
   const activeSpeakerId = rtc?.activeSpeakerId;
   const networkQuality = rtc?.networkQuality || "good";
 
-  // On mobile, always start full-screen
-  const isMobileDevice = typeof window !== "undefined" && window.innerWidth < 768;
-  const [isMaximized, setIsMaximized] = useState(isMobileDevice);
-  const [pos, setPos] = useState(isMobileDevice ? { x: 0, y: 0 } : { x: 200, y: 120 });
-  const [size, setSize] = useState(
-    isMobileDevice
-      ? { w: window.innerWidth, h: window.innerHeight }
-      : { w: 620, h: 440 }
-  );
-  // On mobile, keep size in sync with window (handles keyboard open/close)
+  const [isMobileDevice, setIsMobileDevice] = useState(() => isMobileViewport());
+  const [isMaximized, setIsMaximized] = useState(() => isMobileViewport());
+  const [pos, setPos] = useState(() => (
+    isMobileViewport() ? getFullWindowLayout().pos : { x: 200, y: 120 }
+  ));
+  const [size, setSize] = useState(() => (
+    isMobileViewport() ? getFullWindowLayout().size : { w: 620, h: 440 }
+  ));
+
   useEffect(() => {
-    if (!isMobileDevice) return;
-    const sync = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    const sync = () => {
+      const nextMobile = isMobileViewport();
+      setIsMobileDevice(nextMobile);
+      if (isMaximized) {
+        const full = getFullWindowLayout();
+        setPos(full.pos);
+        setSize(full.size);
+      } else if (nextMobile) {
+        const compact = getMobileCompactLayout();
+        setPos(compact.pos);
+        setSize(compact.size);
+      } else {
+        setPos((current) => clampWindowLayout(current, size, { reserveBottom: 40 }));
+      }
+    };
     window.addEventListener("resize", sync);
-    return () => window.removeEventListener("resize", sync);
-  }, [isMobileDevice]);
+    window.visualViewport?.addEventListener?.("resize", sync);
+    return () => {
+      window.removeEventListener("resize", sync);
+      window.visualViewport?.removeEventListener?.("resize", sync);
+    };
+  }, [isMaximized, size]);
 
   const windowRef = useRef(null);
   const dragging = useRef(false);
@@ -191,14 +250,13 @@ export default function GlobalHuddleWindow() {
 
   const onMouseMove = useCallback((e) => {
     if (dragging.current) {
-      const maxX = Math.max(0, window.innerWidth - size.w);
-      const maxY = Math.max(0, window.innerHeight - size.h - 40);
-      setPos({
-        x: Math.min(Math.max(0, e.clientX - dragOffset.current.x), maxX),
-        y: Math.min(Math.max(0, e.clientY - dragOffset.current.y), maxY),
-      });
+      setPos(clampWindowLayout(
+        { x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y },
+        size,
+        { reserveBottom: isMobileDevice ? 8 : 40 }
+      ));
     }
-    if (resizing.current) {
+    if (resizing.current && !isMobileDevice) {
       const dx = e.clientX - resizeStart.current.x;
       const dy = e.clientY - resizeStart.current.y;
       setSize({
@@ -206,7 +264,7 @@ export default function GlobalHuddleWindow() {
         h: Math.max(320, resizeStart.current.h + dy),
       });
     }
-  }, [size.w, size.h]);
+  }, [isMobileDevice, size]);
 
   const onMouseUp = useCallback(() => {
     dragging.current = false;
@@ -214,7 +272,7 @@ export default function GlobalHuddleWindow() {
   }, []);
 
   const onMouseDownResize = (e) => {
-    if (isMaximized) return;
+    if (isMaximized || isMobileDevice) return;
     e.stopPropagation();
     resizing.current = true;
     resizeStart.current = { w: size.w, h: size.h, x: e.clientX, y: e.clientY };
@@ -233,12 +291,20 @@ export default function GlobalHuddleWindow() {
   const toggleMaximize = () => {
     if (!isMaximized) {
       prevSizeRef.current = { pos: { ...pos }, size: { ...size } };
-      setPos({ x: 0, y: 0 });
-      setSize({ w: window.innerWidth, h: window.innerHeight });
+      const full = getFullWindowLayout();
+      setPos(full.pos);
+      setSize(full.size);
       setIsMaximized(true);
     } else {
+      if (isMobileDevice) {
+        const compact = getMobileCompactLayout();
+        setPos(compact.pos);
+        setSize(compact.size);
+        setIsMaximized(false);
+        return;
+      }
       const prev = prevSizeRef.current;
-      setPos(prev.pos || { x: 200, y: 120 });
+      setPos(prev.pos ? clampWindowLayout(prev.pos, prev.size || { w: 620, h: 440 }, { reserveBottom: 40 }) : { x: 200, y: 120 });
       setSize(prev.size || { w: 620, h: 440 });
       setIsMaximized(false);
     }
@@ -246,9 +312,17 @@ export default function GlobalHuddleWindow() {
 
   useEffect(() => {
     if (!isMaximized) return;
-    const onResize = () => { setSize({ w: window.innerWidth, h: window.innerHeight }); setPos({ x: 0, y: 0 }); };
+    const onResize = () => {
+      const full = getFullWindowLayout();
+      setSize(full.size);
+      setPos(full.pos);
+    };
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.visualViewport?.addEventListener?.("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener?.("resize", onResize);
+    };
   }, [isMaximized]);
 
   // Don't show video tiles while there is a pending incoming call to accept/decline
@@ -258,7 +332,10 @@ export default function GlobalHuddleWindow() {
   const netColor = { good: "text-green-400", ok: "text-yellow-400", poor: "text-red-400" }[networkQuality];
   const netLabel = { good: "●", ok: "◑", poor: "○" }[networkQuality];
 
-  const videoAreaH = size.h - 108; // header ~44px + controls ~64px
+  const subtitlesSupported =
+    rtc?.subtitlesSupported !== false &&
+    typeof rtc?.toggleSubtitles === "function";
+  const videoAreaH = Math.max(120, size.h - (isMobileDevice ? 132 : 108));
 
   return (
     <div
@@ -388,7 +465,9 @@ export default function GlobalHuddleWindow() {
 
       {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
       <div
-        className="w-full bg-[#1b1e27] py-4 px-6 flex justify-center items-center gap-4 shrink-0"
+        className={`w-full bg-[#1b1e27] flex justify-center items-center shrink-0 ${
+          isMobileDevice ? "py-3 px-3 gap-2 flex-wrap" : "py-4 px-6 gap-4"
+        }`}
         style={{
           borderRadius: isMaximized ? 0 : "0 0 0.75rem 0.75rem",
           paddingBottom: isMobileDevice
@@ -431,9 +510,14 @@ export default function GlobalHuddleWindow() {
 
         {/* CC / Live subtitles */}
         <CtrlBtn
-          onClick={() => rtc?.toggleSubtitles?.()}
-          title={rtc?.subtitlesEnabled ? "Turn off subtitles" : "Turn on live subtitles"}
+          onClick={() => subtitlesSupported && rtc?.toggleSubtitles?.()}
+          title={
+            subtitlesSupported
+              ? (rtc?.subtitlesEnabled ? "Turn off subtitles" : "Turn on live subtitles")
+              : "Live subtitles are not available for this call"
+          }
           active={rtc?.subtitlesEnabled}
+          disabled={!subtitlesSupported}
         >
           <Captions size={18} />
         </CtrlBtn>
@@ -456,7 +540,7 @@ export default function GlobalHuddleWindow() {
             wide
           >
             <PhoneOff size={16} />
-            <span>End for all</span>
+            <span className="whitespace-nowrap">End for all</span>
           </CtrlBtn>
         ) : (
           <CtrlBtn
@@ -466,13 +550,13 @@ export default function GlobalHuddleWindow() {
             wide
           >
             <PhoneOff size={16} />
-            <span>Leave</span>
+            <span className="whitespace-nowrap">Leave</span>
           </CtrlBtn>
         )}
       </div>
 
       {/* ── RESIZE HANDLE ─────────────────────────────────────────────────── */}
-      {!isMaximized && (
+      {!isMaximized && !isMobileDevice && (
         <div
           onMouseDown={onMouseDownResize}
           className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize opacity-40 hover:opacity-80 transition-opacity"

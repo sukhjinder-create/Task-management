@@ -284,6 +284,7 @@ export function HuddleProvider({ children }) {
     leaveHuddle: call.leaveCall,
     muteAll: call.muteAll,
     endHuddleForAll,
+    subtitlesSupported: call.subtitlesSupported !== false,
     subtitlesEnabled: call.subtitlesEnabled,
     subtitles: call.subtitles,
     toggleSubtitles: call.toggleSubtitles,
@@ -295,7 +296,7 @@ export function HuddleProvider({ children }) {
     call.toggleMic, call.toggleCamera,
     call.startScreenShare, call.stopScreenShare,
     call.startCall, call.leaveCall, call.muteAll,
-    call.subtitlesEnabled, call.subtitles, call.toggleSubtitles,
+    call.subtitlesSupported, call.subtitlesEnabled, call.subtitles, call.toggleSubtitles,
     endHuddleForAll,
   ]);
 
