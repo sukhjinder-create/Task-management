@@ -11,6 +11,16 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || "";
 const PEER_RECONNECT_GRACE_MS = 20000;
 
+function browserSupportsScreenShare() {
+  return typeof navigator !== "undefined" &&
+    Boolean(navigator.mediaDevices?.getDisplayMedia);
+}
+
+function browserSupportsSpeechRecognition() {
+  return typeof window !== "undefined" &&
+    Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
 // Fetch ICE servers (STUN + TURN) from backend once at module load.
 // This avoids rebuilding the APK when TURN credentials change.
 let cachedRtcConfig = null;
@@ -852,13 +862,16 @@ export function useMeshMediaProvider({ currentUser }) {
 
   // ── Screen share ────────────────────────────────────────────────────────────
   const startScreenShare = useCallback(async () => {
-    if (screenSharing) return;
+    if (screenSharing) return { ok: true, reason: "screen_share_already_active" };
+    if (!browserSupportsScreenShare()) {
+      return { ok: false, reason: "screen_share_not_supported" };
+    }
     const socket = getSocketSafe();
-    if (!socket) return;
+    if (!socket) return { ok: false, reason: "socket_unavailable" };
     try {
       const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const screenTrack = displayStream.getVideoTracks()[0];
-      if (!screenTrack) return;
+      if (!screenTrack) return { ok: false, reason: "screen_track_unavailable" };
       screenTrackRef.current = screenTrack;
       Object.values(peerConnectionsRef.current).forEach((pc) => {
         const sender = pc.getSenders().find((s) => s.track?.kind === "video");
@@ -875,8 +888,14 @@ export function useMeshMediaProvider({ currentUser }) {
       if (channelIdRef.current) {
         socket.emit("huddle:screen-start", { channelId: channelIdRef.current });
       }
+      return { ok: true, reason: "screen_share_started" };
     } catch (err) {
       console.error("[huddle] startScreenShare error:", err);
+      return {
+        ok: false,
+        reason: "screen_share_failed",
+        message: String(err?.message || "").slice(0, 160) || null,
+      };
     }
   }, [screenSharing]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1243,6 +1262,8 @@ export function useMeshMediaProvider({ currentUser }) {
     micEnabled,
     camEnabled,
     screenSharing,
+    screenShareSupported: browserSupportsScreenShare(),
+    subtitlesSupported: browserSupportsSpeechRecognition(),
     subtitlesEnabled,
     subtitles,
     startCall,

@@ -4,6 +4,10 @@ import {
   createLiveKitConnectionPlan,
   disconnectLiveKitRoom,
 } from "./LiveKitConnection";
+import {
+  createLiveTranscriptionClient,
+  liveTranscriptionSupported,
+} from "./LiveTranscriptionClient";
 import api from "../../api";
 import { getCachedLiveKitSdkDiagnostics } from "./LiveKitSdk";
 import {
@@ -281,6 +285,12 @@ function liveKitLocalStream(room, streamCache = null) {
     "local",
     streamCache
   );
+}
+
+function liveKitLocalAudioTrack(room) {
+  return displayTrackPublications(room?.localParticipant)
+    .map((publication) => mediaStreamTrackFromPublication(publication))
+    .find((track) => track?.kind === "audio" && track.readyState !== "ended") || null;
 }
 
 function liveKitRemoteStream(participant = {}, streamCache = null) {
@@ -1529,10 +1539,14 @@ export function useLiveKitMediaProvider({
   const latestNetworkStatsRef = useRef({});
   const qualityStatsPreviousRef = useRef(new Map());
   const qualityPostInFlightRef = useRef(false);
+  const transcriptionClientRef = useRef(null);
   const [connectedRoom, setConnectedRoom] = useState(null);
   const [connectionResult, setConnectionResult] = useState(null);
   const [publicationDiagnostics, setPublicationDiagnostics] = useState(null);
   const [screenShareDiagnostics, setScreenShareDiagnostics] = useState(null);
+  const [transcriptionDiagnostics, setTranscriptionDiagnostics] = useState(null);
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
+  const [subtitles, setSubtitles] = useState({});
   const [networkStatsByParticipant, setNetworkStatsByParticipant] = useState({});
   const [connecting, setConnecting] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -1745,6 +1759,73 @@ export function useLiveKitMediaProvider({
     };
   }, [connectedRoom, connectionPlan.room?.providerRoomId, connectionResult?.connection?.roomName, resolvedWorkspaceId]);
 
+  const stopLiveTranscription = useCallback(() => {
+    try {
+      transcriptionClientRef.current?.stop?.();
+    } catch {
+      // Best effort cleanup.
+    }
+    transcriptionClientRef.current = null;
+    setSubtitlesEnabled(false);
+    setTranscriptionDiagnostics((previous) => ({
+      ...(previous || {}),
+      status: "stopped",
+      observedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  const toggleSubtitles = useCallback(async () => {
+    if (transcriptionClientRef.current || subtitlesEnabled) {
+      stopLiveTranscription();
+      return { ok: true, enabled: false };
+    }
+
+    const room = connectedRoomRef.current || connectedRoom;
+    const sessionId = sessionIdRef.current || huddleIdRef.current;
+    const audioTrack = liveKitLocalAudioTrack(room);
+    if (!room || !sessionId) {
+      return { ok: false, reason: "livekit_not_connected" };
+    }
+    if (!liveTranscriptionSupported()) {
+      return { ok: false, reason: "live_transcription_not_supported" };
+    }
+    if (!audioTrack) {
+      return { ok: false, reason: "microphone_track_required" };
+    }
+
+    const client = createLiveTranscriptionClient({
+      sessionId,
+      audioTrack,
+      language: "en-US",
+      onCaption: (caption) => {
+        setSubtitles((previous) => ({
+          ...previous,
+          local: caption,
+        }));
+      },
+      onDiagnostics: setTranscriptionDiagnostics,
+    });
+    transcriptionClientRef.current = client;
+
+    try {
+      await client.start();
+      setSubtitlesEnabled(true);
+      return { ok: true, enabled: true };
+    } catch (error) {
+      transcriptionClientRef.current = null;
+      setSubtitlesEnabled(false);
+      setTranscriptionDiagnostics({
+        status: "failed",
+        reason: safeString(error?.response?.data?.reason || error?.message) || "live_transcription_start_failed",
+        observedAt: new Date().toISOString(),
+      });
+      return {
+        ok: false,
+        reason: safeString(error?.response?.data?.reason || error?.message) || "live_transcription_start_failed",
+      };
+    }
+  }, [connectedRoom, stopLiveTranscription, subtitlesEnabled]);
+
   useEffect(() => {
     if (!connectedRoom?.on) return undefined;
     const metrics = providerMetricsRef.current;
@@ -1757,6 +1838,7 @@ export function useLiveKitMediaProvider({
       metrics.roomEndedAt = metricNow();
       recordAndBump("disconnected");
       streamCacheRef.current.clear();
+      stopLiveTranscription();
       setConnectedRoom(null);
       connectedRoomRef.current = null;
     };
@@ -1888,7 +1970,7 @@ export function useLiveKitMediaProvider({
         connectedRoom.off?.(eventName, handler);
       });
     };
-  }, [connectedRoom]);
+  }, [connectedRoom, stopLiveTranscription]);
 
   const startCall = useCallback(async (params = {}) => {
     if (connecting || connectedRoomRef.current) {
@@ -2004,6 +2086,7 @@ export function useLiveKitMediaProvider({
     }
     providerMetricsRef.current.roomEndedAt = metricNow();
     recordMetricTransition(providerMetricsRef.current, "leaveCall");
+    stopLiveTranscription();
     connectedRoomRef.current = null;
     streamCacheRef.current.clear();
     setConnectedRoom(null);
@@ -2013,10 +2096,11 @@ export function useLiveKitMediaProvider({
     latestNetworkStatsRef.current = {};
     qualityStatsPreviousRef.current.clear();
     sessionIdRef.current = null;
+    setSubtitles({});
     const result = disconnectLiveKitRoom();
     setConnectionResult(result);
     return result;
-  }, []);
+  }, [stopLiveTranscription]);
   const toggleMic = useCallback(async () => {
     const room = connectedRoomRef.current;
     if (!room?.localParticipant?.setMicrophoneEnabled) {
@@ -2190,9 +2274,9 @@ export function useLiveKitMediaProvider({
       typeof navigator !== "undefined" &&
       navigator.mediaDevices?.getDisplayMedia
     ),
-    subtitlesSupported: false,
-    subtitlesEnabled: false,
-    subtitles: {},
+    subtitlesSupported: Boolean(connectedRoom && liveTranscriptionSupported()),
+    subtitlesEnabled,
+    subtitles,
     activeSpeakerId,
     networkQuality,
     mediaStateV2,
@@ -2203,6 +2287,7 @@ export function useLiveKitMediaProvider({
         connectionResult: connectionResult?.diagnostics || null,
         publication: publicationDiagnostics,
         screenShare: screenShareDiagnostics,
+        transcription: transcriptionDiagnostics,
         activeSpeaker: activeSpeakerDiagnostics,
         networkQuality: networkQualityDiagnostics,
         providerMetrics,
@@ -2215,7 +2300,7 @@ export function useLiveKitMediaProvider({
     toggleCamera,
     startScreenShare,
     stopScreenShare,
-    toggleSubtitles: noop,
+    toggleSubtitles,
     startRecording: noop,
     stopRecording: noop,
     muteAll: noop,
