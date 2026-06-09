@@ -271,6 +271,7 @@ export function HuddleProvider({ children }) {
     isMuted: !call.micEnabled,
     isCameraOff: !call.camEnabled,
     isScreenSharing: call.screenSharing,
+    screenShareSupported: call.screenShareSupported !== false,
     activeSpeakerId: call.activeSpeakerId,
     networkQuality: call.networkQuality,
     joined: call.inCall,
@@ -290,7 +291,7 @@ export function HuddleProvider({ children }) {
     toggleSubtitles: call.toggleSubtitles,
   }), [
     call.localStream, call.remotePeers,
-    call.micEnabled, call.camEnabled, call.screenSharing,
+    call.micEnabled, call.camEnabled, call.screenSharing, call.screenShareSupported,
     call.activeSpeakerId, call.networkQuality,
     call.inCall, call.connecting,
     call.toggleMic, call.toggleCamera,

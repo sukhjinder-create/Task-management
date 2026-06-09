@@ -187,6 +187,17 @@ export default function GlobalHuddleWindow() {
   const [size, setSize] = useState(() => (
     isMobileViewport() ? getFullWindowLayout().size : { w: 620, h: 440 }
   ));
+  const [pendingControl, setPendingControl] = useState(null);
+
+  const runControl = useCallback(async (control, action) => {
+    if (!action || pendingControl) return;
+    setPendingControl(control);
+    try {
+      await Promise.resolve(action());
+    } finally {
+      setPendingControl(null);
+    }
+  }, [pendingControl]);
 
   useEffect(() => {
     const sync = () => {
@@ -335,6 +346,10 @@ export default function GlobalHuddleWindow() {
   const subtitlesSupported =
     rtc?.subtitlesSupported !== false &&
     typeof rtc?.toggleSubtitles === "function";
+  const screenShareSupported =
+    rtc?.screenShareSupported !== false &&
+    typeof rtc?.startScreenShare === "function" &&
+    typeof rtc?.stopScreenShare === "function";
   const videoAreaH = Math.max(120, size.h - (isMobileDevice ? 132 : 108));
 
   return (
@@ -477,54 +492,62 @@ export default function GlobalHuddleWindow() {
       >
         {/* Mic */}
         <CtrlBtn
-          onClick={() => rtc.toggleMute?.()}
+          onClick={() => runControl("mic", rtc.toggleMute)}
           title={rtc.isMuted ? "Unmute microphone" : "Mute microphone"}
           danger={rtc.isMuted}
+          disabled={pendingControl === "mic"}
         >
           {rtc.isMuted ? <MicOff size={18} /> : <Mic size={18} />}
         </CtrlBtn>
 
         {/* Camera */}
         <CtrlBtn
-          onClick={() => rtc?.toggleCamera?.()}
+          onClick={() => runControl("camera", rtc?.toggleCamera)}
           title={rtc?.isCameraOff ? "Turn on camera" : "Turn off camera"}
           danger={rtc?.isCameraOff}
+          disabled={pendingControl === "camera"}
         >
           {rtc.isCameraOff ? <VideoOff size={18} /> : <Video size={18} />}
         </CtrlBtn>
 
-        {/* Screen share — desktop only */}
-        {!isMobileDevice && (
-          <CtrlBtn
-            onClick={() =>
-              rtc.isScreenSharing
-                ? rtc.stopScreenShare?.()
-                : rtc.startScreenShare?.()
-            }
-            title={rtc.isScreenSharing ? "Stop sharing screen" : "Share your screen"}
-            active={rtc.isScreenSharing}
-          >
-            {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
-          </CtrlBtn>
-        )}
+        {/* Screen share */}
+        <CtrlBtn
+          onClick={() => runControl(
+            "screen",
+            rtc.isScreenSharing ? rtc.stopScreenShare : rtc.startScreenShare
+          )}
+          title={
+            screenShareSupported
+              ? (rtc.isScreenSharing ? "Stop sharing screen" : "Share your screen")
+              : "Screen sharing is not available on this browser"
+          }
+          active={rtc.isScreenSharing}
+          disabled={!screenShareSupported || pendingControl === "screen"}
+        >
+          {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
+        </CtrlBtn>
 
         {/* CC / Live subtitles */}
         <CtrlBtn
-          onClick={() => subtitlesSupported && rtc?.toggleSubtitles?.()}
+          onClick={() => subtitlesSupported && runControl("subtitles", rtc?.toggleSubtitles)}
           title={
             subtitlesSupported
               ? (rtc?.subtitlesEnabled ? "Turn off subtitles" : "Turn on live subtitles")
               : "Live subtitles are not available for this call"
           }
           active={rtc?.subtitlesEnabled}
-          disabled={!subtitlesSupported}
+          disabled={!subtitlesSupported || pendingControl === "subtitles"}
         >
           <Captions size={18} />
         </CtrlBtn>
 
         {/* Mute all — host only */}
         {isHost && (
-          <CtrlBtn onClick={() => rtc.muteAll?.()} title="Mute all participants">
+          <CtrlBtn
+            onClick={() => runControl("muteAll", rtc.muteAll)}
+            title="Mute all participants"
+            disabled={pendingControl === "muteAll"}
+          >
             <VolumeX size={18} />
           </CtrlBtn>
         )}
@@ -534,20 +557,22 @@ export default function GlobalHuddleWindow() {
         {/* Leave / End for all */}
         {isHost ? (
           <CtrlBtn
-            onClick={() => rtc.endHuddleForAll?.()}
+            onClick={() => runControl("end", rtc.endHuddleForAll)}
             title="End call for everyone"
             danger
             wide
+            disabled={pendingControl === "end"}
           >
             <PhoneOff size={16} />
             <span className="whitespace-nowrap">End for all</span>
           </CtrlBtn>
         ) : (
           <CtrlBtn
-            onClick={() => rtc.leaveHuddle?.()}
+            onClick={() => runControl("leave", rtc.leaveHuddle)}
             title="Leave call"
             danger
             wide
+            disabled={pendingControl === "leave"}
           >
             <PhoneOff size={16} />
             <span className="whitespace-nowrap">Leave</span>

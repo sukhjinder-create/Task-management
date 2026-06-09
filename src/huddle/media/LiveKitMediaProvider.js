@@ -4,6 +4,7 @@ import {
   createLiveKitConnectionPlan,
   disconnectLiveKitRoom,
 } from "./LiveKitConnection";
+import api from "../../api";
 import { getCachedLiveKitSdkDiagnostics } from "./LiveKitSdk";
 import {
   createHuddleMediaDeviceV2,
@@ -504,6 +505,236 @@ async function collectLiveKitNetworkStats(room) {
   }
 
   return next;
+}
+
+function safeNumber(value, fallback = null) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function qualityParticipantName(participant = {}) {
+  return safeHumanName(
+    participant.name,
+    participant.metadata?.displayName,
+    participant.metadata?.username,
+    safeMetadata(participant.metadata).displayName,
+    safeMetadata(participant.metadata).username
+  ) || null;
+}
+
+function rtcReportEntries(report) {
+  const entries = [];
+  if (!report?.forEach) return entries;
+  report.forEach((entry) => entries.push(entry));
+  return entries;
+}
+
+function codecFromReportEntry(entry = {}, codecs = new Map()) {
+  const codec = codecs.get(entry.codecId);
+  return {
+    codec: safeString(codec?.mimeType || entry.mimeType || entry.codec) || null,
+    mimeType: safeString(codec?.mimeType || entry.mimeType) || null,
+  };
+}
+
+function bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples) {
+  if (!previousSamples || !sampleKey || !Number.isFinite(bytes)) return null;
+  const now = Number.isFinite(Number(timestamp)) ? Number(timestamp) : Date.now();
+  const previous = previousSamples.get(sampleKey);
+  previousSamples.set(sampleKey, { bytes, timestamp: now });
+  if (!previous || !Number.isFinite(previous.bytes) || !Number.isFinite(previous.timestamp)) {
+    return null;
+  }
+  const elapsedMsForSample = Math.max(1, now - previous.timestamp);
+  const deltaBytes = Math.max(0, bytes - previous.bytes);
+  return Math.round((deltaBytes * 8) / elapsedMsForSample);
+}
+
+function applyQualityStatsEntry(track, entry = {}, codecs = new Map()) {
+  if (entry.type === "codec") return;
+
+  if (entry.type === "candidate-pair" && (entry.selected || entry.nominated)) {
+    if (Number.isFinite(Number(entry.currentRoundTripTime))) {
+      track.rttMs = Math.round(Number(entry.currentRoundTripTime) * 1000);
+    }
+    if (Number.isFinite(Number(entry.availableOutgoingBitrate))) {
+      track.availableOutgoingBitrateKbps = Math.round(Number(entry.availableOutgoingBitrate) / 1000);
+    }
+    if (Number.isFinite(Number(entry.availableIncomingBitrate))) {
+      track.availableIncomingBitrateKbps = Math.round(Number(entry.availableIncomingBitrate) / 1000);
+    }
+  }
+
+  if (entry.type === "remote-inbound-rtp" && Number.isFinite(Number(entry.roundTripTime))) {
+    track.rttMs = Math.round(Number(entry.roundTripTime) * 1000);
+  }
+
+  if (entry.type !== "outbound-rtp" && entry.type !== "inbound-rtp" && entry.type !== "media-source") {
+    return;
+  }
+
+  const kind = safeString(entry.kind || entry.mediaType).toLowerCase();
+  if (kind && track.kind && kind !== track.kind) return;
+
+  if (Number.isFinite(Number(entry.frameWidth))) track.width = Number(entry.frameWidth);
+  if (Number.isFinite(Number(entry.frameHeight))) track.height = Number(entry.frameHeight);
+  if (Number.isFinite(Number(entry.framesPerSecond))) {
+    track.framesPerSecond = Number(entry.framesPerSecond);
+  }
+  if (Number.isFinite(Number(entry.framesDropped))) {
+    track.framesDropped = Number(entry.framesDropped);
+  }
+  if (Number.isFinite(Number(entry.bytesSent))) track.bytesSent = Number(entry.bytesSent);
+  if (Number.isFinite(Number(entry.bytesReceived))) track.bytesReceived = Number(entry.bytesReceived);
+  if (Number.isFinite(Number(entry.packetsLost))) track.packetsLost = Number(entry.packetsLost);
+  if (Number.isFinite(Number(entry.packetsSent))) track.packetsSent = Number(entry.packetsSent);
+  if (Number.isFinite(Number(entry.packetsReceived))) track.packetsReceived = Number(entry.packetsReceived);
+  if (entry.qualityLimitationReason) {
+    track.qualityLimitationReason = safeString(entry.qualityLimitationReason) || null;
+  }
+  if (entry.rid) track.rid = safeString(entry.rid) || null;
+  if (entry.scalabilityMode) track.scalabilityMode = safeString(entry.scalabilityMode) || null;
+  const codec = codecFromReportEntry(entry, codecs);
+  track.codec = track.codec || codec.codec;
+  track.mimeType = track.mimeType || codec.mimeType;
+}
+
+async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {}, previousSamples = new Map()) {
+  const participants = [
+    room?.localParticipant,
+    ...remoteParticipantsFromRoom(room),
+  ].filter(Boolean);
+  const observedAt = new Date().toISOString();
+  const tracks = [];
+  const participantSummaries = [];
+
+  for (const participant of participants) {
+    const participantId = participantIdentity(participant);
+    const isLocal = participant === room?.localParticipant;
+    const publications = uniqueTrackPublications(participant);
+    const participantStats = networkStatsByParticipant[participantId] || {};
+    const summary = {
+      participantId,
+      isLocal,
+      displayName: qualityParticipantName(participant),
+      connectionQuality: normalizeNetworkQuality(participant.connectionQuality),
+      trackCount: publications.length,
+      videoTrackCount: 0,
+      audioTrackCount: 0,
+      screenShareTrackCount: 0,
+      rttMs: participantStats.rttMs ?? null,
+      packetLoss: participantStats.packetLoss ?? null,
+      bitrateKbps: participantStats.bitrateKbps ?? null,
+    };
+
+    for (const publication of publications) {
+      const mediaTrack = mediaStreamTrackFromPublication(publication);
+      const settings = mediaTrack?.getSettings?.() || {};
+      const kind = publicationTrackKind(publication) || safeString(settings.kind).toLowerCase();
+      const source = trackSource(publication);
+      const sampleKey = `${participantId}:${publicationKey(publication)}:${isLocal ? "send" : "receive"}`;
+      const track = {
+        trackId: publicationKey(publication),
+        participantId,
+        isLocal,
+        kind,
+        source,
+        direction: isLocal ? "send" : "receive",
+        publicationState: publicationState(publication),
+        subscriptionState: subscriptionState(publication, { isLocal }),
+        isMuted: publication.isMuted === true,
+        isSubscribed: isLocal ? true : publication.isSubscribed === true,
+        width: safeNumber(settings.width),
+        height: safeNumber(settings.height),
+        framesPerSecond: safeNumber(settings.frameRate),
+        bitrateKbps: null,
+        availableOutgoingBitrateKbps: null,
+        availableIncomingBitrateKbps: null,
+        rttMs: null,
+        packetLoss: null,
+        packetsLost: null,
+        packetsSent: null,
+        packetsReceived: null,
+        bytesSent: null,
+        bytesReceived: null,
+        framesDropped: null,
+        codec: null,
+        mimeType: null,
+        rid: null,
+        scalabilityMode: null,
+        simulcastLayer: safeString(publication.videoQuality || publication.currentVideoQuality) || null,
+        streamState: safeString(publication.streamState || publication.track?.streamState) || null,
+        videoQuality: safeString(publication.videoQuality || publication.currentVideoQuality) || null,
+        qualityLimitationReason: null,
+      };
+
+      if (kind === "video") summary.videoTrackCount += 1;
+      if (kind === "audio") summary.audioTrackCount += 1;
+      if (source === HUDDLE_MEDIA_TRACK_SOURCES.screen) summary.screenShareTrackCount += 1;
+
+      const report = await publication.track?.getRTCStatsReport?.().catch(() => null);
+      const entries = rtcReportEntries(report);
+      const codecs = new Map(entries.filter((entry) => entry.type === "codec").map((entry) => [entry.id, entry]));
+      entries.forEach((entry) => applyQualityStatsEntry(track, entry, codecs));
+
+      const bytes = safeNumber((track.bytesSent || 0) + (track.bytesReceived || 0));
+      const timestamp = entries.find((entry) => Number.isFinite(Number(entry.timestamp)))?.timestamp;
+      track.bitrateKbps = bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples);
+      const packetTotal = (track.packetsSent || track.packetsReceived || 0) + (track.packetsLost || 0);
+      track.packetLoss = packetTotal > 0
+        ? Number(((track.packetsLost || 0) / packetTotal).toFixed(4))
+        : null;
+      tracks.push(track);
+    }
+
+    participantSummaries.push(summary);
+  }
+
+  const rttValues = tracks.map((track) => track.rttMs).filter((value) => Number.isFinite(value));
+  const packetLossValues = tracks.map((track) => track.packetLoss).filter((value) => Number.isFinite(value));
+  const bitrateValues = tracks.map((track) => track.bitrateKbps).filter((value) => Number.isFinite(value));
+  const sendVideoTracks = tracks.filter((track) => track.direction === "send" && track.kind === "video");
+  const receiveVideoTracks = tracks.filter((track) => track.direction === "receive" && track.kind === "video");
+  const maxBy = (items, key) => items.reduce((max, item) => Math.max(max, safeNumber(item[key], 0) || 0), 0) || null;
+
+  return {
+    observedAt,
+    provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
+    adaptiveStream: true,
+    dynacast: true,
+    browser: typeof window === "undefined" ? {} : {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      language: navigator.language,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      screenWidth: window.screen?.width,
+      screenHeight: window.screen?.height,
+      devicePixelRatio: window.devicePixelRatio,
+    },
+    aggregate: {
+      participantCount: participantSummaries.length,
+      trackCount: tracks.length,
+      videoTrackCount: tracks.filter((track) => track.kind === "video").length,
+      audioTrackCount: tracks.filter((track) => track.kind === "audio").length,
+      screenShareTrackCount: tracks.filter((track) => track.source === HUDDLE_MEDIA_TRACK_SOURCES.screen).length,
+      averageRttMs: rttValues.length
+        ? Math.round(rttValues.reduce((total, value) => total + value, 0) / rttValues.length)
+        : null,
+      averagePacketLoss: packetLossValues.length
+        ? Number((packetLossValues.reduce((total, value) => total + value, 0) / packetLossValues.length).toFixed(4))
+        : null,
+      totalBitrateKbps: bitrateValues.length
+        ? Math.round(bitrateValues.reduce((total, value) => total + value, 0))
+        : null,
+      maxSendWidth: maxBy(sendVideoTracks, "width"),
+      maxSendHeight: maxBy(sendVideoTracks, "height"),
+      maxReceiveWidth: maxBy(receiveVideoTracks, "width"),
+      maxReceiveHeight: maxBy(receiveVideoTracks, "height"),
+    },
+    participants: participantSummaries,
+    tracks,
+  };
 }
 
 function createInitialLiveKitMetrics() {
@@ -1291,9 +1522,13 @@ export function useLiveKitMediaProvider({
   const resolvedWorkspaceId = resolveLocalWorkspaceId({ currentUser, workspaceId });
   const channelIdRef = useRef(null);
   const huddleIdRef = useRef(null);
+  const sessionIdRef = useRef(null);
   const connectedRoomRef = useRef(null);
   const providerMetricsRef = useRef(createInitialLiveKitMetrics());
   const streamCacheRef = useRef(new Map());
+  const latestNetworkStatsRef = useRef({});
+  const qualityStatsPreviousRef = useRef(new Map());
+  const qualityPostInFlightRef = useRef(false);
   const [connectedRoom, setConnectedRoom] = useState(null);
   const [connectionResult, setConnectionResult] = useState(null);
   const [publicationDiagnostics, setPublicationDiagnostics] = useState(null);
@@ -1427,6 +1662,8 @@ export function useLiveKitMediaProvider({
   useEffect(() => {
     if (!connectedRoom) {
       setNetworkStatsByParticipant({});
+      latestNetworkStatsRef.current = {};
+      qualityStatsPreviousRef.current.clear();
       return undefined;
     }
 
@@ -1434,6 +1671,7 @@ export function useLiveKitMediaProvider({
     const collect = async () => {
       try {
         const stats = await collectLiveKitNetworkStats(connectedRoom);
+        latestNetworkStatsRef.current = stats;
         if (!cancelled) {
           setNetworkStatsByParticipant(stats);
           setRevision((value) => value + 1);
@@ -1455,6 +1693,57 @@ export function useLiveKitMediaProvider({
       window.clearInterval(interval);
     };
   }, [connectedRoom]);
+
+  useEffect(() => {
+    if (!connectedRoom) return undefined;
+    let cancelled = false;
+
+    const postDiagnostics = async () => {
+      if (cancelled || qualityPostInFlightRef.current) return;
+      const room = connectedRoomRef.current || connectedRoom;
+      const channelId = channelIdRef.current;
+      const huddleId = huddleIdRef.current;
+      const sessionId = sessionIdRef.current || huddleId;
+      if (!room || !channelId || !sessionId || !resolvedWorkspaceId) return;
+
+      qualityPostInFlightRef.current = true;
+      try {
+        const diagnostics = await collectLiveKitQualitySnapshot(
+          room,
+          latestNetworkStatsRef.current,
+          qualityStatsPreviousRef.current
+        );
+        await api.post("/huddle/media/livekit/diagnostics", {
+          provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
+          workspaceId: resolvedWorkspaceId,
+          channelId,
+          huddleId,
+          sessionId,
+          providerRoomId:
+            connectionResult?.connection?.roomName ||
+            connectionPlan.room?.providerRoomId ||
+            null,
+          diagnostics,
+        });
+      } catch (error) {
+        recordMetricFailure(providerMetricsRef.current, {
+          type: "quality_diagnostics_persist_failed",
+          reason: "quality_diagnostics_persist_failed",
+          message: safeString(error?.message) || null,
+        });
+        setRevision((value) => value + 1);
+      } finally {
+        qualityPostInFlightRef.current = false;
+      }
+    };
+
+    postDiagnostics();
+    const interval = window.setInterval(postDiagnostics, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [connectedRoom, connectionPlan.room?.providerRoomId, connectionResult?.connection?.roomName, resolvedWorkspaceId]);
 
   useEffect(() => {
     if (!connectedRoom?.on) return undefined;
@@ -1622,6 +1911,9 @@ export function useLiveKitMediaProvider({
       return result;
     }
 
+    channelIdRef.current = channelId;
+    huddleIdRef.current = huddleId || huddleIdRef.current;
+    sessionIdRef.current = sessionId;
     setConnecting(true);
     try {
       providerMetricsRef.current = {
@@ -1718,6 +2010,9 @@ export function useLiveKitMediaProvider({
     setPublicationDiagnostics(null);
     setScreenShareDiagnostics(null);
     setNetworkStatsByParticipant({});
+    latestNetworkStatsRef.current = {};
+    qualityStatsPreviousRef.current.clear();
+    sessionIdRef.current = null;
     const result = disconnectLiveKitRoom();
     setConnectionResult(result);
     return result;
@@ -1890,6 +2185,11 @@ export function useLiveKitMediaProvider({
     micEnabled,
     camEnabled,
     screenSharing,
+    screenShareSupported: Boolean(
+      connectedRoom?.localParticipant?.setScreenShareEnabled &&
+      typeof navigator !== "undefined" &&
+      navigator.mediaDevices?.getDisplayMedia
+    ),
     subtitlesSupported: false,
     subtitlesEnabled: false,
     subtitles: {},
