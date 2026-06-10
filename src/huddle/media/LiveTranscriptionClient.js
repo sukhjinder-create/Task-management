@@ -69,6 +69,8 @@ export function createLiveTranscriptionClient({
   let mediaRecorder = null;
   let mediaStream = null;
   let transcriptionSession = null;
+  let effectiveParticipantId = participantId;
+  let effectiveParticipantDeviceId = null;
   let sequenceNumber = 0;
   let utteranceIndex = 0;
   let activeSourceSegmentId = null;
@@ -127,7 +129,8 @@ export function createLiveTranscriptionClient({
 
     await api.post(`/huddle/transcription/sessions/${sessionId}/events`, {
       transcriptionSessionId: transcriptionSession?.id,
-      participantId,
+      participantId: effectiveParticipantId,
+      participantDeviceId: effectiveParticipantDeviceId,
       provider: "deepgram",
       providerEventId,
       providerRequestId: safeString(payload?.metadata?.request_id, 200) || null,
@@ -174,6 +177,8 @@ export function createLiveTranscriptionClient({
     });
     const grant = grantResponse.data || {};
     transcriptionSession = grant.transcriptionSession;
+    effectiveParticipantId = effectiveParticipantId || transcriptionSession?.participantId || null;
+    effectiveParticipantDeviceId = transcriptionSession?.participantDeviceId || null;
     emitDiagnostics({
       status: "connecting",
       grantOk: true,
