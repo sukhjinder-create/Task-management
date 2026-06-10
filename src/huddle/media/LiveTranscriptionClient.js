@@ -183,7 +183,9 @@ export function createLiveTranscriptionClient({
     });
 
     mediaStream = new MediaStream([audioTrack]);
-    websocket = new WebSocket(grant.listenUrl);
+    websocket = grant.accessToken
+      ? new WebSocket(grant.listenUrl, ["bearer", grant.accessToken])
+      : new WebSocket(grant.listenUrl);
     websocket.binaryType = "arraybuffer";
 
     websocket.onopen = () => {
