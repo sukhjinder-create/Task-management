@@ -306,6 +306,27 @@ function mediaStreamFromPublications(publications = [], cacheKey = null, streamC
   return stream;
 }
 
+function liveKitTrackFromPublication(publication = {}) {
+  const track = publication?.track;
+  return track && typeof track.attach === "function" ? track : null;
+}
+
+function displayVideoPublication(participant = {}) {
+  return displayTrackPublications(participant).find((publication) => {
+    const kind = publicationTrackKind(publication);
+    const track = liveKitTrackFromPublication(publication);
+    return kind === "video" && track && publication.isMuted !== true;
+  }) || null;
+}
+
+function displayAudioPublication(participant = {}) {
+  return displayTrackPublications(participant).find((publication) => {
+    const kind = publicationTrackKind(publication);
+    const track = liveKitTrackFromPublication(publication);
+    return kind === "audio" && track && publication.isMuted !== true;
+  }) || null;
+}
+
 function liveKitLocalStream(room, streamCache = null) {
   return mediaStreamFromPublications(
     displayTrackPublications(room?.localParticipant),
@@ -380,14 +401,58 @@ function liveKitParticipantScreenSharing(participant = {}) {
 }
 
 export function createLiveKitRemotePeers(remoteParticipants = [], streamCache = null) {
-  return (remoteParticipants || []).map((participant) => createRemotePeerState({
-    userId: participantIdentity(participant),
-    username: liveKitParticipantUsername(participant),
-    stream: liveKitRemoteStream(participant, streamCache),
-    isMuted: liveKitParticipantMuted(participant),
-    isCameraOff: liveKitParticipantCameraOff(participant),
-    isScreenSharing: liveKitParticipantScreenSharing(participant),
-  }));
+  return (remoteParticipants || []).map((participant) => {
+    const videoPublication = displayVideoPublication(participant);
+    const audioPublication = displayAudioPublication(participant);
+    return createRemotePeerState({
+      userId: participantIdentity(participant),
+      username: liveKitParticipantUsername(participant),
+      stream: liveKitRemoteStream(participant, streamCache),
+      videoTrack: liveKitTrackFromPublication(videoPublication),
+      audioTrack: liveKitTrackFromPublication(audioPublication),
+      videoPublication,
+      audioPublication,
+      selectedVideoSource: videoPublication ? trackSource(videoPublication) : null,
+      isMuted: liveKitParticipantMuted(participant),
+      isCameraOff: liveKitParticipantCameraOff(participant),
+      isScreenSharing: liveKitParticipantScreenSharing(participant),
+    });
+  });
+}
+
+function normalizedVideoQuality(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return ({ 0: "low", 1: "medium", 2: "high", 3: "off" })[numeric] || `unknown_${numeric}`;
+  }
+  return safeString(value).toLowerCase() || null;
+}
+
+function attachedElementMetrics(track = null) {
+  const elements = Array.isArray(track?.attachedElements)
+    ? track.attachedElements.filter(Boolean)
+    : [];
+  const visible = elements
+    .map((element) => {
+      const rect = element?.getBoundingClientRect?.();
+      return {
+        width: Math.round(rect?.width || element?.clientWidth || 0),
+        height: Math.round(rect?.height || element?.clientHeight || 0),
+      };
+    })
+    .filter((item) => item.width > 0 && item.height > 0);
+  const largest = visible.reduce(
+    (current, item) => (
+      item.width * item.height > current.width * current.height ? item : current
+    ),
+    { width: 0, height: 0 }
+  );
+  return {
+    attachedElementCount: elements.length,
+    renderedWidth: largest.width || null,
+    renderedHeight: largest.height || null,
+    adaptiveStreamAttached: elements.length > 0,
+  };
 }
 
 function activeSpeakerIdFromRoom(room) {
@@ -699,10 +764,20 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
         mimeType: null,
         rid: null,
         scalabilityMode: null,
-        simulcastLayer: safeString(publication.videoQuality || publication.currentVideoQuality) || null,
+        simulcastLayer: normalizedVideoQuality(
+          publication.videoQuality ?? publication.currentVideoQuality
+        ),
         streamState: safeString(publication.streamState || publication.track?.streamState) || null,
-        videoQuality: safeString(publication.videoQuality || publication.currentVideoQuality) || null,
+        videoQuality: normalizedVideoQuality(
+          publication.videoQuality ?? publication.currentVideoQuality
+        ),
         qualityLimitationReason: null,
+        publicationWidth: safeNumber(publication.dimensions?.width),
+        publicationHeight: safeNumber(publication.dimensions?.height),
+        ...attachedElementMetrics(publication.track),
+        currentBitrateKbps: Number.isFinite(Number(publication.track?.currentBitrate))
+          ? Math.round(Number(publication.track.currentBitrate) / 1000)
+          : null,
       };
 
       if (kind === "video") summary.videoTrackCount += 1;
@@ -732,6 +807,8 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
   const bitrateValues = tracks.map((track) => track.bitrateKbps).filter((value) => Number.isFinite(value));
   const sendVideoTracks = tracks.filter((track) => track.direction === "send" && track.kind === "video");
   const receiveVideoTracks = tracks.filter((track) => track.direction === "receive" && track.kind === "video");
+  const sendScreenTracks = tracks.filter((track) => track.direction === "send" && track.source === HUDDLE_MEDIA_TRACK_SOURCES.screen);
+  const receiveScreenTracks = tracks.filter((track) => track.direction === "receive" && track.source === HUDDLE_MEDIA_TRACK_SOURCES.screen);
   const maxBy = (items, key) => items.reduce((max, item) => Math.max(max, safeNumber(item[key], 0) || 0), 0) || null;
 
   return {
@@ -768,6 +845,14 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
       maxSendHeight: maxBy(sendVideoTracks, "height"),
       maxReceiveWidth: maxBy(receiveVideoTracks, "width"),
       maxReceiveHeight: maxBy(receiveVideoTracks, "height"),
+      maxScreenShareSendWidth: maxBy(sendScreenTracks, "width"),
+      maxScreenShareSendHeight: maxBy(sendScreenTracks, "height"),
+      maxScreenShareReceiveWidth: maxBy(receiveScreenTracks, "width"),
+      maxScreenShareReceiveHeight: maxBy(receiveScreenTracks, "height"),
+      adaptiveStreamAttachedTrackCount: tracks.filter((track) => track.adaptiveStreamAttached).length,
+      selectedLowLayerCount: tracks.filter((track) => track.videoQuality === "low").length,
+      selectedMediumLayerCount: tracks.filter((track) => track.videoQuality === "medium").length,
+      selectedHighLayerCount: tracks.filter((track) => track.videoQuality === "high").length,
     },
     participants: participantSummaries,
     tracks,

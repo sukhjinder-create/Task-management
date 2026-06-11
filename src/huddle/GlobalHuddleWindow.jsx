@@ -12,9 +12,13 @@ function useCallTimer(startedAt) {
   useEffect(() => {
     if (!startedAt) return;
     const base = new Date(startedAt).getTime();
-    setElapsed(Math.floor((Date.now() - base) / 1000));
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - base) / 1000)), 1000);
-    return () => clearInterval(id);
+    const update = () => setElapsed(Math.floor((Date.now() - base) / 1000));
+    const initial = window.setTimeout(update, 0);
+    const id = window.setInterval(update, 1000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(id);
+    };
   }, [startedAt]);
   const h = Math.floor(elapsed / 3600);
   const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
@@ -69,12 +73,8 @@ function clampWindowLayout(pos, size, { reserveBottom = 8 } = {}) {
   };
 }
 
-function useMutedVideoRef(stream, shouldMute) {
+function useVideoMediaRef(stream, liveKitTrack, shouldMute) {
   const ref = useRef(null);
-  const streamRef = useRef(stream);
-  streamRef.current = stream;
-
-  // Callback ref: fires whenever the element mounts / changes
   const setRef = useCallback((el) => {
     ref.current = el;
     if (!el) return;
@@ -86,30 +86,68 @@ function useMutedVideoRef(stream, shouldMute) {
     el.setAttribute("playsinline", "");
     el.setAttribute("autoplay", "");
 
-    const s = streamRef.current;
-    if (s && el.srcObject !== s) el.srcObject = s;
-    el.play().catch(() => {});
-  }, [shouldMute]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shouldMute]);
 
-  // Re-apply srcObject when stream changes
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (!stream) { el.srcObject = null; return; }
-    if (el.srcObject !== stream) {
-      el.srcObject = stream;
+
+    if (liveKitTrack && typeof liveKitTrack.attach === "function") {
+      el.setAttribute("muted", "");
+      el.muted = true;
+      el.srcObject = null;
+      liveKitTrack.attach(el);
       el.play().catch(() => {});
+      return () => {
+        try {
+          liveKitTrack.detach(el);
+        } catch {
+          el.srcObject = null;
+        }
+      };
     }
-  }, [stream]);
+
+    if (!stream) {
+      el.srcObject = null;
+      return;
+    }
+    if (el.srcObject !== stream) el.srcObject = stream;
+    el.play().catch(() => {});
+    return () => {
+      if (el.srcObject === stream) el.srcObject = null;
+    };
+  }, [liveKitTrack, stream]);
 
   return { setRef, ref };
 }
 
+function RemoteAudioTrack({ track }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || !track || typeof track.attach !== "function") return;
+    element.setAttribute("playsinline", "");
+    element.setAttribute("autoplay", "");
+    track.attach(element);
+    element.play().catch(() => {});
+    return () => {
+      try {
+        track.detach(element);
+      } catch {
+        element.srcObject = null;
+      }
+    };
+  }, [track]);
+
+  return <audio ref={ref} className="hidden" aria-hidden="true" />;
+}
+
 // ── Single video tile ────────────────────────────────────────────────────────
-function VideoTile({ stream, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false, compact = false, connectionState = "connected" }) {
-  const { setRef } = useMutedVideoRef(stream, isLocal);
+function VideoTile({ stream, liveKitTrack = null, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false, compact = false, connectionState = "connected" }) {
+  const { setRef } = useVideoMediaRef(stream, liveKitTrack, isLocal || Boolean(liveKitTrack));
   const initials = (name || "?")[0].toUpperCase();
-  const showAvatar = !stream || isCameraOff;
+  const showAvatar = (!stream && !liveKitTrack) || isCameraOff;
   const reconnecting = connectionState === "reconnecting";
 
   return (
@@ -254,11 +292,11 @@ export default function GlobalHuddleWindow() {
   // 1-on-1 mode: one remote peer — use WhatsApp-style layout
   const isOneOnOne = remotePeers.length === 1;
   const remoteParticipant = isOneOnOne
-    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, isMuted: remotePeers[0].isMuted, isCameraOff: remotePeers[0].isCameraOff, connectionState: remotePeers[0].connectionState, isLocal: false }
+    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, videoTrack: remotePeers[0].videoTrack, isMuted: remotePeers[0].isMuted, isCameraOff: remotePeers[0].isCameraOff, connectionState: remotePeers[0].connectionState, isLocal: false }
     : null;
 
   // Grid layout for group calls
-  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, isMuted: p.isMuted, isCameraOff: p.isCameraOff, connectionState: p.connectionState, isLocal: false }))];
+  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, videoTrack: p.videoTrack, isMuted: p.isMuted, isCameraOff: p.isCameraOff, connectionState: p.connectionState, isLocal: false }))];
   const count = participants.length;
   const gridCols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
 
@@ -408,6 +446,9 @@ export default function GlobalHuddleWindow() {
 
       {/* ── VIDEO AREA ────────────────────────────────────────────────────── */}
       <div className="flex-1 relative bg-[#0f111a] overflow-hidden min-h-0" style={{ height: videoAreaH }}>
+        {remotePeers.map((peer) => (
+          <RemoteAudioTrack key={`audio:${peer.userId}`} track={peer.audioTrack} />
+        ))}
         {rtc?.error && (
           <div className="absolute top-2 left-2 right-2 z-30 rounded-md border border-red-400/40 bg-red-950/85 px-3 py-2 text-xs text-red-100 shadow-lg">
             {rtc.error}
@@ -420,6 +461,7 @@ export default function GlobalHuddleWindow() {
             <div className="absolute inset-0">
               <VideoTile
                 stream={remoteParticipant.stream}
+                liveKitTrack={remoteParticipant.videoTrack}
                 name={remoteParticipant.username}
                 isMuted={remoteParticipant.isMuted}
                 isCameraOff={remoteParticipant.isCameraOff}
@@ -458,6 +500,7 @@ export default function GlobalHuddleWindow() {
               <VideoTile
                 key={p.userId}
                 stream={p.stream}
+                liveKitTrack={p.videoTrack}
                 name={p.username}
                 isMuted={p.isMuted}
                 isCameraOff={p.isCameraOff}

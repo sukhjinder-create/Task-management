@@ -23,6 +23,7 @@ import Migrations from "./pages/Migrations.jsx";
 import WorkspaceBilling from "./pages/WorkspaceBilling.jsx";
 import WorkspaceSearchMemory from "./pages/WorkspaceSearchMemory.jsx";
 import UserProfile from "./pages/UserProfile.jsx";
+import HuddleMeetingIntelligence from "./pages/HuddleMeetingIntelligence.jsx";
 
 // ---- Gradient Demo (Development) ----
 import { GradientDemo } from "./components/ui/GradientDemo";
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="projects/:projectId" element={<ProjectTasks />} />
           <Route path="my-tasks" element={<MyTasks />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="huddles/:sessionId/intelligence" element={<HuddleMeetingIntelligence />} />
           <Route path="profile" element={<Profile />} />
           <Route path="users/:userId/profile" element={<UserProfile />} />
           <Route

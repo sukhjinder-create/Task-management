@@ -9,6 +9,7 @@ import { publishUnreadCount } from "../notificationBus";
 import { Bell, CheckCheck } from "lucide-react";
 
 const TYPE_META = {
+  huddle_intelligence_ready: { label: "Meeting intelligence", icon: "AI" },
   task_assigned:      { label: "Task assigned",     icon: "📋" },
   task_updated:       { label: "Task updated",       icon: "✏️" },
   task_deleted:       { label: "Task deleted",       icon: "🗑️" },
@@ -38,6 +39,7 @@ function relativeTime(iso) {
 
 const ALL_TYPE_FILTERS = [
   { value: "all",              label: "All",       roles: ["user", "manager", "admin"] },
+  { value: "huddle_intelligence_ready", label: "Meetings", roles: ["user", "manager", "admin"] },
   { value: "task_assigned",    label: "Assigned",  roles: ["user", "manager", "admin"] },
   { value: "task_updated",     label: "Updated",   roles: ["user", "manager", "admin"] },
   { value: "comment_added",    label: "Comments",  roles: ["user", "manager", "admin"] },
@@ -128,6 +130,10 @@ export default function Notifications() {
   const handleOpen = async (notif) => {
     if (!notif.is_read) await handleMarkOneRead(notif.id);
 
+    if (notif.action_url) {
+      navigate(notif.action_url);
+      return;
+    }
     if (notif.task_id) {
       if (notif.project_id) {
         const p = new URLSearchParams({ task: notif.task_id });
@@ -309,6 +315,7 @@ export default function Notifications() {
                         <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--primary)] shrink-0" />
                       )}
                     </div>
+                    {n.title && <p className="text-sm font-semibold text-[color:var(--text)] leading-snug">{n.title}</p>}
                     <p className="text-sm text-[color:var(--text)] leading-snug line-clamp-2">{n.message}</p>
                     <p className="text-[11px] text-[color:var(--text-muted)] mt-1">{relativeTime(n.created_at)}</p>
                   </div>
