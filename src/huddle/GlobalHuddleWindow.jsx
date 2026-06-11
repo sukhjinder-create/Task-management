@@ -518,10 +518,13 @@ export default function GlobalHuddleWindow() {
         <section
           className={`absolute z-30 overflow-hidden border border-white/15 bg-black/80 shadow-xl backdrop-blur-sm ${
             isMobileDevice
-              ? "inset-x-2 bottom-2 max-h-[48%]"
-              : "right-3 bottom-3 w-[min(380px,46%)] max-h-[52%]"
+              ? "inset-x-2 max-h-[48%]"
+              : "right-3 w-[min(380px,46%)] max-h-[52%]"
           }`}
-          style={{ borderRadius: 8 }}
+          style={{
+            borderRadius: 8,
+            bottom: isMobileDevice ? 132 : 88,
+          }}
           aria-label="Live meeting transcript"
         >
           <div className="border-b border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-300">
