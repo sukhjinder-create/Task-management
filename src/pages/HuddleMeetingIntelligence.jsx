@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   Gavel,
+  Database,
   ListChecks,
   Loader2,
   Pencil,
@@ -26,6 +27,7 @@ const TABS = [
   { id: "decisions", label: "Decisions", icon: Gavel },
   { id: "actions", label: "Action items", icon: ListChecks },
   { id: "ownership", label: "Ownership", icon: UserCheck },
+  { id: "memory", label: "Memory", icon: Database },
 ];
 
 function TabIcon({ id }) {
@@ -34,7 +36,8 @@ function TabIcon({ id }) {
   if (id === "transcript") return <ScrollText size={15} />;
   if (id === "decisions") return <Gavel size={15} />;
   if (id === "actions") return <ListChecks size={15} />;
-  return <UserCheck size={15} />;
+  if (id === "ownership") return <UserCheck size={15} />;
+  return <Database size={15} />;
 }
 
 function dateTime(value) {
@@ -64,8 +67,16 @@ function artifactContentText(artifactType, content) {
   if (artifactType === "summary") {
     return [
       content.title,
+      "Executive Summary",
       content.overview,
+      "Discussion Highlights",
+      ...(content.discussionHighlights || []).map(
+        (item) => `- ${item.speaker || "Participant"}: ${item.text}`
+      ),
+      "Important Points",
       ...(content.keyPoints || []).map((item) => `- ${item.text}`),
+      "Open Questions",
+      ...(content.openQuestions || []).map((item) => `- ${item.question}`),
     ].filter(Boolean).join("\n\n");
   }
   if (artifactType === "decision") {
@@ -140,22 +151,26 @@ function ArtifactActions({ artifact, canReview, canEdit, onEdit, onDecision, bus
           <Pencil size={13} /> Edit
         </button>
       )}
-      <button
-        type="button"
-        onClick={() => onDecision(artifact, "approved")}
-        disabled={busy}
-        className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-      >
-        <Check size={13} /> Approve
-      </button>
-      <button
-        type="button"
-        onClick={() => onDecision(artifact, "rejected")}
-        disabled={busy}
-        className="inline-flex items-center gap-1.5 rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-      >
-        <X size={13} /> Reject
-      </button>
+      {artifact.approvalStatus !== "approved" && (
+        <button
+          type="button"
+          onClick={() => onDecision(artifact, "approved")}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          <Check size={13} /> Approve
+        </button>
+      )}
+      {artifact.approvalStatus !== "rejected" && (
+        <button
+          type="button"
+          onClick={() => onDecision(artifact, "rejected")}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+        >
+          <X size={13} /> Reject
+        </button>
+      )}
     </div>
   );
 }
@@ -209,6 +224,38 @@ function ArtifactEditor({ artifact, onClose, onSave, saving }) {
                 <textarea
                   value={item.text || ""}
                   onChange={(event) => updateListItem("keyPoints", index, "text", event.target.value)}
+                  rows={2}
+                  className="mt-1 w-full rounded border border-[color:var(--border)] bg-transparent px-3 py-2"
+                />
+              </label>
+            ))}
+            {(content.discussionHighlights || []).map((item, index) => (
+              <div key={item.id || index} className="grid gap-3 border-t border-[color:var(--border)] pt-4 sm:grid-cols-[160px_1fr]">
+                <label className="block text-sm font-medium text-[color:var(--text)]">
+                  Speaker
+                  <input
+                    value={item.speaker || ""}
+                    onChange={(event) => updateListItem("discussionHighlights", index, "speaker", event.target.value)}
+                    className="mt-1 w-full rounded border border-[color:var(--border)] bg-transparent px-3 py-2"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-[color:var(--text)]">
+                  Discussion highlight
+                  <textarea
+                    value={item.text || ""}
+                    onChange={(event) => updateListItem("discussionHighlights", index, "text", event.target.value)}
+                    rows={3}
+                    className="mt-1 w-full rounded border border-[color:var(--border)] bg-transparent px-3 py-2"
+                  />
+                </label>
+              </div>
+            ))}
+            {(content.openQuestions || []).map((item, index) => (
+              <label key={item.id || index} className="block text-sm font-medium text-[color:var(--text)]">
+                Open question {index + 1}
+                <textarea
+                  value={item.question || ""}
+                  onChange={(event) => updateListItem("openQuestions", index, "question", event.target.value)}
                   rows={2}
                   className="mt-1 w-full rounded border border-[color:var(--border)] bg-transparent px-3 py-2"
                 />
@@ -333,12 +380,40 @@ export default function HuddleMeetingIntelligence() {
   const decideArtifact = async (artifact, decision) => {
     setBusyId(artifact.id);
     try {
-      await api.post(`/huddle/artifacts/${artifact.id}/${decision === "approved" ? "approve" : "reject"}`, {
+      const response = await api.post(`/huddle/artifacts/${artifact.id}/${decision === "approved" ? "approve" : "reject"}`, {
         approvalNote: decision === "approved" ? "Approved in Meeting Intelligence" : "Rejected in Meeting Intelligence",
+        expectedRevision: artifact.currentRevision,
+      });
+      const updatedArtifact = response.data.artifact;
+      setReview((current) => {
+        if (!current || !updatedArtifact) return current;
+        const artifactKey = {
+          summary: "summary",
+          decision: "decisions",
+          action_item: "actions",
+        }[updatedArtifact.artifactType];
+        if (!artifactKey) return current;
+        const previous = current.artifacts[artifactKey];
+        const wasPending = previous?.approvalStatus === "pending";
+        const isPending = updatedArtifact.approvalStatus === "pending";
+        return {
+          ...current,
+          artifacts: {
+            ...current.artifacts,
+            [artifactKey]: updatedArtifact,
+          },
+          status: {
+            ...current.status,
+            pendingReviewCount: Math.max(
+              0,
+              current.status.pendingReviewCount + (isPending ? 1 : 0) - (wasPending ? 1 : 0)
+            ),
+          },
+        };
       });
       toast.success(decision === "approved" ? "Artifact approved" : "Artifact rejected");
-      await load();
     } catch (requestError) {
+      if (requestError.response?.status === 409) await load();
       toast.error(requestError.response?.data?.reason || "Review could not be saved");
     } finally {
       setBusyId(null);
@@ -367,15 +442,85 @@ export default function HuddleMeetingIntelligence() {
   const decideOwnership = async (item, status, resolvedOwnerUserId = null) => {
     setBusyId(item.id);
     try {
-      await api.patch(`/huddle/intelligence/sessions/${sessionId}/ownership/${item.id}`, {
+      const response = await api.patch(`/huddle/intelligence/sessions/${sessionId}/ownership/${item.id}`, {
         status,
         resolvedOwnerUserId,
+        expectedStatus: item.status,
         resolutionNote: status === "rejected" ? "Rejected in Meeting Intelligence" : "Approved in Meeting Intelligence",
       });
+      const updated = response.data.ownershipResolution;
+      setReview((current) => {
+        if (!current || !updated) return current;
+        return {
+          ...current,
+          ownership: current.ownership.map((entry) =>
+            entry.id === updated.id ? updated : entry
+          ),
+          status: {
+            ...current.status,
+            pendingReviewCount: Math.max(
+              0,
+              current.status.pendingReviewCount -
+                (item.status === "pending_approval" ? 1 : 0)
+            ),
+          },
+        };
+      });
       toast.success(status === "rejected" ? "Ownership suggestion rejected" : "Ownership confirmed");
+    } catch (requestError) {
+      if (requestError.response?.status === 409) await load();
+      toast.error(requestError.response?.data?.reason || "Ownership review could not be saved");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const createMemoryCandidate = async (artifact) => {
+    setBusyId(`memory:${artifact.id}`);
+    try {
+      await api.post(
+        `/huddle/intelligence/sessions/${sessionId}/memory-candidates/from-artifact/${artifact.id}`
+      );
+      toast.success("Memory candidate created for review");
+      setActiveTab("memory");
       await load();
     } catch (requestError) {
-      toast.error(requestError.response?.data?.reason || "Ownership review could not be saved");
+      toast.error(requestError.response?.data?.reason || "Memory candidate could not be created");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const reviewMemoryCandidate = async (candidate, status) => {
+    setBusyId(candidate.id);
+    try {
+      await api.patch(
+        `/huddle/intelligence/sessions/${sessionId}/memory-candidates/${candidate.id}`,
+        {
+          status,
+          expectedStatus: candidate.status,
+          metadata: { reviewedInMeetingIntelligence: true },
+        }
+      );
+      toast.success(status === "approved" ? "Memory approved" : "Memory rejected");
+      await load();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.reason || "Memory review could not be saved");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const promoteMemoryCandidate = async (candidate) => {
+    setBusyId(candidate.id);
+    try {
+      await api.post(
+        `/huddle/intelligence/sessions/${sessionId}/memory-candidates/${candidate.id}/promote`
+      );
+      toast.success("Meeting knowledge added to workspace memory");
+      await load();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.reason || "Memory promotion failed");
     } finally {
       setBusyId(null);
     }
@@ -487,8 +632,15 @@ export default function HuddleMeetingIntelligence() {
               <>
                 <p className="max-w-4xl whitespace-pre-wrap text-[15px] leading-7">{summary.contentJson?.overview}</p>
                 <EvidenceButton ids={summary.contentJson?.overviewEvidenceSegmentIds} onOpen={showEvidence} />
-                <h3 className="mb-3 mt-7 font-semibold">Key points</h3>
+                <h3 className="mb-3 mt-7 font-semibold">Discussion highlights</h3>
                 <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                  {(summary.contentJson?.discussionHighlights || []).map((point) => (
+                    <div key={point.id} className="py-4">
+                      <div className="text-xs font-semibold text-[color:var(--primary)]">{point.speaker}</div>
+                      <p className="mt-1 text-sm leading-6">{point.text}</p>
+                      <div className="mt-2"><EvidenceButton ids={point.evidenceSegmentIds} onOpen={showEvidence} /></div>
+                    </div>
+                  ))}
                   {(summary.contentJson?.keyPoints || []).map((point) => (
                     <div key={point.id} className="py-4">
                       <p className="text-sm leading-6">{point.text}</p>
@@ -496,6 +648,25 @@ export default function HuddleMeetingIntelligence() {
                     </div>
                   ))}
                 </div>
+                <h3 className="mb-3 mt-7 font-semibold">Open questions</h3>
+                {(summary.contentJson?.openQuestions || []).length > 0 ? (
+                  <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                    {summary.contentJson.openQuestions.map((item) => (
+                      <div key={item.id} className="py-4">
+                        <p className="text-sm leading-6">{item.question}</p>
+                        {item.raisedBy && <p className="mt-1 text-xs text-[color:var(--text-muted)]">Raised by {item.raisedBy}</p>}
+                        <div className="mt-2"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[color:var(--text-muted)]">No unresolved question was identified in the transcript.</p>
+                )}
+                {summary.approvalStatus === "approved" && (
+                  <button type="button" disabled={busyId === `memory:${summary.id}`} onClick={() => createMemoryCandidate(summary)} className="mt-5 inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-soft)] disabled:opacity-50">
+                    <Database size={15} /> Add approved summary to memory
+                  </button>
+                )}
                 <Provenance artifact={summary} />
               </>
             ) : <p className="text-sm text-[color:var(--text-muted)]">No summary artifact is available for this meeting.</p>}
@@ -568,6 +739,11 @@ export default function HuddleMeetingIntelligence() {
               ))}
             </div>
             <Provenance artifact={decisions} />
+            {decisions?.approvalStatus === "approved" && (
+              <button type="button" disabled={busyId === `memory:${decisions.id}`} onClick={() => createMemoryCandidate(decisions)} className="mt-5 inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-soft)] disabled:opacity-50">
+                <Database size={15} /> Add approved decisions to memory
+              </button>
+            )}
           </section>
         )}
 
@@ -591,6 +767,11 @@ export default function HuddleMeetingIntelligence() {
               ))}
             </div>
             <Provenance artifact={actions} />
+            {actions?.approvalStatus === "approved" && (
+              <button type="button" disabled={busyId === `memory:${actions.id}`} onClick={() => createMemoryCandidate(actions)} className="mt-5 inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-soft)] disabled:opacity-50">
+                <Database size={15} /> Add approved actions to memory
+              </button>
+            )}
           </section>
         )}
 
@@ -629,6 +810,40 @@ export default function HuddleMeetingIntelligence() {
                 );
               })}
               {review.ownership.length === 0 && <p className="py-6 text-sm text-[color:var(--text-muted)]">No ownership suggestions were generated.</p>}
+            </div>
+          </section>
+        )}
+
+        {activeTab === "memory" && (
+          <section>
+            <h2 className="text-xl font-semibold">Meeting memory</h2>
+            <p className="mt-1 text-sm text-[color:var(--text-muted)]">Only approved meeting artifacts can become searchable workspace knowledge. Promotion always requires a separate human confirmation.</p>
+            <div className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+              {(review.memoryCandidates || []).map((candidate) => (
+                <article key={candidate.id} className="py-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold">{candidate.title || "Meeting memory"}</h3>
+                      <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-[color:var(--text-muted)]">{candidate.candidateText}</p>
+                    </div>
+                    <span className="rounded bg-[var(--surface-soft)] px-2 py-1 text-xs font-medium">{candidate.status.replace("_", " ")}</span>
+                  </div>
+                  {review.permissions.canReviewMemory && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {candidate.status === "pending_approval" && (
+                        <>
+                          <button type="button" disabled={busyId === candidate.id} onClick={() => reviewMemoryCandidate(candidate, "approved")} className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"><Check size={13} /> Approve memory</button>
+                          <button type="button" disabled={busyId === candidate.id} onClick={() => reviewMemoryCandidate(candidate, "rejected")} className="inline-flex items-center gap-1 rounded border border-red-300 px-3 py-2 text-xs font-medium text-red-600 disabled:opacity-50"><X size={13} /> Reject</button>
+                        </>
+                      )}
+                      {candidate.status === "approved" && (
+                        <button type="button" disabled={busyId === candidate.id} onClick={() => promoteMemoryCandidate(candidate)} className="inline-flex items-center gap-1 rounded bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[color:var(--primary-contrast)] disabled:opacity-50"><Database size={13} /> Promote to workspace memory</button>
+                      )}
+                    </div>
+                  )}
+                </article>
+              ))}
+              {(review.memoryCandidates || []).length === 0 && <p className="py-6 text-sm text-[color:var(--text-muted)]">Approve a summary, decision set, or action list to create a memory candidate.</p>}
             </div>
           </section>
         )}

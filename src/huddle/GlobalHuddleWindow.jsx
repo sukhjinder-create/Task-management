@@ -4,7 +4,10 @@ import { useHuddle } from "../context/HuddleContext";
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Maximize2, Minimize2, VolumeX, Captions,
+  BookOpenText, Image, Sparkles, X,
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { useApi } from "../api";
 
 // ── Call timer ──────────────────────────────────────────────────────────────
 function useCallTimer(startedAt) {
@@ -206,6 +209,7 @@ function CtrlBtn({ onClick, title, active = false, danger = false, wide = false,
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function GlobalHuddleWindow() {
+  const api = useApi();
   const huddleCtx = useHuddle();
   const activeHuddle = huddleCtx?.activeHuddle || null;
   const incomingHuddle = huddleCtx?.incomingHuddle || null;
@@ -226,7 +230,13 @@ export default function GlobalHuddleWindow() {
     isMobileViewport() ? getFullWindowLayout().size : { w: 620, h: 440 }
   ));
   const [pendingControl, setPendingControl] = useState(null);
+  const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
+  const [showMissedPanel, setShowMissedPanel] = useState(false);
+  const [missedBrief, setMissedBrief] = useState(null);
+  const [missedLoading, setMissedLoading] = useState(false);
   const captionFeedRef = useRef(null);
+  const replacementInputRef = useRef(null);
+  const replacementUrlRef = useRef(null);
   const canonicalCaptionFeed = useMemo(
     () => (Array.isArray(rtc?.captionFeed) ? rtc.captionFeed : []),
     [rtc?.captionFeed]
@@ -241,6 +251,64 @@ export default function GlobalHuddleWindow() {
       setPendingControl(null);
     }
   }, [pendingControl]);
+
+  useEffect(() => () => {
+    if (replacementUrlRef.current) {
+      URL.revokeObjectURL(replacementUrlRef.current);
+    }
+  }, []);
+
+  const updateBackgroundEffect = useCallback(async (mode, imagePath = null) => {
+    if (!rtc?.setBackgroundEffect) return;
+    const result = await rtc.setBackgroundEffect({ mode, imagePath });
+    if (!result?.ok) {
+      toast.error(
+        result?.reason === "background_effect_not_supported"
+          ? "Background effects are unavailable in this browser"
+          : "Background effect could not be applied"
+      );
+      return;
+    }
+    setShowBackgroundMenu(false);
+    toast.success(
+      mode === "off"
+        ? "Background effect removed"
+        : mode === "blur"
+          ? "Background blurred"
+          : "Background replaced"
+    );
+  }, [rtc]);
+
+  const chooseReplacement = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (replacementUrlRef.current) URL.revokeObjectURL(replacementUrlRef.current);
+    replacementUrlRef.current = URL.createObjectURL(file);
+    void updateBackgroundEffect("replacement", replacementUrlRef.current);
+    event.target.value = "";
+  }, [updateBackgroundEffect]);
+
+  const loadWhatDidIMiss = useCallback(async () => {
+    const sessionId = activeHuddle?.sessionId;
+    if (!sessionId) {
+      toast.error("Meeting context is still connecting");
+      return;
+    }
+    setShowMissedPanel(true);
+    setMissedLoading(true);
+    try {
+      const response = await api.get(
+        `/huddle/intelligence/sessions/${sessionId}/what-did-i-miss`
+      );
+      setMissedBrief(response.data.result);
+    } catch (requestError) {
+      toast.error(
+        requestError.response?.data?.reason || "Meeting brief could not be loaded"
+      );
+    } finally {
+      setMissedLoading(false);
+    }
+  }, [activeHuddle?.sessionId, api]);
 
   useEffect(() => {
     const sync = () => {
@@ -514,7 +582,7 @@ export default function GlobalHuddleWindow() {
       </div>
 
       {/* ── SUBTITLE OVERLAY ─────────────────────────────────────────────── */}
-      {rtc?.subtitlesEnabled && (
+      {rtc?.subtitlesEnabled && !showMissedPanel && (
         <section
           className={`absolute z-30 overflow-hidden border border-white/15 bg-black/80 shadow-xl backdrop-blur-sm ${
             isMobileDevice
@@ -569,6 +637,77 @@ export default function GlobalHuddleWindow() {
         </section>
       )}
 
+      {showMissedPanel && (
+        <section
+          className={`absolute z-40 overflow-hidden border border-white/15 bg-[#111827]/95 shadow-xl ${
+            isMobileDevice
+              ? "inset-x-2 top-12"
+              : "left-3 top-14 w-[min(430px,62%)]"
+          }`}
+          style={{ borderRadius: 8, bottom: isMobileDevice ? 132 : 88 }}
+          aria-label="What did I miss"
+        >
+          <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+            <div>
+              <div className="text-sm font-semibold">What did I miss?</div>
+              <div className="text-[11px] text-slate-400">Evidence from the live transcript</div>
+            </div>
+            <button type="button" onClick={() => setShowMissedPanel(false)} className="p-1.5 text-slate-300" title="Close">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="h-full overflow-y-auto px-3 py-3 text-sm">
+            {missedLoading ? (
+              <div className="py-8 text-center text-slate-400">Preparing your meeting brief...</div>
+            ) : (
+              <>
+                <p className="whitespace-pre-wrap leading-6 text-slate-100">
+                  {missedBrief?.rollingSummary || "No finalized discussion is available yet."}
+                </p>
+                {(missedBrief?.decisions || []).length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-xs font-semibold uppercase text-sky-300">Decisions so far</h3>
+                    <ul className="mt-2 space-y-2">
+                      {missedBrief.decisions.map((item) => (
+                        <li key={item.id} className="leading-5 text-slate-200">{item.decision}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(missedBrief?.openQuestions || []).length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-xs font-semibold uppercase text-amber-300">Open questions</h3>
+                    <ul className="mt-2 space-y-2">
+                      {missedBrief.openQuestions.map((item) => (
+                        <li key={item.id} className="leading-5 text-slate-200">{item.question}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {showBackgroundMenu && (
+        <div
+          className="absolute z-50 w-52 border border-white/15 bg-[#1b1e27] p-2 shadow-xl"
+          style={{ borderRadius: 8, bottom: isMobileDevice ? 126 : 82, left: "50%", transform: "translateX(-50%)" }}
+        >
+          <button type="button" onClick={() => updateBackgroundEffect("off")} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10">
+            <Video size={15} /> No effect
+          </button>
+          <button type="button" onClick={() => updateBackgroundEffect("blur")} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10">
+            <Sparkles size={15} /> Blur background
+          </button>
+          <button type="button" onClick={() => replacementInputRef.current?.click()} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10">
+            <Image size={15} /> Replace background
+          </button>
+          <input ref={replacementInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={chooseReplacement} />
+        </div>
+      )}
+
       {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
       <div
         className={`w-full bg-[#1b1e27] flex justify-center items-center shrink-0 ${
@@ -618,6 +757,20 @@ export default function GlobalHuddleWindow() {
           {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
         </CtrlBtn>
 
+        {/* Background effects */}
+        <CtrlBtn
+          onClick={() => setShowBackgroundMenu((value) => !value)}
+          title={
+            rtc.backgroundEffectsSupported
+              ? "Background effects"
+              : "Background effects are unavailable in this browser"
+          }
+          active={rtc.backgroundEffect?.active}
+          disabled={!rtc.backgroundEffectsSupported || pendingControl === "background"}
+        >
+          <Sparkles size={18} />
+        </CtrlBtn>
+
         {/* CC / Live subtitles */}
         <CtrlBtn
           onClick={() => subtitlesSupported && runControl("subtitles", rtc?.toggleSubtitles)}
@@ -630,6 +783,16 @@ export default function GlobalHuddleWindow() {
           disabled={!subtitlesSupported || pendingControl === "subtitles"}
         >
           <Captions size={18} />
+        </CtrlBtn>
+
+        {/* What did I miss */}
+        <CtrlBtn
+          onClick={loadWhatDidIMiss}
+          title="What did I miss?"
+          active={showMissedPanel}
+          disabled={missedLoading}
+        >
+          <BookOpenText size={18} />
         </CtrlBtn>
 
         {/* Mute all — host only */}

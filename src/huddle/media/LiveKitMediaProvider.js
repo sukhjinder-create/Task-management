@@ -31,6 +31,12 @@ import {
   elapsedMs,
   metricNow,
 } from "./providerDiagnostics";
+import {
+  applyBackgroundEffect,
+  destroyBackgroundEffect,
+  getBackgroundEffectSupport,
+  HUDDLE_BACKGROUND_EFFECTS,
+} from "./BackgroundEffects";
 
 export const LIVEKIT_MEDIA_PROVIDER_READINESS = Object.freeze({
   modeled: true,
@@ -339,6 +345,15 @@ function liveKitLocalAudioTrack(room) {
   return displayTrackPublications(room?.localParticipant)
     .map((publication) => mediaStreamTrackFromPublication(publication))
     .find((track) => track?.kind === "audio" && track.readyState !== "ended") || null;
+}
+
+function liveKitLocalCameraTrack(room) {
+  const publication = displayTrackPublications(room?.localParticipant).find(
+    (item) =>
+      trackSource(item) === HUDDLE_MEDIA_TRACK_SOURCES.camera &&
+      publicationTrackKind(item) === "video"
+  );
+  return liveKitTrackFromPublication(publication);
 }
 
 function liveKitRemoteStream(participant = {}, streamCache = null) {
@@ -1652,10 +1667,18 @@ export function useLiveKitMediaProvider({
   const qualityPostInFlightRef = useRef(false);
   const transcriptionClientRef = useRef(null);
   const transcriptionStartingRef = useRef(false);
+  const backgroundProcessorRef = useRef(null);
+  const backgroundTrackRef = useRef(null);
   const [connectedRoom, setConnectedRoom] = useState(null);
   const [connectionResult, setConnectionResult] = useState(null);
   const [publicationDiagnostics, setPublicationDiagnostics] = useState(null);
   const [screenShareDiagnostics, setScreenShareDiagnostics] = useState(null);
+  const [backgroundEffect, setBackgroundEffectState] = useState({
+    mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
+    active: false,
+    imagePathConfigured: false,
+    diagnostics: null,
+  });
   const [transcriptionDiagnostics, setTranscriptionDiagnostics] = useState(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [subtitles, setSubtitles] = useState({});
@@ -2277,6 +2300,15 @@ export function useLiveKitMediaProvider({
     setConnectedRoom(null);
     setPublicationDiagnostics(null);
     setScreenShareDiagnostics(null);
+    void destroyBackgroundEffect(backgroundProcessorRef.current);
+    backgroundProcessorRef.current = null;
+    backgroundTrackRef.current = null;
+    setBackgroundEffectState({
+      mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
+      active: false,
+      imagePathConfigured: false,
+      diagnostics: null,
+    });
     setNetworkStatsByParticipant({});
     latestNetworkStatsRef.current = {};
     qualityStatsPreviousRef.current.clear();
@@ -2346,6 +2378,30 @@ export function useLiveKitMediaProvider({
         },
       }));
       setRevision((value) => value + 1);
+      if (nextEnabled && backgroundEffect.mode !== HUDDLE_BACKGROUND_EFFECTS.OFF) {
+        window.setTimeout(() => {
+          const nextTrack = liveKitLocalCameraTrack(room);
+          if (!nextTrack) return;
+          if (backgroundTrackRef.current && backgroundTrackRef.current !== nextTrack) {
+            void destroyBackgroundEffect(backgroundProcessorRef.current);
+            backgroundProcessorRef.current = null;
+          }
+          backgroundTrackRef.current = nextTrack;
+          void applyBackgroundEffect({
+            localVideoTrack: nextTrack,
+            processor: backgroundProcessorRef.current,
+            mode: backgroundEffect.mode,
+            imagePath: backgroundEffect.imagePath || null,
+          }).then((result) => {
+            if (!result.ok) return;
+            backgroundProcessorRef.current = result.processor;
+            setBackgroundEffectState((current) => ({
+              ...current,
+              diagnostics: result,
+            }));
+          });
+        }, 250);
+      }
       return { ok: true, enabled: nextEnabled };
     } catch (error) {
       const failure = sanitizeLiveKitMediaFailure(
@@ -2361,6 +2417,65 @@ export function useLiveKitMediaProvider({
         },
       }));
       return { ok: false, reason: failure.reason, diagnostics: failure };
+    }
+  }, [backgroundEffect.imagePath, backgroundEffect.mode]);
+  const setBackgroundEffect = useCallback(async ({
+    mode = HUDDLE_BACKGROUND_EFFECTS.OFF,
+    imagePath = null,
+    blurRadius = 12,
+  } = {}) => {
+    const room = connectedRoomRef.current;
+    const localVideoTrack = liveKitLocalCameraTrack(room);
+    if (!room || !localVideoTrack) {
+      return { ok: false, reason: "livekit_camera_track_required" };
+    }
+    if (
+      backgroundTrackRef.current &&
+      backgroundTrackRef.current !== localVideoTrack
+    ) {
+      await destroyBackgroundEffect(backgroundProcessorRef.current);
+      backgroundProcessorRef.current = null;
+    }
+    backgroundTrackRef.current = localVideoTrack;
+    try {
+      const result = await applyBackgroundEffect({
+        localVideoTrack,
+        processor: backgroundProcessorRef.current,
+        mode,
+        imagePath,
+        blurRadius,
+      });
+      if (!result.ok) return result;
+      backgroundProcessorRef.current = result.processor;
+      const next = {
+        mode,
+        active: mode !== HUDDLE_BACKGROUND_EFFECTS.OFF,
+        imagePath: mode === HUDDLE_BACKGROUND_EFFECTS.REPLACEMENT ? imagePath : null,
+        imagePathConfigured:
+          mode === HUDDLE_BACKGROUND_EFFECTS.REPLACEMENT && Boolean(imagePath),
+        diagnostics: {
+          reason: result.reason,
+          modern: result.modern,
+          observedAt: result.observedAt,
+        },
+      };
+      setBackgroundEffectState(next);
+      setPublicationDiagnostics((previous) => ({
+        ...(previous || {}),
+        backgroundEffect: next,
+      }));
+      setRevision((value) => value + 1);
+      return { ...result, ...next };
+    } catch (error) {
+      const diagnostics = {
+        reason: safeString(error?.message) || "background_effect_failed",
+        observedAt: new Date().toISOString(),
+      };
+      setBackgroundEffectState((current) => ({
+        ...current,
+        diagnostics,
+      }));
+      return { ok: false, reason: diagnostics.reason, diagnostics };
     }
   }, []);
   const startScreenShare = useCallback(async () => {
@@ -2460,6 +2575,8 @@ export function useLiveKitMediaProvider({
       typeof navigator !== "undefined" &&
       navigator.mediaDevices?.getDisplayMedia
     ),
+    backgroundEffectsSupported: getBackgroundEffectSupport().supported,
+    backgroundEffect,
     subtitlesSupported: Boolean(connectedRoom && liveTranscriptionSupported()),
     subtitlesEnabled,
     subtitles,
@@ -2474,6 +2591,7 @@ export function useLiveKitMediaProvider({
         connectionResult: connectionResult?.diagnostics || null,
         publication: publicationDiagnostics,
         screenShare: screenShareDiagnostics,
+        backgroundEffect,
         transcription: transcriptionDiagnostics,
         activeSpeaker: activeSpeakerDiagnostics,
         networkQuality: networkQualityDiagnostics,
@@ -2487,6 +2605,7 @@ export function useLiveKitMediaProvider({
     toggleCamera,
     startScreenShare,
     stopScreenShare,
+    setBackgroundEffect,
     toggleSubtitles,
     startRecording: noop,
     stopRecording: noop,
