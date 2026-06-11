@@ -37,9 +37,9 @@ function deepgramConfidence(payload = {}) {
   return Number.isFinite(confidence) ? Math.min(Math.max(confidence, 0), 1) : null;
 }
 
-function segmentTiming(payload = {}) {
+function segmentTiming(payload = {}, streamStartedAtMs = Date.now()) {
   const startedAt = Number.isFinite(Number(payload.start))
-    ? new Date(Date.now() + Number(payload.start) * 1000).toISOString()
+    ? new Date(streamStartedAtMs + Number(payload.start) * 1000).toISOString()
     : null;
   const duration = Number(payload.duration);
   const endedAt = startedAt && Number.isFinite(duration)
@@ -75,6 +75,7 @@ export function createLiveTranscriptionClient({
   let utteranceIndex = 0;
   let activeSourceSegmentId = null;
   let stopped = false;
+  let streamStartedAtMs = Date.now();
 
   const diagnostics = {
     supported: liveTranscriptionSupported(),
@@ -125,7 +126,7 @@ export function createLiveTranscriptionClient({
       sequenceNumber,
       status,
     ].join(":");
-    const timing = segmentTiming(payload);
+    const timing = segmentTiming(payload, streamStartedAtMs);
 
     await api.post(`/huddle/transcription/sessions/${sessionId}/events`, {
       transcriptionSessionId: transcriptionSession?.id,
@@ -195,6 +196,7 @@ export function createLiveTranscriptionClient({
 
     websocket.onopen = () => {
       if (stopped) return;
+      streamStartedAtMs = Date.now();
       emitDiagnostics({ status: "streaming", websocketOpen: true });
       const mimeType = preferredMimeType();
       mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);

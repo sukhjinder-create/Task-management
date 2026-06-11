@@ -93,6 +93,10 @@ const LIVEKIT_CAMERA_PUBLISH_OPTIONS = Object.freeze({
   simulcast: true,
 });
 
+const LIVE_CAPTION_LANGUAGE = "multi";
+const LIVE_CAPTION_POLL_INTERVAL_MS = 1500;
+const LIVE_CAPTION_HISTORY_LIMIT = 300;
+
 function safeString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -193,6 +197,29 @@ function uniqueTrackPublications(participant = {}) {
       publication,
     ])).values()
   );
+}
+
+function canonicalCaptionFeed(events = []) {
+  const latestBySegment = new Map();
+  events.forEach((event) => {
+    const key =
+      safeString(event?.transcriptSegmentId) ||
+      safeString(event?.id);
+    if (!key) return;
+    if (safeString(event?.status).toLowerCase() === "retracted") {
+      latestBySegment.delete(key);
+      return;
+    }
+    latestBySegment.set(key, event);
+  });
+  return Array.from(latestBySegment.values())
+    .sort((left, right) => {
+      const leftAt = new Date(left?.emittedAt || left?.createdAt || 0).getTime();
+      const rightAt = new Date(right?.emittedAt || right?.createdAt || 0).getTime();
+      if (leftAt !== rightAt) return leftAt - rightAt;
+      return Number(left?.sequenceNumber || 0) - Number(right?.sequenceNumber || 0);
+    })
+    .slice(-LIVE_CAPTION_HISTORY_LIMIT);
 }
 
 function publicationTrackKind(publication = {}) {
@@ -1300,7 +1327,6 @@ export function adaptLiveKitParticipant({
   const identity = createLiveKitProviderIdentityMapping({ participant, participantId });
   const userId = identity.userId;
   const deviceId = identity.deviceId;
-  const metadata = safeMetadata(participant.metadata);
   const uniquePublications = uniqueTrackPublications(participant);
   const tracks = uniquePublications.map((publication) =>
     adaptLiveKitTrackPublication({
@@ -1540,6 +1566,7 @@ export function useLiveKitMediaProvider({
   const qualityStatsPreviousRef = useRef(new Map());
   const qualityPostInFlightRef = useRef(false);
   const transcriptionClientRef = useRef(null);
+  const transcriptionStartingRef = useRef(false);
   const [connectedRoom, setConnectedRoom] = useState(null);
   const [connectionResult, setConnectionResult] = useState(null);
   const [publicationDiagnostics, setPublicationDiagnostics] = useState(null);
@@ -1547,6 +1574,7 @@ export function useLiveKitMediaProvider({
   const [transcriptionDiagnostics, setTranscriptionDiagnostics] = useState(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [subtitles, setSubtitles] = useState({});
+  const [captionFeed, setCaptionFeed] = useState([]);
   const [networkStatsByParticipant, setNetworkStatsByParticipant] = useState({});
   const [connecting, setConnecting] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -1766,7 +1794,7 @@ export function useLiveKitMediaProvider({
       // Best effort cleanup.
     }
     transcriptionClientRef.current = null;
-    setSubtitlesEnabled(false);
+    transcriptionStartingRef.current = false;
     setTranscriptionDiagnostics((previous) => ({
       ...(previous || {}),
       status: "stopped",
@@ -1774,12 +1802,10 @@ export function useLiveKitMediaProvider({
     }));
   }, []);
 
-  const toggleSubtitles = useCallback(async () => {
-    if (transcriptionClientRef.current || subtitlesEnabled) {
-      stopLiveTranscription();
-      return { ok: true, enabled: false };
+  const startLiveTranscriptionCapture = useCallback(async () => {
+    if (transcriptionClientRef.current || transcriptionStartingRef.current) {
+      return { ok: true, alreadyStarted: true };
     }
-
     const room = connectedRoomRef.current || connectedRoom;
     const sessionId = sessionIdRef.current || huddleIdRef.current;
     const audioTrack = liveKitLocalAudioTrack(room);
@@ -1793,10 +1819,11 @@ export function useLiveKitMediaProvider({
       return { ok: false, reason: "microphone_track_required" };
     }
 
+    transcriptionStartingRef.current = true;
     const client = createLiveTranscriptionClient({
       sessionId,
       audioTrack,
-      language: "en-US",
+      language: LIVE_CAPTION_LANGUAGE,
       onCaption: (caption) => {
         setSubtitles((previous) => ({
           ...previous,
@@ -1809,11 +1836,11 @@ export function useLiveKitMediaProvider({
 
     try {
       await client.start();
-      setSubtitlesEnabled(true);
-      return { ok: true, enabled: true };
+      transcriptionStartingRef.current = false;
+      return { ok: true, capturing: true };
     } catch (error) {
       transcriptionClientRef.current = null;
-      setSubtitlesEnabled(false);
+      transcriptionStartingRef.current = false;
       setTranscriptionDiagnostics({
         status: "failed",
         reason: safeString(error?.response?.data?.reason || error?.message) || "live_transcription_start_failed",
@@ -1824,7 +1851,79 @@ export function useLiveKitMediaProvider({
         reason: safeString(error?.response?.data?.reason || error?.message) || "live_transcription_start_failed",
       };
     }
-  }, [connectedRoom, stopLiveTranscription, subtitlesEnabled]);
+  }, [connectedRoom]);
+
+  const toggleSubtitles = useCallback(async () => {
+    const enabled = !subtitlesEnabled;
+    setSubtitlesEnabled(enabled);
+    return { ok: true, enabled };
+  }, [subtitlesEnabled]);
+
+  useEffect(() => {
+    if (!connectedRoom || !liveTranscriptionSupported()) return undefined;
+    let cancelled = false;
+    let retryTimer = null;
+
+    const ensureCapture = async () => {
+      const result = await startLiveTranscriptionCapture();
+      if (!cancelled && !result?.ok) {
+        retryTimer = window.setTimeout(ensureCapture, 15000);
+      }
+    };
+    ensureCapture();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+    };
+  }, [connectedRoom, revision, startLiveTranscriptionCapture]);
+
+  useEffect(() => {
+    if (!connectedRoom || !subtitlesEnabled) return undefined;
+    let cancelled = false;
+    let inFlight = false;
+
+    const loadCaptions = async () => {
+      if (cancelled || inFlight) return;
+      const sessionId = sessionIdRef.current || huddleIdRef.current;
+      if (!sessionId) return;
+      inFlight = true;
+      try {
+        const { data } = await api.get(
+          `/huddle/intelligence/sessions/${sessionId}/captions`,
+          {
+            params: {
+              replayableOnly: true,
+              limit: LIVE_CAPTION_HISTORY_LIMIT,
+            },
+          }
+        );
+        if (!cancelled) {
+          setCaptionFeed(canonicalCaptionFeed(data?.captions || []));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTranscriptionDiagnostics((previous) => ({
+            ...(previous || {}),
+            captionFeedStatus: "failed",
+            captionFeedError:
+              safeString(error?.response?.data?.reason || error?.message) ||
+              "caption_feed_failed",
+            observedAt: new Date().toISOString(),
+          }));
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    loadCaptions();
+    const interval = window.setInterval(loadCaptions, LIVE_CAPTION_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [connectedRoom, subtitlesEnabled]);
 
   useEffect(() => {
     if (!connectedRoom?.on) return undefined;
@@ -2087,6 +2186,7 @@ export function useLiveKitMediaProvider({
     providerMetricsRef.current.roomEndedAt = metricNow();
     recordMetricTransition(providerMetricsRef.current, "leaveCall");
     stopLiveTranscription();
+    setSubtitlesEnabled(false);
     connectedRoomRef.current = null;
     streamCacheRef.current.clear();
     setConnectedRoom(null);
@@ -2097,6 +2197,7 @@ export function useLiveKitMediaProvider({
     qualityStatsPreviousRef.current.clear();
     sessionIdRef.current = null;
     setSubtitles({});
+    setCaptionFeed([]);
     const result = disconnectLiveKitRoom();
     setConnectionResult(result);
     return result;
@@ -2277,6 +2378,7 @@ export function useLiveKitMediaProvider({
     subtitlesSupported: Boolean(connectedRoom && liveTranscriptionSupported()),
     subtitlesEnabled,
     subtitles,
+    captionFeed,
     activeSpeakerId,
     networkQuality,
     mediaStateV2,

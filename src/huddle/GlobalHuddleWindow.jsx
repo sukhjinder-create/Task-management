@@ -1,5 +1,5 @@
 // src/huddle/GlobalHuddleWindow.jsx
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useHuddle } from "../context/HuddleContext";
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
@@ -188,6 +188,11 @@ export default function GlobalHuddleWindow() {
     isMobileViewport() ? getFullWindowLayout().size : { w: 620, h: 440 }
   ));
   const [pendingControl, setPendingControl] = useState(null);
+  const captionFeedRef = useRef(null);
+  const canonicalCaptionFeed = useMemo(
+    () => (Array.isArray(rtc?.captionFeed) ? rtc.captionFeed : []),
+    [rtc?.captionFeed]
+  );
 
   const runControl = useCallback(async (control, action) => {
     if (!action || pendingControl) return;
@@ -222,6 +227,11 @@ export default function GlobalHuddleWindow() {
       window.visualViewport?.removeEventListener?.("resize", sync);
     };
   }, [isMaximized, size]);
+
+  useEffect(() => {
+    if (!rtc?.subtitlesEnabled || !captionFeedRef.current) return;
+    captionFeedRef.current.scrollTop = captionFeedRef.current.scrollHeight;
+  }, [canonicalCaptionFeed, rtc?.subtitlesEnabled]);
 
   const windowRef = useRef(null);
   const dragging = useRef(false);
@@ -461,21 +471,56 @@ export default function GlobalHuddleWindow() {
       </div>
 
       {/* ── SUBTITLE OVERLAY ─────────────────────────────────────────────── */}
-      {rtc?.subtitlesEnabled && rtc?.subtitles && (
-        <div className="absolute bottom-2 left-0 right-0 z-30 flex flex-col items-center gap-1 px-4 pointer-events-none">
-          {Object.entries(rtc.subtitles).map(([uid, entry]) => {
-            if (!entry?.text || Date.now() - entry.at > 4000) return null;
-            const name = uid === "local"
-              ? (currentUser?.username || "You")
-              : (remotePeers.find((p) => String(p.userId) === String(uid))?.username || "User");
-            return (
-              <div key={uid} className="bg-black/75 text-white text-sm px-3 py-1 rounded-lg max-w-[80%] text-center">
-                <span className="text-slate-400 text-xs mr-1">{name}:</span>
-                {entry.text}
-              </div>
-            );
-          })}
-        </div>
+      {rtc?.subtitlesEnabled && (
+        <section
+          className={`absolute z-30 overflow-hidden border border-white/15 bg-black/80 shadow-xl backdrop-blur-sm ${
+            isMobileDevice
+              ? "inset-x-2 bottom-2 max-h-[48%]"
+              : "right-3 bottom-3 w-[min(380px,46%)] max-h-[52%]"
+          }`}
+          style={{ borderRadius: 8 }}
+          aria-label="Live meeting transcript"
+        >
+          <div className="border-b border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-300">
+            Live transcript
+          </div>
+          <div
+            ref={captionFeedRef}
+            className="max-h-[inherit] overflow-y-auto px-3 py-2"
+          >
+            {canonicalCaptionFeed.length > 0 ? (
+              canonicalCaptionFeed.map((caption) => (
+                <div key={caption.id || caption.transcriptSegmentId} className="mb-2 last:mb-0">
+                  <div className="text-[11px] font-semibold text-sky-300">
+                    {caption.speaker?.label ||
+                      (String(caption.speaker?.userId) === String(currentUser?.id)
+                        ? currentUser?.username || "You"
+                        : "Participant")}
+                  </div>
+                  <div className={`text-sm leading-5 text-white ${caption.status === "partial" ? "opacity-75" : ""}`}>
+                    {caption.text}
+                  </div>
+                </div>
+              ))
+            ) : (
+              Object.entries(rtc?.subtitles || {}).map(([uid, entry]) => {
+                if (!entry?.text) return null;
+                const name = uid === "local"
+                  ? (currentUser?.username || "You")
+                  : (remotePeers.find((p) => String(p.userId) === String(uid))?.username || "Participant");
+                return (
+                  <div key={uid} className="mb-2 last:mb-0">
+                    <div className="text-[11px] font-semibold text-sky-300">{name}</div>
+                    <div className="text-sm leading-5 text-white">{entry.text}</div>
+                  </div>
+                );
+              })
+            )}
+            {canonicalCaptionFeed.length === 0 && Object.keys(rtc?.subtitles || {}).length === 0 && (
+              <div className="py-2 text-center text-xs text-slate-400">Listening...</div>
+            )}
+          </div>
+        </section>
       )}
 
       {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
