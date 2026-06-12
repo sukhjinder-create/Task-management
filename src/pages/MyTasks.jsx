@@ -1,6 +1,6 @@
 // src/pages/MyTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Edit2, Trash2, Link as LinkIcon, Upload, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, Hash, Layers, Flag, Plus, X, Filter } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -1324,6 +1324,29 @@ export default function MyTasks() {
                   )}
                 </div>
               )}
+
+              {selectedTaskDetails.source_type === "huddle_action_item" &&
+                selectedTaskDetails.source_metadata?.sessionId && (
+                  <div className="mt-3 border-l-2 border-[color:var(--primary)] bg-[var(--surface-soft)] px-3 py-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-xs font-semibold text-[color:var(--text)]">Created from Huddle</h3>
+                        <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">
+                          Approved action item with {(selectedTaskDetails.source_metadata.evidenceSegmentIds || []).length} transcript source{(selectedTaskDetails.source_metadata.evidenceSegmentIds || []).length === 1 ? "" : "s"}.
+                        </p>
+                        <p className="mt-1 text-[10px] text-[color:var(--text-soft)]">
+                          Created {selectedTaskDetails.source_metadata.createdAt ? new Date(selectedTaskDetails.source_metadata.createdAt).toLocaleString() : "from meeting review"}
+                        </p>
+                      </div>
+                      <Link
+                        to={`/huddles/${selectedTaskDetails.source_metadata.sessionId}/intelligence`}
+                        className="inline-flex items-center gap-1 rounded border border-[color:var(--border)] px-2.5 py-1.5 text-[11px] font-medium text-[color:var(--primary)] hover:bg-[var(--surface)]"
+                      >
+                        <LinkIcon className="h-3 w-3" /> View evidence
+                      </Link>
+                    </div>
+                  </div>
+                )}
 
               {/* Edit form */}
               {isEditing && editTask && (

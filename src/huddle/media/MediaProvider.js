@@ -8,6 +8,7 @@ export const MEDIA_PROVIDER_METHODS = Object.freeze([
   "startScreenShare",
   "stopScreenShare",
   "setBackgroundEffect",
+  "setQualityMode",
   "toggleSubtitles",
   "startRecording",
   "stopRecording",
@@ -32,6 +33,7 @@ export const MEDIA_PROVIDER_STATE_FIELDS = Object.freeze([
   "subtitles",
   "activeSpeakerId",
   "networkQuality",
+  "qualityMode",
 ]);
 
 export const MEDIA_PROVIDER_V2_STATE_FIELDS = Object.freeze([
@@ -60,6 +62,7 @@ export function createEmptyMediaProvider() {
     subtitles: state.subtitles,
     activeSpeakerId: state.activeSpeakerId,
     networkQuality: state.networkQuality,
+    qualityMode: "auto",
     mediaStateV2: state.mediaStateV2,
     diagnostics: state.mediaStateV2.diagnostics,
     startCall: noopAsync,
@@ -69,6 +72,7 @@ export function createEmptyMediaProvider() {
     startScreenShare: noopAsync,
     stopScreenShare: noop,
     setBackgroundEffect: noopAsync,
+    setQualityMode: noopAsync,
     toggleSubtitles: noop,
     startRecording: noop,
     stopRecording: noop,

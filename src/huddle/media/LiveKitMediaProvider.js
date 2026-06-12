@@ -9,7 +9,7 @@ import {
   liveTranscriptionSupported,
 } from "./LiveTranscriptionClient";
 import api from "../../api";
-import { getCachedLiveKitSdkDiagnostics } from "./LiveKitSdk";
+import { getCachedLiveKitSdkDiagnostics, loadLiveKitSdk } from "./LiveKitSdk";
 import {
   createHuddleMediaDeviceV2,
   createHuddleActiveSpeakerDiagnosticsV2,
@@ -97,6 +97,21 @@ const LIVEKIT_CAMERA_CAPTURE_OPTIONS = Object.freeze({
 
 const LIVEKIT_CAMERA_PUBLISH_OPTIONS = Object.freeze({
   simulcast: true,
+});
+
+const LIVEKIT_QUALITY_MODES = Object.freeze({
+  AUTO: "auto",
+  STANDARD: "standard",
+  HD: "hd",
+});
+
+const LIVEKIT_QUALITY_CAPTURE_OPTIONS = Object.freeze({
+  [LIVEKIT_QUALITY_MODES.STANDARD]: {
+    resolution: { width: 960, height: 540, frameRate: 24 },
+  },
+  [LIVEKIT_QUALITY_MODES.HD]: {
+    resolution: { width: 1280, height: 720, frameRate: 30 },
+  },
 });
 
 const LIVE_CAPTION_LANGUAGE = "multi";
@@ -1684,6 +1699,7 @@ export function useLiveKitMediaProvider({
   const [subtitles, setSubtitles] = useState({});
   const [captionFeed, setCaptionFeed] = useState([]);
   const [networkStatsByParticipant, setNetworkStatsByParticipant] = useState({});
+  const [qualityMode, setQualityModeState] = useState(LIVEKIT_QUALITY_MODES.AUTO);
   const [connecting, setConnecting] = useState(false);
   const [revision, setRevision] = useState(0);
   const sdkDiagnostics = getCachedLiveKitSdkDiagnostics();
@@ -2419,6 +2435,57 @@ export function useLiveKitMediaProvider({
       return { ok: false, reason: failure.reason, diagnostics: failure };
     }
   }, [backgroundEffect.imagePath, backgroundEffect.mode]);
+  const setQualityMode = useCallback(async (requestedMode = LIVEKIT_QUALITY_MODES.AUTO) => {
+    const mode = Object.values(LIVEKIT_QUALITY_MODES).includes(requestedMode)
+      ? requestedMode
+      : LIVEKIT_QUALITY_MODES.AUTO;
+    const room = connectedRoomRef.current;
+    if (!room) return { ok: false, reason: "livekit_not_connected" };
+    try {
+      const sdkResult = await loadLiveKitSdk({ enabled: true });
+      if (!sdkResult.ok) return { ok: false, reason: "livekit_sdk_unavailable" };
+      const sdk = sdkResult.sdk;
+      const captureOptions =
+        LIVEKIT_QUALITY_CAPTURE_OPTIONS[mode] || LIVEKIT_CAMERA_CAPTURE_OPTIONS;
+      const localCameraTrack = liveKitLocalCameraTrack(room);
+      if (localCameraTrack?.restartTrack && room.localParticipant?.isCameraEnabled) {
+        await localCameraTrack.restartTrack(captureOptions);
+      }
+      for (const participant of remoteParticipantsFromRoom(room)) {
+        for (const publication of displayTrackPublications(participant)) {
+          if (
+            publication?.kind !== "video" ||
+            publication?.source === sdk.Track?.Source?.ScreenShare
+          ) {
+            continue;
+          }
+          if (mode === LIVEKIT_QUALITY_MODES.HD) {
+            publication.setVideoQuality?.(sdk.VideoQuality.HIGH);
+          } else if (mode === LIVEKIT_QUALITY_MODES.STANDARD) {
+            publication.setVideoQuality?.(sdk.VideoQuality.MEDIUM);
+          }
+        }
+      }
+      setQualityModeState(mode);
+      setPublicationDiagnostics((previous) => ({
+        ...(previous || {}),
+        qualityMode: {
+          mode,
+          captureOptions,
+          adaptiveStream: true,
+          dynacast: true,
+          observedAt: new Date().toISOString(),
+        },
+      }));
+      setRevision((value) => value + 1);
+      return { ok: true, mode, captureOptions };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: safeString(error?.message) || "livekit_quality_mode_failed",
+      };
+    }
+  }, []);
   const setBackgroundEffect = useCallback(async ({
     mode = HUDDLE_BACKGROUND_EFFECTS.OFF,
     imagePath = null,
@@ -2583,6 +2650,7 @@ export function useLiveKitMediaProvider({
     captionFeed,
     activeSpeakerId,
     networkQuality,
+    qualityMode,
     mediaStateV2,
     diagnostics: {
       ...mediaStateV2.diagnostics,
@@ -2606,6 +2674,7 @@ export function useLiveKitMediaProvider({
     startScreenShare,
     stopScreenShare,
     setBackgroundEffect,
+    setQualityMode,
     toggleSubtitles,
     startRecording: noop,
     stopRecording: noop,

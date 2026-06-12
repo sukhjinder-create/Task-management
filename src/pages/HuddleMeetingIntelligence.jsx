@@ -3,16 +3,23 @@ import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   AlertCircle,
+  Archive,
+  Bot,
   Check,
   ClipboardCopy,
   Clock3,
   Download,
+  FileDown,
   FileText,
   Gavel,
   Database,
   ListChecks,
   Loader2,
   Pencil,
+  Plus,
+  Radio,
+  RotateCcw,
+  Search,
   ScrollText,
   Sparkles,
   UserCheck,
@@ -28,6 +35,8 @@ const TABS = [
   { id: "actions", label: "Action items", icon: ListChecks },
   { id: "ownership", label: "Ownership", icon: UserCheck },
   { id: "memory", label: "Memory", icon: Database },
+  { id: "copilot", label: "Copilot", icon: Bot },
+  { id: "quality", label: "Quality", icon: Radio },
 ];
 
 function TabIcon({ id }) {
@@ -37,6 +46,8 @@ function TabIcon({ id }) {
   if (id === "decisions") return <Gavel size={15} />;
   if (id === "actions") return <ListChecks size={15} />;
   if (id === "ownership") return <UserCheck size={15} />;
+  if (id === "copilot") return <Bot size={15} />;
+  if (id === "quality") return <Radio size={15} />;
   return <Database size={15} />;
 }
 
@@ -87,6 +98,62 @@ function artifactContentText(artifactType, content) {
   return (content.actionItems || [])
     .map((item) => [item.title, item.description, item.dueDate && `Due: ${item.dueDate}`].filter(Boolean).join("\n"))
     .join("\n\n");
+}
+
+function reportMarkdown(review) {
+  const report = review?.report || {};
+  const lines = [
+    `# ${review?.session?.title || "Huddle"}`,
+    "",
+    `Held ${dateTime(review?.session?.startedAt)}`,
+    "",
+    "## Executive Summary",
+    "",
+    report.executiveSummary?.outcome || "No executive summary is available.",
+    "",
+    "## Discussion Highlights",
+    "",
+    ...(report.discussionHighlights || []).map(
+      (item) => `- **${item.speaker || "Participants"}:** ${item.text}`
+    ),
+    "",
+    "## Chronological Conversation",
+    "",
+    ...(report.chronologicalConversation || []).map(
+      (item) =>
+        `- ${item.occurredAt ? `${timeOnly(item.occurredAt)} - ` : ""}**${item.title || "Discussion"}:** ${item.description || ""}`
+    ),
+    "",
+    "## Decisions",
+    "",
+    ...(report.decisions || []).map(
+      (item) =>
+        `- **${item.title || "Decision"}:** ${item.decision || ""}${item.rationale ? `\n  - Rationale: ${item.rationale}` : ""}`
+    ),
+    "",
+    "## Action Items",
+    "",
+    ...(report.actionItems || []).map(
+      (item) =>
+        `- [ ] **${item.title}**${item.owner?.label ? ` - ${item.owner.label}` : ""}${item.dueDate ? ` - due ${item.dueDate}` : ""}${item.description ? `\n  - ${item.description}` : ""}`
+    ),
+    "",
+    "## Open Questions",
+    "",
+    ...(report.openQuestions || []).map((item) => `- ${item.question}`),
+    "",
+    "## Risks",
+    "",
+    ...(report.risks || []).map((item) => `- ${item.text || item.question || item}`),
+    "",
+    "## Transcript",
+    "",
+    ...(review?.transcript || []).map(
+      (segment) =>
+        `- **${segment.speaker?.label || "Participant"}** (${timeOnly(segment.startedAt)}): ${segment.text}`
+    ),
+  ];
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function ReviewStatus({ artifact }) {
@@ -340,12 +407,39 @@ export default function HuddleMeetingIntelligence() {
   const [evidenceIds, setEvidenceIds] = useState([]);
   const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [taskProjects, setTaskProjects] = useState({});
+  const [memoryEditor, setMemoryEditor] = useState(null);
+  const [memoryHistory, setMemoryHistory] = useState({});
+  const [copilotQuestion, setCopilotQuestion] = useState("");
+  const [copilotQueries, setCopilotQueries] = useState([]);
+  const [quality, setQuality] = useState(null);
   const transcriptRefs = useRef(new Map());
 
   const load = async () => {
     try {
-      const response = await api.get(`/huddle/intelligence/sessions/${sessionId}/review`);
-      setReview(response.data.review);
+      const [reviewResponse, projectsResponse, copilotResponse, qualityResponse] =
+        await Promise.allSettled([
+          api.get(`/huddle/intelligence/sessions/${sessionId}/review`),
+          api.get("/projects"),
+          api.get(`/huddle/intelligence/sessions/${sessionId}/copilot`),
+          api.get(`/huddle/media/livekit/quality/sessions/${sessionId}/summary`),
+        ]);
+      if (reviewResponse.status !== "fulfilled") throw reviewResponse.reason;
+      setReview(reviewResponse.value.data.review);
+      if (projectsResponse.status === "fulfilled") {
+        const list =
+          projectsResponse.value.data?.projects ||
+          projectsResponse.value.data ||
+          [];
+        setProjects(Array.isArray(list) ? list : []);
+      }
+      if (copilotResponse.status === "fulfilled") {
+        setCopilotQueries(copilotResponse.value.data?.queries || []);
+      }
+      if (qualityResponse.status === "fulfilled") {
+        setQuality(qualityResponse.value.data?.quality || null);
+      }
       setError("");
     } catch (requestError) {
       setError(requestError.response?.data?.reason || "Meeting intelligence could not be loaded.");
@@ -526,7 +620,106 @@ export default function HuddleMeetingIntelligence() {
     }
   };
 
-  const downloadExport = () => {
+  const saveMemoryCandidate = async () => {
+    if (!memoryEditor) return;
+    setBusyId(memoryEditor.id);
+    try {
+      await api.patch(
+        `/huddle/intelligence/sessions/${sessionId}/memory-candidates/${memoryEditor.id}`,
+        {
+          status:
+            memoryEditor.status === "promoted"
+              ? "approved"
+              : memoryEditor.status,
+          expectedStatus: memoryEditor.status,
+          title: memoryEditor.title,
+          candidateText: memoryEditor.candidateText,
+          metadata: { editedInMeetingIntelligence: true },
+        }
+      );
+      toast.success("Memory revision saved");
+      setMemoryEditor(null);
+      await load();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.reason || "Memory could not be updated");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const revokeMemoryCandidate = async (candidate) => {
+    setBusyId(candidate.id);
+    try {
+      await api.post(
+        `/huddle/intelligence/sessions/${sessionId}/memory-candidates/${candidate.id}/revoke`,
+        { reason: "Revoked in Meeting Intelligence" }
+      );
+      toast.success("Workspace memory archived");
+      await load();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.reason || "Memory could not be revoked");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const loadMemoryHistory = async (candidate) => {
+    try {
+      const response = await api.get(
+        `/huddle/intelligence/sessions/${sessionId}/memory-candidates/${candidate.id}/history`
+      );
+      setMemoryHistory((current) => ({
+        ...current,
+        [candidate.id]: response.data?.history || [],
+      }));
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.reason || "Memory history could not be loaded");
+    }
+  };
+
+  const createTaskFromAction = async (item) => {
+    const projectId = taskProjects[item.id];
+    if (!projectId) {
+      toast.error("Choose a project first");
+      return;
+    }
+    setBusyId(`task:${item.id}`);
+    try {
+      await api.post(
+        `/huddle/intelligence/sessions/${sessionId}/actions/${item.id}/tasks`,
+        {
+          artifactId: review.artifacts.actions.id,
+          projectId,
+        }
+      );
+      toast.success("Task created with Huddle evidence");
+      await load();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.reason || "Task could not be created");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const askCopilot = async (event) => {
+    event.preventDefault();
+    if (!copilotQuestion.trim()) return;
+    setBusyId("copilot");
+    try {
+      const response = await api.post(
+        `/huddle/intelligence/sessions/${sessionId}/copilot`,
+        { question: copilotQuestion }
+      );
+      setCopilotQueries((current) => [response.data.result, ...current]);
+      setCopilotQuestion("");
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.reason || "Copilot could not answer");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const downloadJsonExport = () => {
     const payload = {
       ...review.export,
       session: review.session,
@@ -537,6 +730,8 @@ export default function HuddleMeetingIntelligence() {
       ownership: review.ownership,
       timeline: review.timeline,
       transcript: review.transcript,
+      report: review.report,
+      actionTasks: review.actionTasks,
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
     const anchor = document.createElement("a");
@@ -544,6 +739,33 @@ export default function HuddleMeetingIntelligence() {
     anchor.download = `huddle-intelligence-${sessionId}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadMarkdownExport = () => {
+    const url = URL.createObjectURL(
+      new Blob([reportMarkdown(review)], { type: "text/markdown;charset=utf-8" })
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `huddle-intelligence-${sessionId}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPdfExport = async () => {
+    const { jsPDF } = await import("jspdf");
+    const document = new jsPDF({ unit: "pt", format: "a4" });
+    const lines = document.splitTextToSize(reportMarkdown(review), 500);
+    let y = 48;
+    for (const line of lines) {
+      if (y > 790) {
+        document.addPage();
+        y = 48;
+      }
+      document.text(line, 48, y);
+      y += 14;
+    }
+    document.save(`huddle-intelligence-${sessionId}.pdf`);
   };
 
   if (loading) {
@@ -585,8 +807,14 @@ export default function HuddleMeetingIntelligence() {
               <button type="button" onClick={() => copyText(transcriptText, "Transcript")} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
                 <ClipboardCopy size={15} /> Copy transcript
               </button>
-              <button type="button" onClick={downloadExport} title="Export meeting intelligence" className="inline-flex items-center gap-2 rounded bg-[var(--primary)] px-3 py-2 text-sm font-medium text-[color:var(--primary-contrast)]">
-                <Download size={15} /> Export
+              <button type="button" onClick={downloadMarkdownExport} title="Export Markdown" className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
+                <FileDown size={15} /> Markdown
+              </button>
+              <button type="button" onClick={downloadPdfExport} title="Export PDF" className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
+                <FileText size={15} /> PDF
+              </button>
+              <button type="button" onClick={downloadJsonExport} title="Export structured meeting intelligence" className="inline-flex items-center gap-2 rounded bg-[var(--primary)] px-3 py-2 text-sm font-medium text-[color:var(--primary-contrast)]">
+                <Download size={15} /> JSON
               </button>
             </div>
           </div>
@@ -661,6 +889,34 @@ export default function HuddleMeetingIntelligence() {
                   </div>
                 ) : (
                   <p className="text-sm text-[color:var(--text-muted)]">No unresolved question was identified in the transcript.</p>
+                )}
+                {(review.report?.risks || []).length > 0 && (
+                  <>
+                    <h3 className="mb-3 mt-7 font-semibold">Risks and blockers</h3>
+                    <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                      {review.report.risks.map((item, index) => (
+                        <div key={item.id || index} className="py-4">
+                          <p className="text-sm leading-6">{item.text || item.question || item}</p>
+                          <div className="mt-2">
+                            <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {(review.report?.outcomes || []).length > 0 && (
+                  <>
+                    <h3 className="mb-3 mt-7 font-semibold">Meeting outcomes</h3>
+                    <ul className="space-y-2 text-sm leading-6">
+                      {review.report.outcomes.map((item, index) => (
+                        <li key={`${item.type || "outcome"}-${index}`} className="flex gap-2">
+                          <Check size={15} className="mt-1 shrink-0 text-emerald-600" />
+                          <span>{item.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
                 {summary.approvalStatus === "approved" && (
                   <button type="button" disabled={busyId === `memory:${summary.id}`} onClick={() => createMemoryCandidate(summary)} className="mt-5 inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-soft)] disabled:opacity-50">
@@ -750,11 +1006,19 @@ export default function HuddleMeetingIntelligence() {
         {activeTab === "actions" && (
           <section>
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div><h2 className="text-xl font-semibold">Action items</h2><p className="text-sm text-[color:var(--text-muted)]">No task is created until a future explicit workflow is approved.</p></div>
+              <div><h2 className="text-xl font-semibold">Action items</h2><p className="text-sm text-[color:var(--text-muted)]">Approved actions become tasks only after ownership is confirmed and you choose a project.</p></div>
               <div className="flex flex-wrap items-center gap-2"><ReviewStatus artifact={actions} /><ArtifactActions artifact={actions} canReview={review.permissions.canReviewArtifacts} canEdit={actions?.approvalStatus !== "approved" || review.permissions.canEditApprovedArtifacts} onEdit={setEditing} onDecision={decideArtifact} busy={busyId === actions?.id} /></div>
             </div>
             <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-              {(actions?.contentJson?.actionItems || []).map((item) => (
+              {(actions?.contentJson?.actionItems || []).map((item) => {
+                const linkedTask = (review.actionTasks || []).find(
+                  (task) => String(task.source?.actionItemId) === String(item.id)
+                );
+                const ownership = (review.ownership || []).find(
+                  (entry) => String(entry.metadata?.actionItemId) === String(item.id)
+                );
+                const ownershipApproved = ["approved", "reassigned"].includes(ownership?.status);
+                return (
                 <article key={item.id} className="py-5">
                   <div className="flex flex-wrap items-start justify-between gap-3"><h3 className="font-semibold">{item.title}</h3><span className="text-xs text-[color:var(--text-muted)]">{confidenceLabel(item.confidence)}</span></div>
                   {item.description && <p className="mt-2 text-sm leading-6">{item.description}</p>}
@@ -763,8 +1027,44 @@ export default function HuddleMeetingIntelligence() {
                     {item.dueDate && <span>Due: {item.dueDate}</span>}
                   </div>
                   <div className="mt-3"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
+                  {linkedTask ? (
+                    <div className="mt-4 inline-flex items-center gap-2 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+                      <Check size={13} />
+                      Task {linkedTask.displayId || linkedTask.title} in {linkedTask.projectName || "project"}
+                    </div>
+                  ) : actions?.approvalStatus === "approved" &&
+                    review.permissions.canCreateTasks ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <select
+                        value={taskProjects[item.id] || ""}
+                        onChange={(event) =>
+                          setTaskProjects((current) => ({
+                            ...current,
+                            [item.id]: event.target.value,
+                          }))
+                        }
+                        className="min-w-48 rounded border border-[color:var(--border)] bg-transparent px-3 py-2 text-sm"
+                      >
+                        <option value="">Choose project</option>
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>{project.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!ownershipApproved || busyId === `task:${item.id}`}
+                        onClick={() => createTaskFromAction(item)}
+                        title={ownershipApproved ? "Create task" : "Approve ownership first"}
+                        className="inline-flex items-center gap-1 rounded bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[color:var(--primary-contrast)] disabled:opacity-50"
+                      >
+                        {busyId === `task:${item.id}` ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                        Create task
+                      </button>
+                    </div>
+                  ) : null}
                 </article>
-              ))}
+                );
+              })}
             </div>
             <Provenance artifact={actions} />
             {actions?.approvalStatus === "approved" && (
@@ -830,6 +1130,11 @@ export default function HuddleMeetingIntelligence() {
                   </div>
                   {review.permissions.canReviewMemory && (
                     <div className="mt-4 flex flex-wrap gap-2">
+                      {!["promoted", "cancelled"].includes(candidate.status) && (
+                        <button type="button" onClick={() => setMemoryEditor({ ...candidate })} className="inline-flex items-center gap-1 rounded border border-[color:var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-soft)]">
+                          <Pencil size={13} /> Edit
+                        </button>
+                      )}
                       {candidate.status === "pending_approval" && (
                         <>
                           <button type="button" disabled={busyId === candidate.id} onClick={() => reviewMemoryCandidate(candidate, "approved")} className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"><Check size={13} /> Approve memory</button>
@@ -839,6 +1144,23 @@ export default function HuddleMeetingIntelligence() {
                       {candidate.status === "approved" && (
                         <button type="button" disabled={busyId === candidate.id} onClick={() => promoteMemoryCandidate(candidate)} className="inline-flex items-center gap-1 rounded bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[color:var(--primary-contrast)] disabled:opacity-50"><Database size={13} /> Promote to workspace memory</button>
                       )}
+                      {candidate.status === "promoted" && (
+                        <button type="button" disabled={busyId === candidate.id} onClick={() => revokeMemoryCandidate(candidate)} className="inline-flex items-center gap-1 rounded border border-red-300 px-3 py-2 text-xs font-medium text-red-600 disabled:opacity-50">
+                          <Archive size={13} /> Revoke and archive
+                        </button>
+                      )}
+                      <button type="button" onClick={() => loadMemoryHistory(candidate)} className="inline-flex items-center gap-1 rounded border border-[color:var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-soft)]">
+                        <RotateCcw size={13} /> History
+                      </button>
+                    </div>
+                  )}
+                  {(memoryHistory[candidate.id] || []).length > 0 && (
+                    <div className="mt-4 border-l-2 border-[color:var(--border)] pl-3 text-xs text-[color:var(--text-muted)]">
+                      {memoryHistory[candidate.id].map((revision) => (
+                        <div key={revision.id} className="mb-2">
+                          Revision {revision.revisionNumber}: {revision.changeReason?.replaceAll("_", " ")} by {revision.changedByName || "reviewer"} on {dateTime(revision.createdAt)}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </article>
@@ -847,9 +1169,160 @@ export default function HuddleMeetingIntelligence() {
             </div>
           </section>
         )}
+
+        {activeTab === "copilot" && (
+          <section>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Meeting Copilot</h2>
+                <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+                  Answers are restricted to transcript evidence, approved artifacts, and approved workspace memory.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700">
+                <Check size={13} /> Evidence required
+              </span>
+            </div>
+            <form onSubmit={askCopilot} className="mt-5 flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search size={16} className="absolute left-3 top-3 text-[color:var(--text-muted)]" />
+                <input
+                  value={copilotQuestion}
+                  onChange={(event) => setCopilotQuestion(event.target.value)}
+                  placeholder="Ask what was decided, who owns an action, or what evidence supports a conclusion"
+                  className="w-full rounded border border-[color:var(--border)] bg-transparent py-2.5 pl-10 pr-3 text-sm"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!copilotQuestion.trim() || busyId === "copilot"}
+                className="inline-flex items-center gap-2 rounded bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[color:var(--primary-contrast)] disabled:opacity-50"
+              >
+                {busyId === "copilot" ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />}
+                Ask
+              </button>
+            </form>
+            <div className="mt-6 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+              {copilotQueries.map((query) => (
+                <article key={query.id} className="py-5">
+                  <p className="text-sm font-semibold">{query.question}</p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7">{query.answer}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(query.evidence || []).map((evidence) => (
+                      <button
+                        key={evidence.ref}
+                        type="button"
+                        onClick={() =>
+                          evidence.type === "transcript"
+                            ? showEvidence([evidence.id])
+                            : null
+                        }
+                        className="inline-flex items-center gap-1 rounded border border-[color:var(--border)] px-2 py-1 text-xs text-[color:var(--primary)] hover:bg-[var(--surface-soft)]"
+                      >
+                        <FileText size={12} /> {evidence.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-[color:var(--text-muted)]">
+                    {query.provider} {query.model ? `- ${query.model}` : ""} - {dateTime(query.createdAt)}
+                  </p>
+                </article>
+              ))}
+              {copilotQueries.length === 0 && (
+                <p className="py-7 text-sm text-[color:var(--text-muted)]">
+                  No questions have been asked about this meeting yet.
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {activeTab === "quality" && (
+          <section>
+            <h2 className="text-xl font-semibold">Media quality</h2>
+            <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+              Production telemetry from this Huddle, separated from synthetic certification traffic.
+            </p>
+            {quality ? (
+              <>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ["Quality score", `${quality.score}/100`],
+                    ["Round-trip time", quality.metrics?.averageRttMs == null ? "No data" : `${quality.metrics.averageRttMs} ms`],
+                    ["Packet loss", quality.metrics?.averagePacketLoss == null ? "No data" : `${(quality.metrics.averagePacketLoss * 100).toFixed(2)}%`],
+                    ["Receive resolution", quality.metrics?.maxReceiveResolution || "No data"],
+                    ["Send resolution", quality.metrics?.maxSendResolution || "No data"],
+                    ["Bitrate", quality.metrics?.averageBitrateKbps == null ? "No data" : `${quality.metrics.averageBitrateKbps} kbps`],
+                    ["Real-device samples", quality.realDeviceSampleCount],
+                    ["Screen-share tracks", quality.metrics?.screenShareTrackCount || 0],
+                  ].map(([label, value]) => (
+                    <div key={label} className="border-b border-[color:var(--border)] py-3">
+                      <div className="text-xs text-[color:var(--text-muted)]">{label}</div>
+                      <div className="mt-1 text-lg font-semibold">{value}</div>
+                    </div>
+                  ))}
+                </div>
+                <h3 className="mt-7 font-semibold">Adaptive stream layers</h3>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm text-[color:var(--text-muted)]">
+                  <span>Low: {quality.metrics?.lowLayerSamples || 0}</span>
+                  <span>Medium: {quality.metrics?.mediumLayerSamples || 0}</span>
+                  <span>High: {quality.metrics?.highLayerSamples || 0}</span>
+                </div>
+                {(quality.observations || []).length > 0 && (
+                  <div className="mt-6 border-l-2 border-amber-500 pl-4">
+                    <h3 className="font-semibold">Observations</h3>
+                    <ul className="mt-2 space-y-2 text-sm text-[color:var(--text-muted)]">
+                      {quality.observations.map((observation) => (
+                        <li key={observation}>{observation}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="mt-5 text-sm text-[color:var(--text-muted)]">
+                No LiveKit quality telemetry is available for this meeting.
+              </p>
+            )}
+          </section>
+        )}
       </div>
 
       {editing && <ArtifactEditor artifact={editing} onClose={() => setEditing(null)} onSave={saveArtifact} saving={busyId === editing.id} />}
+      {memoryEditor && (
+        <div className="fixed inset-0 z-[1000000] flex items-center justify-center bg-black/55 p-4">
+          <section className="w-full max-w-xl rounded-lg bg-[var(--surface)] p-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Edit meeting memory</h2>
+              <button type="button" onClick={() => setMemoryEditor(null)} title="Close"><X size={18} /></button>
+            </div>
+            <label className="mt-4 block text-sm font-medium">
+              Title
+              <input
+                value={memoryEditor.title || ""}
+                onChange={(event) => setMemoryEditor((current) => ({ ...current, title: event.target.value }))}
+                className="mt-1 w-full rounded border border-[color:var(--border)] bg-transparent px-3 py-2"
+              />
+            </label>
+            <label className="mt-4 block text-sm font-medium">
+              Memory
+              <textarea
+                value={memoryEditor.candidateText || ""}
+                onChange={(event) => setMemoryEditor((current) => ({ ...current, candidateText: event.target.value }))}
+                rows={10}
+                className="mt-1 w-full rounded border border-[color:var(--border)] bg-transparent px-3 py-2"
+              />
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setMemoryEditor(null)} className="rounded border border-[color:var(--border)] px-4 py-2 text-sm">Cancel</button>
+              <button type="button" onClick={saveMemoryCandidate} disabled={busyId === memoryEditor.id} className="inline-flex items-center gap-2 rounded bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[color:var(--primary-contrast)] disabled:opacity-50">
+                {busyId === memoryEditor.id && <Loader2 size={14} className="animate-spin" />}
+                Save revision
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

@@ -4,7 +4,7 @@ import { useHuddle } from "../context/HuddleContext";
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Maximize2, Minimize2, VolumeX, Captions,
-  BookOpenText, Image, Sparkles, X,
+  BookOpenText, Gauge, Image, Sparkles, X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useApi } from "../api";
@@ -231,6 +231,7 @@ export default function GlobalHuddleWindow() {
   ));
   const [pendingControl, setPendingControl] = useState(null);
   const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showMissedPanel, setShowMissedPanel] = useState(false);
   const [missedBrief, setMissedBrief] = useState(null);
   const [missedLoading, setMissedLoading] = useState(false);
@@ -288,6 +289,23 @@ export default function GlobalHuddleWindow() {
     event.target.value = "";
   }, [updateBackgroundEffect]);
 
+  const updateQualityMode = useCallback(async (mode) => {
+    if (!rtc?.setQualityMode) return;
+    const result = await rtc.setQualityMode(mode);
+    if (!result?.ok) {
+      toast.error("Video quality mode could not be changed");
+      return;
+    }
+    setShowQualityMenu(false);
+    toast.success(
+      mode === "hd"
+        ? "HD video requested"
+        : mode === "standard"
+          ? "Standard video selected"
+          : "Automatic video quality selected"
+    );
+  }, [rtc]);
+
   const loadWhatDidIMiss = useCallback(async () => {
     const sessionId = activeHuddle?.sessionId;
     if (!sessionId) {
@@ -309,6 +327,21 @@ export default function GlobalHuddleWindow() {
       setMissedLoading(false);
     }
   }, [activeHuddle?.sessionId, api]);
+
+  useEffect(() => {
+    if (!showMissedPanel || !activeHuddle?.sessionId) return undefined;
+    const refresh = window.setInterval(async () => {
+      try {
+        const response = await api.get(
+          `/huddle/intelligence/sessions/${activeHuddle.sessionId}/what-did-i-miss`
+        );
+        setMissedBrief(response.data.result);
+      } catch {
+        // Keep the latest successful brief visible during transient reconnects.
+      }
+    }, 6000);
+    return () => window.clearInterval(refresh);
+  }, [activeHuddle?.sessionId, api, showMissedPanel]);
 
   useEffect(() => {
     const sync = () => {
@@ -708,6 +741,31 @@ export default function GlobalHuddleWindow() {
         </div>
       )}
 
+      {showQualityMenu && (
+        <div
+          className="absolute z-50 w-52 border border-white/15 bg-[#1b1e27] p-2 shadow-xl"
+          style={{ borderRadius: 8, bottom: isMobileDevice ? 126 : 82, right: 12 }}
+        >
+          {[
+            ["auto", "Auto", "Adapts to network and tile size"],
+            ["standard", "Standard", "Balances clarity and bandwidth"],
+            ["hd", "HD", "Requests 720p and the high layer"],
+          ].map(([mode, label, description]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => updateQualityMode(mode)}
+              className={`w-full rounded px-3 py-2 text-left hover:bg-white/10 ${
+                rtc.qualityMode === mode ? "bg-white/10" : ""
+              }`}
+            >
+              <div className="text-sm font-medium">{label}</div>
+              <div className="text-[11px] text-slate-400">{description}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
       <div
         className={`w-full bg-[#1b1e27] flex justify-center items-center shrink-0 ${
@@ -769,6 +827,15 @@ export default function GlobalHuddleWindow() {
           disabled={!rtc.backgroundEffectsSupported || pendingControl === "background"}
         >
           <Sparkles size={18} />
+        </CtrlBtn>
+
+        <CtrlBtn
+          onClick={() => setShowQualityMenu((value) => !value)}
+          title={`Video quality: ${rtc.qualityMode || "auto"}`}
+          active={rtc.qualityMode === "hd"}
+          disabled={typeof rtc.setQualityMode !== "function"}
+        >
+          <Gauge size={18} />
         </CtrlBtn>
 
         {/* CC / Live subtitles */}
