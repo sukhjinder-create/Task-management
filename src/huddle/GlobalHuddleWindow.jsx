@@ -9,19 +9,27 @@ import {
 import toast from "react-hot-toast";
 import { useApi } from "../api";
 import { preloadBackgroundEffects } from "./media/BackgroundEffects";
+import {
+  clearLiveKitRenderTarget,
+  updateLiveKitRenderTarget,
+} from "./media/LiveKitRenderTarget";
 
 const CURATED_HUDDLE_BACKGROUNDS = [
   {
-    label: "Quiet office",
-    path: "/huddle-backgrounds/office.jpg",
+    label: "Modern office",
+    path: "/huddle-backgrounds/office-premium.jpg",
   },
   {
-    label: "Meeting room",
-    path: "/huddle-backgrounds/meeting-room.jpg",
+    label: "Conference room",
+    path: "/huddle-backgrounds/conference-room-premium.jpg",
   },
   {
-    label: "Soft abstract",
-    path: "/huddle-backgrounds/abstract.jpg",
+    label: "Executive office",
+    path: "/huddle-backgrounds/executive-office-premium.jpg",
+  },
+  {
+    label: "Enterprise abstract",
+    path: "/huddle-backgrounds/enterprise-abstract-premium.jpg",
   },
 ];
 
@@ -163,14 +171,55 @@ function RemoteAudioTrack({ track }) {
 }
 
 // ── Single video tile ────────────────────────────────────────────────────────
-function VideoTile({ stream, liveKitTrack = null, name, isMuted = false, isCameraOff = false, isLocal = false, isActiveSpeaker = false, compact = false, connectionState = "connected" }) {
+function VideoTile({
+  stream,
+  liveKitTrack = null,
+  liveKitPublication = null,
+  videoSource = "camera",
+  name,
+  isMuted = false,
+  isCameraOff = false,
+  isLocal = false,
+  isActiveSpeaker = false,
+  compact = false,
+  connectionState = "connected",
+}) {
   const { setRef } = useVideoMediaRef(stream, liveKitTrack, isLocal || Boolean(liveKitTrack));
+  const tileRef = useRef(null);
   const initials = (name || "?")[0].toUpperCase();
   const showAvatar = (!stream && !liveKitTrack) || isCameraOff;
   const reconnecting = connectionState === "reconnecting";
+  const screenShare = videoSource === "screen" || videoSource === "screen_share";
+
+  useEffect(() => {
+    const tile = tileRef.current;
+    if (!tile || !liveKitPublication || isLocal) return undefined;
+
+    const update = () => {
+      const rect = tile.getBoundingClientRect();
+      updateLiveKitRenderTarget(liveKitPublication, {
+        width: rect.width,
+        height: rect.height,
+        visible: rect.width > 0 && rect.height > 0,
+        source: videoSource,
+      });
+    };
+    update();
+    const observer = typeof ResizeObserver === "function"
+      ? new ResizeObserver(update)
+      : null;
+    observer?.observe(tile);
+    window.addEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+      clearLiveKitRenderTarget(liveKitPublication);
+    };
+  }, [isLocal, liveKitPublication, videoSource]);
 
   return (
     <div
+      ref={tileRef}
       className={`relative bg-[#1a1d27] overflow-hidden flex items-center justify-center w-full h-full transition-all ${
         isActiveSpeaker ? "ring-2 ring-green-400" : ""
       } ${compact ? "rounded-xl" : "rounded-xl"}`}
@@ -179,7 +228,7 @@ function VideoTile({ stream, liveKitTrack = null, name, isMuted = false, isCamer
       <video
         ref={setRef}
         onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
-        className="absolute inset-0 w-full h-full object-cover"
+        className={`absolute inset-0 h-full w-full ${screenShare ? "object-contain bg-black" : "object-cover"}`}
         style={isLocal ? { transform: "scaleX(-1)" } : undefined}
       />
 
@@ -282,12 +331,19 @@ export default function GlobalHuddleWindow() {
     if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || "")) {
       return undefined;
     }
-    const timeout = window.setTimeout(() => {
+    const preload = () => {
       void preloadBackgroundEffects({
         imagePaths: CURATED_HUDDLE_BACKGROUNDS.map((background) => background.path),
       });
-    }, 3500);
-    return () => window.clearTimeout(timeout);
+    };
+    const idleId = window.requestIdleCallback?.(preload, { timeout: 1200 });
+    const timeout = idleId === undefined
+      ? window.setTimeout(preload, 900)
+      : null;
+    return () => {
+      if (idleId !== undefined) window.cancelIdleCallback?.(idleId);
+      if (timeout !== null) window.clearTimeout(timeout);
+    };
   }, [rtc?.backgroundEffectsSupported, rtc?.joined]);
 
   useEffect(() => {
@@ -464,12 +520,21 @@ export default function GlobalHuddleWindow() {
   // 1-on-1 mode: one remote peer — use WhatsApp-style layout
   const isOneOnOne = remotePeers.length === 1;
   const remoteParticipant = isOneOnOne
-    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, videoTrack: remotePeers[0].videoTrack, isMuted: remotePeers[0].isMuted, isCameraOff: remotePeers[0].isCameraOff, connectionState: remotePeers[0].connectionState, isLocal: false }
+    ? { userId: remotePeers[0].userId, username: remotePeers[0].username || "User", stream: remotePeers[0].stream, videoTrack: remotePeers[0].videoTrack, videoPublication: remotePeers[0].videoPublication, selectedVideoSource: remotePeers[0].selectedVideoSource, isMuted: remotePeers[0].isMuted, isCameraOff: remotePeers[0].isCameraOff, connectionState: remotePeers[0].connectionState, isLocal: false }
     : null;
 
   // Grid layout for group calls
-  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, videoTrack: p.videoTrack, isMuted: p.isMuted, isCameraOff: p.isCameraOff, connectionState: p.connectionState, isLocal: false }))];
-  const count = participants.length;
+  const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, videoTrack: p.videoTrack, videoPublication: p.videoPublication, selectedVideoSource: p.selectedVideoSource, isMuted: p.isMuted, isCameraOff: p.isCameraOff, connectionState: p.connectionState, isLocal: false }))];
+  const presentingParticipant = participants.find(
+    (participant) =>
+      !participant.isLocal &&
+      (participant.selectedVideoSource === "screen" ||
+        participant.selectedVideoSource === "screen_share")
+  );
+  const gridParticipants = presentingParticipant
+    ? participants.filter((participant) => participant.userId !== presentingParticipant.userId)
+    : participants;
+  const count = gridParticipants.length;
   const gridCols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
 
   // ── Drag ────────────────────────────────────────────────────────────────────
@@ -626,7 +691,39 @@ export default function GlobalHuddleWindow() {
             {rtc.error}
           </div>
         )}
-        {isOneOnOne ? (
+        {presentingParticipant ? (
+          <div className="flex h-full min-h-0 flex-col gap-2 p-2 lg:flex-row">
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-white/10 bg-black">
+              <VideoTile
+                stream={presentingParticipant.stream}
+                liveKitTrack={presentingParticipant.videoTrack}
+                liveKitPublication={presentingParticipant.videoPublication}
+                videoSource={presentingParticipant.selectedVideoSource}
+                name={`${presentingParticipant.username} is presenting`}
+                isMuted={presentingParticipant.isMuted}
+                isCameraOff={false}
+                connectionState={presentingParticipant.connectionState}
+              />
+            </div>
+            <div className="grid h-24 shrink-0 grid-flow-col auto-cols-[120px] gap-2 overflow-x-auto lg:h-full lg:w-36 lg:grid-flow-row lg:auto-rows-[100px] lg:grid-cols-1 lg:overflow-y-auto">
+              {gridParticipants.map((participant) => (
+                <VideoTile
+                  key={`presenting:${participant.userId}`}
+                  stream={participant.stream}
+                  liveKitTrack={participant.videoTrack}
+                  liveKitPublication={participant.videoPublication}
+                  videoSource={participant.selectedVideoSource}
+                  name={participant.username}
+                  isMuted={participant.isMuted}
+                  isCameraOff={participant.isCameraOff}
+                  isLocal={participant.isLocal}
+                  compact
+                  connectionState={participant.connectionState}
+                />
+              ))}
+            </div>
+          </div>
+        ) : isOneOnOne ? (
           /* ── WhatsApp-style 1-on-1 ── */
           <>
             {/* Remote: full-screen background */}
@@ -634,6 +731,8 @@ export default function GlobalHuddleWindow() {
               <VideoTile
                 stream={remoteParticipant.stream}
                 liveKitTrack={remoteParticipant.videoTrack}
+                liveKitPublication={remoteParticipant.videoPublication}
+                videoSource={remoteParticipant.selectedVideoSource}
                 name={remoteParticipant.username}
                 isMuted={remoteParticipant.isMuted}
                 isCameraOff={remoteParticipant.isCameraOff}
@@ -668,11 +767,13 @@ export default function GlobalHuddleWindow() {
               gridTemplateRows: `repeat(${Math.ceil(count / gridCols)}, 1fr)`,
             }}
           >
-            {participants.map((p) => (
+            {gridParticipants.map((p) => (
               <VideoTile
                 key={p.userId}
                 stream={p.stream}
                 liveKitTrack={p.videoTrack}
+                liveKitPublication={p.videoPublication}
+                videoSource={p.selectedVideoSource}
                 name={p.username}
                 isMuted={p.isMuted}
                 isCameraOff={p.isCameraOff}

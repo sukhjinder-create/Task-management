@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   AlertCircle,
@@ -27,16 +27,29 @@ import {
 import { useApi } from "../api";
 
 const TABS = [
-  { id: "summary", label: "Summary", icon: Sparkles },
-  { id: "timeline", label: "Timeline", icon: Clock3 },
-  { id: "transcript", label: "Transcript", icon: ScrollText },
-  { id: "decisions", label: "Decisions", icon: Gavel },
-  { id: "actions", label: "Action items", icon: ListChecks },
-  { id: "ownership", label: "Ownership", icon: UserCheck },
-  { id: "memory", label: "Memory", icon: Database },
-  { id: "copilot", label: "Copilot", icon: Bot },
-  { id: "quality", label: "Quality", icon: Radio },
+  { id: "summary", label: "Overview", icon: Sparkles, group: "primary" },
+  { id: "timeline", label: "Timeline", icon: Clock3, group: "primary" },
+  { id: "transcript", label: "Transcript", icon: ScrollText, group: "primary" },
+  { id: "decisions", label: "Decisions", icon: Gavel, group: "primary" },
+  { id: "actions", label: "Actions", icon: ListChecks, group: "primary" },
+  { id: "ownership", label: "Ownership", icon: UserCheck, group: "review" },
+  { id: "memory", label: "Memory", icon: Database, group: "review" },
+  { id: "copilot", label: "Copilot", icon: Bot, group: "review" },
+  { id: "quality", label: "Call quality", icon: Radio, group: "review" },
 ];
+
+const COPILOT_PROMPTS = {
+  meeting: [
+    "What decisions were made?",
+    "Who owns the next actions?",
+    "What remains unresolved?",
+  ],
+  workspace: [
+    "What did the team commit to last month?",
+    "What decisions were made about Huddles?",
+    "What changed across recent meetings?",
+  ],
+};
 
 function TabIcon({ id }) {
   if (id === "summary") return <Sparkles size={15} />;
@@ -469,6 +482,7 @@ function ArtifactEditor({ artifact, onClose, onSave, saving }) {
 
 export default function HuddleMeetingIntelligence() {
   const { sessionId } = useParams();
+  const navigate = useNavigate();
   const api = useApi();
   const [review, setReview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -482,6 +496,7 @@ export default function HuddleMeetingIntelligence() {
   const [memoryEditor, setMemoryEditor] = useState(null);
   const [memoryHistory, setMemoryHistory] = useState({});
   const [copilotQuestion, setCopilotQuestion] = useState("");
+  const [copilotScope, setCopilotScope] = useState("meeting");
   const [copilotQueries, setCopilotQueries] = useState([]);
   const [quality, setQuality] = useState(null);
   const [supplementLoading, setSupplementLoading] = useState({});
@@ -798,7 +813,7 @@ export default function HuddleMeetingIntelligence() {
     try {
       const response = await api.post(
         `/huddle/intelligence/sessions/${sessionId}/copilot`,
-        { question: copilotQuestion }
+        { question: copilotQuestion, scope: copilotScope }
       );
       setCopilotQueries((current) => [response.data.result, ...current]);
       setCopilotQuestion("");
@@ -972,22 +987,21 @@ export default function HuddleMeetingIntelligence() {
                 {dateTime(review.session.startedAt)} · {review.participants.length} participant{review.participants.length === 1 ? "" : "s"}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => copyText(summaryText, "Summary")} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
                 <ClipboardCopy size={15} /> Copy summary
               </button>
-              <button type="button" onClick={() => copyText(transcriptText, "Transcript")} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
-                <ClipboardCopy size={15} /> Copy transcript
-              </button>
-              <button type="button" onClick={() => copyText(reportMarkdown(review), "Meeting report")} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
-                <ClipboardCopy size={15} /> Copy report
-              </button>
-              <button type="button" onClick={downloadMarkdownExport} title="Export Markdown" className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
-                <FileDown size={15} /> Markdown
-              </button>
-              <button type="button" onClick={downloadPdfExport} title="Export PDF" className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
-                <FileText size={15} /> PDF
-              </button>
+              <details className="relative">
+                <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
+                  <FileDown size={15} /> Export
+                </summary>
+                <div className="absolute right-0 z-20 mt-2 grid min-w-48 overflow-hidden rounded border border-[color:var(--border)] bg-[var(--surface)] p-1 shadow-xl">
+                  <button type="button" onClick={() => copyText(transcriptText, "Transcript")} className="rounded px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)]">Copy transcript</button>
+                  <button type="button" onClick={() => copyText(reportMarkdown(review), "Meeting report")} className="rounded px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)]">Copy full report</button>
+                  <button type="button" onClick={downloadMarkdownExport} className="rounded px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)]">Download Markdown</button>
+                  <button type="button" onClick={downloadPdfExport} className="rounded px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)]">Download PDF</button>
+                </div>
+              </details>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2" aria-label="Meeting participants">
@@ -1011,7 +1025,7 @@ export default function HuddleMeetingIntelligence() {
 
       <nav className="border-b border-[color:var(--border)] px-4 sm:px-7" aria-label="Meeting intelligence sections">
         <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto py-2">
-          {TABS.map(({ id, label }) => (
+          {TABS.map(({ id, label, group }, index) => (
             <button
               key={id}
               type="button"
@@ -1020,7 +1034,7 @@ export default function HuddleMeetingIntelligence() {
                 activeTab === id
                   ? "bg-[var(--surface-soft)] text-[color:var(--primary)]"
                   : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
-              }`}
+              } ${index > 0 && TABS[index - 1].group !== group ? "ml-2 border-l border-[color:var(--border)] pl-4" : ""}`}
             >
               <TabIcon id={id} /> {label}
             </button>
@@ -1446,12 +1460,43 @@ export default function HuddleMeetingIntelligence() {
               <div>
                 <h2 className="text-xl font-semibold">Meeting Copilot</h2>
                 <p className="mt-1 text-sm text-[color:var(--text-muted)]">
-                  Answers are restricted to transcript evidence, approved artifacts, and approved workspace memory.
+                  Ask about this meeting or trace decisions and commitments across your workspace.
                 </p>
               </div>
               <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700">
                 <Check size={13} /> Evidence required
               </span>
+            </div>
+            <div className="mt-5 inline-flex rounded border border-[color:var(--border)] bg-[var(--surface-soft)] p-1">
+              {[
+                ["meeting", "This meeting"],
+                ["workspace", "Across meetings"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setCopilotScope(value)}
+                  className={`rounded px-3 py-1.5 text-sm font-medium ${
+                    copilotScope === value
+                      ? "bg-[var(--surface)] text-[color:var(--text)] shadow-sm"
+                      : "text-[color:var(--text-muted)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {COPILOT_PROMPTS[copilotScope].map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => setCopilotQuestion(prompt)}
+                  className="rounded-full border border-[color:var(--border)] px-3 py-1.5 text-xs text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)] hover:text-[color:var(--text)]"
+                >
+                  {prompt}
+                </button>
+              ))}
             </div>
             <form onSubmit={askCopilot} className="mt-5 flex gap-2">
               <div className="relative min-w-0 flex-1">
@@ -1459,7 +1504,11 @@ export default function HuddleMeetingIntelligence() {
                 <input
                   value={copilotQuestion}
                   onChange={(event) => setCopilotQuestion(event.target.value)}
-                  placeholder="Ask what was decided, who owns an action, or what evidence supports a conclusion"
+                  placeholder={
+                    copilotScope === "workspace"
+                      ? "Ask about decisions, commitments, topics, or changes across meetings"
+                      : "Ask what was decided, who owns an action, or what remains unresolved"
+                  }
                   className="w-full rounded border border-[color:var(--border)] bg-transparent py-2.5 pl-10 pr-3 text-sm"
                 />
               </div>
@@ -1482,14 +1531,23 @@ export default function HuddleMeetingIntelligence() {
                       <button
                         key={evidence.ref}
                         type="button"
-                        onClick={() =>
-                          evidence.type === "transcript"
-                            ? showEvidence([evidence.id])
-                            : null
-                        }
+                        onClick={() => {
+                          if (
+                            evidence.type === "transcript" &&
+                            String(evidence.sessionId || sessionId) === String(sessionId)
+                          ) {
+                            showEvidence([evidence.id]);
+                          } else if (
+                            evidence.sessionId &&
+                            String(evidence.sessionId) !== String(sessionId)
+                          ) {
+                            navigate(`/huddles/${evidence.sessionId}/intelligence`);
+                          }
+                        }}
                         className="inline-flex items-center gap-1 rounded border border-[color:var(--border)] px-2 py-1 text-xs text-[color:var(--primary)] hover:bg-[var(--surface-soft)]"
                       >
-                        <FileText size={12} /> {evidence.label}
+                        <FileText size={12} />
+                        <span>{evidence.meetingTitle || evidence.label}</span>
                       </button>
                     ))}
                   </div>
@@ -1539,6 +1597,10 @@ export default function HuddleMeetingIntelligence() {
                     ["Captions active", quality.metrics?.averageCaptionsActiveMs == null ? "No data" : `${quality.metrics.averageCaptionsActiveMs} ms`],
                     ["Real-device samples", quality.realDeviceSampleCount],
                     ["Screen-share tracks", quality.metrics?.screenShareTrackCount || 0],
+                    ["Tile target match", quality.metrics?.renderTargetMatchRate == null ? "No data" : `${Math.round(quality.metrics.renderTargetMatchRate * 100)}%`],
+                    ["Requested receive size", quality.metrics?.averageRequestedReceiveWidth == null ? "No data" : `${Math.round(quality.metrics.averageRequestedReceiveWidth)}x${Math.round(quality.metrics.averageRequestedReceiveHeight || 0)}`],
+                    ["Screen-share send", quality.metrics?.averageScreenShareSendBitrateKbps == null ? "No data" : `${quality.metrics.averageScreenShareSendBitrateKbps} kbps`],
+                    ["Screen-share receive", quality.metrics?.averageScreenShareReceiveBitrateKbps == null ? "No data" : `${quality.metrics.averageScreenShareReceiveBitrateKbps} kbps`],
                   ].map(([label, value]) => (
                     <div key={label} className="border-b border-[color:var(--border)] py-3">
                       <div className="text-xs text-[color:var(--text-muted)]">{label}</div>

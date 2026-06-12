@@ -37,6 +37,7 @@ import {
   getBackgroundEffectSupport,
   HUDDLE_BACKGROUND_EFFECTS,
 } from "./BackgroundEffects";
+import { getLiveKitRenderTarget } from "./LiveKitRenderTarget";
 
 export const LIVEKIT_MEDIA_PROVIDER_READINESS = Object.freeze({
   modeled: true,
@@ -484,7 +485,7 @@ function normalizedVideoQuality(value) {
   return safeString(value).toLowerCase() || null;
 }
 
-function attachedElementMetrics(track = null) {
+function attachedElementMetrics(track = null, publication = null) {
   const elements = Array.isArray(track?.attachedElements)
     ? track.attachedElements.filter(Boolean)
     : [];
@@ -503,11 +504,18 @@ function attachedElementMetrics(track = null) {
     ),
     { width: 0, height: 0 }
   );
+  const requested = getLiveKitRenderTarget(publication);
   return {
     attachedElementCount: elements.length,
     renderedWidth: largest.width || null,
     renderedHeight: largest.height || null,
     adaptiveStreamAttached: elements.length > 0,
+    requestedWidth: requested?.width || null,
+    requestedHeight: requested?.height || null,
+    requestedFramesPerSecond: requested?.framesPerSecond || null,
+    requestedPixelRatio: requested?.pixelRatio || null,
+    renderTargetVisible:
+      requested?.visible === undefined ? null : Boolean(requested.visible),
   };
 }
 
@@ -854,7 +862,7 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
         qualityLimitationReason: null,
         publicationWidth: safeNumber(publication.dimensions?.width),
         publicationHeight: safeNumber(publication.dimensions?.height),
-        ...attachedElementMetrics(publication.track),
+        ...attachedElementMetrics(publication.track, publication),
         currentBitrateKbps: Number.isFinite(Number(publication.track?.currentBitrate))
           ? Math.round(Number(publication.track.currentBitrate) / 1000)
           : null,
@@ -897,7 +905,21 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
   const receiveVideoTracks = tracks.filter((track) => track.direction === "receive" && track.kind === "video");
   const sendScreenTracks = tracks.filter((track) => track.direction === "send" && track.source === HUDDLE_MEDIA_TRACK_SOURCES.screen);
   const receiveScreenTracks = tracks.filter((track) => track.direction === "receive" && track.source === HUDDLE_MEDIA_TRACK_SOURCES.screen);
+  const targetedReceiveVideoTracks = receiveVideoTracks.filter(
+    (track) =>
+      Number(track.requestedWidth) > 0 &&
+      Number(track.requestedHeight) > 0
+  );
+  const renderTargetMismatchCount = targetedReceiveVideoTracks.filter(
+    (track) =>
+      Number(track.width) < Number(track.requestedWidth) * 0.7 ||
+      Number(track.height) < Number(track.requestedHeight) * 0.7
+  ).length;
   const maxBy = (items, key) => items.reduce((max, item) => Math.max(max, safeNumber(item[key], 0) || 0), 0) || null;
+  const sumBy = (items, key) => items.reduce(
+    (total, item) => total + (safeNumber(item[key], 0) || 0),
+    0
+  );
 
   return {
     observedAt,
@@ -953,6 +975,12 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
       maxScreenShareSendHeight: maxBy(sendScreenTracks, "height"),
       maxScreenShareReceiveWidth: maxBy(receiveScreenTracks, "width"),
       maxScreenShareReceiveHeight: maxBy(receiveScreenTracks, "height"),
+      maxRequestedReceiveWidth: maxBy(receiveVideoTracks, "requestedWidth"),
+      maxRequestedReceiveHeight: maxBy(receiveVideoTracks, "requestedHeight"),
+      renderTargetTrackCount: targetedReceiveVideoTracks.length,
+      renderTargetMismatchCount,
+      screenShareSendBitrateKbps: sumBy(sendScreenTracks, "bitrateKbps") || null,
+      screenShareReceiveBitrateKbps: sumBy(receiveScreenTracks, "bitrateKbps") || null,
       adaptiveStreamAttachedTrackCount: tracks.filter((track) => track.adaptiveStreamAttached).length,
       selectedLowLayerCount: tracks.filter((track) => track.videoQuality === "low").length,
       selectedMediumLayerCount: tracks.filter((track) => track.videoQuality === "medium").length,
@@ -1343,7 +1371,42 @@ export async function startLiveKitScreenShare(room) {
   }
 
   try {
-    const result = await room.localParticipant.setScreenShareEnabled(true);
+    const userAgent = globalThis.navigator?.userAgent || "";
+    const safari = /Safari/i.test(userAgent) && !/Chrome|Chromium|Android/i.test(userAgent);
+    const captureOptions = {
+      audio: true,
+      video: { displaySurface: "monitor" },
+      selfBrowserSurface: "exclude",
+      surfaceSwitching: "include",
+      systemAudio: "include",
+      contentHint: "detail",
+      ...(safari
+        ? {}
+        : {
+            resolution: {
+              width: 1920,
+              height: 1080,
+              frameRate: 30,
+              aspectRatio: 16 / 9,
+            },
+          }),
+    };
+    const publishOptions = {
+      simulcast: true,
+      videoEncoding: {
+        maxBitrate: 2_500_000,
+        maxFramerate: 30,
+      },
+      screenShareEncoding: {
+        maxBitrate: 2_500_000,
+        maxFramerate: 30,
+      },
+    };
+    const result = await room.localParticipant.setScreenShareEnabled(
+      true,
+      captureOptions,
+      publishOptions
+    );
     const publications = Array.isArray(result) ? result : result ? [result] : [];
     diagnostics.publications = publications.map((publication) => ({
       trackSid: safeString(publication?.trackSid) || safeString(publication?.sid) || null,
@@ -1352,6 +1415,13 @@ export async function startLiveKitScreenShare(room) {
       subscriptionState: subscriptionState(publication, { isLocal: true }),
     }));
     diagnostics.publicationCount = diagnostics.publications.length;
+    diagnostics.capture = {
+      audioRequested: true,
+      contentHint: captureOptions.contentHint,
+      displaySurface: captureOptions.video.displaySurface,
+      resolution: captureOptions.resolution || "browser_default",
+      safariResolutionWorkaround: safari,
+    };
     diagnostics.completedAt = new Date().toISOString();
     diagnostics.latencyMs = elapsedMs(startedAt);
     diagnostics.ok = Boolean(room.localParticipant.isScreenShareEnabled || diagnostics.publicationCount > 0);
