@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -484,43 +484,65 @@ export default function HuddleMeetingIntelligence() {
   const [copilotQuestion, setCopilotQuestion] = useState("");
   const [copilotQueries, setCopilotQueries] = useState([]);
   const [quality, setQuality] = useState(null);
+  const [supplementLoading, setSupplementLoading] = useState({});
   const transcriptRefs = useRef(new Map());
+  const loadedSupplementsRef = useRef(new Set());
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
-      const [reviewResponse, projectsResponse, copilotResponse, qualityResponse] =
-        await Promise.allSettled([
-          api.get(`/huddle/intelligence/sessions/${sessionId}/review`),
-          api.get("/projects"),
-          api.get(`/huddle/intelligence/sessions/${sessionId}/copilot`),
-          api.get(`/huddle/media/livekit/quality/sessions/${sessionId}/summary`),
-        ]);
-      if (reviewResponse.status !== "fulfilled") throw reviewResponse.reason;
-      setReview(reviewResponse.value.data.review);
-      if (projectsResponse.status === "fulfilled") {
-        const list =
-          projectsResponse.value.data?.projects ||
-          projectsResponse.value.data ||
-          [];
-        setProjects(Array.isArray(list) ? list : []);
-      }
-      if (copilotResponse.status === "fulfilled") {
-        setCopilotQueries(copilotResponse.value.data?.queries || []);
-      }
-      if (qualityResponse.status === "fulfilled") {
-        setQuality(qualityResponse.value.data?.quality || null);
-      }
+      const response = await api.get(
+        `/huddle/intelligence/sessions/${sessionId}/review`
+      );
+      setReview(response.data.review);
       setError("");
     } catch (requestError) {
       setError(requestError.response?.data?.reason || "Meeting intelligence could not be loaded.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, sessionId]);
 
   useEffect(() => {
+    loadedSupplementsRef.current.clear();
+    setProjects([]);
+    setCopilotQueries([]);
+    setQuality(null);
+    setLoading(true);
     load();
-  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [load, sessionId]);
+
+  const loadSupplement = useCallback(async (kind) => {
+    if (loadedSupplementsRef.current.has(kind)) return;
+    loadedSupplementsRef.current.add(kind);
+    setSupplementLoading((current) => ({ ...current, [kind]: true }));
+    try {
+      if (kind === "projects") {
+        const response = await api.get("/projects");
+        const list = response.data?.projects || response.data || [];
+        setProjects(Array.isArray(list) ? list : []);
+      } else if (kind === "copilot") {
+        const response = await api.get(
+          `/huddle/intelligence/sessions/${sessionId}/copilot`
+        );
+        setCopilotQueries(response.data?.queries || []);
+      } else if (kind === "quality") {
+        const response = await api.get(
+          `/huddle/media/livekit/quality/sessions/${sessionId}/summary`
+        );
+        setQuality(response.data?.quality || null);
+      }
+    } catch {
+      loadedSupplementsRef.current.delete(kind);
+    } finally {
+      setSupplementLoading((current) => ({ ...current, [kind]: false }));
+    }
+  }, [api, sessionId]);
+
+  useEffect(() => {
+    if (activeTab === "actions") void loadSupplement("projects");
+    if (activeTab === "copilot") void loadSupplement("copilot");
+    if (activeTab === "quality") void loadSupplement("quality");
+  }, [activeTab, loadSupplement]);
 
   const segmentById = useMemo(
     () => new Map((review?.transcript || []).map((segment) => [segment.id, segment])),
@@ -613,17 +635,41 @@ export default function HuddleMeetingIntelligence() {
     }
   };
 
-  const createMemoryCandidate = async (artifact) => {
+  const addArtifactToWorkspaceMemory = async (artifact) => {
     setBusyId(`memory:${artifact.id}`);
     try {
-      await api.post(
+      const creation = await api.post(
         `/huddle/intelligence/sessions/${sessionId}/memory-candidates/from-artifact/${artifact.id}`
       );
-      toast.success("Memory candidate created for review");
+      let candidate = creation.data?.memoryCandidate;
+      if (!candidate?.id) throw new Error("memory_candidate_missing");
+      if (candidate.status !== "promoted" && candidate.status !== "approved") {
+        const approval = await api.patch(
+          `/huddle/intelligence/sessions/${sessionId}/memory-candidates/${candidate.id}`,
+          {
+            status: "approved",
+            expectedStatus: candidate.status,
+            metadata: {
+              reviewedInMeetingIntelligence: true,
+              explicitWorkspacePromotion: true,
+            },
+          }
+        );
+        candidate = approval.data?.memoryCandidate || candidate;
+      }
+      if (candidate.status !== "promoted") {
+        await api.post(
+          `/huddle/intelligence/sessions/${sessionId}/memory-candidates/${candidate.id}/promote`
+        );
+      }
+      toast.success("Meeting knowledge added to workspace memory");
       setActiveTab("memory");
       await load();
     } catch (requestError) {
-      toast.error(requestError.response?.data?.reason || "Memory candidate could not be created");
+      toast.error(
+        requestError.response?.data?.reason ||
+        "Meeting knowledge could not be added to workspace memory"
+      );
     } finally {
       setBusyId(null);
     }
@@ -1138,8 +1184,8 @@ export default function HuddleMeetingIntelligence() {
                   </>
                 )}
                 {summary.approvalStatus === "approved" && (
-                  <button type="button" disabled={busyId === `memory:${summary.id}`} onClick={() => createMemoryCandidate(summary)} className="mt-5 inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-soft)] disabled:opacity-50">
-                    <Database size={15} /> Add approved summary to memory
+                  <button type="button" disabled={busyId === `memory:${summary.id}`} onClick={() => addArtifactToWorkspaceMemory(summary)} className="mt-5 inline-flex items-center gap-2 rounded bg-[var(--primary)] px-3 py-2 text-sm font-medium text-[color:var(--primary-contrast)] disabled:opacity-50">
+                    {busyId === `memory:${summary.id}` ? <Loader2 size={15} className="animate-spin" /> : <Database size={15} />} Add to workspace memory
                   </button>
                 )}
                 <Provenance artifact={summary} />
@@ -1220,8 +1266,8 @@ export default function HuddleMeetingIntelligence() {
             </div>
             <Provenance artifact={decisions} />
             {decisions?.approvalStatus === "approved" && (
-              <button type="button" disabled={busyId === `memory:${decisions.id}`} onClick={() => createMemoryCandidate(decisions)} className="mt-5 inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-soft)] disabled:opacity-50">
-                <Database size={15} /> Add approved decisions to memory
+              <button type="button" disabled={busyId === `memory:${decisions.id}`} onClick={() => addArtifactToWorkspaceMemory(decisions)} className="mt-5 inline-flex items-center gap-2 rounded bg-[var(--primary)] px-3 py-2 text-sm font-medium text-[color:var(--primary-contrast)] disabled:opacity-50">
+                {busyId === `memory:${decisions.id}` ? <Loader2 size={15} className="animate-spin" /> : <Database size={15} />} Add to workspace memory
               </button>
             )}
           </section>
@@ -1292,8 +1338,8 @@ export default function HuddleMeetingIntelligence() {
             </div>
             <Provenance artifact={actions} />
             {actions?.approvalStatus === "approved" && (
-              <button type="button" disabled={busyId === `memory:${actions.id}`} onClick={() => createMemoryCandidate(actions)} className="mt-5 inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-soft)] disabled:opacity-50">
-                <Database size={15} /> Add approved actions to memory
+              <button type="button" disabled={busyId === `memory:${actions.id}`} onClick={() => addArtifactToWorkspaceMemory(actions)} className="mt-5 inline-flex items-center gap-2 rounded bg-[var(--primary)] px-3 py-2 text-sm font-medium text-[color:var(--primary-contrast)] disabled:opacity-50">
+                {busyId === `memory:${actions.id}` ? <Loader2 size={15} className="animate-spin" /> : <Database size={15} />} Add to workspace memory
               </button>
             )}
           </section>
@@ -1341,7 +1387,7 @@ export default function HuddleMeetingIntelligence() {
         {activeTab === "memory" && (
           <section>
             <h2 className="text-xl font-semibold">Meeting memory</h2>
-            <p className="mt-1 text-sm text-[color:var(--text-muted)]">Only approved meeting artifacts can become searchable workspace knowledge. Promotion always requires a separate human confirmation.</p>
+            <p className="mt-1 text-sm text-[color:var(--text-muted)]">Approved meeting artifacts become searchable workspace knowledge only after an explicit reviewer action. Every promotion remains auditable and reversible.</p>
             <div className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
               {(review.memoryCandidates || []).map((candidate) => (
                 <article key={candidate.id} className="py-5">
@@ -1454,7 +1500,9 @@ export default function HuddleMeetingIntelligence() {
               ))}
               {copilotQueries.length === 0 && (
                 <p className="py-7 text-sm text-[color:var(--text-muted)]">
-                  No questions have been asked about this meeting yet.
+                  {supplementLoading.copilot
+                    ? "Loading Copilot history..."
+                    : "No questions have been asked about this meeting yet."}
                 </p>
               )}
             </div>
@@ -1467,7 +1515,11 @@ export default function HuddleMeetingIntelligence() {
             <p className="mt-1 text-sm text-[color:var(--text-muted)]">
               Production telemetry from this Huddle, separated from synthetic certification traffic.
             </p>
-            {quality ? (
+            {supplementLoading.quality ? (
+              <div className="flex items-center gap-2 py-8 text-sm text-[color:var(--text-muted)]">
+                <Loader2 size={15} className="animate-spin" /> Loading media quality...
+              </div>
+            ) : quality ? (
               <>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {[
@@ -1481,6 +1533,10 @@ export default function HuddleMeetingIntelligence() {
                     ["Receive frame rate", quality.metrics?.averageReceiveFps == null ? "No data" : `${quality.metrics.averageReceiveFps} fps`],
                     ["Video codecs", quality.metrics?.videoCodecs?.join(", ") || "No data"],
                     ["Estimated data", quality.metrics?.estimatedMegabytesPerHour == null ? "No data" : `${quality.metrics.estimatedMegabytesPerHour} MB/hour`],
+                    ["Join after click", quality.metrics?.averageIntentToJoinMs == null ? "No data" : `${quality.metrics.averageIntentToJoinMs} ms`],
+                    ["First remote audio", quality.metrics?.averageFirstAudioMs == null ? "No data" : `${quality.metrics.averageFirstAudioMs} ms`],
+                    ["First remote video", quality.metrics?.averageFirstVideoMs == null ? "No data" : `${quality.metrics.averageFirstVideoMs} ms`],
+                    ["Captions active", quality.metrics?.averageCaptionsActiveMs == null ? "No data" : `${quality.metrics.averageCaptionsActiveMs} ms`],
                     ["Real-device samples", quality.realDeviceSampleCount],
                     ["Screen-share tracks", quality.metrics?.screenShareTrackCount || 0],
                   ].map(([label, value]) => (

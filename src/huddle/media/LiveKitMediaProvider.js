@@ -965,12 +965,20 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
 
 function createInitialLiveKitMetrics() {
   return {
+    intentStartedAt: null,
     joinStartedAt: null,
     joinLatencyMs: null,
+    intentToJoinLatencyMs: null,
     publishLatencyMs: null,
     subscribeLatencyMs: null,
+    firstAudioSubscribeLatencyMs: null,
+    firstVideoSubscribeLatencyMs: null,
+    captionsActiveLatencyMs: null,
     screenShareLatencyMs: null,
     firstSubscribeAt: null,
+    firstAudioSubscribeAt: null,
+    firstVideoSubscribeAt: null,
+    firstCaptionAt: null,
     roomStartedAt: null,
     roomEndedAt: null,
     reconnectStartedAt: null,
@@ -1878,6 +1886,10 @@ export function useLiveKitMediaProvider({
         roomEndpointMs: connectionTimings.roomEndpointLatencyMs,
         tokenEndpointMs: connectionTimings.tokenEndpointLatencyMs,
         sdkLoadMs: connectionTimings.prepareLatencyMs,
+        intentToJoinMs: metrics.intentToJoinLatencyMs,
+        firstAudioMs: metrics.firstAudioSubscribeLatencyMs,
+        firstVideoMs: metrics.firstVideoSubscribeLatencyMs,
+        captionsActiveMs: metrics.captionsActiveLatencyMs,
       },
       transitions: metrics.connectionStateTransitions,
       failures: metrics.trackFailures,
@@ -1959,6 +1971,17 @@ export function useLiveKitMediaProvider({
           latestNetworkStatsRef.current,
           qualityStatsPreviousRef.current
         );
+        const providerMetrics = providerMetricsRef.current;
+        diagnostics.startup = {
+          joinMs: providerMetrics.joinLatencyMs,
+          publishMs: providerMetrics.publishLatencyMs,
+          subscribeMs: providerMetrics.subscribeLatencyMs,
+          intentToJoinMs: providerMetrics.intentToJoinLatencyMs,
+          firstAudioMs: providerMetrics.firstAudioSubscribeLatencyMs,
+          firstVideoMs: providerMetrics.firstVideoSubscribeLatencyMs,
+          captionsActiveMs: providerMetrics.captionsActiveLatencyMs,
+        };
+        diagnostics.backgroundEffect = backgroundEffectRef.current;
         const activeEffect = backgroundEffectRef.current;
         const localCamera = diagnostics.tracks.find(
           (track) =>
@@ -1986,22 +2009,31 @@ export function useLiveKitMediaProvider({
           backgroundStressSamplesRef.current >= 2
         ) {
           const localTrack = liveKitLocalCameraTrack(room);
-          const disabled = await applyBackgroundEffect({
+          const nextMode =
+            activeEffect.mode === HUDDLE_BACKGROUND_EFFECTS.REPLACEMENT
+              ? HUDDLE_BACKGROUND_EFFECTS.BLUR
+              : HUDDLE_BACKGROUND_EFFECTS.OFF;
+          const degraded = await applyBackgroundEffect({
             localVideoTrack: localTrack,
             processor: backgroundProcessorRef.current,
-            mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
+            mode: nextMode,
+            blurRadius: 8,
           });
-          if (disabled.ok) {
-            backgroundProcessorRef.current = disabled.processor;
+          if (degraded.ok) {
+            backgroundProcessorRef.current = degraded.processor;
             const nextEffect = {
-              mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
-              active: false,
+              mode: nextMode,
+              active: nextMode !== HUDDLE_BACKGROUND_EFFECTS.OFF,
               imagePath: null,
               imagePathConfigured: false,
               diagnostics: {
-                reason: "background_effect_automatically_disabled",
+                reason:
+                  nextMode === HUDDLE_BACKGROUND_EFFECTS.BLUR
+                    ? "background_replacement_degraded_to_blur"
+                    : "background_effect_automatically_disabled",
                 trigger: localCamera.qualityLimitationReason || "low_frame_rate",
                 framesPerSecond: localCamera.framesPerSecond,
+                timings: degraded.timings || null,
                 observedAt: new Date().toISOString(),
               },
             };
@@ -2182,6 +2214,14 @@ export function useLiveKitMediaProvider({
         if (!cancelled) {
           const incoming = Array.isArray(data?.captions) ? data.captions : [];
           if (incoming.length > 0) {
+            const metrics = providerMetricsRef.current;
+            if (!metrics.firstCaptionAt) {
+              metrics.firstCaptionAt = metricNow();
+              metrics.captionsActiveLatencyMs = elapsedMs(
+                metrics.intentStartedAt || metrics.joinStartedAt,
+                metrics.firstCaptionAt
+              );
+            }
             captionCursorRef.current =
               incoming[incoming.length - 1]?.emittedAt ||
               captionCursorRef.current;
@@ -2271,9 +2311,24 @@ export function useLiveKitMediaProvider({
       trackUnpublished: (_publication, participant) =>
         recordAndBump("trackUnpublished", { participantId: participantIdentity(participant) }),
       trackSubscribed: (_track, publication, participant) => {
+        const trackKind = safeString(_track?.kind || publication?.kind).toLowerCase();
         if (!metrics.firstSubscribeAt) {
           metrics.firstSubscribeAt = metricNow();
           metrics.subscribeLatencyMs = elapsedMs(metrics.roomStartedAt || metrics.joinStartedAt, metrics.firstSubscribeAt);
+        }
+        if (trackKind === "audio" && !metrics.firstAudioSubscribeAt) {
+          metrics.firstAudioSubscribeAt = metricNow();
+          metrics.firstAudioSubscribeLatencyMs = elapsedMs(
+            metrics.intentStartedAt || metrics.joinStartedAt,
+            metrics.firstAudioSubscribeAt
+          );
+        }
+        if (trackKind === "video" && !metrics.firstVideoSubscribeAt) {
+          metrics.firstVideoSubscribeAt = metricNow();
+          metrics.firstVideoSubscribeLatencyMs = elapsedMs(
+            metrics.intentStartedAt || metrics.joinStartedAt,
+            metrics.firstVideoSubscribeAt
+          );
         }
         recordAndBump("trackSubscribed", {
           participantId: participantIdentity(participant),
@@ -2407,6 +2462,10 @@ export function useLiveKitMediaProvider({
     try {
       providerMetricsRef.current = {
         ...createInitialLiveKitMetrics(),
+        intentStartedAt:
+          Number.isFinite(Number(params.intentStartedAt))
+            ? Number(params.intentStartedAt)
+            : metricNow(),
         joinStartedAt: metricNow(),
       };
       streamCacheRef.current.clear();
@@ -2423,6 +2482,9 @@ export function useLiveKitMediaProvider({
         providerMetricsRef.current.joinLatencyMs =
           result.diagnostics?.timings?.totalJoinLatencyMs ||
           elapsedMs(providerMetricsRef.current.joinStartedAt);
+        providerMetricsRef.current.intentToJoinLatencyMs = elapsedMs(
+          providerMetricsRef.current.intentStartedAt
+        );
         providerMetricsRef.current.roomStartedAt = metricNow();
         recordMetricTransition(providerMetricsRef.current, "connected", {
           joinLatencyMs: providerMetricsRef.current.joinLatencyMs,
@@ -2603,7 +2665,10 @@ export function useLiveKitMediaProvider({
             backgroundProcessorRef.current = result.processor;
             setBackgroundEffectState((current) => ({
               ...current,
-              diagnostics: result,
+              diagnostics: {
+                ...result,
+                timings: result.timings || null,
+              },
             }));
           });
         }, 250);
@@ -2713,6 +2778,7 @@ export function useLiveKitMediaProvider({
         diagnostics: {
           reason: result.reason,
           modern: result.modern,
+          timings: result.timings || null,
           observedAt: result.observedAt,
         },
       };

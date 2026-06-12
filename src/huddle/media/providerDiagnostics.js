@@ -70,6 +70,10 @@ export function createProviderMetricsSnapshot({
       roomEndpointMs: safeNumber(timings.roomEndpointMs),
       tokenEndpointMs: safeNumber(timings.tokenEndpointMs),
       sdkLoadMs: safeNumber(timings.sdkLoadMs),
+      intentToJoinMs: safeNumber(timings.intentToJoinMs),
+      firstAudioMs: safeNumber(timings.firstAudioMs),
+      firstVideoMs: safeNumber(timings.firstVideoMs),
+      captionsActiveMs: safeNumber(timings.captionsActiveMs),
     },
     failures: {
       count: boundedFailures.length,

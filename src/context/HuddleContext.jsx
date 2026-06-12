@@ -4,6 +4,7 @@ import { useHuddleCall } from "../hooks/useHuddleCall";
 import { getSocket, joinHuddle as emitJoinHuddle } from "../socket";
 import { useAuth } from "./AuthContext";
 import toast from "react-hot-toast";
+import { loadLiveKitSdk } from "../huddle/media/LiveKitSdk";
 
 const HuddleContext = createContext(null);
 const ACTIVE_HUDDLE_STORAGE_KEY = "asystence.activeHuddle.v1";
@@ -100,6 +101,18 @@ export function HuddleProvider({ children }) {
 
   const incomingHuddleRef = useRef(incomingHuddle);
   useEffect(() => { incomingHuddleRef.current = incomingHuddle; }, [incomingHuddle]);
+  const callIntentStartedAtRef = useRef(null);
+
+  const markCallIntent = useCallback(() => {
+    callIntentStartedAtRef.current =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    void loadLiveKitSdk({ enabled: true });
+  }, []);
+
+  useEffect(() => {
+    if (!incomingHuddle?.huddleId) return;
+    void loadLiveKitSdk({ enabled: true });
+  }, [incomingHuddle?.huddleId]);
 
   // ---------------------------
   // WebRTC Hook
@@ -138,10 +151,15 @@ export function HuddleProvider({ children }) {
     }
     if (joinedHuddleRef.current === activeHuddle.huddleId) return;
     joinedHuddleRef.current = activeHuddle.huddleId;
+    const intentStartedAt =
+      callIntentStartedAtRef.current ||
+      (typeof performance !== "undefined" ? performance.now() : Date.now());
+    callIntentStartedAtRef.current = null;
     call.startCall({
       channelId: activeHuddle.channelId,
       huddleId: activeHuddle.huddleId,
       sessionId: activeHuddle.sessionId || activeHuddle.huddleId,
+      intentStartedAt,
       ...providerJoinOptions(activeHuddle),
     });
   }, [activeHuddle?.huddleId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -189,6 +207,7 @@ export function HuddleProvider({ children }) {
   // ---------------------------
   const acceptHuddle = useCallback(() => {
     if (!incomingHuddle) return;
+    markCallIntent();
     if (activeHuddleRef.current) {
       call.leaveCall();
     }
@@ -199,7 +218,7 @@ export function HuddleProvider({ children }) {
     incomingHuddleRef.current = null;
     publishActiveHuddle(incomingHuddle);
     setIncomingHuddle(null);
-  }, [incomingHuddle, call, publishActiveHuddle]);
+  }, [incomingHuddle, call, markCallIntent, publishActiveHuddle]);
 
   // ---------------------------
   // Decline incoming huddle invite — notify initiator via socket
@@ -465,6 +484,7 @@ export function HuddleProvider({ children }) {
         activeHuddle,
         setActiveHuddle: publishActiveHuddle,
         incomingHuddle,
+        markCallIntent,
         acceptHuddle,
         declineHuddle,
         rtc,

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useApi } from "../api";
+import { preloadBackgroundEffects } from "./media/BackgroundEffects";
 
 const CURATED_HUDDLE_BACKGROUNDS = [
   {
@@ -275,6 +276,27 @@ export default function GlobalHuddleWindow() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!rtc?.joined || !rtc?.backgroundEffectsSupported) return undefined;
+    const connection = navigator.connection;
+    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || "")) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      void preloadBackgroundEffects({
+        imagePaths: CURATED_HUDDLE_BACKGROUNDS.map((background) => background.path),
+      });
+    }, 3500);
+    return () => window.clearTimeout(timeout);
+  }, [rtc?.backgroundEffectsSupported, rtc?.joined]);
+
+  useEffect(() => {
+    if (!showBackgroundMenu || !rtc?.backgroundEffectsSupported) return;
+    void preloadBackgroundEffects({
+      imagePaths: CURATED_HUDDLE_BACKGROUNDS.map((background) => background.path),
+    });
+  }, [rtc?.backgroundEffectsSupported, showBackgroundMenu]);
+
   const updateBackgroundEffect = useCallback(async (mode, imagePath = null) => {
     if (!rtc?.setBackgroundEffect) return;
     const result = await rtc.setBackgroundEffect({ mode, imagePath });
@@ -413,6 +435,11 @@ export default function GlobalHuddleWindow() {
       "background_effect_automatically_disabled"
     ) {
       toast("Background effect was disabled to protect call quality.");
+    } else if (
+      rtc?.backgroundEffect?.diagnostics?.reason ===
+      "background_replacement_degraded_to_blur"
+    ) {
+      toast("Background replacement was reduced to blur to protect call quality.");
     }
   }, [rtc?.backgroundEffect?.diagnostics?.reason]);
 

@@ -2280,6 +2280,7 @@ useEffect(() => {
     }
 
     const huddleId = createUniqueId("huddle");
+    huddleCtx?.markCallIntent?.();
     startHuddle(activeChannelKey, huddleId);
 
   };

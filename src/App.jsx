@@ -1,37 +1,38 @@
 // src/App.jsx
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 // ---- Normal user pages ----
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import AuthCallback from "./pages/AuthCallback";
-import Projects from "./pages/Projects";
-import ProjectTasks from "./pages/ProjectTasks";
-import UsersAdmin from "./pages/UsersAdmin";
-import Dashboard from "./pages/Dashboard";
-import MyTasks from "./pages/MyTasks";
-import Notifications from "./pages/Notifications";
-import Profile from "./pages/Profile";
-import Chat from "./pages/Chat";
-import Reports from "./pages/Reports.jsx";
-import AdminAttendance from "./pages/AdminAttendance.jsx";
-import StrategicIntelligence from "./pages/StrategicIntelligence.jsx";
-import Autopilot from "./pages/Autopilot.jsx";
-import TestingAgent from "./pages/TestingAgent.jsx";
-import SlackMigration from "./pages/SlackMigration.jsx";
-import Migrations from "./pages/Migrations.jsx";
-import WorkspaceBilling from "./pages/WorkspaceBilling.jsx";
-import WorkspaceSearchMemory from "./pages/WorkspaceSearchMemory.jsx";
-import UserProfile from "./pages/UserProfile.jsx";
-import HuddleMeetingIntelligence from "./pages/HuddleMeetingIntelligence.jsx";
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+const Projects = lazy(() => import("./pages/Projects"));
+const ProjectTasks = lazy(() => import("./pages/ProjectTasks"));
+const UsersAdmin = lazy(() => import("./pages/UsersAdmin"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const MyTasks = lazy(() => import("./pages/MyTasks"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Chat = lazy(() => import("./pages/Chat"));
+const Reports = lazy(() => import("./pages/Reports.jsx"));
+const AdminAttendance = lazy(() => import("./pages/AdminAttendance.jsx"));
+const StrategicIntelligence = lazy(() => import("./pages/StrategicIntelligence.jsx"));
+const Autopilot = lazy(() => import("./pages/Autopilot.jsx"));
+const TestingAgent = lazy(() => import("./pages/TestingAgent.jsx"));
+const SlackMigration = lazy(() => import("./pages/SlackMigration.jsx"));
+const Migrations = lazy(() => import("./pages/Migrations.jsx"));
+const WorkspaceBilling = lazy(() => import("./pages/WorkspaceBilling.jsx"));
+const WorkspaceSearchMemory = lazy(() => import("./pages/WorkspaceSearchMemory.jsx"));
+const UserProfile = lazy(() => import("./pages/UserProfile.jsx"));
+const HuddleMeetingIntelligence = lazy(() => import("./pages/HuddleMeetingIntelligence.jsx"));
 
 // ---- Gradient Demo (Development) ----
 import { GradientDemo } from "./components/ui/GradientDemo";
 
 // ---- Intelligence pages (NEW) ----
-import UserPerformance from "./pages/intelligence/UserPerformance.jsx";
-import AdminIntelligence from "./pages/intelligence/AdminIntelligence.jsx";
-import ExecutiveSummary from "./pages/intelligence/ExecutiveSummary.jsx";
+const UserPerformance = lazy(() => import("./pages/intelligence/UserPerformance.jsx"));
+const AdminIntelligence = lazy(() => import("./pages/intelligence/AdminIntelligence.jsx"));
+const ExecutiveSummary = lazy(() => import("./pages/intelligence/ExecutiveSummary.jsx"));
 
 // ---- Layouts & protection ----
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -39,34 +40,42 @@ import AppLayout from "./layouts/AppLayout";
 
 // ---- Superadmin auth & layout ----
 import SuperAdminLayout from "./layouts/SuperAdminLayout.jsx";
-import SuperAdminWorkspaces from "./pages/SuperAdminWorkspaces.jsx";
-import SuperadminLogin from "./pages/SuperadminLogin.jsx";
-import SuperadminPayments from "./pages/SuperadminPayments.jsx";
-import SuperadminSettings from "./pages/SuperadminSettings.jsx";
-import SuperadminPlans from "./pages/SuperadminPlans.jsx";
-import SuperadminBackups from "./pages/SuperadminBackups.jsx";
+const SuperAdminWorkspaces = lazy(() => import("./pages/SuperAdminWorkspaces.jsx"));
+const SuperadminLogin = lazy(() => import("./pages/SuperadminLogin.jsx"));
+const SuperadminPayments = lazy(() => import("./pages/SuperadminPayments.jsx"));
+const SuperadminSettings = lazy(() => import("./pages/SuperadminSettings.jsx"));
+const SuperadminPlans = lazy(() => import("./pages/SuperadminPlans.jsx"));
+const SuperadminBackups = lazy(() => import("./pages/SuperadminBackups.jsx"));
 import ProtectedSuperadmin from "./components/ProtectedSuperadmin";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext";
 
 // ---- Extra legacy / preserved ----
-import CreateWorkspace from "./pages/CreateWorkspace";
+const CreateWorkspace = lazy(() => import("./pages/CreateWorkspace"));
 
 // ---- Enterprise Phase 1-4 pages ----
-import Enterprise from "./pages/Enterprise.jsx";
-import EnterpriseIntelligence from "./pages/EnterpriseIntelligence.jsx";
-import Wiki       from "./pages/Wiki.jsx";
-import Leave      from "./pages/Leave.jsx";
-import OKR        from "./pages/OKR.jsx";
-import Reviews    from "./pages/Reviews.jsx";
-import AIFeatures from "./pages/AIFeatures.jsx";
-import AIHub      from "./pages/AIHub.jsx";
+const Enterprise = lazy(() => import("./pages/Enterprise.jsx"));
+const EnterpriseIntelligence = lazy(() => import("./pages/EnterpriseIntelligence.jsx"));
+const Wiki = lazy(() => import("./pages/Wiki.jsx"));
+const Leave = lazy(() => import("./pages/Leave.jsx"));
+const OKR = lazy(() => import("./pages/OKR.jsx"));
+const Reviews = lazy(() => import("./pages/Reviews.jsx"));
+const AIFeatures = lazy(() => import("./pages/AIFeatures.jsx"));
+const AIHub = lazy(() => import("./pages/AIHub.jsx"));
 
 // ---- Auth flow pages ----
-import ForgotPassword from "./pages/ForgotPassword.jsx";
-import ResetPassword  from "./pages/ResetPassword.jsx";
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword.jsx"));
 
 // ---- Public pages ----
-import SLA from "./pages/SLA.jsx";
+const SLA = lazy(() => import("./pages/SLA.jsx"));
+
+function RouteLoading() {
+  return (
+    <div className="flex min-h-[45vh] items-center justify-center bg-[var(--background)] text-sm text-[color:var(--text-muted)]">
+      Loading...
+    </div>
+  );
+}
 
 /**
  * ======================================================
@@ -80,6 +89,7 @@ import SLA from "./pages/SLA.jsx";
 
 export default function App() {
   return (
+    <Suspense fallback={<RouteLoading />}>
       <Routes>
         {/* ============================
             PUBLIC
@@ -318,7 +328,7 @@ export default function App() {
         ============================ */}
         <Route path="*" element={<Navigate to="/projects" />} />
       </Routes>
-
+    </Suspense>
   );
 }
 

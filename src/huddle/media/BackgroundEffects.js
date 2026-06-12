@@ -5,12 +5,65 @@ export const HUDDLE_BACKGROUND_EFFECTS = Object.freeze({
 });
 
 let processorsPromise = null;
+const imagePreloads = new Map();
+
+function now() {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+function duration(startedAt) {
+  return Math.max(0, Math.round(now() - startedAt));
+}
 
 function loadProcessors() {
   if (!processorsPromise) {
     processorsPromise = import("@livekit/track-processors");
   }
   return processorsPromise;
+}
+
+function preloadImage(imagePath) {
+  if (!imagePath || typeof Image === "undefined") return Promise.resolve(false);
+  if (!imagePreloads.has(imagePath)) {
+    imagePreloads.set(
+      imagePath,
+      new Promise((resolve) => {
+        const image = new Image();
+        image.decoding = "async";
+        image.onload = () => resolve(true);
+        image.onerror = () => resolve(false);
+        image.src = imagePath;
+        if (typeof image.decode === "function") {
+          image.decode().then(() => resolve(true)).catch(() => {});
+        }
+      })
+    );
+  }
+  return imagePreloads.get(imagePath);
+}
+
+export async function preloadBackgroundEffects({ imagePaths = [] } = {}) {
+  const support = getBackgroundEffectSupport();
+  if (!support.supported) {
+    return { ok: false, reason: "background_effect_not_supported", support };
+  }
+  const startedAt = now();
+  const moduleStartedAt = now();
+  await loadProcessors();
+  const moduleLoadMs = duration(moduleStartedAt);
+  const imagesStartedAt = now();
+  const imageResults = await Promise.all(imagePaths.map(preloadImage));
+  return {
+    ok: true,
+    reason: "background_effect_assets_preloaded",
+    moduleLoadMs,
+    imagePreloadMs: duration(imagesStartedAt),
+    totalPreloadMs: duration(startedAt),
+    imageCount: imageResults.filter(Boolean).length,
+    observedAt: new Date().toISOString(),
+  };
 }
 
 export function getBackgroundEffectSupport() {
@@ -105,11 +158,14 @@ export async function applyBackgroundEffect({
   }
 
   const options = processorOptions({ mode, imagePath, blurRadius });
+  const totalStartedAt = now();
+  const moduleStartedAt = now();
   const {
     BackgroundProcessor,
     supportsBackgroundProcessors,
     supportsModernBackgroundProcessors,
   } = await loadProcessors();
+  const moduleLoadMs = duration(moduleStartedAt);
   if (!supportsBackgroundProcessors()) {
     return {
       ok: false,
@@ -119,11 +175,16 @@ export async function applyBackgroundEffect({
     };
   }
   let activeProcessor = processor;
+  let processorAttachMs = 0;
   if (!activeProcessor) {
+    const attachStartedAt = now();
     activeProcessor = BackgroundProcessor({ mode: "disabled" });
     await localVideoTrack.setProcessor(activeProcessor);
+    processorAttachMs = duration(attachStartedAt);
   }
+  const switchStartedAt = now();
   await activeProcessor.switchTo(options);
+  const switchMs = duration(switchStartedAt);
   return {
     ok: true,
     reason: "background_effect_updated",
@@ -132,6 +193,12 @@ export async function applyBackgroundEffect({
     mode,
     modern: Boolean(supportsModernBackgroundProcessors()),
     imagePathConfigured: Boolean(imagePath),
+    timings: {
+      moduleLoadMs,
+      processorAttachMs,
+      switchMs,
+      totalMs: duration(totalStartedAt),
+    },
     observedAt: new Date().toISOString(),
   };
 }
@@ -148,6 +215,7 @@ export async function destroyBackgroundEffect(processor) {
 export default {
   HUDDLE_BACKGROUND_EFFECTS,
   getBackgroundEffectSupport,
+  preloadBackgroundEffects,
   applyBackgroundEffect,
   destroyBackgroundEffect,
 };
