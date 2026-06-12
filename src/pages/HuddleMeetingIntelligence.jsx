@@ -160,16 +160,17 @@ function ReviewStatus({ artifact }) {
   if (!artifact) return null;
   const approved = artifact.approvalStatus === "approved";
   const rejected = artifact.approvalStatus === "rejected";
+  const revoked = artifact.approvalStatus === "revoked";
   return (
     <span className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
       approved
         ? "bg-emerald-500/10 text-emerald-600"
-        : rejected
+        : rejected || revoked
           ? "bg-red-500/10 text-red-600"
           : "bg-amber-500/10 text-amber-700"
     }`}>
-      {approved ? <Check size={13} /> : rejected ? <X size={13} /> : <Clock3 size={13} />}
-      {approved ? "Approved" : rejected ? "Rejected" : "Review required"}
+      {approved ? <Check size={13} /> : rejected || revoked ? <X size={13} /> : <Clock3 size={13} />}
+      {approved ? "Approved" : revoked ? "Revoked" : rejected ? "Rejected" : "Review required"}
     </span>
   );
 }
@@ -228,7 +229,16 @@ function ArtifactActions({ artifact, canReview, canEdit, onEdit, onDecision, bus
           <Check size={13} /> Approve
         </button>
       )}
-      {artifact.approvalStatus !== "rejected" && (
+      {artifact.approvalStatus === "approved" ? (
+        <button
+          type="button"
+          onClick={() => onDecision(artifact, "revoked")}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+        >
+          <Archive size={13} /> Revoke
+        </button>
+      ) : artifact.approvalStatus !== "rejected" && (
         <button
           type="button"
           onClick={() => onDecision(artifact, "rejected")}
@@ -474,8 +484,19 @@ export default function HuddleMeetingIntelligence() {
   const decideArtifact = async (artifact, decision) => {
     setBusyId(artifact.id);
     try {
-      const response = await api.post(`/huddle/artifacts/${artifact.id}/${decision === "approved" ? "approve" : "reject"}`, {
-        approvalNote: decision === "approved" ? "Approved in Meeting Intelligence" : "Rejected in Meeting Intelligence",
+      const endpoint =
+        decision === "approved"
+          ? "approve"
+          : decision === "revoked"
+            ? "revoke"
+            : "reject";
+      const response = await api.post(`/huddle/artifacts/${artifact.id}/${endpoint}`, {
+        approvalNote:
+          decision === "approved"
+            ? "Approved in Meeting Intelligence"
+            : decision === "revoked"
+              ? "Approval revoked in Meeting Intelligence"
+              : "Rejected in Meeting Intelligence",
         expectedRevision: artifact.currentRevision,
       });
       const updatedArtifact = response.data.artifact;
@@ -505,7 +526,13 @@ export default function HuddleMeetingIntelligence() {
           },
         };
       });
-      toast.success(decision === "approved" ? "Artifact approved" : "Artifact rejected");
+      toast.success(
+        decision === "approved"
+          ? "Artifact approved"
+          : decision === "revoked"
+            ? "Artifact approval revoked"
+            : "Artifact rejected"
+      );
     } catch (requestError) {
       if (requestError.response?.status === 409) await load();
       toast.error(requestError.response?.data?.reason || "Review could not be saved");
@@ -807,6 +834,9 @@ export default function HuddleMeetingIntelligence() {
               <button type="button" onClick={() => copyText(transcriptText, "Transcript")} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
                 <ClipboardCopy size={15} /> Copy transcript
               </button>
+              <button type="button" onClick={() => copyText(reportMarkdown(review), "Meeting report")} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
+                <ClipboardCopy size={15} /> Copy report
+              </button>
               <button type="button" onClick={downloadMarkdownExport} title="Export Markdown" className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
                 <FileDown size={15} /> Markdown
               </button>
@@ -858,8 +888,31 @@ export default function HuddleMeetingIntelligence() {
             </div>
             {summary ? (
               <>
+                <div className="mb-5 grid gap-4 border-y border-[color:var(--border)] py-4 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-[color:var(--text-muted)]">Purpose</div>
+                    <p className="mt-1 text-sm leading-6">{review.report?.executiveSummary?.purpose}</p>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-[color:var(--text-muted)]">Overall outcome</div>
+                    <p className="mt-1 text-sm leading-6">{review.report?.executiveSummary?.outcome}</p>
+                  </div>
+                </div>
                 <p className="max-w-4xl whitespace-pre-wrap text-[15px] leading-7">{summary.contentJson?.overview}</p>
                 <EvidenceButton ids={summary.contentJson?.overviewEvidenceSegmentIds} onOpen={showEvidence} />
+                {(review.report?.executiveSummary?.conclusions || []).length > 0 && (
+                  <>
+                    <h3 className="mb-3 mt-7 font-semibold">Major conclusions</h3>
+                    <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                      {review.report.executiveSummary.conclusions.map((item, index) => (
+                        <div key={item.id || index} className="py-3">
+                          <p className="text-sm leading-6">{item.text || item}</p>
+                          <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <h3 className="mb-3 mt-7 font-semibold">Discussion highlights</h3>
                 <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
                   {(summary.contentJson?.discussionHighlights || []).map((point) => (
@@ -876,6 +929,40 @@ export default function HuddleMeetingIntelligence() {
                     </div>
                   ))}
                 </div>
+                {(review.report?.speakerHighlights || []).length > 0 && (
+                  <>
+                    <h3 className="mb-3 mt-7 font-semibold">Speaker highlights</h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {review.report.speakerHighlights.map((speaker) => (
+                        <article key={speaker.speaker} className="border-l-2 border-[color:var(--primary)] pl-4">
+                          <h4 className="font-semibold">{speaker.speaker}</h4>
+                          <dl className="mt-2 space-y-2 text-sm">
+                            {speaker.keyPointsRaised.length > 0 && <div><dt className="text-xs font-medium text-[color:var(--text-muted)]">Key points</dt><dd>{speaker.keyPointsRaised.map((item) => item.text).join(" ")}</dd></div>}
+                            {speaker.commitments.length > 0 && <div><dt className="text-xs font-medium text-[color:var(--text-muted)]">Commitments</dt><dd>{speaker.commitments.map((item) => item.title).join(", ")}</dd></div>}
+                            {speaker.concernsRaised.length > 0 && <div><dt className="text-xs font-medium text-[color:var(--text-muted)]">Concerns</dt><dd>{speaker.concernsRaised.map((item) => item.text || item.question).join(" ")}</dd></div>}
+                            {speaker.decisionsInfluenced.length > 0 && <div><dt className="text-xs font-medium text-[color:var(--text-muted)]">Decisions influenced</dt><dd>{speaker.decisionsInfluenced.map((item) => item.title).join(", ")}</dd></div>}
+                          </dl>
+                        </article>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {(review.report?.chronologicalConversation || []).length > 0 && (
+                  <>
+                    <h3 className="mb-3 mt-7 font-semibold">Chronological conversation</h3>
+                    <div className="border-l border-[color:var(--border)] pl-5">
+                      {review.report.chronologicalConversation.map((entry, index) => (
+                        <div key={entry.id || index} className="relative pb-5">
+                          <span className="absolute -left-[25px] top-1.5 h-2.5 w-2.5 rounded-full bg-[var(--primary)]" />
+                          <div className="text-xs text-[color:var(--text-muted)]">{timeOnly(entry.occurredAt)}</div>
+                          <div className="text-sm font-medium">{entry.title}</div>
+                          <p className="mt-1 text-sm leading-6 text-[color:var(--text-muted)]">{entry.description}</p>
+                          <EvidenceButton ids={entry.evidenceSegmentIds} onOpen={showEvidence} />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <h3 className="mb-3 mt-7 font-semibold">Open questions</h3>
                 {(summary.contentJson?.openQuestions || []).length > 0 ? (
                   <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
@@ -985,11 +1072,16 @@ export default function HuddleMeetingIntelligence() {
               <div className="flex flex-wrap items-center gap-2"><ReviewStatus artifact={decisions} /><ArtifactActions artifact={decisions} canReview={review.permissions.canReviewArtifacts} canEdit={decisions?.approvalStatus !== "approved" || review.permissions.canEditApprovedArtifacts} onEdit={setEditing} onDecision={decideArtifact} busy={busyId === decisions?.id} /></div>
             </div>
             <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-              {(decisions?.contentJson?.decisions || []).map((item) => (
+              {(review.report?.decisions || decisions?.contentJson?.decisions || []).map((item) => (
                 <article key={item.id} className="py-5">
                   <div className="flex flex-wrap items-start justify-between gap-3"><h3 className="font-semibold">{item.title}</h3><span className="text-xs text-[color:var(--text-muted)]">{confidenceLabel(item.confidence)}</span></div>
                   <p className="mt-2 text-sm leading-6">{item.decision}</p>
                   {item.rationale && <p className="mt-2 text-sm text-[color:var(--text-muted)]">{item.rationale}</p>}
+                  {(item.participants || []).length > 0 && (
+                    <p className="mt-2 text-xs text-[color:var(--text-muted)]">
+                      Participants: {item.participants.join(", ")}
+                    </p>
+                  )}
                   <div className="mt-3"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
                 </article>
               ))}
@@ -1010,7 +1102,7 @@ export default function HuddleMeetingIntelligence() {
               <div className="flex flex-wrap items-center gap-2"><ReviewStatus artifact={actions} /><ArtifactActions artifact={actions} canReview={review.permissions.canReviewArtifacts} canEdit={actions?.approvalStatus !== "approved" || review.permissions.canEditApprovedArtifacts} onEdit={setEditing} onDecision={decideArtifact} busy={busyId === actions?.id} /></div>
             </div>
             <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-              {(actions?.contentJson?.actionItems || []).map((item) => {
+              {(review.report?.actionItems || actions?.contentJson?.actionItems || []).map((item) => {
                 const linkedTask = (review.actionTasks || []).find(
                   (task) => String(task.source?.actionItemId) === String(item.id)
                 );
@@ -1023,7 +1115,7 @@ export default function HuddleMeetingIntelligence() {
                   <div className="flex flex-wrap items-start justify-between gap-3"><h3 className="font-semibold">{item.title}</h3><span className="text-xs text-[color:var(--text-muted)]">{confidenceLabel(item.confidence)}</span></div>
                   {item.description && <p className="mt-2 text-sm leading-6">{item.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-4 text-xs text-[color:var(--text-muted)]">
-                    {item.suggestedOwner?.label && <span>Suggested owner: {item.suggestedOwner.label}</span>}
+                    {(item.owner?.label || item.suggestedOwner?.label) && <span>Owner: {item.owner?.label || item.suggestedOwner.label}</span>}
                     {item.dueDate && <span>Due: {item.dueDate}</span>}
                   </div>
                   <div className="mt-3"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
