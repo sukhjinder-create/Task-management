@@ -77,8 +77,12 @@ function artifactContentText(artifactType, content) {
   if (artifactType === "summary") {
     return [
       content.title,
+      "Meeting Purpose",
+      content.purpose,
       "Executive Summary",
       content.overview,
+      "Discussion Summary",
+      ...(content.discussionSummary || []).map((item) => `- ${item.text}`),
       "Discussion Highlights",
       ...(content.discussionHighlights || []).map(
         (item) => `- ${item.speaker || "Participant"}: ${item.text}`
@@ -87,6 +91,10 @@ function artifactContentText(artifactType, content) {
       ...(content.keyPoints || []).map((item) => `- ${item.text}`),
       "Open Questions",
       ...(content.openQuestions || []).map((item) => `- ${item.question}`),
+      "Risks and Blockers",
+      ...(content.risksRaised || []).map((item) => `- ${item.text}`),
+      "Next Steps",
+      ...(content.nextSteps || []).map((item) => `- ${item.text}`),
     ].filter(Boolean).join("\n\n");
   }
   if (artifactType === "decision") {
@@ -119,6 +127,16 @@ function reportMarkdown(review) {
     "## Executive Summary",
     "",
     report.executiveSummary?.outcome || "No executive summary is available.",
+    "",
+    "## Meeting Purpose",
+    "",
+    report.executiveSummary?.purpose || review?.session?.title || "Huddle",
+    "",
+    "## Discussion Summary",
+    "",
+    ...(report.discussionSummary || []).map(
+      (item) => `- ${item.text}${evidence(item.evidenceSegmentIds)}`
+    ),
     "",
     "## Discussion Highlights",
     "",
@@ -161,6 +179,19 @@ function reportMarkdown(review) {
         `- ${item.text || item.question || item}${evidence(item.evidenceSegmentIds)}`
     ),
     "",
+    "## Next Steps",
+    "",
+    ...(report.nextSteps || []).map(
+      (item) => `- ${item.text || item}${evidence(item.evidenceSegmentIds)}`
+    ),
+    "",
+    "## Ownership Suggestions",
+    "",
+    ...(report.ownershipSuggestions || []).map(
+      (item) =>
+        `- ${item.metadata?.actionTitle || "Action item"}: ${item.metadata?.resolvedOwnerLabel || item.metadata?.ownerLabel || "Unassigned"} (${item.status || "pending review"})`
+    ),
+    "",
     "## Transcript",
     "",
     ...(review?.transcript || []).map(
@@ -169,6 +200,20 @@ function reportMarkdown(review) {
     ),
   ];
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+async function installPdfUnicodeFont(document) {
+  const response = await fetch("/fonts/NotoSansDevanagari.ttf");
+  if (!response.ok) throw new Error("pdf_unicode_font_unavailable");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  const filename = "NotoSansDevanagari.ttf";
+  document.addFileToVFS(filename, window.btoa(binary));
+  document.addFont(filename, "NotoSansDevanagari", "normal");
+  document.addFont(filename, "NotoSansDevanagari", "bold");
 }
 
 function ReviewStatus({ artifact }) {
@@ -505,7 +550,7 @@ export default function HuddleMeetingIntelligence() {
           : decision === "revoked"
             ? "revoke"
             : "reject";
-      const response = await api.post(`/huddle/artifacts/${artifact.id}/${endpoint}`, {
+      await api.post(`/huddle/artifacts/${artifact.id}/${endpoint}`, {
         approvalNote:
           decision === "approved"
             ? "Approved in Meeting Intelligence"
@@ -514,33 +559,7 @@ export default function HuddleMeetingIntelligence() {
               : "Rejected in Meeting Intelligence",
         expectedRevision: artifact.currentRevision,
       });
-      const updatedArtifact = response.data.artifact;
-      setReview((current) => {
-        if (!current || !updatedArtifact) return current;
-        const artifactKey = {
-          summary: "summary",
-          decision: "decisions",
-          action_item: "actions",
-        }[updatedArtifact.artifactType];
-        if (!artifactKey) return current;
-        const previous = current.artifacts[artifactKey];
-        const wasPending = previous?.approvalStatus === "pending";
-        const isPending = updatedArtifact.approvalStatus === "pending";
-        return {
-          ...current,
-          artifacts: {
-            ...current.artifacts,
-            [artifactKey]: updatedArtifact,
-          },
-          status: {
-            ...current.status,
-            pendingReviewCount: Math.max(
-              0,
-              current.status.pendingReviewCount + (isPending ? 1 : 0) - (wasPending ? 1 : 0)
-            ),
-          },
-        };
-      });
+      await load();
       toast.success(
         decision === "approved"
           ? "Artifact approved"
@@ -578,30 +597,13 @@ export default function HuddleMeetingIntelligence() {
   const decideOwnership = async (item, status, resolvedOwnerUserId = null) => {
     setBusyId(item.id);
     try {
-      const response = await api.patch(`/huddle/intelligence/sessions/${sessionId}/ownership/${item.id}`, {
+      await api.patch(`/huddle/intelligence/sessions/${sessionId}/ownership/${item.id}`, {
         status,
         resolvedOwnerUserId,
         expectedStatus: item.status,
         resolutionNote: status === "rejected" ? "Rejected in Meeting Intelligence" : "Approved in Meeting Intelligence",
       });
-      const updated = response.data.ownershipResolution;
-      setReview((current) => {
-        if (!current || !updated) return current;
-        return {
-          ...current,
-          ownership: current.ownership.map((entry) =>
-            entry.id === updated.id ? updated : entry
-          ),
-          status: {
-            ...current.status,
-            pendingReviewCount: Math.max(
-              0,
-              current.status.pendingReviewCount -
-                (item.status === "pending_approval" ? 1 : 0)
-            ),
-          },
-        };
-      });
+      await load();
       toast.success(status === "rejected" ? "Ownership suggestion rejected" : "Ownership confirmed");
     } catch (requestError) {
       if (requestError.response?.status === 409) await load();
@@ -763,7 +765,9 @@ export default function HuddleMeetingIntelligence() {
 
   const downloadMarkdownExport = () => {
     const url = URL.createObjectURL(
-      new Blob([reportMarkdown(review)], { type: "text/markdown;charset=utf-8" })
+      new Blob([`\uFEFF${reportMarkdown(review)}`], {
+        type: "text/markdown;charset=utf-8",
+      })
     );
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -775,6 +779,13 @@ export default function HuddleMeetingIntelligence() {
   const downloadPdfExport = async () => {
     const { jsPDF } = await import("jspdf");
     const document = new jsPDF({ unit: "pt", format: "a4" });
+    let pdfFont = "helvetica";
+    try {
+      await installPdfUnicodeFont(document);
+      pdfFont = "NotoSansDevanagari";
+    } catch {
+      toast.error("Unicode font could not be loaded; PDF text may be limited");
+    }
     const pageWidth = document.internal.pageSize.getWidth();
     const pageHeight = document.internal.pageSize.getHeight();
     const margin = 48;
@@ -788,7 +799,7 @@ export default function HuddleMeetingIntelligence() {
     };
     const write = (text, { size = 10, bold = false, gap = 8 } = {}) => {
       if (!text) return;
-      document.setFont("helvetica", bold ? "bold" : "normal");
+      document.setFont(pdfFont, bold ? "bold" : "normal");
       document.setFontSize(size);
       const lines = document.splitTextToSize(String(text), contentWidth);
       ensureSpace(lines.length * (size + 3) + gap);
@@ -819,6 +830,12 @@ export default function HuddleMeetingIntelligence() {
     );
     heading("Executive Summary");
     write(review.report?.executiveSummary?.outcome || summaryText);
+    heading("Meeting Purpose");
+    write(review.report?.executiveSummary?.purpose || review.session.title);
+    heading("Discussion Summary");
+    (review.report?.discussionSummary || []).forEach((item) =>
+      bullet(`${item.text}${evidence(item.evidenceSegmentIds)}`)
+    );
     heading("Discussion Highlights");
     (review.report?.discussionHighlights || []).forEach((item) =>
       bullet(
@@ -843,6 +860,18 @@ export default function HuddleMeetingIntelligence() {
         `${item.occurredAt ? `${timeOnly(item.occurredAt)} | ` : ""}${item.title || "Discussion"}: ${item.description || ""}${evidence(item.evidenceSegmentIds)}`
       )
     );
+    heading("Open Questions");
+    (review.report?.openQuestions || []).forEach((item) =>
+      bullet(`${item.question}${evidence(item.evidenceSegmentIds)}`)
+    );
+    heading("Risks and Blockers");
+    (review.report?.risks || []).forEach((item) =>
+      bullet(`${item.text || item.question || item}${evidence(item.evidenceSegmentIds)}`)
+    );
+    heading("Next Steps");
+    (review.report?.nextSteps || []).forEach((item) =>
+      bullet(`${item.text || item}${evidence(item.evidenceSegmentIds)}`)
+    );
     heading("Transcript");
     review.transcript.forEach((segment) =>
       write(
@@ -853,7 +882,7 @@ export default function HuddleMeetingIntelligence() {
     const pageCount = document.getNumberOfPages();
     for (let page = 1; page <= pageCount; page += 1) {
       document.setPage(page);
-      document.setFont("helvetica", "normal");
+      document.setFont(pdfFont, "normal");
       document.setFontSize(8);
       document.setTextColor(100);
       document.text(
@@ -977,6 +1006,19 @@ export default function HuddleMeetingIntelligence() {
                 </div>
                 <p className="max-w-4xl whitespace-pre-wrap text-[15px] leading-7">{summary.contentJson?.overview}</p>
                 <EvidenceButton ids={summary.contentJson?.overviewEvidenceSegmentIds} onOpen={showEvidence} />
+                {(review.report?.discussionSummary || []).length > 0 && (
+                  <>
+                    <h3 className="mb-3 mt-7 font-semibold">Discussion summary</h3>
+                    <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                      {review.report.discussionSummary.map((item, index) => (
+                        <div key={item.id || index} className="py-3">
+                          <p className="text-sm leading-6">{item.text}</p>
+                          <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
                 {(review.report?.executiveSummary?.conclusions || []).length > 0 && (
                   <>
                     <h3 className="mb-3 mt-7 font-semibold">Major conclusions</h3>
@@ -1080,6 +1122,19 @@ export default function HuddleMeetingIntelligence() {
                         </li>
                       ))}
                     </ul>
+                  </>
+                )}
+                {(review.report?.nextSteps || []).length > 0 && (
+                  <>
+                    <h3 className="mb-3 mt-7 font-semibold">Next steps</h3>
+                    <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                      {review.report.nextSteps.map((item, index) => (
+                        <div key={item.id || index} className="py-3">
+                          <p className="text-sm leading-6">{item.text || item}</p>
+                          <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
+                        </div>
+                      ))}
+                    </div>
                   </>
                 )}
                 {summary.approvalStatus === "approved" && (
@@ -1422,6 +1477,9 @@ export default function HuddleMeetingIntelligence() {
                     ["Receive resolution", quality.metrics?.maxReceiveResolution || "No data"],
                     ["Send resolution", quality.metrics?.maxSendResolution || "No data"],
                     ["Bitrate", quality.metrics?.averageBitrateKbps == null ? "No data" : `${quality.metrics.averageBitrateKbps} kbps`],
+                    ["Send frame rate", quality.metrics?.averageSendFps == null ? "No data" : `${quality.metrics.averageSendFps} fps`],
+                    ["Receive frame rate", quality.metrics?.averageReceiveFps == null ? "No data" : `${quality.metrics.averageReceiveFps} fps`],
+                    ["Video codecs", quality.metrics?.videoCodecs?.join(", ") || "No data"],
                     ["Estimated data", quality.metrics?.estimatedMegabytesPerHour == null ? "No data" : `${quality.metrics.estimatedMegabytesPerHour} MB/hour`],
                     ["Real-device samples", quality.realDeviceSampleCount],
                     ["Screen-share tracks", quality.metrics?.screenShareTrackCount || 0],
@@ -1438,6 +1496,13 @@ export default function HuddleMeetingIntelligence() {
                   <span>Medium: {quality.metrics?.mediumLayerSamples || 0}</span>
                   <span>High: {quality.metrics?.highLayerSamples || 0}</span>
                 </div>
+                {Object.keys(quality.metrics?.qualityLimitationReasons || {}).length > 0 && (
+                  <div className="mt-4 text-sm text-[color:var(--text-muted)]">
+                    Quality limitations: {Object.entries(quality.metrics.qualityLimitationReasons)
+                      .map(([reason, count]) => `${reason} (${count})`)
+                      .join(", ")}
+                  </div>
+                )}
                 {(quality.observations || []).length > 0 && (
                   <div className="mt-6 border-l-2 border-amber-500 pl-4">
                     <h3 className="font-semibold">Observations</h3>

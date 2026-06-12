@@ -4,10 +4,25 @@ import { useHuddle } from "../context/HuddleContext";
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Maximize2, Minimize2, VolumeX, Captions,
-  BookOpenText, Gauge, Image, Sparkles, X,
+  BookOpenText, Gauge, Image, Sparkles, X, ArrowDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useApi } from "../api";
+
+const CURATED_HUDDLE_BACKGROUNDS = [
+  {
+    label: "Quiet office",
+    path: "/huddle-backgrounds/office.jpg",
+  },
+  {
+    label: "Meeting room",
+    path: "/huddle-backgrounds/meeting-room.jpg",
+  },
+  {
+    label: "Soft abstract",
+    path: "/huddle-backgrounds/abstract.jpg",
+  },
+];
 
 // ── Call timer ──────────────────────────────────────────────────────────────
 function useCallTimer(startedAt) {
@@ -235,6 +250,7 @@ export default function GlobalHuddleWindow() {
   const [showMissedPanel, setShowMissedPanel] = useState(false);
   const [missedBrief, setMissedBrief] = useState(null);
   const [missedLoading, setMissedLoading] = useState(false);
+  const [followLatestCaption, setFollowLatestCaption] = useState(true);
   const captionFeedRef = useRef(null);
   const replacementInputRef = useRef(null);
   const replacementUrlRef = useRef(null);
@@ -368,9 +384,28 @@ export default function GlobalHuddleWindow() {
   }, [isMaximized, size]);
 
   useEffect(() => {
-    if (!rtc?.subtitlesEnabled || !captionFeedRef.current) return;
+    if (
+      !rtc?.subtitlesEnabled ||
+      !followLatestCaption ||
+      !captionFeedRef.current
+    ) return;
     captionFeedRef.current.scrollTop = captionFeedRef.current.scrollHeight;
-  }, [canonicalCaptionFeed, rtc?.subtitlesEnabled]);
+  }, [canonicalCaptionFeed, followLatestCaption, rtc?.subtitlesEnabled]);
+
+  const handleCaptionScroll = useCallback(() => {
+    const element = captionFeedRef.current;
+    if (!element) return;
+    const distanceFromBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    setFollowLatestCaption(distanceFromBottom < 28);
+  }, []);
+
+  const jumpToLatestCaption = useCallback(() => {
+    const element = captionFeedRef.current;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+    setFollowLatestCaption(true);
+  }, []);
 
   useEffect(() => {
     if (
@@ -655,6 +690,7 @@ export default function GlobalHuddleWindow() {
           </div>
           <div
             ref={captionFeedRef}
+            onScroll={handleCaptionScroll}
             className="max-h-[inherit] overflow-y-auto px-3 py-2"
           >
             {canonicalCaptionFeed.length > 0 ? (
@@ -689,6 +725,15 @@ export default function GlobalHuddleWindow() {
               <div className="py-2 text-center text-xs text-slate-400">Listening...</div>
             )}
           </div>
+          {!followLatestCaption && (
+            <button
+              type="button"
+              onClick={jumpToLatestCaption}
+              className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white shadow-lg"
+            >
+              <ArrowDown size={13} /> Latest
+            </button>
+          )}
         </section>
       )}
 
@@ -747,7 +792,7 @@ export default function GlobalHuddleWindow() {
 
       {showBackgroundMenu && (
         <div
-          className="absolute z-50 w-52 border border-white/15 bg-[#1b1e27] p-2 shadow-xl"
+          className="absolute z-50 w-72 border border-white/15 bg-[#1b1e27] p-2 shadow-xl"
           style={{ borderRadius: 8, bottom: isMobileDevice ? 126 : 82, left: "50%", transform: "translateX(-50%)" }}
         >
           <button type="button" onClick={() => updateBackgroundEffect("off")} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10">
@@ -769,6 +814,35 @@ export default function GlobalHuddleWindow() {
           >
             <Image size={15} /> Replace background
           </button>
+          {rtc?.backgroundEffectSupport?.replacementSupported !== false && (
+            <div className="mt-2 border-t border-white/10 pt-2">
+              <div className="px-1 pb-2 text-[11px] font-semibold uppercase text-slate-400">
+                Included backgrounds
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {CURATED_HUDDLE_BACKGROUNDS.map((background) => (
+                  <button
+                    key={background.path}
+                    type="button"
+                    onClick={() =>
+                      updateBackgroundEffect("replacement", background.path)
+                    }
+                    className="overflow-hidden rounded border border-white/10 text-left hover:border-sky-400"
+                    title={background.label}
+                  >
+                    <img
+                      src={background.path}
+                      alt=""
+                      className="aspect-video w-full object-cover"
+                    />
+                    <span className="block truncate px-1.5 py-1 text-[10px] text-slate-300">
+                      {background.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <input ref={replacementInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={chooseReplacement} />
         </div>
       )}

@@ -83,7 +83,9 @@ export function createLiveTranscriptionClient({
   let keepAliveTimer = null;
   let reconnectAttempts = 0;
   let connectionGeneration = 0;
-  let postQueue = Promise.resolve();
+  let pendingPartialEvent = null;
+  const pendingFinalEvents = [];
+  let eventPumpRunning = false;
 
   const diagnostics = {
     supported: liveTranscriptionSupported(),
@@ -98,6 +100,9 @@ export function createLiveTranscriptionClient({
     providerMessages: 0,
     backendEvents: 0,
     reconnectAttempts: 0,
+    coalescedPartialEvents: 0,
+    pendingFinalEvents: 0,
+    eventPumpRunning: false,
     lastProviderMessageAt: null,
     lastBackendEventAt: null,
     lastError: null,
@@ -108,7 +113,7 @@ export function createLiveTranscriptionClient({
     onDiagnostics({ ...diagnostics });
   }
 
-  function nextSourceSegmentId(payload = {}) {
+  function allocateSourceSegmentId(payload = {}) {
     if (!activeSourceSegmentId) {
       activeSourceSegmentId = [
         "deepgram",
@@ -143,36 +148,21 @@ export function createLiveTranscriptionClient({
     throw lastError;
   }
 
-  async function postProviderEvent(payload = {}, clientProviderReceivedAt = null) {
-    const text = deepgramTranscript(payload);
-    if (!text) return;
-
-    const status = payload?.is_final === true || payload?.speech_final === true ? "final" : "partial";
-    const sourceSegmentId = nextSourceSegmentId(payload);
+  async function postProviderEvent({
+    payload = {},
+    clientProviderReceivedAt = null,
+    text,
+    status,
+    sourceSegmentId,
+    eventSequence,
+  } = {}) {
     const providerEventId = [
       sourceSegmentId,
-      sequenceNumber,
+      eventSequence,
       status,
     ].join(":");
     const timing = segmentTiming(payload, streamStartedAtMs);
     const clientPostedAt = new Date().toISOString();
-    const caption = {
-      id: `local:${sourceSegmentId}`,
-      source: "deepgram",
-      sourceSegmentId,
-      metadata: { sourceSegmentId },
-      speakerId: effectiveParticipantId || participantId || "local",
-      text,
-      status,
-      isFinal: status === "final",
-      sequenceNumber,
-      emittedAt: clientProviderReceivedAt || clientPostedAt,
-      at: clientProviderReceivedAt || clientPostedAt,
-    };
-
-    // The local speaker should not wait for API persistence and polling to see
-    // their own words. The canonical server event replaces this optimistic row.
-    onCaption(caption);
 
     await postWithRetry({
       transcriptionSessionId: transcriptionSession?.id,
@@ -182,7 +172,7 @@ export function createLiveTranscriptionClient({
       providerEventId,
       providerRequestId: safeString(payload?.metadata?.request_id, 200) || null,
       sourceSegmentId,
-      sequenceNumber,
+      sequenceNumber: eventSequence,
       status,
       text,
       confidence: deepgramConfidence(payload),
@@ -197,8 +187,94 @@ export function createLiveTranscriptionClient({
 
     diagnostics.backendEvents += 1;
     diagnostics.lastBackendEventAt = new Date().toISOString();
-    sequenceNumber += 1;
     emitDiagnostics({ status: "streaming", lastError: null });
+  }
+
+  async function pumpProviderEvents() {
+    if (eventPumpRunning || stopped) return;
+    eventPumpRunning = true;
+    emitDiagnostics({
+      eventPumpRunning: true,
+      pendingFinalEvents: pendingFinalEvents.length,
+    });
+    try {
+      while (!stopped) {
+        const event = pendingFinalEvents.shift() || pendingPartialEvent;
+        if (!event) break;
+        if (event === pendingPartialEvent) pendingPartialEvent = null;
+        try {
+          await postProviderEvent(event);
+        } catch (error) {
+          emitDiagnostics({
+            status: "degraded",
+            lastError:
+              safeString(error?.response?.data?.reason || error?.message) ||
+              "provider_event_post_failed",
+          });
+        }
+        emitDiagnostics({
+          pendingFinalEvents: pendingFinalEvents.length,
+        });
+      }
+    } finally {
+      eventPumpRunning = false;
+      emitDiagnostics({
+        eventPumpRunning: false,
+        pendingFinalEvents: pendingFinalEvents.length,
+      });
+      if (!stopped && (pendingFinalEvents.length > 0 || pendingPartialEvent)) {
+        void pumpProviderEvents();
+      }
+    }
+  }
+
+  function enqueueProviderEvent(payload = {}, clientProviderReceivedAt = null) {
+    const text = deepgramTranscript(payload);
+    if (!text) return;
+    const status =
+      payload?.is_final === true || payload?.speech_final === true
+        ? "final"
+        : "partial";
+    const sourceSegmentId = allocateSourceSegmentId(payload);
+    const eventSequence = sequenceNumber;
+    sequenceNumber += 1;
+    const event = {
+      payload,
+      clientProviderReceivedAt,
+      text,
+      status,
+      sourceSegmentId,
+      eventSequence,
+    };
+
+    // Local captions stay immediate while persistence is handled by the
+    // bounded event pump. The canonical server event replaces this row.
+    const observedAt = clientProviderReceivedAt || new Date().toISOString();
+    onCaption({
+      id: `local:${sourceSegmentId}`,
+      source: "deepgram",
+      sourceSegmentId,
+      metadata: { sourceSegmentId },
+      speakerId: effectiveParticipantId || participantId || "local",
+      text,
+      status,
+      isFinal: status === "final",
+      sequenceNumber: eventSequence,
+      emittedAt: observedAt,
+      at: observedAt,
+    });
+
+    if (status === "final") {
+      if (pendingPartialEvent?.sourceSegmentId === sourceSegmentId) {
+        pendingPartialEvent = null;
+      }
+      pendingFinalEvents.push(event);
+    } else {
+      if (pendingPartialEvent) diagnostics.coalescedPartialEvents += 1;
+      pendingPartialEvent = event;
+    }
+    diagnostics.pendingFinalEvents = pendingFinalEvents.length;
+    void pumpProviderEvents();
   }
 
   function clearTimer(timer) {
@@ -331,16 +407,7 @@ export function createLiveTranscriptionClient({
         const clientProviderReceivedAt = new Date().toISOString();
         diagnostics.providerMessages += 1;
         diagnostics.lastProviderMessageAt = clientProviderReceivedAt;
-        postQueue = postQueue
-          .then(() => postProviderEvent(payload, clientProviderReceivedAt))
-          .catch((error) => {
-            emitDiagnostics({
-              status: "degraded",
-              lastError:
-                safeString(error?.response?.data?.reason || error?.message) ||
-                "provider_event_post_failed",
-            });
-          });
+        enqueueProviderEvent(payload, clientProviderReceivedAt);
       };
 
       websocket.onerror = () => {
@@ -386,6 +453,13 @@ export function createLiveTranscriptionClient({
   }
 
   function stop() {
+    const finalEventsToFlush = pendingFinalEvents.splice(0);
+    if (finalEventsToFlush.length > 0) {
+      void Promise.allSettled(
+        finalEventsToFlush.map((event) => postProviderEvent(event))
+      );
+    }
+    pendingPartialEvent = null;
     stopped = true;
     connectionGeneration += 1;
     clearTimer(reconnectTimer);
