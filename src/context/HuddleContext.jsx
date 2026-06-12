@@ -273,6 +273,7 @@ export function HuddleProvider({ children }) {
     isScreenSharing: call.screenSharing,
     screenShareSupported: call.screenShareSupported !== false,
     backgroundEffectsSupported: call.backgroundEffectsSupported === true,
+    backgroundEffectSupport: call.backgroundEffectSupport || null,
     backgroundEffect: call.backgroundEffect || { mode: "off", active: false },
     activeSpeakerId: call.activeSpeakerId,
     networkQuality: call.networkQuality,
@@ -294,17 +295,18 @@ export function HuddleProvider({ children }) {
     subtitlesEnabled: call.subtitlesEnabled,
     subtitles: call.subtitles,
     captionFeed: call.captionFeed || [],
+    captionStatus: call.captionStatus || "idle",
     toggleSubtitles: call.toggleSubtitles,
   }), [
     call.localStream, call.remotePeers,
     call.micEnabled, call.camEnabled, call.screenSharing, call.screenShareSupported,
-    call.backgroundEffectsSupported, call.backgroundEffect,
+    call.backgroundEffectsSupported, call.backgroundEffectSupport, call.backgroundEffect,
     call.activeSpeakerId, call.networkQuality, call.qualityMode,
     call.inCall, call.connecting,
     call.toggleMic, call.toggleCamera,
     call.startScreenShare, call.stopScreenShare, call.setBackgroundEffect, call.setQualityMode,
     call.startCall, call.leaveCall, call.muteAll,
-    call.subtitlesSupported, call.subtitlesEnabled, call.subtitles, call.captionFeed, call.toggleSubtitles,
+    call.subtitlesSupported, call.subtitlesEnabled, call.subtitles, call.captionFeed, call.captionStatus, call.toggleSubtitles,
     endHuddleForAll,
   ]);
 

@@ -372,6 +372,15 @@ export default function GlobalHuddleWindow() {
     captionFeedRef.current.scrollTop = captionFeedRef.current.scrollHeight;
   }, [canonicalCaptionFeed, rtc?.subtitlesEnabled]);
 
+  useEffect(() => {
+    if (
+      rtc?.backgroundEffect?.diagnostics?.reason ===
+      "background_effect_automatically_disabled"
+    ) {
+      toast("Background effect was disabled to protect call quality.");
+    }
+  }, [rtc?.backgroundEffect?.diagnostics?.reason]);
+
   const windowRef = useRef(null);
   const dragging = useRef(false);
   const resizing = useRef(false);
@@ -628,8 +637,21 @@ export default function GlobalHuddleWindow() {
           }}
           aria-label="Live meeting transcript"
         >
-          <div className="border-b border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-300">
-            Live transcript
+          <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-300">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                rtc?.captionStatus === "failed"
+                  ? "bg-red-400"
+                  : rtc?.captionStatus === "reconnecting"
+                    ? "bg-amber-400"
+                    : "bg-emerald-400"
+              }`}
+            />
+            {rtc?.captionStatus === "reconnecting"
+              ? "Reconnecting captions"
+              : rtc?.captionStatus === "failed"
+                ? "Captions unavailable"
+                : "Live transcript"}
           </div>
           <div
             ref={captionFeedRef}
@@ -637,7 +659,7 @@ export default function GlobalHuddleWindow() {
           >
             {canonicalCaptionFeed.length > 0 ? (
               canonicalCaptionFeed.map((caption) => (
-                <div key={caption.id || caption.transcriptSegmentId} className="mb-2 last:mb-0">
+                <div key={caption.transcriptSegmentId || caption.metadata?.sourceSegmentId || caption.id} className="mb-2 last:mb-0">
                   <div className="text-[11px] font-semibold text-sky-300">
                     {caption.speaker?.label ||
                       (String(caption.speaker?.userId) === String(currentUser?.id)
@@ -734,7 +756,17 @@ export default function GlobalHuddleWindow() {
           <button type="button" onClick={() => updateBackgroundEffect("blur")} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10">
             <Sparkles size={15} /> Blur background
           </button>
-          <button type="button" onClick={() => replacementInputRef.current?.click()} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10">
+          <button
+            type="button"
+            onClick={() => replacementInputRef.current?.click()}
+            disabled={rtc?.backgroundEffectSupport?.replacementSupported === false}
+            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+            title={
+              rtc?.backgroundEffectSupport?.replacementSupported === false
+                ? "Background replacement is disabled on this device to protect call quality"
+                : "Replace background"
+            }
+          >
             <Image size={15} /> Replace background
           </button>
           <input ref={replacementInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={chooseReplacement} />
@@ -799,6 +831,8 @@ export default function GlobalHuddleWindow() {
         </CtrlBtn>
 
         {/* Screen share */}
+        {(!isMobileDevice || isMaximized) && (
+          <>
         <CtrlBtn
           onClick={() => runControl(
             "screen",
@@ -871,6 +905,8 @@ export default function GlobalHuddleWindow() {
           >
             <VolumeX size={18} />
           </CtrlBtn>
+        )}
+          </>
         )}
 
         <div className="w-px h-7 bg-slate-600 mx-1" />

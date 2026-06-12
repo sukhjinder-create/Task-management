@@ -87,18 +87,6 @@ export const LIVEKIT_MEDIA_PUBLICATION_REASONS = Object.freeze({
 
 const noop = () => {};
 
-const LIVEKIT_CAMERA_CAPTURE_OPTIONS = Object.freeze({
-  resolution: {
-    width: 1280,
-    height: 720,
-    frameRate: 30,
-  },
-});
-
-const LIVEKIT_CAMERA_PUBLISH_OPTIONS = Object.freeze({
-  simulcast: true,
-});
-
 const LIVEKIT_QUALITY_MODES = Object.freeze({
   AUTO: "auto",
   STANDARD: "standard",
@@ -114,9 +102,45 @@ const LIVEKIT_QUALITY_CAPTURE_OPTIONS = Object.freeze({
   },
 });
 
+function isMobileMediaDevice() {
+  return (
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
+  );
+}
+
+function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
+  if (isMobileMediaDevice()) {
+    return mode === LIVEKIT_QUALITY_MODES.HD
+      ? { resolution: { width: 960, height: 540, frameRate: 24 } }
+      : { resolution: { width: 640, height: 360, frameRate: 24 } };
+  }
+  return (
+    LIVEKIT_QUALITY_CAPTURE_OPTIONS[mode] || {
+      resolution: { width: 960, height: 540, frameRate: 24 },
+    }
+  );
+}
+
+function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
+  const mobile = isMobileMediaDevice();
+  return {
+    simulcast: true,
+    videoEncoding: {
+      maxBitrate:
+        mode === LIVEKIT_QUALITY_MODES.HD
+          ? (mobile ? 900_000 : 1_500_000)
+          : (mobile ? 600_000 : 1_000_000),
+      maxFramerate:
+        mode === LIVEKIT_QUALITY_MODES.HD && !mobile ? 30 : 24,
+    },
+  };
+}
+
 const LIVE_CAPTION_LANGUAGE = "multi";
-const LIVE_CAPTION_POLL_INTERVAL_MS = 1500;
-const LIVE_CAPTION_HISTORY_LIMIT = 300;
+const LIVE_CAPTION_POLL_INTERVAL_MS = 750;
+const LIVE_CAPTION_HISTORY_LIMIT = 1500;
+const LIVE_CAPTION_CURSOR_OVERLAP_MS = 2000;
 
 function safeString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -224,6 +248,8 @@ function canonicalCaptionFeed(events = []) {
   const latestBySegment = new Map();
   events.forEach((event) => {
     const key =
+      safeString(event?.metadata?.sourceSegmentId) ||
+      safeString(event?.sourceSegmentId) ||
       safeString(event?.transcriptSegmentId) ||
       safeString(event?.id);
     if (!key) return;
@@ -708,19 +734,43 @@ function applyQualityStatsEntry(track, entry = {}, codecs = new Map()) {
   const kind = safeString(entry.kind || entry.mediaType).toLowerCase();
   if (kind && track.kind && kind !== track.kind) return;
 
-  if (Number.isFinite(Number(entry.frameWidth))) track.width = Number(entry.frameWidth);
-  if (Number.isFinite(Number(entry.frameHeight))) track.height = Number(entry.frameHeight);
+  if (Number.isFinite(Number(entry.frameWidth))) {
+    track.width = Math.max(Number(track.width) || 0, Number(entry.frameWidth));
+  }
+  if (Number.isFinite(Number(entry.frameHeight))) {
+    track.height = Math.max(Number(track.height) || 0, Number(entry.frameHeight));
+  }
   if (Number.isFinite(Number(entry.framesPerSecond))) {
-    track.framesPerSecond = Number(entry.framesPerSecond);
+    track.framesPerSecond = Math.max(
+      Number(track.framesPerSecond) || 0,
+      Number(entry.framesPerSecond)
+    );
   }
-  if (Number.isFinite(Number(entry.framesDropped))) {
-    track.framesDropped = Number(entry.framesDropped);
+  const rtpEntry =
+    entry.type === "outbound-rtp" || entry.type === "inbound-rtp";
+  if (rtpEntry && Number.isFinite(Number(entry.framesDropped))) {
+    track.framesDropped =
+      (Number(track.framesDropped) || 0) + Number(entry.framesDropped);
   }
-  if (Number.isFinite(Number(entry.bytesSent))) track.bytesSent = Number(entry.bytesSent);
-  if (Number.isFinite(Number(entry.bytesReceived))) track.bytesReceived = Number(entry.bytesReceived);
-  if (Number.isFinite(Number(entry.packetsLost))) track.packetsLost = Number(entry.packetsLost);
-  if (Number.isFinite(Number(entry.packetsSent))) track.packetsSent = Number(entry.packetsSent);
-  if (Number.isFinite(Number(entry.packetsReceived))) track.packetsReceived = Number(entry.packetsReceived);
+  if (rtpEntry && Number.isFinite(Number(entry.bytesSent))) {
+    track.bytesSent = (Number(track.bytesSent) || 0) + Number(entry.bytesSent);
+  }
+  if (rtpEntry && Number.isFinite(Number(entry.bytesReceived))) {
+    track.bytesReceived =
+      (Number(track.bytesReceived) || 0) + Number(entry.bytesReceived);
+  }
+  if (rtpEntry && Number.isFinite(Number(entry.packetsLost))) {
+    track.packetsLost =
+      (Number(track.packetsLost) || 0) + Number(entry.packetsLost);
+  }
+  if (rtpEntry && Number.isFinite(Number(entry.packetsSent))) {
+    track.packetsSent =
+      (Number(track.packetsSent) || 0) + Number(entry.packetsSent);
+  }
+  if (rtpEntry && Number.isFinite(Number(entry.packetsReceived))) {
+    track.packetsReceived =
+      (Number(track.packetsReceived) || 0) + Number(entry.packetsReceived);
+  }
   if (entry.qualityLimitationReason) {
     track.qualityLimitationReason = safeString(entry.qualityLimitationReason) || null;
   }
@@ -835,6 +885,14 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
   const rttValues = tracks.map((track) => track.rttMs).filter((value) => Number.isFinite(value));
   const packetLossValues = tracks.map((track) => track.packetLoss).filter((value) => Number.isFinite(value));
   const bitrateValues = tracks.map((track) => track.bitrateKbps).filter((value) => Number.isFinite(value));
+  const sendBitrateValues = tracks
+    .filter((track) => track.direction === "send")
+    .map((track) => track.bitrateKbps)
+    .filter((value) => Number.isFinite(value));
+  const receiveBitrateValues = tracks
+    .filter((track) => track.direction === "receive")
+    .map((track) => track.bitrateKbps)
+    .filter((value) => Number.isFinite(value));
   const sendVideoTracks = tracks.filter((track) => track.direction === "send" && track.kind === "video");
   const receiveVideoTracks = tracks.filter((track) => track.direction === "receive" && track.kind === "video");
   const sendScreenTracks = tracks.filter((track) => track.direction === "send" && track.source === HUDDLE_MEDIA_TRACK_SOURCES.screen);
@@ -870,6 +928,22 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
         : null,
       totalBitrateKbps: bitrateValues.length
         ? Math.round(bitrateValues.reduce((total, value) => total + value, 0))
+        : null,
+      sendBitrateKbps: sendBitrateValues.length
+        ? Math.round(sendBitrateValues.reduce((total, value) => total + value, 0))
+        : null,
+      receiveBitrateKbps: receiveBitrateValues.length
+        ? Math.round(receiveBitrateValues.reduce((total, value) => total + value, 0))
+        : null,
+      estimatedMegabytesPerHour: bitrateValues.length
+        ? Number(
+            (
+              (bitrateValues.reduce((total, value) => total + value, 0) *
+                3600) /
+              8 /
+              1024
+            ).toFixed(1)
+          )
         : null,
       maxSendWidth: maxBy(sendVideoTracks, "width"),
       maxSendHeight: maxBy(sendVideoTracks, "height"),
@@ -1199,8 +1273,8 @@ export async function publishInitialLiveKitMedia(room) {
     const cameraStartedAt = metricNow();
     const cameraPublication = await room?.localParticipant?.setCameraEnabled?.(
       true,
-      LIVEKIT_CAMERA_CAPTURE_OPTIONS,
-      LIVEKIT_CAMERA_PUBLISH_OPTIONS
+      cameraCaptureOptions(),
+      cameraPublishOptions()
     );
     diagnostics.camera = {
       ok: Boolean(cameraPublication || room?.localParticipant?.isCameraEnabled),
@@ -1682,8 +1756,14 @@ export function useLiveKitMediaProvider({
   const qualityPostInFlightRef = useRef(false);
   const transcriptionClientRef = useRef(null);
   const transcriptionStartingRef = useRef(false);
+  const captionCursorRef = useRef(null);
   const backgroundProcessorRef = useRef(null);
   const backgroundTrackRef = useRef(null);
+  const backgroundEffectRef = useRef({
+    mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
+    active: false,
+  });
+  const backgroundStressSamplesRef = useRef(0);
   const [connectedRoom, setConnectedRoom] = useState(null);
   const [connectionResult, setConnectionResult] = useState(null);
   const [publicationDiagnostics, setPublicationDiagnostics] = useState(null);
@@ -1879,6 +1959,57 @@ export function useLiveKitMediaProvider({
           latestNetworkStatsRef.current,
           qualityStatsPreviousRef.current
         );
+        const activeEffect = backgroundEffectRef.current;
+        const localCamera = diagnostics.tracks.find(
+          (track) =>
+            track.isLocal &&
+            track.direction === "send" &&
+            track.kind === "video" &&
+            track.source === HUDDLE_MEDIA_TRACK_SOURCES.camera
+        );
+        const effectUnderStress = Boolean(
+          activeEffect?.active &&
+          localCamera &&
+          (
+            localCamera.qualityLimitationReason === "cpu" ||
+            (
+              Number(localCamera.framesPerSecond) > 0 &&
+              Number(localCamera.framesPerSecond) < 18
+            )
+          )
+        );
+        backgroundStressSamplesRef.current = effectUnderStress
+          ? backgroundStressSamplesRef.current + 1
+          : 0;
+        if (
+          activeEffect?.active &&
+          backgroundStressSamplesRef.current >= 2
+        ) {
+          const localTrack = liveKitLocalCameraTrack(room);
+          const disabled = await applyBackgroundEffect({
+            localVideoTrack: localTrack,
+            processor: backgroundProcessorRef.current,
+            mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
+          });
+          if (disabled.ok) {
+            backgroundProcessorRef.current = disabled.processor;
+            const nextEffect = {
+              mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
+              active: false,
+              imagePath: null,
+              imagePathConfigured: false,
+              diagnostics: {
+                reason: "background_effect_automatically_disabled",
+                trigger: localCamera.qualityLimitationReason || "low_frame_rate",
+                framesPerSecond: localCamera.framesPerSecond,
+                observedAt: new Date().toISOString(),
+              },
+            };
+            backgroundEffectRef.current = nextEffect;
+            setBackgroundEffectState(nextEffect);
+            backgroundStressSamplesRef.current = 0;
+          }
+        }
         await api.post("/huddle/media/livekit/diagnostics", {
           provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
           workspaceId: resolvedWorkspaceId,
@@ -1949,10 +2080,21 @@ export function useLiveKitMediaProvider({
       audioTrack,
       language: LIVE_CAPTION_LANGUAGE,
       onCaption: (caption) => {
+        const localCaption = {
+          ...caption,
+          speaker: {
+            participantId: caption.speakerId || null,
+            userId: currentUser?.id || null,
+            label: currentUser?.username || currentUser?.name || "You",
+          },
+        };
         setSubtitles((previous) => ({
           ...previous,
-          local: caption,
+          local: localCaption,
         }));
+        setCaptionFeed((previous) =>
+          canonicalCaptionFeed([...previous, localCaption])
+        );
       },
       onDiagnostics: setTranscriptionDiagnostics,
     });
@@ -1975,7 +2117,12 @@ export function useLiveKitMediaProvider({
         reason: safeString(error?.response?.data?.reason || error?.message) || "live_transcription_start_failed",
       };
     }
-  }, [connectedRoom]);
+  }, [
+    connectedRoom,
+    currentUser?.id,
+    currentUser?.name,
+    currentUser?.username,
+  ]);
 
   const toggleSubtitles = useCallback(async () => {
     const enabled = !subtitlesEnabled;
@@ -2013,17 +2160,45 @@ export function useLiveKitMediaProvider({
       if (!sessionId) return;
       inFlight = true;
       try {
+        const cursor = captionCursorRef.current;
+        const after = cursor
+          ? new Date(
+              Math.max(
+                0,
+                new Date(cursor).getTime() - LIVE_CAPTION_CURSOR_OVERLAP_MS
+              )
+            ).toISOString()
+          : null;
         const { data } = await api.get(
           `/huddle/intelligence/sessions/${sessionId}/captions`,
           {
             params: {
               replayableOnly: true,
+              after,
               limit: LIVE_CAPTION_HISTORY_LIMIT,
             },
           }
         );
         if (!cancelled) {
-          setCaptionFeed(canonicalCaptionFeed(data?.captions || []));
+          const incoming = Array.isArray(data?.captions) ? data.captions : [];
+          if (incoming.length > 0) {
+            captionCursorRef.current =
+              incoming[incoming.length - 1]?.emittedAt ||
+              captionCursorRef.current;
+            setCaptionFeed((previous) =>
+              canonicalCaptionFeed([...previous, ...incoming])
+            );
+          }
+          setTranscriptionDiagnostics((previous) => ({
+            ...(previous || {}),
+            captionFeedStatus: "streaming",
+            captionFeedLastEventAt:
+              incoming[incoming.length - 1]?.emittedAt ||
+              previous?.captionFeedLastEventAt ||
+              null,
+            captionFeedEventCount: incoming.length,
+            observedAt: new Date().toISOString(),
+          }));
         }
       } catch (error) {
         if (!cancelled) {
@@ -2043,9 +2218,16 @@ export function useLiveKitMediaProvider({
 
     loadCaptions();
     const interval = window.setInterval(loadCaptions, LIVE_CAPTION_POLL_INTERVAL_MS);
+    const refreshNow = () => {
+      void loadCaptions();
+    };
+    window.addEventListener("online", refreshNow);
+    document.addEventListener("visibilitychange", refreshNow);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.removeEventListener("online", refreshNow);
+      document.removeEventListener("visibilitychange", refreshNow);
     };
   }, [connectedRoom, subtitlesEnabled]);
 
@@ -2219,6 +2401,8 @@ export function useLiveKitMediaProvider({
     channelIdRef.current = channelId;
     huddleIdRef.current = huddleId || huddleIdRef.current;
     sessionIdRef.current = sessionId;
+    captionCursorRef.current = null;
+    setCaptionFeed([]);
     setConnecting(true);
     try {
       providerMetricsRef.current = {
@@ -2325,10 +2509,16 @@ export function useLiveKitMediaProvider({
       imagePathConfigured: false,
       diagnostics: null,
     });
+    backgroundEffectRef.current = {
+      mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
+      active: false,
+    };
+    backgroundStressSamplesRef.current = 0;
     setNetworkStatsByParticipant({});
     latestNetworkStatsRef.current = {};
     qualityStatsPreviousRef.current.clear();
     sessionIdRef.current = null;
+    captionCursorRef.current = null;
     setSubtitles({});
     setCaptionFeed([]);
     const result = disconnectLiveKitRoom();
@@ -2381,8 +2571,8 @@ export function useLiveKitMediaProvider({
     try {
       const publication = await room.localParticipant.setCameraEnabled(
         nextEnabled,
-        nextEnabled ? LIVEKIT_CAMERA_CAPTURE_OPTIONS : undefined,
-        nextEnabled ? LIVEKIT_CAMERA_PUBLISH_OPTIONS : undefined
+        nextEnabled ? cameraCaptureOptions(qualityMode) : undefined,
+        nextEnabled ? cameraPublishOptions(qualityMode) : undefined
       );
       setPublicationDiagnostics((previous) => ({
         ...(previous || {}),
@@ -2434,7 +2624,7 @@ export function useLiveKitMediaProvider({
       }));
       return { ok: false, reason: failure.reason, diagnostics: failure };
     }
-  }, [backgroundEffect.imagePath, backgroundEffect.mode]);
+  }, [backgroundEffect.imagePath, backgroundEffect.mode, qualityMode]);
   const setQualityMode = useCallback(async (requestedMode = LIVEKIT_QUALITY_MODES.AUTO) => {
     const mode = Object.values(LIVEKIT_QUALITY_MODES).includes(requestedMode)
       ? requestedMode
@@ -2445,8 +2635,7 @@ export function useLiveKitMediaProvider({
       const sdkResult = await loadLiveKitSdk({ enabled: true });
       if (!sdkResult.ok) return { ok: false, reason: "livekit_sdk_unavailable" };
       const sdk = sdkResult.sdk;
-      const captureOptions =
-        LIVEKIT_QUALITY_CAPTURE_OPTIONS[mode] || LIVEKIT_CAMERA_CAPTURE_OPTIONS;
+      const captureOptions = cameraCaptureOptions(mode);
       const localCameraTrack = liveKitLocalCameraTrack(room);
       if (localCameraTrack?.restartTrack && room.localParticipant?.isCameraEnabled) {
         await localCameraTrack.restartTrack(captureOptions);
@@ -2472,6 +2661,7 @@ export function useLiveKitMediaProvider({
         qualityMode: {
           mode,
           captureOptions,
+          publishOptions: cameraPublishOptions(mode),
           adaptiveStream: true,
           dynacast: true,
           observedAt: new Date().toISOString(),
@@ -2526,6 +2716,8 @@ export function useLiveKitMediaProvider({
           observedAt: result.observedAt,
         },
       };
+      backgroundEffectRef.current = next;
+      backgroundStressSamplesRef.current = 0;
       setBackgroundEffectState(next);
       setPublicationDiagnostics((previous) => ({
         ...(previous || {}),
@@ -2643,11 +2835,16 @@ export function useLiveKitMediaProvider({
       navigator.mediaDevices?.getDisplayMedia
     ),
     backgroundEffectsSupported: getBackgroundEffectSupport().supported,
+    backgroundEffectSupport: getBackgroundEffectSupport(),
     backgroundEffect,
     subtitlesSupported: Boolean(connectedRoom && liveTranscriptionSupported()),
     subtitlesEnabled,
     subtitles,
     captionFeed,
+    captionStatus:
+      transcriptionDiagnostics?.captionFeedStatus ||
+      transcriptionDiagnostics?.status ||
+      "idle",
     activeSpeakerId,
     networkQuality,
     qualityMode,

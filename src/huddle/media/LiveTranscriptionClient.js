@@ -1,7 +1,10 @@
 import api from "../../api";
 
 const DEFAULT_LANGUAGE = "en-US";
-const DEFAULT_TIMESLICE_MS = 500;
+const DEFAULT_TIMESLICE_MS = 250;
+const KEEP_ALIVE_INTERVAL_MS = 8000;
+const MAX_RECONNECT_DELAY_MS = 15000;
+const PROVIDER_EVENT_POST_RETRIES = 3;
 
 function safeString(value, maxLength = null) {
   const normalized = typeof value === "string" ? value.trim() : "";
@@ -76,6 +79,11 @@ export function createLiveTranscriptionClient({
   let activeSourceSegmentId = null;
   let stopped = false;
   let streamStartedAtMs = Date.now();
+  let reconnectTimer = null;
+  let keepAliveTimer = null;
+  let reconnectAttempts = 0;
+  let connectionGeneration = 0;
+  let postQueue = Promise.resolve();
 
   const diagnostics = {
     supported: liveTranscriptionSupported(),
@@ -89,6 +97,9 @@ export function createLiveTranscriptionClient({
     chunksSent: 0,
     providerMessages: 0,
     backendEvents: 0,
+    reconnectAttempts: 0,
+    lastProviderMessageAt: null,
+    lastBackendEventAt: null,
     lastError: null,
   };
 
@@ -115,7 +126,24 @@ export function createLiveTranscriptionClient({
     return activeSourceSegmentId;
   }
 
-  async function postProviderEvent(payload = {}) {
+  async function postWithRetry(body) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= PROVIDER_EVENT_POST_RETRIES; attempt += 1) {
+      try {
+        return await api.post(`/huddle/transcription/sessions/${sessionId}/events`, body);
+      } catch (error) {
+        lastError = error;
+        if (attempt < PROVIDER_EVENT_POST_RETRIES) {
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, attempt * 300);
+          });
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  async function postProviderEvent(payload = {}, clientProviderReceivedAt = null) {
     const text = deepgramTranscript(payload);
     if (!text) return;
 
@@ -127,8 +155,26 @@ export function createLiveTranscriptionClient({
       status,
     ].join(":");
     const timing = segmentTiming(payload, streamStartedAtMs);
+    const clientPostedAt = new Date().toISOString();
+    const caption = {
+      id: `local:${sourceSegmentId}`,
+      source: "deepgram",
+      sourceSegmentId,
+      metadata: { sourceSegmentId },
+      speakerId: effectiveParticipantId || participantId || "local",
+      text,
+      status,
+      isFinal: status === "final",
+      sequenceNumber,
+      emittedAt: clientProviderReceivedAt || clientPostedAt,
+      at: clientProviderReceivedAt || clientPostedAt,
+    };
 
-    await api.post(`/huddle/transcription/sessions/${sessionId}/events`, {
+    // The local speaker should not wait for API persistence and polling to see
+    // their own words. The canonical server event replaces this optimistic row.
+    onCaption(caption);
+
+    await postWithRetry({
       transcriptionSessionId: transcriptionSession?.id,
       participantId: effectiveParticipantId,
       participantDeviceId: effectiveParticipantDeviceId,
@@ -143,20 +189,187 @@ export function createLiveTranscriptionClient({
       language: payload?.channel?.detected_language || language,
       startedAt: timing.startedAt,
       endedAt: timing.endedAt,
+      clientCapturedAt: timing.endedAt,
+      clientProviderReceivedAt,
+      clientPostedAt,
       providerPayload: payload,
     });
 
     diagnostics.backendEvents += 1;
-    onCaption({
-      source: "deepgram",
-      speakerId: participantId || "local",
-      text,
-      isFinal: status === "final",
-      sequenceNumber,
-      at: new Date().toISOString(),
-    });
+    diagnostics.lastBackendEventAt = new Date().toISOString();
     sequenceNumber += 1;
-    emitDiagnostics({ status: "streaming" });
+    emitDiagnostics({ status: "streaming", lastError: null });
+  }
+
+  function clearTimer(timer) {
+    if (timer) window.clearTimeout(timer);
+  }
+
+  function cleanupTransport({ closeSocket = true } = {}) {
+    clearTimer(keepAliveTimer);
+    keepAliveTimer = null;
+    try {
+      if (mediaRecorder?.state && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    } catch {
+      // Best effort cleanup.
+    }
+    mediaRecorder = null;
+    if (closeSocket) {
+      try {
+        websocket?.close?.();
+      } catch {
+        // Best effort cleanup.
+      }
+    }
+    websocket = null;
+    mediaStream = null;
+  }
+
+  function scheduleReconnect(reason) {
+    if (stopped || reconnectTimer) return;
+    cleanupTransport({ closeSocket: false });
+    reconnectAttempts += 1;
+    diagnostics.reconnectAttempts = reconnectAttempts;
+    const delay = Math.min(
+      1000 * (2 ** Math.min(reconnectAttempts - 1, 4)),
+      MAX_RECONNECT_DELAY_MS
+    );
+    emitDiagnostics({
+      status: "reconnecting",
+      websocketOpen: false,
+      recorderStarted: false,
+      lastError: reason,
+      reconnectDelayMs: delay,
+    });
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null;
+      void connectStream();
+    }, delay);
+  }
+
+  async function connectStream() {
+    if (stopped) return { ok: false, reason: "transcription_stopped" };
+    const generation = ++connectionGeneration;
+    cleanupTransport();
+    activeSourceSegmentId = null;
+
+    emitDiagnostics({
+      status: reconnectAttempts > 0 ? "reconnecting" : "granting",
+      websocketOpen: false,
+      recorderStarted: false,
+    });
+    try {
+      const grantResponse = await api.post(`/huddle/transcription/sessions/${sessionId}/grant`, {
+        participantId,
+        language,
+        provider: "deepgram",
+      });
+      if (stopped || generation !== connectionGeneration) {
+        return { ok: false, reason: "transcription_connection_superseded" };
+      }
+      const grant = grantResponse.data || {};
+      transcriptionSession = grant.transcriptionSession;
+      effectiveParticipantId =
+        effectiveParticipantId || transcriptionSession?.participantId || null;
+      effectiveParticipantDeviceId =
+        transcriptionSession?.participantDeviceId || null;
+      emitDiagnostics({
+        status: "connecting",
+        grantOk: true,
+        provider: grant.provider,
+        model: grant.model,
+        language: grant.language || language,
+      });
+
+      mediaStream = new MediaStream([audioTrack]);
+      websocket = grant.accessToken
+        ? new WebSocket(grant.listenUrl, ["bearer", grant.accessToken])
+        : new WebSocket(grant.listenUrl);
+      websocket.binaryType = "arraybuffer";
+
+      websocket.onopen = () => {
+        if (stopped || generation !== connectionGeneration) return;
+        streamStartedAtMs = Date.now();
+        reconnectAttempts = 0;
+        diagnostics.reconnectAttempts = 0;
+        emitDiagnostics({
+          status: "streaming",
+          websocketOpen: true,
+          lastError: null,
+        });
+        const mimeType = preferredMimeType();
+        mediaRecorder = new MediaRecorder(
+          mediaStream,
+          mimeType ? { mimeType } : undefined
+        );
+        mediaRecorder.ondataavailable = (event) => {
+          if (stopped || !event.data || event.data.size <= 0) return;
+          if (websocket?.readyState !== WebSocket.OPEN) return;
+          websocket.send(event.data);
+          diagnostics.chunksSent += 1;
+        };
+        mediaRecorder.onerror = (event) => {
+          scheduleReconnect(
+            safeString(event?.error?.message || event?.message) ||
+            "media_recorder_error"
+          );
+        };
+        mediaRecorder.start(DEFAULT_TIMESLICE_MS);
+        keepAliveTimer = window.setInterval(() => {
+          if (websocket?.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify({ type: "KeepAlive" }));
+          }
+        }, KEEP_ALIVE_INTERVAL_MS);
+        emitDiagnostics({ recorderStarted: true });
+      };
+
+      websocket.onmessage = (event) => {
+        const payload = typeof event.data === "string" ? jsonParse(event.data) : null;
+        if (!payload || payload.type !== "Results") return;
+        const clientProviderReceivedAt = new Date().toISOString();
+        diagnostics.providerMessages += 1;
+        diagnostics.lastProviderMessageAt = clientProviderReceivedAt;
+        postQueue = postQueue
+          .then(() => postProviderEvent(payload, clientProviderReceivedAt))
+          .catch((error) => {
+            emitDiagnostics({
+              status: "degraded",
+              lastError:
+                safeString(error?.response?.data?.reason || error?.message) ||
+                "provider_event_post_failed",
+            });
+          });
+      };
+
+      websocket.onerror = () => {
+        emitDiagnostics({
+          status: "reconnecting",
+          lastError: "transcription_websocket_error",
+        });
+      };
+
+      websocket.onclose = () => {
+        if (!stopped && generation === connectionGeneration) {
+          scheduleReconnect("transcription_websocket_closed");
+        }
+      };
+      return { ok: true, diagnostics: { ...diagnostics } };
+    } catch (error) {
+      if (!stopped && generation === connectionGeneration) {
+        scheduleReconnect(
+          safeString(error?.response?.data?.reason || error?.message) ||
+          "transcription_connect_failed"
+        );
+      }
+      return {
+        ok: false,
+        reason:
+          safeString(error?.response?.data?.reason || error?.message) ||
+          "transcription_connect_failed",
+      };
+    }
   }
 
   async function start() {
@@ -169,99 +382,22 @@ export function createLiveTranscriptionClient({
     if (!liveTranscriptionSupported()) {
       throw new Error("transcription_not_supported");
     }
-
-    emitDiagnostics({ status: "granting" });
-    const grantResponse = await api.post(`/huddle/transcription/sessions/${sessionId}/grant`, {
-      participantId,
-      language,
-      provider: "deepgram",
-    });
-    const grant = grantResponse.data || {};
-    transcriptionSession = grant.transcriptionSession;
-    effectiveParticipantId = effectiveParticipantId || transcriptionSession?.participantId || null;
-    effectiveParticipantDeviceId = transcriptionSession?.participantDeviceId || null;
-    emitDiagnostics({
-      status: "connecting",
-      grantOk: true,
-      provider: grant.provider,
-      model: grant.model,
-      language: grant.language || language,
-    });
-
-    mediaStream = new MediaStream([audioTrack]);
-    websocket = grant.accessToken
-      ? new WebSocket(grant.listenUrl, ["bearer", grant.accessToken])
-      : new WebSocket(grant.listenUrl);
-    websocket.binaryType = "arraybuffer";
-
-    websocket.onopen = () => {
-      if (stopped) return;
-      streamStartedAtMs = Date.now();
-      emitDiagnostics({ status: "streaming", websocketOpen: true });
-      const mimeType = preferredMimeType();
-      mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
-      mediaRecorder.ondataavailable = (event) => {
-        if (stopped || !event.data || event.data.size <= 0) return;
-        if (websocket?.readyState !== WebSocket.OPEN) return;
-        websocket.send(event.data);
-        diagnostics.chunksSent += 1;
-        emitDiagnostics({ status: "streaming" });
-      };
-      mediaRecorder.onerror = (event) => {
-        emitDiagnostics({
-          status: "failed",
-          lastError: safeString(event?.error?.message || event?.message) || "media_recorder_error",
-        });
-      };
-      mediaRecorder.start(DEFAULT_TIMESLICE_MS);
-      emitDiagnostics({ recorderStarted: true });
-    };
-
-    websocket.onmessage = async (event) => {
-      const payload = typeof event.data === "string" ? jsonParse(event.data) : null;
-      if (!payload || payload.type !== "Results") return;
-      diagnostics.providerMessages += 1;
-      try {
-        await postProviderEvent(payload);
-      } catch (error) {
-        emitDiagnostics({
-          status: "failed",
-          lastError: safeString(error?.response?.data?.reason || error?.message) || "provider_event_post_failed",
-        });
-      }
-    };
-
-    websocket.onerror = () => {
-      emitDiagnostics({ status: "failed", lastError: "transcription_websocket_error" });
-    };
-
-    websocket.onclose = () => {
-      if (!stopped) emitDiagnostics({ status: "closed", websocketOpen: false });
-    };
-
-    return { ok: true, diagnostics: { ...diagnostics } };
+    return connectStream();
   }
 
   function stop() {
     stopped = true;
-    try {
-      if (mediaRecorder?.state && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-      }
-    } catch {
-      // Best effort cleanup.
-    }
+    connectionGeneration += 1;
+    clearTimer(reconnectTimer);
+    reconnectTimer = null;
     try {
       if (websocket?.readyState === WebSocket.OPEN) {
         websocket.send(JSON.stringify({ type: "CloseStream" }));
       }
-      websocket?.close?.();
     } catch {
       // Best effort cleanup.
     }
-    mediaRecorder = null;
-    websocket = null;
-    mediaStream = null;
+    cleanupTransport();
     emitDiagnostics({ status: "stopped", websocketOpen: false, recorderStarted: false });
   }
 

@@ -17,25 +17,47 @@ export function getBackgroundEffectSupport() {
   try {
     const userAgent = globalThis.navigator?.userAgent || "";
     const ios = /iPad|iPhone|iPod/i.test(userAgent);
+    const mobile = /Android|iPad|iPhone|iPod|Mobile/i.test(userAgent);
+    const hardwareConcurrency = Number(
+      globalThis.navigator?.hardwareConcurrency || 0
+    );
+    const deviceMemory = Number(globalThis.navigator?.deviceMemory || 0);
     const canvasFallback =
       typeof globalThis.HTMLCanvasElement !== "undefined" &&
       typeof globalThis.HTMLCanvasElement.prototype?.captureStream === "function";
     const modern =
       typeof globalThis.MediaStreamTrackProcessor !== "undefined" &&
       typeof globalThis.MediaStreamTrackGenerator !== "undefined";
+    const processingSupported = Boolean(
+      !ios &&
+      globalThis.navigator?.mediaDevices?.getUserMedia &&
+      (modern || canvasFallback)
+    );
+    const constrainedDevice =
+      mobile &&
+      ((hardwareConcurrency > 0 && hardwareConcurrency < 6) ||
+        (deviceMemory > 0 && deviceMemory < 4));
     return {
-      supported: Boolean(
-        !ios &&
-        globalThis.navigator?.mediaDevices?.getUserMedia &&
-        (modern || canvasFallback)
-      ),
+      supported: processingSupported && !constrainedDevice,
+      blurSupported: processingSupported && !constrainedDevice,
+      replacementSupported:
+        processingSupported &&
+        modern &&
+        !mobile &&
+        (hardwareConcurrency === 0 || hardwareConcurrency >= 6),
       modern,
+      mobile,
+      constrainedDevice,
+      hardwareConcurrency: hardwareConcurrency || null,
+      deviceMemory: deviceMemory || null,
       providerIndependent: true,
       webOnly: true,
     };
   } catch {
     return {
       supported: false,
+      blurSupported: false,
+      replacementSupported: false,
       modern: false,
       providerIndependent: true,
       webOnly: true,
@@ -43,7 +65,7 @@ export function getBackgroundEffectSupport() {
   }
 }
 
-function processorOptions({ mode, imagePath = null, blurRadius = 12 }) {
+function processorOptions({ mode, imagePath = null, blurRadius = 8 }) {
   if (mode === HUDDLE_BACKGROUND_EFFECTS.BLUR) {
     return {
       mode: "background-blur",
@@ -62,13 +84,21 @@ export async function applyBackgroundEffect({
   processor = null,
   mode = HUDDLE_BACKGROUND_EFFECTS.OFF,
   imagePath = null,
-  blurRadius = 12,
+  blurRadius = 8,
 }) {
   const support = getBackgroundEffectSupport();
-  if (!support.supported || !localVideoTrack?.setProcessor) {
+  const modeSupported =
+    mode === HUDDLE_BACKGROUND_EFFECTS.OFF ||
+    (mode === HUDDLE_BACKGROUND_EFFECTS.BLUR && support.blurSupported) ||
+    (mode === HUDDLE_BACKGROUND_EFFECTS.REPLACEMENT &&
+      support.replacementSupported);
+  if (!modeSupported || !localVideoTrack?.setProcessor) {
     return {
       ok: false,
-      reason: "background_effect_not_supported",
+      reason:
+        mode === HUDDLE_BACKGROUND_EFFECTS.REPLACEMENT
+          ? "background_replacement_not_supported"
+          : "background_effect_not_supported",
       processor,
       support,
     };

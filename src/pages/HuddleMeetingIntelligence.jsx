@@ -8,7 +8,6 @@ import {
   Check,
   ClipboardCopy,
   Clock3,
-  Download,
   FileDown,
   FileText,
   Gavel,
@@ -102,10 +101,20 @@ function artifactContentText(artifactType, content) {
 
 function reportMarkdown(review) {
   const report = review?.report || {};
+  const evidence = (ids) =>
+    Array.isArray(ids) && ids.length
+      ? ` _(Evidence: ${ids.map((id) => `T:${id}`).join(", ")})_`
+      : "";
   const lines = [
     `# ${review?.session?.title || "Huddle"}`,
     "",
     `Held ${dateTime(review?.session?.startedAt)}`,
+    "",
+    "## Participants",
+    "",
+    ...(review?.participants || []).map(
+      (participant) => `- ${participant.displayName}`
+    ),
     "",
     "## Executive Summary",
     "",
@@ -114,43 +123,49 @@ function reportMarkdown(review) {
     "## Discussion Highlights",
     "",
     ...(report.discussionHighlights || []).map(
-      (item) => `- **${item.speaker || "Participants"}:** ${item.text}`
+      (item) =>
+        `- **${item.speaker || "Participants"}:** ${item.text}${evidence(item.evidenceSegmentIds)}`
     ),
     "",
     "## Chronological Conversation",
     "",
     ...(report.chronologicalConversation || []).map(
       (item) =>
-        `- ${item.occurredAt ? `${timeOnly(item.occurredAt)} - ` : ""}**${item.title || "Discussion"}:** ${item.description || ""}`
+        `- ${item.occurredAt ? `${timeOnly(item.occurredAt)} - ` : ""}**${item.title || "Discussion"}:** ${item.description || ""}${evidence(item.evidenceSegmentIds)}`
     ),
     "",
     "## Decisions",
     "",
     ...(report.decisions || []).map(
       (item) =>
-        `- **${item.title || "Decision"}:** ${item.decision || ""}${item.rationale ? `\n  - Rationale: ${item.rationale}` : ""}`
+        `- **${item.title || "Decision"}:** ${item.decision || ""}${item.rationale ? `\n  - Rationale: ${item.rationale}` : ""}${evidence(item.evidenceSegmentIds)}`
     ),
     "",
     "## Action Items",
     "",
     ...(report.actionItems || []).map(
       (item) =>
-        `- [ ] **${item.title}**${item.owner?.label ? ` - ${item.owner.label}` : ""}${item.dueDate ? ` - due ${item.dueDate}` : ""}${item.description ? `\n  - ${item.description}` : ""}`
+        `- [ ] **${item.title}**${item.owner?.label ? ` - ${item.owner.label}` : ""}${item.dueDate ? ` - due ${item.dueDate}` : ""}${item.description ? `\n  - ${item.description}` : ""}${evidence(item.evidenceSegmentIds)}`
     ),
     "",
     "## Open Questions",
     "",
-    ...(report.openQuestions || []).map((item) => `- ${item.question}`),
+    ...(report.openQuestions || []).map(
+      (item) => `- ${item.question}${evidence(item.evidenceSegmentIds)}`
+    ),
     "",
     "## Risks",
     "",
-    ...(report.risks || []).map((item) => `- ${item.text || item.question || item}`),
+    ...(report.risks || []).map(
+      (item) =>
+        `- ${item.text || item.question || item}${evidence(item.evidenceSegmentIds)}`
+    ),
     "",
     "## Transcript",
     "",
     ...(review?.transcript || []).map(
       (segment) =>
-        `- **${segment.speaker?.label || "Participant"}** (${timeOnly(segment.startedAt)}): ${segment.text}`
+        `- **${segment.speaker?.label || "Participant"}** (${timeOnly(segment.startedAt)}): ${segment.text} _(T:${segment.id})_`
     ),
   ];
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -746,28 +761,6 @@ export default function HuddleMeetingIntelligence() {
     }
   };
 
-  const downloadJsonExport = () => {
-    const payload = {
-      ...review.export,
-      session: review.session,
-      participants: review.participants,
-      summary: review.artifacts.summary,
-      decisions: review.artifacts.decisions,
-      actions: review.artifacts.actions,
-      ownership: review.ownership,
-      timeline: review.timeline,
-      transcript: review.transcript,
-      report: review.report,
-      actionTasks: review.actionTasks,
-    };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `huddle-intelligence-${sessionId}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
   const downloadMarkdownExport = () => {
     const url = URL.createObjectURL(
       new Blob([reportMarkdown(review)], { type: "text/markdown;charset=utf-8" })
@@ -782,15 +775,92 @@ export default function HuddleMeetingIntelligence() {
   const downloadPdfExport = async () => {
     const { jsPDF } = await import("jspdf");
     const document = new jsPDF({ unit: "pt", format: "a4" });
-    const lines = document.splitTextToSize(reportMarkdown(review), 500);
-    let y = 48;
-    for (const line of lines) {
-      if (y > 790) {
+    const pageWidth = document.internal.pageSize.getWidth();
+    const pageHeight = document.internal.pageSize.getHeight();
+    const margin = 48;
+    const contentWidth = pageWidth - margin * 2;
+    let y = margin;
+    const ensureSpace = (height = 24) => {
+      if (y + height > pageHeight - margin) {
         document.addPage();
-        y = 48;
+        y = margin;
       }
-      document.text(line, 48, y);
-      y += 14;
+    };
+    const write = (text, { size = 10, bold = false, gap = 8 } = {}) => {
+      if (!text) return;
+      document.setFont("helvetica", bold ? "bold" : "normal");
+      document.setFontSize(size);
+      const lines = document.splitTextToSize(String(text), contentWidth);
+      ensureSpace(lines.length * (size + 3) + gap);
+      document.text(lines, margin, y);
+      y += lines.length * (size + 3) + gap;
+    };
+    const heading = (text) => {
+      ensureSpace(34);
+      y += 8;
+      write(text, { size: 14, bold: true, gap: 8 });
+    };
+    const bullet = (text) => write(`- ${text}`, { size: 10, gap: 5 });
+    const evidence = (ids) =>
+      Array.isArray(ids) && ids.length
+        ? ` [${ids.map((id) => `T:${id}`).join(", ")}]`
+        : "";
+
+    write(review.session.title, { size: 20, bold: true, gap: 10 });
+    write(
+      `${dateTime(review.session.startedAt)} | ${review.participants.length} participants`,
+      { size: 10, gap: 4 }
+    );
+    write(
+      review.participants
+        .map((participant) => participant.displayName)
+        .join(", "),
+      { size: 10, gap: 12 }
+    );
+    heading("Executive Summary");
+    write(review.report?.executiveSummary?.outcome || summaryText);
+    heading("Discussion Highlights");
+    (review.report?.discussionHighlights || []).forEach((item) =>
+      bullet(
+        `${item.speaker}: ${item.text}${evidence(item.evidenceSegmentIds)}`
+      )
+    );
+    heading("Decisions");
+    (review.report?.decisions || []).forEach((item) =>
+      bullet(
+        `${item.title || "Decision"}: ${item.decision || ""}${item.rationale ? ` Rationale: ${item.rationale}` : ""}${evidence(item.evidenceSegmentIds)}`
+      )
+    );
+    heading("Action Items");
+    (review.report?.actionItems || []).forEach((item) =>
+      bullet(
+        `${item.title}${item.owner?.label ? ` | Owner: ${item.owner.label}` : ""}${item.dueDate ? ` | Due: ${item.dueDate}` : ""}${evidence(item.evidenceSegmentIds)}`
+      )
+    );
+    heading("Timeline");
+    (review.report?.chronologicalConversation || []).forEach((item) =>
+      bullet(
+        `${item.occurredAt ? `${timeOnly(item.occurredAt)} | ` : ""}${item.title || "Discussion"}: ${item.description || ""}${evidence(item.evidenceSegmentIds)}`
+      )
+    );
+    heading("Transcript");
+    review.transcript.forEach((segment) =>
+      write(
+        `${timeOnly(segment.startedAt)} | ${segment.speaker?.label || "Participant"}: ${segment.text} [T:${segment.id}]`,
+        { size: 9, gap: 5 }
+      )
+    );
+    const pageCount = document.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page += 1) {
+      document.setPage(page);
+      document.setFont("helvetica", "normal");
+      document.setFontSize(8);
+      document.setTextColor(100);
+      document.text(
+        `Asystence Huddle | Page ${page} of ${pageCount}`,
+        margin,
+        pageHeight - 24
+      );
     }
     document.save(`huddle-intelligence-${sessionId}.pdf`);
   };
@@ -843,10 +913,17 @@ export default function HuddleMeetingIntelligence() {
               <button type="button" onClick={downloadPdfExport} title="Export PDF" className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
                 <FileText size={15} /> PDF
               </button>
-              <button type="button" onClick={downloadJsonExport} title="Export structured meeting intelligence" className="inline-flex items-center gap-2 rounded bg-[var(--primary)] px-3 py-2 text-sm font-medium text-[color:var(--primary-contrast)]">
-                <Download size={15} /> JSON
-              </button>
             </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Meeting participants">
+            {review.participants.map((participant) => (
+              <span
+                key={participant.id || participant.userId || participant.displayName}
+                className="inline-flex items-center rounded border border-[color:var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium"
+              >
+                {participant.displayName}
+              </span>
+            ))}
           </div>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[color:var(--text-muted)]">
             <span>{review.status.summaryAvailable ? "Summary ready" : "Summary unavailable"}</span>
@@ -1345,6 +1422,7 @@ export default function HuddleMeetingIntelligence() {
                     ["Receive resolution", quality.metrics?.maxReceiveResolution || "No data"],
                     ["Send resolution", quality.metrics?.maxSendResolution || "No data"],
                     ["Bitrate", quality.metrics?.averageBitrateKbps == null ? "No data" : `${quality.metrics.averageBitrateKbps} kbps`],
+                    ["Estimated data", quality.metrics?.estimatedMegabytesPerHour == null ? "No data" : `${quality.metrics.estimatedMegabytesPerHour} MB/hour`],
                     ["Real-device samples", quality.realDeviceSampleCount],
                     ["Screen-share tracks", quality.metrics?.screenShareTrackCount || 0],
                   ].map(([label, value]) => (
