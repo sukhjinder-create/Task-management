@@ -34,17 +34,26 @@ function createLiveKitRoomOptions(sdk = {}) {
   const mobile =
     typeof navigator !== "undefined" &&
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  const portrait =
+    mobile &&
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(orientation: portrait)")?.matches !== false;
   const layers = mobile
     ? [videoPresets.h180].filter(Boolean)
     : [videoPresets.h180, videoPresets.h360].filter(Boolean);
   const balancedResolution = mobile
-    ? { width: 640, height: 360, frameRate: 24 }
-    : {
-        ...(videoPresets.h540?.resolution || {
-          width: 960,
-          height: 540,
-        }),
+    ? {
+        width: portrait ? 720 : 1280,
+        height: portrait ? 1280 : 720,
         frameRate: 24,
+        aspectRatio: portrait ? 9 / 16 : 16 / 9,
+      }
+    : {
+        ...(videoPresets.h720?.resolution || {
+          width: 1280,
+          height: 720,
+        }),
+        frameRate: 30,
       };
 
   return {
@@ -52,12 +61,13 @@ function createLiveKitRoomOptions(sdk = {}) {
     dynacast: true,
     videoCaptureDefaults: {
       resolution: balancedResolution,
+      facingMode: "user",
     },
     publishDefaults: {
       simulcast: true,
       videoEncoding: {
-        maxBitrate: mobile ? 600_000 : 1_000_000,
-        maxFramerate: 24,
+        maxBitrate: mobile ? 1_000_000 : 1_500_000,
+        maxFramerate: mobile ? 24 : 30,
       },
       videoSimulcastLayers: layers,
       screenShareEncoding: {
@@ -270,13 +280,16 @@ export async function connectLiveKitRoom(params = {}) {
     };
   }
 
-  let roomDescriptor;
-  let roomEndpointLatencyMs = null;
-  try {
-    const roomStartedAt = metricNow();
-    roomDescriptor = await fetchLiveKitRoomDescriptor(params);
-    roomEndpointLatencyMs = elapsedMs(roomStartedAt);
-  } catch (error) {
+  const roomStartedAt = metricNow();
+  const tokenStartedAt = metricNow();
+  const [roomRequest, tokenRequest] = await Promise.allSettled([
+    fetchLiveKitRoomDescriptor(params),
+    fetchLiveKitToken(params),
+  ]);
+  const roomEndpointLatencyMs = elapsedMs(roomStartedAt);
+  const tokenEndpointLatencyMs = elapsedMs(tokenStartedAt);
+
+  if (roomRequest.status === "rejected") {
     return {
       ok: false,
       reason: LIVEKIT_CONNECTION_REASONS.ROOM_ENDPOINT_FAILED,
@@ -286,24 +299,20 @@ export async function connectLiveKitRoom(params = {}) {
         ...prepared.diagnostics,
         timings: {
           prepareLatencyMs,
-          roomEndpointLatencyMs: elapsedMs(totalStartedAt),
+          roomEndpointLatencyMs,
+          tokenEndpointLatencyMs,
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
-        roomFailure: sanitizeFailure(error, LIVEKIT_CONNECTION_REASONS.ROOM_ENDPOINT_FAILED),
+        roomFailure: sanitizeFailure(
+          roomRequest.reason,
+          LIVEKIT_CONNECTION_REASONS.ROOM_ENDPOINT_FAILED
+        ),
       },
     };
   }
+  const roomDescriptor = roomRequest.value;
 
-  let tokenDescriptor;
-  let tokenEndpointLatencyMs = null;
-  try {
-    const tokenStartedAt = metricNow();
-    tokenDescriptor = await fetchLiveKitToken({
-      ...params,
-      providerRoomId: roomDescriptor?.liveKit?.roomName,
-    });
-    tokenEndpointLatencyMs = elapsedMs(tokenStartedAt);
-  } catch (error) {
+  if (tokenRequest.status === "rejected") {
     return {
       ok: false,
       reason: LIVEKIT_CONNECTION_REASONS.TOKEN_ENDPOINT_FAILED,
@@ -318,10 +327,14 @@ export async function connectLiveKitRoom(params = {}) {
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
         room: roomDescriptor?.diagnostics || prepared.diagnostics.room,
-        tokenFailure: sanitizeFailure(error, LIVEKIT_CONNECTION_REASONS.TOKEN_ENDPOINT_FAILED),
+        tokenFailure: sanitizeFailure(
+          tokenRequest.reason,
+          LIVEKIT_CONNECTION_REASONS.TOKEN_ENDPOINT_FAILED
+        ),
       },
     };
   }
+  const tokenDescriptor = tokenRequest.value;
 
   const liveKitUrl = tokenDescriptor?.liveKit?.url || roomDescriptor?.liveKit?.url;
   const token = tokenDescriptor?.liveKit?.token;

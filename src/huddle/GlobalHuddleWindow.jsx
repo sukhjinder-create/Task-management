@@ -186,6 +186,7 @@ function VideoTile({
 }) {
   const { setRef } = useVideoMediaRef(stream, liveKitTrack, isLocal || Boolean(liveKitTrack));
   const tileRef = useRef(null);
+  const [portraitVideo, setPortraitVideo] = useState(false);
   const initials = (name || "?")[0].toUpperCase();
   const showAvatar = (!stream && !liveKitTrack) || isCameraOff;
   const reconnecting = connectionState === "reconnecting";
@@ -227,8 +228,18 @@ function VideoTile({
       {/* Local video is mirrored (selfie-style); remote is natural */}
       <video
         ref={setRef}
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget;
+          setPortraitVideo(video.videoHeight > video.videoWidth);
+        }}
+        onResize={(event) => {
+          const video = event.currentTarget;
+          setPortraitVideo(video.videoHeight > video.videoWidth);
+        }}
         onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
-        className={`absolute inset-0 h-full w-full ${screenShare ? "object-contain bg-black" : "object-cover"}`}
+        className={`absolute inset-0 h-full w-full ${
+          screenShare || portraitVideo ? "object-contain bg-black" : "object-cover"
+        }`}
         style={isLocal ? { transform: "scaleX(-1)" } : undefined}
       />
 

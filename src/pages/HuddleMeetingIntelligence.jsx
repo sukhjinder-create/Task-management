@@ -19,6 +19,7 @@ import {
   Radio,
   RotateCcw,
   Search,
+  Share2,
   ScrollText,
   Sparkles,
   UserCheck,
@@ -837,6 +838,26 @@ export default function HuddleMeetingIntelligence() {
     URL.revokeObjectURL(url);
   };
 
+  const shareMeetingIntelligence = async () => {
+    const title = review?.session?.title || "Huddle Meeting Intelligence";
+    const text = summaryText
+      ? `${title}\n\n${summaryText}`
+      : `${title}\n\nMeeting intelligence is ready.`;
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Meeting Intelligence link copied");
+    } catch (shareError) {
+      if (shareError?.name !== "AbortError") {
+        toast.error("Meeting Intelligence could not be shared");
+      }
+    }
+  };
+
   const downloadPdfExport = async () => {
     const { jsPDF } = await import("jspdf");
     const document = new jsPDF({ unit: "pt", format: "a4" });
@@ -988,6 +1009,9 @@ export default function HuddleMeetingIntelligence() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={shareMeetingIntelligence} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
+                <Share2 size={15} /> Share
+              </button>
               <button type="button" onClick={() => copyText(summaryText, "Summary")} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
                 <ClipboardCopy size={15} /> Copy summary
               </button>

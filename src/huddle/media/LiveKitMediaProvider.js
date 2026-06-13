@@ -112,13 +112,24 @@ function isMobileMediaDevice() {
 
 function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
   if (isMobileMediaDevice()) {
-    return mode === LIVEKIT_QUALITY_MODES.HD
-      ? { resolution: { width: 960, height: 540, frameRate: 24 } }
-      : { resolution: { width: 640, height: 360, frameRate: 24 } };
+    const portrait =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(orientation: portrait)")?.matches !== false;
+    const standard = mode === LIVEKIT_QUALITY_MODES.STANDARD;
+    return {
+      facingMode: "user",
+      resolution: {
+        width: portrait ? (standard ? 540 : 720) : (standard ? 960 : 1280),
+        height: portrait ? (standard ? 960 : 1280) : (standard ? 540 : 720),
+        frameRate: 24,
+        aspectRatio: portrait ? 9 / 16 : 16 / 9,
+      },
+    };
   }
   return (
     LIVEKIT_QUALITY_CAPTURE_OPTIONS[mode] || {
-      resolution: { width: 960, height: 540, frameRate: 24 },
+      facingMode: "user",
+      resolution: { width: 1280, height: 720, frameRate: 30 },
     }
   );
 }
@@ -130,8 +141,8 @@ function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
     videoEncoding: {
       maxBitrate:
         mode === LIVEKIT_QUALITY_MODES.HD
-          ? (mobile ? 900_000 : 1_500_000)
-          : (mobile ? 600_000 : 1_000_000),
+          ? (mobile ? 1_200_000 : 1_800_000)
+          : (mobile ? 1_000_000 : 1_500_000),
       maxFramerate:
         mode === LIVEKIT_QUALITY_MODES.HD && !mobile ? 30 : 24,
     },
@@ -1283,52 +1294,74 @@ export async function publishInitialLiveKitMedia(room) {
     totalPublishLatencyMs: null,
   };
 
+  const combinedStartedAt = metricNow();
   try {
-    const microphoneStartedAt = metricNow();
-    const microphonePublication = await room?.localParticipant?.setMicrophoneEnabled?.(true);
+    if (typeof room?.localParticipant?.enableCameraAndMicrophone !== "function") {
+      throw new Error("combined_media_enable_unavailable");
+    }
+    await room.localParticipant.enableCameraAndMicrophone();
+    const microphonePublication =
+      room.localParticipant.getTrackPublication?.(HUDDLE_MEDIA_TRACK_SOURCES.microphone);
+    const cameraPublication =
+      room.localParticipant.getTrackPublication?.(HUDDLE_MEDIA_TRACK_SOURCES.camera);
+    const latencyMs = elapsedMs(combinedStartedAt);
     diagnostics.microphone = {
-      ok: Boolean(microphonePublication || room?.localParticipant?.isMicrophoneEnabled),
-      published: Boolean(microphonePublication || room?.localParticipant?.isMicrophoneEnabled),
+      ok: Boolean(microphonePublication || room.localParticipant.isMicrophoneEnabled),
+      published: Boolean(microphonePublication || room.localParticipant.isMicrophoneEnabled),
       trackSid: safeString(microphonePublication?.trackSid) || null,
       source: HUDDLE_MEDIA_TRACK_SOURCES.microphone,
-      latencyMs: elapsedMs(microphoneStartedAt),
+      latencyMs,
     };
-  } catch (error) {
-    diagnostics.microphone = {
-      ok: false,
-      published: false,
-      failure: sanitizeLiveKitMediaFailure(
-        error,
-        LIVEKIT_MEDIA_PUBLICATION_REASONS.MICROPHONE_PUBLICATION_FAILED
-      ),
-      latencyMs: null,
-    };
-  }
-
-  try {
-    const cameraStartedAt = metricNow();
-    const cameraPublication = await room?.localParticipant?.setCameraEnabled?.(
-      true,
-      cameraCaptureOptions(),
-      cameraPublishOptions()
-    );
     diagnostics.camera = {
-      ok: Boolean(cameraPublication || room?.localParticipant?.isCameraEnabled),
-      published: Boolean(cameraPublication || room?.localParticipant?.isCameraEnabled),
+      ok: Boolean(cameraPublication || room.localParticipant.isCameraEnabled),
+      published: Boolean(cameraPublication || room.localParticipant.isCameraEnabled),
       trackSid: safeString(cameraPublication?.trackSid) || null,
       source: HUDDLE_MEDIA_TRACK_SOURCES.camera,
-      latencyMs: elapsedMs(cameraStartedAt),
+      latencyMs,
     };
-  } catch (error) {
-    diagnostics.camera = {
-      ok: false,
-      published: false,
-      failure: sanitizeLiveKitMediaFailure(
-        error,
-        LIVEKIT_MEDIA_PUBLICATION_REASONS.CAMERA_PUBLICATION_FAILED
+  } catch (combinedError) {
+    const [microphoneResult, cameraResult] = await Promise.allSettled([
+      room?.localParticipant?.setMicrophoneEnabled?.(true),
+      room?.localParticipant?.setCameraEnabled?.(
+        true,
+        cameraCaptureOptions(),
+        cameraPublishOptions()
       ),
-      latencyMs: null,
-    };
+    ]);
+    diagnostics.microphone = microphoneResult.status === "fulfilled"
+      ? {
+          ok: Boolean(microphoneResult.value || room?.localParticipant?.isMicrophoneEnabled),
+          published: Boolean(microphoneResult.value || room?.localParticipant?.isMicrophoneEnabled),
+          trackSid: safeString(microphoneResult.value?.trackSid) || null,
+          source: HUDDLE_MEDIA_TRACK_SOURCES.microphone,
+          latencyMs: elapsedMs(combinedStartedAt),
+        }
+      : {
+          ok: false,
+          published: false,
+          failure: sanitizeLiveKitMediaFailure(
+            microphoneResult.reason || combinedError,
+            LIVEKIT_MEDIA_PUBLICATION_REASONS.MICROPHONE_PUBLICATION_FAILED
+          ),
+          latencyMs: null,
+        };
+    diagnostics.camera = cameraResult.status === "fulfilled"
+      ? {
+          ok: Boolean(cameraResult.value || room?.localParticipant?.isCameraEnabled),
+          published: Boolean(cameraResult.value || room?.localParticipant?.isCameraEnabled),
+          trackSid: safeString(cameraResult.value?.trackSid) || null,
+          source: HUDDLE_MEDIA_TRACK_SOURCES.camera,
+          latencyMs: elapsedMs(combinedStartedAt),
+        }
+      : {
+          ok: false,
+          published: false,
+          failure: sanitizeLiveKitMediaFailure(
+            cameraResult.reason || combinedError,
+            LIVEKIT_MEDIA_PUBLICATION_REASONS.CAMERA_PUBLICATION_FAILED
+          ),
+          latencyMs: null,
+        };
   }
 
   diagnostics.completedAt = new Date().toISOString();
@@ -2076,7 +2109,7 @@ export function useLiveKitMediaProvider({
           : 0;
         if (
           activeEffect?.active &&
-          backgroundStressSamplesRef.current >= 2
+          backgroundStressSamplesRef.current >= 1
         ) {
           const localTrack = liveKitLocalCameraTrack(room);
           const nextMode =
@@ -2137,7 +2170,7 @@ export function useLiveKitMediaProvider({
     };
 
     postDiagnostics();
-    const interval = window.setInterval(postDiagnostics, 15000);
+    const interval = window.setInterval(postDiagnostics, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -2549,6 +2582,9 @@ export function useLiveKitMediaProvider({
       });
 
       if (result.ok && result.connection?.room) {
+        connectedRoomRef.current = result.connection.room;
+        setConnectedRoom(result.connection.room);
+        setRevision((value) => value + 1);
         providerMetricsRef.current.joinLatencyMs =
           result.diagnostics?.timings?.totalJoinLatencyMs ||
           elapsedMs(providerMetricsRef.current.joinStartedAt);
@@ -2605,9 +2641,6 @@ export function useLiveKitMediaProvider({
             publication: publishResult.diagnostics,
           },
         };
-        connectedRoomRef.current = result.connection.room;
-        setConnectedRoom(result.connection.room);
-        setRevision((value) => value + 1);
       }
 
       setConnectionResult(result);
