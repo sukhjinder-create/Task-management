@@ -9,6 +9,13 @@ function bounded(value, minimum, maximum) {
   return Math.min(Math.max(Math.round(value), minimum), maximum);
 }
 
+function isMobileMediaDevice() {
+  return (
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
+  );
+}
+
 export function getLiveKitRenderTarget(publication) {
   return publication ? renderTargets.get(publication) || null : null;
 }
@@ -37,6 +44,7 @@ export function updateLiveKitRenderTarget(publication, {
   const sourceWidth = positiveNumber(mediaWidth);
   const sourceHeight = positiveNumber(mediaHeight);
   const sourcePortrait = sourceHeight > sourceWidth;
+  const mobile = isMobileMediaDevice();
   let targetCssWidth = cssWidth;
   let targetCssHeight = cssHeight;
   if (!screenShare && sourceWidth && sourceHeight) {
@@ -48,6 +56,10 @@ export function updateLiveKitRenderTarget(publication, {
   }
   const maxCameraWidth = sourcePortrait ? 720 : 1280;
   const maxCameraHeight = sourcePortrait ? 1280 : 720;
+  const minimumCameraWidth = mobile ? 160 : maxCameraWidth;
+  const minimumCameraHeight = mobile ? 90 : maxCameraHeight;
+  const rawTargetWidth = targetCssWidth * pixelRatio;
+  const rawTargetHeight = targetCssHeight * pixelRatio;
   const target = {
     cssWidth: Math.round(cssWidth),
     cssHeight: Math.round(cssHeight),
@@ -55,8 +67,16 @@ export function updateLiveKitRenderTarget(publication, {
     contentCssHeight: Math.round(targetCssHeight),
     sourceWidth: sourceWidth || null,
     sourceHeight: sourceHeight || null,
-    width: bounded(targetCssWidth * pixelRatio, 160, screenShare ? 1920 : maxCameraWidth),
-    height: bounded(targetCssHeight * pixelRatio, 90, screenShare ? 1080 : maxCameraHeight),
+    width: bounded(
+      !screenShare ? Math.max(rawTargetWidth, minimumCameraWidth) : rawTargetWidth,
+      160,
+      screenShare ? 1920 : maxCameraWidth
+    ),
+    height: bounded(
+      !screenShare ? Math.max(rawTargetHeight, minimumCameraHeight) : rawTargetHeight,
+      90,
+      screenShare ? 1080 : maxCameraHeight
+    ),
     framesPerSecond: screenShare ? 30 : cssWidth >= 720 ? 30 : 24,
     pixelRatio,
     source,

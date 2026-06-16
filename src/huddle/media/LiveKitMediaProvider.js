@@ -138,8 +138,19 @@ function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
   );
 }
 
-function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
+function liveKitCameraSimulcastLayers(sdk = null) {
+  const presets = sdk?.VideoPresets || {};
   const mobile = isMobileMediaDevice();
+  return (
+    mobile
+      ? [presets.h180, presets.h360, presets.h540]
+      : [presets.h180, presets.h360, presets.h720]
+  ).filter(Boolean);
+}
+
+function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO, sdk = null) {
+  const mobile = isMobileMediaDevice();
+  const layers = liveKitCameraSimulcastLayers(sdk);
 
   return {
     simulcast: true,
@@ -150,6 +161,7 @@ function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
           : (mobile ? 1_300_000 : 2_000_000),
       maxFramerate: mobile ? 24 : 30,
     },
+    ...(layers.length ? { videoSimulcastLayers: layers } : {}),
   };
 }
 
@@ -1087,6 +1099,9 @@ function createInitialLiveKitMetrics() {
     firstAudioSubscribeAt: null,
     firstVideoSubscribeAt: null,
     firstCaptionAt: null,
+    captionTransportReadyAt: null,
+    captionTransportReadyLatencyMs: null,
+    captionTransportReadyFromIntentMs: null,
     captionStartupTimings: null,
     captionGrantCacheHit: false,
     captionGrantSharedInFlight: false,
@@ -1415,12 +1430,14 @@ export async function publishInitialLiveKitMedia(room) {
     ) {
       throw new Error("explicit_media_enable_unavailable");
     }
+    const sdkResult = await loadLiveKitSdk({ enabled: true });
+    const sdk = sdkResult.ok ? sdkResult.sdk : null;
     const [microphoneResult, cameraResult] = await Promise.allSettled([
       room?.localParticipant?.setMicrophoneEnabled?.(true),
       room?.localParticipant?.setCameraEnabled?.(
         true,
         cameraCaptureOptions(),
-        cameraPublishOptions()
+        cameraPublishOptions(LIVEKIT_QUALITY_MODES.AUTO, sdk)
       ),
     ]);
     diagnostics.microphone = microphoneResult.status === "fulfilled"
@@ -1446,6 +1463,7 @@ export async function publishInitialLiveKitMedia(room) {
           published: Boolean(cameraResult.value || room?.localParticipant?.isCameraEnabled),
           trackSid: safeString(cameraResult.value?.trackSid) || null,
           source: HUDDLE_MEDIA_TRACK_SOURCES.camera,
+          simulcastLayerCount: liveKitCameraSimulcastLayers(sdk).length,
           latencyMs: elapsedMs(combinedStartedAt),
         }
       : {
@@ -2133,6 +2151,8 @@ export function useLiveKitMediaProvider({
         firstAudioMs: metrics.firstAudioSubscribeLatencyMs,
         firstVideoMs: metrics.firstVideoSubscribeLatencyMs,
         captionsActiveMs: metrics.captionsActiveLatencyMs,
+        captionTransportReadyMs: metrics.captionTransportReadyLatencyMs,
+        captionTransportReadyFromIntentMs: metrics.captionTransportReadyFromIntentMs,
       },
       transitions: metrics.connectionStateTransitions,
       failures: metrics.trackFailures,
@@ -2235,6 +2255,8 @@ export function useLiveKitMediaProvider({
           captionGrantLatencyMs: providerMetrics.captionStartupTimings?.grantLatencyMs,
           captionWebsocketOpenLatencyMs: providerMetrics.captionStartupTimings?.websocketOpenLatencyMs,
           captionRecorderStartLatencyMs: providerMetrics.captionStartupTimings?.recorderStartLatencyMs,
+          captionTransportReadyLatencyMs: providerMetrics.captionTransportReadyLatencyMs,
+          captionTransportReadyFromIntentMs: providerMetrics.captionTransportReadyFromIntentMs,
           captionFirstProviderResultLatencyMs: providerMetrics.captionStartupTimings?.firstProviderResultLatencyMs,
           captionFirstBackendEventLatencyMs: providerMetrics.captionStartupTimings?.firstBackendEventLatencyMs,
           captionFirstLocalCaptionLatencyMs: providerMetrics.captionStartupTimings?.firstLocalCaptionLatencyMs,
@@ -2397,10 +2419,26 @@ export function useLiveKitMediaProvider({
         );
       },
       onDiagnostics: (diagnostics) => {
-        providerMetricsRef.current.captionStartupTimings =
-          diagnostics?.timings || providerMetricsRef.current.captionStartupTimings;
-        providerMetricsRef.current.captionGrantCacheHit = Boolean(diagnostics?.grantCacheHit);
-        providerMetricsRef.current.captionGrantSharedInFlight = Boolean(diagnostics?.grantSharedInFlight);
+        const metrics = providerMetricsRef.current;
+        const timings = diagnostics?.timings || metrics.captionStartupTimings;
+        metrics.captionStartupTimings = timings;
+        metrics.captionGrantCacheHit = Boolean(diagnostics?.grantCacheHit);
+        metrics.captionGrantSharedInFlight = Boolean(diagnostics?.grantSharedInFlight);
+        if (
+          diagnostics?.websocketOpen &&
+          diagnostics?.recorderStarted &&
+          !metrics.captionTransportReadyAt
+        ) {
+          metrics.captionTransportReadyAt = metricNow();
+          metrics.captionTransportReadyLatencyMs = Math.max(
+            Number(timings?.websocketOpenLatencyMs) || 0,
+            Number(timings?.recorderStartLatencyMs) || 0
+          ) || null;
+          metrics.captionTransportReadyFromIntentMs = elapsedMs(
+            metrics.intentStartedAt || metrics.joinStartedAt,
+            metrics.captionTransportReadyAt
+          );
+        }
         setTranscriptionDiagnostics(diagnostics);
       },
     });
@@ -2911,10 +2949,12 @@ export function useLiveKitMediaProvider({
 
     const nextEnabled = !(room.localParticipant.isCameraEnabled ?? true);
     try {
+      const sdkResult = await loadLiveKitSdk({ enabled: true });
+      const sdk = sdkResult.ok ? sdkResult.sdk : null;
       const publication = await room.localParticipant.setCameraEnabled(
         nextEnabled,
         nextEnabled ? cameraCaptureOptions(qualityMode) : undefined,
-        nextEnabled ? cameraPublishOptions(qualityMode) : undefined
+        nextEnabled ? cameraPublishOptions(qualityMode, sdk) : undefined
       );
       setPublicationDiagnostics((previous) => ({
         ...(previous || {}),
@@ -2922,6 +2962,9 @@ export function useLiveKitMediaProvider({
           ok: true,
           enabled: nextEnabled,
           trackSid: safeString(publication?.trackSid) || null,
+          simulcastLayerCount: nextEnabled
+            ? liveKitCameraSimulcastLayers(sdk).length
+            : null,
           observedAt: new Date().toISOString(),
         },
       }));
@@ -3006,7 +3049,8 @@ export function useLiveKitMediaProvider({
         qualityMode: {
           mode,
           captureOptions,
-          publishOptions: cameraPublishOptions(mode),
+          publishOptions: cameraPublishOptions(mode, sdk),
+          simulcastLayerCount: liveKitCameraSimulcastLayers(sdk).length,
           adaptiveStream: true,
           dynacast: true,
           observedAt: new Date().toISOString(),
