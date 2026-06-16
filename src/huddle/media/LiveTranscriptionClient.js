@@ -56,7 +56,7 @@ function preconnectOrigin(origin, marker) {
   return true;
 }
 
-function preconnectDeepgram() {
+export function preconnectDeepgram() {
   return preconnectOrigin(DEEPGRAM_ORIGIN, "data-deepgram-preconnect");
 }
 

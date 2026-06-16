@@ -15,8 +15,9 @@ import {
   createLiveKitProviderReadinessDiagnostics,
   useLiveKitMediaProvider,
 } from "./LiveKitMediaProvider";
-import { preconnectCachedLiveKitOrigin } from "./LiveKitConnection";
+import { preconnectCachedLiveKitOrigin, preconnectLiveKit } from "./LiveKitConnection";
 import { loadLiveKitSdk } from "./LiveKitSdk";
+import { preconnectDeepgram } from "./LiveTranscriptionClient";
 
 export const WEB_MEDIA_PROVIDER_SELECTION_REASONS = Object.freeze({
   DEFAULT_MESH: "default_mesh",
@@ -135,7 +136,13 @@ export function useHuddleMediaService({
 
   useEffect(() => {
     if (!selection.canary?.providerCanActivate) return;
+    const configuredLiveKitUrl =
+      import.meta.env?.VITE_LIVEKIT_URL ||
+      import.meta.env?.VITE_HUDDLE_LIVEKIT_URL ||
+      "";
+    preconnectLiveKit(configuredLiveKitUrl);
     preconnectCachedLiveKitOrigin();
+    preconnectDeepgram();
     void loadLiveKitSdk({
       enabled: Boolean(
         selection.canary.sdkLoadEnabled &&
