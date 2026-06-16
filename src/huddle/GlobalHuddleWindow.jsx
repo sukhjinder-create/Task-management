@@ -187,6 +187,7 @@ function VideoTile({
   const { setRef } = useVideoMediaRef(stream, liveKitTrack, isLocal || Boolean(liveKitTrack));
   const tileRef = useRef(null);
   const [portraitVideo, setPortraitVideo] = useState(false);
+  const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
   const initials = (name || "?")[0].toUpperCase();
   const showAvatar = (!stream && !liveKitTrack) || isCameraOff;
   const reconnecting = connectionState === "reconnecting";
@@ -203,6 +204,8 @@ function VideoTile({
         height: rect.height,
         visible: rect.width > 0 && rect.height > 0,
         source: videoSource,
+        mediaWidth: videoSize.width,
+        mediaHeight: videoSize.height,
       });
     };
     update();
@@ -216,7 +219,7 @@ function VideoTile({
       window.removeEventListener("resize", update);
       clearLiveKitRenderTarget(liveKitPublication);
     };
-  }, [isLocal, liveKitPublication, videoSource]);
+  }, [isLocal, liveKitPublication, videoSize.height, videoSize.width, videoSource]);
 
   return (
     <div
@@ -231,10 +234,12 @@ function VideoTile({
         onLoadedMetadata={(event) => {
           const video = event.currentTarget;
           setPortraitVideo(video.videoHeight > video.videoWidth);
+          setVideoSize({ width: video.videoWidth || 0, height: video.videoHeight || 0 });
         }}
         onResize={(event) => {
           const video = event.currentTarget;
           setPortraitVideo(video.videoHeight > video.videoWidth);
+          setVideoSize({ width: video.videoWidth || 0, height: video.videoHeight || 0 });
         }}
         onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
         className={`absolute inset-0 h-full w-full ${

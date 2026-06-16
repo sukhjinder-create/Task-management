@@ -39,8 +39,8 @@ function createLiveKitRoomOptions(sdk = {}) {
     typeof window !== "undefined" &&
     window.matchMedia?.("(orientation: portrait)")?.matches !== false;
   const layers = mobile
-    ? [videoPresets.h180].filter(Boolean)
-    : [videoPresets.h180, videoPresets.h360].filter(Boolean);
+    ? [videoPresets.h180, videoPresets.h360, videoPresets.h540].filter(Boolean)
+    : [videoPresets.h180, videoPresets.h360, videoPresets.h720].filter(Boolean);
   const balancedResolution = mobile
     ? {
         width: portrait ? 720 : 1280,
@@ -66,7 +66,7 @@ function createLiveKitRoomOptions(sdk = {}) {
     publishDefaults: {
       simulcast: true,
       videoEncoding: {
-        maxBitrate: mobile ? 1_000_000 : 1_500_000,
+        maxBitrate: mobile ? 1_400_000 : 2_200_000,
         maxFramerate: mobile ? 24 : 30,
       },
       videoSimulcastLayers: layers,

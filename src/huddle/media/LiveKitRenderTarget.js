@@ -18,6 +18,8 @@ export function updateLiveKitRenderTarget(publication, {
   height,
   visible = true,
   source = "camera",
+  mediaWidth = null,
+  mediaHeight = null,
 } = {}) {
   if (!publication || typeof publication.setVideoDimensions !== "function") {
     return null;
@@ -32,11 +34,29 @@ export function updateLiveKitRenderTarget(publication, {
     2
   );
   const screenShare = source === "screen" || source === "screen_share";
+  const sourceWidth = positiveNumber(mediaWidth);
+  const sourceHeight = positiveNumber(mediaHeight);
+  const sourcePortrait = sourceHeight > sourceWidth;
+  let targetCssWidth = cssWidth;
+  let targetCssHeight = cssHeight;
+  if (!screenShare && sourceWidth && sourceHeight) {
+    const scale = Math.min(cssWidth / sourceWidth, cssHeight / sourceHeight);
+    if (scale > 0) {
+      targetCssWidth = sourceWidth * scale;
+      targetCssHeight = sourceHeight * scale;
+    }
+  }
+  const maxCameraWidth = sourcePortrait ? 720 : 1280;
+  const maxCameraHeight = sourcePortrait ? 1280 : 720;
   const target = {
     cssWidth: Math.round(cssWidth),
     cssHeight: Math.round(cssHeight),
-    width: bounded(cssWidth * pixelRatio, 160, screenShare ? 1920 : 1280),
-    height: bounded(cssHeight * pixelRatio, 90, screenShare ? 1080 : 720),
+    contentCssWidth: Math.round(targetCssWidth),
+    contentCssHeight: Math.round(targetCssHeight),
+    sourceWidth: sourceWidth || null,
+    sourceHeight: sourceHeight || null,
+    width: bounded(targetCssWidth * pixelRatio, 160, screenShare ? 1920 : maxCameraWidth),
+    height: bounded(targetCssHeight * pixelRatio, 90, screenShare ? 1080 : maxCameraHeight),
     framesPerSecond: screenShare ? 30 : cssWidth >= 720 ? 30 : 24,
     pixelRatio,
     source,

@@ -110,6 +110,10 @@ function isMobileMediaDevice() {
   );
 }
 
+function isMobileBackgroundEffectDevice() {
+  return isMobileMediaDevice();
+}
+
 function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
   if (isMobileMediaDevice()) {
     const portrait =
@@ -136,13 +140,17 @@ function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
 
 function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
   const mobile = isMobileMediaDevice();
+  const backgroundEffectSupport = getBackgroundEffectSupport();
+  const backgroundEffectsEnabled =
+    backgroundEffectSupport.supported && !isMobileBackgroundEffectDevice();
+
   return {
     simulcast: true,
     videoEncoding: {
       maxBitrate:
         mode === LIVEKIT_QUALITY_MODES.HD
-          ? (mobile ? 1_200_000 : 1_800_000)
-          : (mobile ? 1_000_000 : 1_500_000),
+          ? (mobile ? 1_500_000 : 2_500_000)
+          : (mobile ? 1_300_000 : 2_000_000),
       maxFramerate:
         mode === LIVEKIT_QUALITY_MODES.HD && !mobile ? 30 : 24,
     },
@@ -523,6 +531,10 @@ function attachedElementMetrics(track = null, publication = null) {
     adaptiveStreamAttached: elements.length > 0,
     requestedWidth: requested?.width || null,
     requestedHeight: requested?.height || null,
+    requestedContentWidth: requested?.contentCssWidth || null,
+    requestedContentHeight: requested?.contentCssHeight || null,
+    requestedSourceWidth: requested?.sourceWidth || null,
+    requestedSourceHeight: requested?.sourceHeight || null,
     requestedFramesPerSecond: requested?.framesPerSecond || null,
     requestedPixelRatio: requested?.pixelRatio || null,
     renderTargetVisible:
@@ -665,7 +677,6 @@ async function collectLiveKitNetworkStats(room) {
     }
 
     const packetsTotal = stats.packetsReceived + stats.packetsLost;
-    const bytesTotal = stats.bytesSent + stats.bytesReceived;
     next[participantId] = {
       observedAt: new Date().toISOString(),
       rttMs: stats.rttSamples.length
@@ -674,7 +685,7 @@ async function collectLiveKitNetworkStats(room) {
       packetLoss: packetsTotal > 0
         ? Number((stats.packetsLost / packetsTotal).toFixed(4))
         : null,
-      bitrateKbps: bytesTotal > 0 ? Math.round((bytesTotal * 8) / 1000) : null,
+      bitrateKbps: null,
       bytesSent: stats.bytesSent,
       bytesReceived: stats.bytesReceived,
       collectedAt,
@@ -744,6 +755,29 @@ function applyQualityStatsEntry(track, entry = {}, codecs = new Map()) {
 
   if (entry.type === "remote-inbound-rtp" && Number.isFinite(Number(entry.roundTripTime))) {
     track.rttMs = Math.round(Number(entry.roundTripTime) * 1000);
+  }
+
+  if (entry.type === "inbound-rtp") {
+    if (Number.isFinite(Number(entry.framesDecoded))) {
+      track.framesDecoded = Math.max(Number(track.framesDecoded) || 0, Number(entry.framesDecoded));
+    }
+    if (Number.isFinite(Number(entry.framesRendered))) {
+      track.framesRendered = Math.max(Number(track.framesRendered) || 0, Number(entry.framesRendered));
+    }
+    if (Number.isFinite(Number(entry.freezeCount))) {
+      track.freezeCount = (Number(track.freezeCount) || 0) + Number(entry.freezeCount);
+    }
+    if (Number.isFinite(Number(entry.totalFreezesDuration))) {
+      track.totalFreezesDuration =
+        (Number(track.totalFreezesDuration) || 0) + Number(entry.totalFreezesDuration);
+    }
+    if (Number.isFinite(Number(entry.pauseCount))) {
+      track.pauseCount = (Number(track.pauseCount) || 0) + Number(entry.pauseCount);
+    }
+    if (Number.isFinite(Number(entry.totalPausesDuration))) {
+      track.totalPausesDuration =
+        (Number(track.totalPausesDuration) || 0) + Number(entry.totalPausesDuration);
+    }
   }
 
   if (entry.type !== "outbound-rtp" && entry.type !== "inbound-rtp" && entry.type !== "media-source") {
@@ -859,6 +893,12 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
         bytesSent: null,
         bytesReceived: null,
         framesDropped: null,
+        framesDecoded: null,
+        framesRendered: null,
+        freezeCount: null,
+        totalFreezesDuration: null,
+        pauseCount: null,
+        totalPausesDuration: null,
         codec: null,
         mimeType: null,
         rid: null,
@@ -921,16 +961,30 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
       Number(track.requestedWidth) > 0 &&
       Number(track.requestedHeight) > 0
   );
-  const renderTargetMismatchCount = targetedReceiveVideoTracks.filter(
-    (track) =>
-      Number(track.width) < Number(track.requestedWidth) * 0.7 ||
-      Number(track.height) < Number(track.requestedHeight) * 0.7
-  ).length;
+  const renderTargetMismatchCount = targetedReceiveVideoTracks.filter((track) => {
+    const requestedWidth = Number(track.requestedWidth) || 0;
+    const requestedHeight = Number(track.requestedHeight) || 0;
+    const actualWidth = Number(track.width) || 0;
+    const actualHeight = Number(track.height) || 0;
+    const requestedPixels = requestedWidth * requestedHeight;
+    const actualPixels = actualWidth * actualHeight;
+    if (!requestedPixels || !actualPixels) return false;
+    const requestedLongEdge = Math.max(requestedWidth, requestedHeight);
+    const requestedShortEdge = Math.min(requestedWidth, requestedHeight);
+    const actualLongEdge = Math.max(actualWidth, actualHeight);
+    const actualShortEdge = Math.min(actualWidth, actualHeight);
+    return (
+      actualPixels < requestedPixels * 0.72 ||
+      actualLongEdge < requestedLongEdge * 0.78 ||
+      actualShortEdge < requestedShortEdge * 0.72
+    );
+  }).length;
   const maxBy = (items, key) => items.reduce((max, item) => Math.max(max, safeNumber(item[key], 0) || 0), 0) || null;
   const sumBy = (items, key) => items.reduce(
     (total, item) => total + (safeNumber(item[key], 0) || 0),
     0
   );
+  const freezeTracks = receiveVideoTracks.filter((track) => Number(track.freezeCount) > 0);
 
   return {
     observedAt,
@@ -988,6 +1042,8 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
       maxScreenShareReceiveHeight: maxBy(receiveScreenTracks, "height"),
       maxRequestedReceiveWidth: maxBy(receiveVideoTracks, "requestedWidth"),
       maxRequestedReceiveHeight: maxBy(receiveVideoTracks, "requestedHeight"),
+      maxRequestedContentReceiveWidth: maxBy(receiveVideoTracks, "requestedContentWidth"),
+      maxRequestedContentReceiveHeight: maxBy(receiveVideoTracks, "requestedContentHeight"),
       renderTargetTrackCount: targetedReceiveVideoTracks.length,
       renderTargetMismatchCount,
       screenShareSendBitrateKbps: sumBy(sendScreenTracks, "bitrateKbps") || null,
@@ -996,6 +1052,12 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
       selectedLowLayerCount: tracks.filter((track) => track.videoQuality === "low").length,
       selectedMediumLayerCount: tracks.filter((track) => track.videoQuality === "medium").length,
       selectedHighLayerCount: tracks.filter((track) => track.videoQuality === "high").length,
+      freezeTrackCount: freezeTracks.length,
+      totalFreezeCount: sumBy(receiveVideoTracks, "freezeCount") || null,
+      totalFreezeDurationSeconds: sumBy(receiveVideoTracks, "totalFreezesDuration") || null,
+      totalFramesDropped: sumBy(receiveVideoTracks, "framesDropped") || null,
+      totalFramesDecoded: sumBy(receiveVideoTracks, "framesDecoded") || null,
+      totalFramesRendered: sumBy(receiveVideoTracks, "framesRendered") || null,
     },
     participants: participantSummaries,
     tracks,
@@ -1059,6 +1121,47 @@ function recordMetricEvent(metrics, key, event) {
       ...event,
     },
   ]);
+}
+
+function markExistingSubscribedTracks(metrics, room) {
+  if (!metrics || !room) return;
+  const now = metricNow();
+  for (const participant of remoteParticipantsFromRoom(room)) {
+    for (const publication of uniqueTrackPublications(participant)) {
+      const hasTrack =
+        publication?.isSubscribed === true ||
+        Boolean(publication?.track) ||
+        Boolean(mediaStreamTrackFromPublication(publication));
+      if (!hasTrack) continue;
+      const trackKind = publicationTrackKind(publication);
+      if (!metrics.firstSubscribeAt) {
+        metrics.firstSubscribeAt = now;
+        metrics.subscribeLatencyMs = elapsedMs(
+          metrics.roomStartedAt || metrics.joinStartedAt,
+          metrics.firstSubscribeAt
+        );
+      }
+      if (trackKind === "audio" && !metrics.firstAudioSubscribeAt) {
+        metrics.firstAudioSubscribeAt = now;
+        metrics.firstAudioSubscribeLatencyMs = elapsedMs(
+          metrics.intentStartedAt || metrics.joinStartedAt,
+          metrics.firstAudioSubscribeAt
+        );
+      }
+      if (trackKind === "video" && !metrics.firstVideoSubscribeAt) {
+        metrics.firstVideoSubscribeAt = now;
+        metrics.firstVideoSubscribeLatencyMs = elapsedMs(
+          metrics.intentStartedAt || metrics.joinStartedAt,
+          metrics.firstVideoSubscribeAt
+        );
+      }
+      recordMetricTransition(metrics, "trackSubscribedExisting", {
+        participantId: participantIdentity(participant),
+        trackSid: safeString(publication?.trackSid) || null,
+        trackKind: trackKind || null,
+      });
+    }
+  }
 }
 
 function roomStateFromLiveKitRoom(room, fallback = LIVEKIT_ROOM_STATES.disabled) {
@@ -2100,7 +2203,7 @@ export function useLiveKitMediaProvider({
             localCamera.qualityLimitationReason === "cpu" ||
             (
               Number(localCamera.framesPerSecond) > 0 &&
-              Number(localCamera.framesPerSecond) < 18
+              Number(localCamera.framesPerSecond) < 21
             )
           )
         );
@@ -2436,6 +2539,7 @@ export function useLiveKitMediaProvider({
         recordAndBump("trackSubscribed", {
           participantId: participantIdentity(participant),
           trackSid: safeString(publication?.trackSid) || null,
+          trackKind: trackKind || null,
           subscribeLatencyMs: metrics.subscribeLatencyMs,
         });
       },
@@ -2595,6 +2699,7 @@ export function useLiveKitMediaProvider({
         recordMetricTransition(providerMetricsRef.current, "connected", {
           joinLatencyMs: providerMetricsRef.current.joinLatencyMs,
         });
+        markExistingSubscribedTracks(providerMetricsRef.current, result.connection.room);
         const publishResult = await publishInitialLiveKitMedia(result.connection.room);
         providerMetricsRef.current.publishLatencyMs =
           publishResult.diagnostics?.totalPublishLatencyMs || null;
@@ -2855,6 +2960,37 @@ export function useLiveKitMediaProvider({
       return { ok: false, reason: "livekit_camera_track_required" };
     }
     if (
+      isMobileBackgroundEffectDevice() &&
+      mode !== HUDDLE_BACKGROUND_EFFECTS.OFF
+    ) {
+      const next = {
+        mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
+        active: false,
+        imagePath: null,
+        imagePathConfigured: false,
+        diagnostics: {
+          reason: "background_effect_disabled_on_mobile_for_call_quality",
+          requestedMode: mode,
+          observedAt: new Date().toISOString(),
+        },
+      };
+      await destroyBackgroundEffect(backgroundProcessorRef.current);
+      backgroundProcessorRef.current = null;
+      backgroundEffectRef.current = next;
+      backgroundStressSamplesRef.current = 0;
+      setBackgroundEffectState(next);
+      setPublicationDiagnostics((previous) => ({
+        ...(previous || {}),
+        backgroundEffect: next,
+      }));
+      setRevision((value) => value + 1);
+      return {
+        ok: false,
+        reason: next.diagnostics.reason,
+        backgroundEffect: next,
+      };
+    }
+    if (
       backgroundTrackRef.current &&
       backgroundTrackRef.current !== localVideoTrack
     ) {
@@ -3003,8 +3139,13 @@ export function useLiveKitMediaProvider({
       typeof navigator !== "undefined" &&
       navigator.mediaDevices?.getDisplayMedia
     ),
-    backgroundEffectsSupported: getBackgroundEffectSupport().supported,
-    backgroundEffectSupport: getBackgroundEffectSupport(),
+    backgroundEffectsSupported: backgroundEffectsEnabled,
+    backgroundEffectSupport: {
+      ...backgroundEffectSupport,
+      supported: backgroundEffectsEnabled,
+      mobileDisabledForCallQuality:
+        backgroundEffectSupport.supported && isMobileBackgroundEffectDevice(),
+    },
     backgroundEffect,
     subtitlesSupported: Boolean(connectedRoom && liveTranscriptionSupported()),
     subtitlesEnabled,
