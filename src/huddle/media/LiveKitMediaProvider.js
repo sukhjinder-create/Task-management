@@ -140,9 +140,6 @@ function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
 
 function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
   const mobile = isMobileMediaDevice();
-  const backgroundEffectSupport = getBackgroundEffectSupport();
-  const backgroundEffectsEnabled =
-    backgroundEffectSupport.supported && !isMobileBackgroundEffectDevice();
 
   return {
     simulcast: true,
@@ -3125,6 +3122,9 @@ export function useLiveKitMediaProvider({
   const setHuddleId = useCallback((id) => {
     huddleIdRef.current = safeString(id) || null;
   }, []);
+  const backgroundEffectSupport = getBackgroundEffectSupport();
+  const backgroundEffectsEnabled =
+    backgroundEffectSupport.supported && !isMobileBackgroundEffectDevice();
 
   return {
     inCall: Boolean(connectedRoom),
