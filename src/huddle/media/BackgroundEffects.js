@@ -7,6 +7,18 @@ export const HUDDLE_BACKGROUND_EFFECTS = Object.freeze({
 let processorsPromise = null;
 const imagePreloads = new Map();
 
+function betaFlagEnabled(value) {
+  return ["1", "true", "yes", "on"].includes(
+    String(value ?? "").trim().toLowerCase()
+  );
+}
+
+export function backgroundEffectsBetaEnabled() {
+  return betaFlagEnabled(
+    import.meta.env?.VITE_HUDDLE_BACKGROUND_EFFECTS_BETA_ENABLED
+  );
+}
+
 function now() {
   return typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
@@ -68,6 +80,7 @@ export async function preloadBackgroundEffects({ imagePaths = [] } = {}) {
 
 export function getBackgroundEffectSupport() {
   try {
+    const betaEnabled = backgroundEffectsBetaEnabled();
     const userAgent = globalThis.navigator?.userAgent || "";
     const ios = /iPad|iPhone|iPod/i.test(userAgent);
     const mobile = /Android|iPad|iPhone|iPod|Mobile/i.test(userAgent);
@@ -91,13 +104,15 @@ export function getBackgroundEffectSupport() {
       ((hardwareConcurrency > 0 && hardwareConcurrency < 6) ||
         (deviceMemory > 0 && deviceMemory < 4));
     return {
-      supported: processingSupported && !constrainedDevice,
-      blurSupported: processingSupported && !constrainedDevice,
+      supported: betaEnabled && processingSupported && !constrainedDevice,
+      blurSupported: betaEnabled && processingSupported && !constrainedDevice,
       replacementSupported:
+        betaEnabled &&
         processingSupported &&
         modern &&
         !mobile &&
         (hardwareConcurrency === 0 || hardwareConcurrency >= 6),
+      betaEnabled,
       modern,
       mobile,
       constrainedDevice,
@@ -111,6 +126,7 @@ export function getBackgroundEffectSupport() {
       supported: false,
       blurSupported: false,
       replacementSupported: false,
+      betaEnabled: false,
       modern: false,
       providerIndependent: true,
       webOnly: true,
@@ -214,6 +230,7 @@ export async function destroyBackgroundEffect(processor) {
 
 export default {
   HUDDLE_BACKGROUND_EFFECTS,
+  backgroundEffectsBetaEnabled,
   getBackgroundEffectSupport,
   preloadBackgroundEffects,
   applyBackgroundEffect,

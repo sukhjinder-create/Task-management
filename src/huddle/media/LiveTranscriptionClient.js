@@ -5,6 +5,9 @@ const DEFAULT_TIMESLICE_MS = 250;
 const KEEP_ALIVE_INTERVAL_MS = 8000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 const PROVIDER_EVENT_POST_RETRIES = 3;
+const NO_PROVIDER_RESULTS_TIMEOUT_MS = 12000;
+const NO_PROVIDER_RESULTS_MIN_CHUNKS = 12;
+const NO_PROVIDER_RESULTS_MAX_RECONNECTS = 2;
 
 function safeString(value, maxLength = null) {
   const normalized = typeof value === "string" ? value.trim() : "";
@@ -81,7 +84,9 @@ export function createLiveTranscriptionClient({
   let streamStartedAtMs = Date.now();
   let reconnectTimer = null;
   let keepAliveTimer = null;
+  let noProviderResultsTimer = null;
   let reconnectAttempts = 0;
+  let noProviderResultsReconnects = 0;
   let connectionGeneration = 0;
   let pendingPartialEvent = null;
   const pendingFinalEvents = [];
@@ -100,6 +105,7 @@ export function createLiveTranscriptionClient({
     providerMessages: 0,
     backendEvents: 0,
     reconnectAttempts: 0,
+    noProviderResultsReconnects: 0,
     coalescedPartialEvents: 0,
     pendingFinalEvents: 0,
     eventPumpRunning: false,
@@ -281,8 +287,36 @@ export function createLiveTranscriptionClient({
     if (timer) window.clearTimeout(timer);
   }
 
+  function clearNoProviderResultsTimer() {
+    clearTimer(noProviderResultsTimer);
+    noProviderResultsTimer = null;
+  }
+
+  function scheduleNoProviderResultsWatchdog() {
+    if (stopped || noProviderResultsTimer) return;
+    if (diagnostics.providerMessages > 0) return;
+    if (diagnostics.chunksSent < NO_PROVIDER_RESULTS_MIN_CHUNKS) return;
+    if (noProviderResultsReconnects >= NO_PROVIDER_RESULTS_MAX_RECONNECTS) return;
+
+    noProviderResultsTimer = window.setTimeout(() => {
+      noProviderResultsTimer = null;
+      if (
+        stopped ||
+        diagnostics.providerMessages > 0 ||
+        diagnostics.chunksSent < NO_PROVIDER_RESULTS_MIN_CHUNKS ||
+        noProviderResultsReconnects >= NO_PROVIDER_RESULTS_MAX_RECONNECTS
+      ) {
+        return;
+      }
+      noProviderResultsReconnects += 1;
+      diagnostics.noProviderResultsReconnects = noProviderResultsReconnects;
+      scheduleReconnect("transcription_provider_no_results");
+    }, NO_PROVIDER_RESULTS_TIMEOUT_MS);
+  }
+
   function cleanupTransport({ closeSocket = true } = {}) {
     clearTimer(keepAliveTimer);
+    clearNoProviderResultsTimer();
     keepAliveTimer = null;
     try {
       if (mediaRecorder?.state && mediaRecorder.state !== "inactive") {
@@ -385,6 +419,7 @@ export function createLiveTranscriptionClient({
           if (websocket?.readyState !== WebSocket.OPEN) return;
           websocket.send(event.data);
           diagnostics.chunksSent += 1;
+          scheduleNoProviderResultsWatchdog();
         };
         mediaRecorder.onerror = (event) => {
           scheduleReconnect(
@@ -405,6 +440,7 @@ export function createLiveTranscriptionClient({
         const payload = typeof event.data === "string" ? jsonParse(event.data) : null;
         if (!payload || payload.type !== "Results") return;
         const clientProviderReceivedAt = new Date().toISOString();
+        clearNoProviderResultsTimer();
         diagnostics.providerMessages += 1;
         diagnostics.lastProviderMessageAt = clientProviderReceivedAt;
         enqueueProviderEvent(payload, clientProviderReceivedAt);
@@ -463,6 +499,7 @@ export function createLiveTranscriptionClient({
     stopped = true;
     connectionGeneration += 1;
     clearTimer(reconnectTimer);
+    clearNoProviderResultsTimer();
     reconnectTimer = null;
     try {
       if (websocket?.readyState === WebSocket.OPEN) {
