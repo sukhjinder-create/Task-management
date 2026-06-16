@@ -761,18 +761,22 @@ function applyQualityStatsEntry(track, entry = {}, codecs = new Map()) {
       track.framesRendered = Math.max(Number(track.framesRendered) || 0, Number(entry.framesRendered));
     }
     if (Number.isFinite(Number(entry.freezeCount))) {
-      track.freezeCount = (Number(track.freezeCount) || 0) + Number(entry.freezeCount);
+      track.freezeCount = Math.max(Number(track.freezeCount) || 0, Number(entry.freezeCount));
     }
     if (Number.isFinite(Number(entry.totalFreezesDuration))) {
-      track.totalFreezesDuration =
-        (Number(track.totalFreezesDuration) || 0) + Number(entry.totalFreezesDuration);
+      track.totalFreezesDuration = Math.max(
+        Number(track.totalFreezesDuration) || 0,
+        Number(entry.totalFreezesDuration)
+      );
     }
     if (Number.isFinite(Number(entry.pauseCount))) {
-      track.pauseCount = (Number(track.pauseCount) || 0) + Number(entry.pauseCount);
+      track.pauseCount = Math.max(Number(track.pauseCount) || 0, Number(entry.pauseCount));
     }
     if (Number.isFinite(Number(entry.totalPausesDuration))) {
-      track.totalPausesDuration =
-        (Number(track.totalPausesDuration) || 0) + Number(entry.totalPausesDuration);
+      track.totalPausesDuration = Math.max(
+        Number(track.totalPausesDuration) || 0,
+        Number(entry.totalPausesDuration)
+      );
     }
   }
 
@@ -798,8 +802,7 @@ function applyQualityStatsEntry(track, entry = {}, codecs = new Map()) {
   const rtpEntry =
     entry.type === "outbound-rtp" || entry.type === "inbound-rtp";
   if (rtpEntry && Number.isFinite(Number(entry.framesDropped))) {
-    track.framesDropped =
-      (Number(track.framesDropped) || 0) + Number(entry.framesDropped);
+    track.framesDropped = Math.max(Number(track.framesDropped) || 0, Number(entry.framesDropped));
   }
   if (rtpEntry && Number.isFinite(Number(entry.bytesSent))) {
     track.bytesSent = (Number(track.bytesSent) || 0) + Number(entry.bytesSent);

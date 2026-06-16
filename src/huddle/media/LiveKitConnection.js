@@ -244,6 +244,23 @@ async function fetchLiveKitToken({
   return data;
 }
 
+async function timedLiveKitRequest(request) {
+  const startedAt = metricNow();
+  try {
+    return {
+      ok: true,
+      value: await request(),
+      latencyMs: elapsedMs(startedAt),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error,
+      latencyMs: elapsedMs(startedAt),
+    };
+  }
+}
+
 export async function connectLiveKitRoom(params = {}) {
   const totalStartedAt = metricNow();
   const prepared = await prepareLiveKitConnection(params);
@@ -280,16 +297,14 @@ export async function connectLiveKitRoom(params = {}) {
     };
   }
 
-  const roomStartedAt = metricNow();
-  const tokenStartedAt = metricNow();
-  const [roomRequest, tokenRequest] = await Promise.allSettled([
-    fetchLiveKitRoomDescriptor(params),
-    fetchLiveKitToken(params),
+  const [roomRequest, tokenRequest] = await Promise.all([
+    timedLiveKitRequest(() => fetchLiveKitRoomDescriptor(params)),
+    timedLiveKitRequest(() => fetchLiveKitToken(params)),
   ]);
-  const roomEndpointLatencyMs = elapsedMs(roomStartedAt);
-  const tokenEndpointLatencyMs = elapsedMs(tokenStartedAt);
+  const roomEndpointLatencyMs = roomRequest.latencyMs;
+  const tokenEndpointLatencyMs = tokenRequest.latencyMs;
 
-  if (roomRequest.status === "rejected") {
+  if (!roomRequest.ok) {
     return {
       ok: false,
       reason: LIVEKIT_CONNECTION_REASONS.ROOM_ENDPOINT_FAILED,
@@ -304,7 +319,7 @@ export async function connectLiveKitRoom(params = {}) {
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
         roomFailure: sanitizeFailure(
-          roomRequest.reason,
+          roomRequest.error,
           LIVEKIT_CONNECTION_REASONS.ROOM_ENDPOINT_FAILED
         ),
       },
@@ -312,7 +327,7 @@ export async function connectLiveKitRoom(params = {}) {
   }
   const roomDescriptor = roomRequest.value;
 
-  if (tokenRequest.status === "rejected") {
+  if (!tokenRequest.ok) {
     return {
       ok: false,
       reason: LIVEKIT_CONNECTION_REASONS.TOKEN_ENDPOINT_FAILED,
@@ -323,12 +338,12 @@ export async function connectLiveKitRoom(params = {}) {
         timings: {
           prepareLatencyMs,
           roomEndpointLatencyMs,
-          tokenEndpointLatencyMs: elapsedMs(totalStartedAt),
+          tokenEndpointLatencyMs,
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
         room: roomDescriptor?.diagnostics || prepared.diagnostics.room,
         tokenFailure: sanitizeFailure(
-          tokenRequest.reason,
+          tokenRequest.error,
           LIVEKIT_CONNECTION_REASONS.TOKEN_ENDPOINT_FAILED
         ),
       },
