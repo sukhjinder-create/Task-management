@@ -297,35 +297,9 @@ export async function connectLiveKitRoom(params = {}) {
     };
   }
 
-  const [roomRequest, tokenRequest] = await Promise.all([
-    timedLiveKitRequest(() => fetchLiveKitRoomDescriptor(params)),
-    timedLiveKitRequest(() => fetchLiveKitToken(params)),
-  ]);
-  const roomEndpointLatencyMs = roomRequest.latencyMs;
+  const tokenRequest = await timedLiveKitRequest(() => fetchLiveKitToken(params));
+  const roomEndpointLatencyMs = null;
   const tokenEndpointLatencyMs = tokenRequest.latencyMs;
-
-  if (!roomRequest.ok) {
-    return {
-      ok: false,
-      reason: LIVEKIT_CONNECTION_REASONS.ROOM_ENDPOINT_FAILED,
-      connection: null,
-      plan: prepared.plan,
-      diagnostics: {
-        ...prepared.diagnostics,
-        timings: {
-          prepareLatencyMs,
-          roomEndpointLatencyMs,
-          tokenEndpointLatencyMs,
-          totalJoinLatencyMs: elapsedMs(totalStartedAt),
-        },
-        roomFailure: sanitizeFailure(
-          roomRequest.error,
-          LIVEKIT_CONNECTION_REASONS.ROOM_ENDPOINT_FAILED
-        ),
-      },
-    };
-  }
-  const roomDescriptor = roomRequest.value;
 
   if (!tokenRequest.ok) {
     return {
@@ -341,7 +315,7 @@ export async function connectLiveKitRoom(params = {}) {
           tokenEndpointLatencyMs,
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
-        room: roomDescriptor?.diagnostics || prepared.diagnostics.room,
+        room: prepared.diagnostics.room,
         tokenFailure: sanitizeFailure(
           tokenRequest.error,
           LIVEKIT_CONNECTION_REASONS.TOKEN_ENDPOINT_FAILED
@@ -350,8 +324,16 @@ export async function connectLiveKitRoom(params = {}) {
     };
   }
   const tokenDescriptor = tokenRequest.value;
+  const roomDescriptor = {
+    diagnostics: {
+      providerRoomId: tokenDescriptor?.liveKit?.roomName || prepared.diagnostics.room?.providerRoomId,
+      canConnect: true,
+      canJoinRooms: true,
+      source: "token_endpoint",
+    },
+  };
 
-  const liveKitUrl = tokenDescriptor?.liveKit?.url || roomDescriptor?.liveKit?.url;
+  const liveKitUrl = tokenDescriptor?.liveKit?.url;
   const token = tokenDescriptor?.liveKit?.token;
   if (!liveKitUrl || !token) {
     return {
