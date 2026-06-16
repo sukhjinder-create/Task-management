@@ -29,6 +29,37 @@ function safeString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function liveKitHttpsOrigin(url) {
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol === "wss:" ? "https:" : parsed.protocol;
+    if (protocol !== "https:") return null;
+    return `${protocol}//${parsed.host}`;
+  } catch {
+    return null;
+  }
+}
+
+function preconnectLiveKit(url) {
+  if (typeof document === "undefined") return false;
+  const origin = liveKitHttpsOrigin(url);
+  if (!origin) return false;
+  const existing = document.querySelector(`link[data-livekit-preconnect="${origin}"]`);
+  if (existing) return false;
+  const dnsPrefetch = document.createElement("link");
+  dnsPrefetch.rel = "dns-prefetch";
+  dnsPrefetch.href = origin;
+  dnsPrefetch.setAttribute("data-livekit-preconnect", origin);
+  const preconnect = document.createElement("link");
+  preconnect.rel = "preconnect";
+  preconnect.href = origin;
+  preconnect.crossOrigin = "anonymous";
+  preconnect.setAttribute("data-livekit-preconnect", origin);
+  document.head?.appendChild(dnsPrefetch);
+  document.head?.appendChild(preconnect);
+  return true;
+}
+
 function createLiveKitRoomOptions(sdk = {}) {
   const videoPresets = sdk.VideoPresets || {};
   const mobile =
@@ -169,6 +200,7 @@ export async function prepareLiveKitConnection({
   sessionId = null,
   providerRoomId = null,
 } = {}) {
+  const sdkStartedAt = metricNow();
   const sdkResult = await loadLiveKitSdk({
     enabled: Boolean(
       canary.sdkLoadEnabled &&
@@ -176,6 +208,7 @@ export async function prepareLiveKitConnection({
       canary.runtimeConnectionsEnabled
     ),
   });
+  const sdkLoadLatencyMs = elapsedMs(sdkStartedAt);
   const plan = createLiveKitConnectionPlan({
     canary,
     workspaceId,
@@ -192,7 +225,12 @@ export async function prepareLiveKitConnection({
         : plan.reason,
     sdk: sdkResult.sdk,
     plan,
-    diagnostics: plan.diagnostics,
+    diagnostics: {
+      ...plan.diagnostics,
+      timings: {
+        sdkLoadLatencyMs,
+      },
+    },
   };
 }
 
@@ -265,6 +303,7 @@ export async function connectLiveKitRoom(params = {}) {
   const totalStartedAt = metricNow();
   const prepared = await prepareLiveKitConnection(params);
   const prepareLatencyMs = elapsedMs(totalStartedAt);
+  const sdkLoadLatencyMs = prepared.diagnostics?.timings?.sdkLoadLatencyMs ?? null;
   if (!params?.canary?.runtimeConnectionsEnabled || !params?.canary?.providerCanActivate) {
     return {
       ok: false,
@@ -275,6 +314,7 @@ export async function connectLiveKitRoom(params = {}) {
         ...prepared.diagnostics,
         timings: {
           prepareLatencyMs,
+          sdkLoadLatencyMs,
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
       },
@@ -291,6 +331,7 @@ export async function connectLiveKitRoom(params = {}) {
         ...prepared.diagnostics,
         timings: {
           prepareLatencyMs,
+          sdkLoadLatencyMs,
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
       },
@@ -300,6 +341,8 @@ export async function connectLiveKitRoom(params = {}) {
   const tokenRequest = await timedLiveKitRequest(() => fetchLiveKitToken(params));
   const roomEndpointLatencyMs = null;
   const tokenEndpointLatencyMs = tokenRequest.latencyMs;
+  const tokenEndpointBackendTimings =
+    tokenRequest.value?.diagnostics?.timings || null;
 
   if (!tokenRequest.ok) {
     return {
@@ -311,8 +354,10 @@ export async function connectLiveKitRoom(params = {}) {
         ...prepared.diagnostics,
         timings: {
           prepareLatencyMs,
+          sdkLoadLatencyMs,
           roomEndpointLatencyMs,
           tokenEndpointLatencyMs,
+          tokenEndpointBackendTimings,
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
         room: prepared.diagnostics.room,
@@ -335,6 +380,9 @@ export async function connectLiveKitRoom(params = {}) {
 
   const liveKitUrl = tokenDescriptor?.liveKit?.url;
   const token = tokenDescriptor?.liveKit?.token;
+  const preconnectStartedAt = metricNow();
+  const preconnectInserted = preconnectLiveKit(liveKitUrl);
+  const preconnectLatencyMs = elapsedMs(preconnectStartedAt);
   if (!liveKitUrl || !token) {
     return {
       ok: false,
@@ -345,8 +393,12 @@ export async function connectLiveKitRoom(params = {}) {
         ...prepared.diagnostics,
         timings: {
           prepareLatencyMs,
+          sdkLoadLatencyMs,
           roomEndpointLatencyMs,
           tokenEndpointLatencyMs,
+          tokenEndpointBackendTimings,
+          preconnectLatencyMs,
+          preconnectInserted,
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
         room: roomDescriptor?.diagnostics || prepared.diagnostics.room,
@@ -386,8 +438,12 @@ export async function connectLiveKitRoom(params = {}) {
         active: true,
         timings: {
           prepareLatencyMs,
+          sdkLoadLatencyMs,
           roomEndpointLatencyMs,
           tokenEndpointLatencyMs,
+          tokenEndpointBackendTimings,
+          preconnectLatencyMs,
+          preconnectInserted,
           connectLatencyMs,
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },
@@ -417,8 +473,12 @@ export async function connectLiveKitRoom(params = {}) {
         ...prepared.diagnostics,
         timings: {
           prepareLatencyMs,
+          sdkLoadLatencyMs,
           roomEndpointLatencyMs,
           tokenEndpointLatencyMs,
+          tokenEndpointBackendTimings,
+          preconnectLatencyMs,
+          preconnectInserted,
           connectLatencyMs: elapsedMs(totalStartedAt),
           totalJoinLatencyMs: elapsedMs(totalStartedAt),
         },

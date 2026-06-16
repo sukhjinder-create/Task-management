@@ -9,6 +9,20 @@ const NO_PROVIDER_RESULTS_TIMEOUT_MS = 12000;
 const NO_PROVIDER_RESULTS_MIN_CHUNKS = 12;
 const NO_PROVIDER_RESULTS_MAX_RECONNECTS = 2;
 
+function nowMs() {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
+
+function elapsedMs(startedAt, endedAt = nowMs()) {
+  const start = Number(startedAt);
+  const end = Number(endedAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return Math.max(0, Math.round(end - start));
+}
+
 function safeString(value, maxLength = null) {
   const normalized = typeof value === "string" ? value.trim() : "";
   return maxLength ? normalized.slice(0, maxLength) : normalized;
@@ -82,6 +96,7 @@ export function createLiveTranscriptionClient({
   let activeSourceSegmentId = null;
   let stopped = false;
   let streamStartedAtMs = Date.now();
+  let streamAttemptStartedAtMs = nowMs();
   let reconnectTimer = null;
   let keepAliveTimer = null;
   let noProviderResultsTimer = null;
@@ -109,6 +124,14 @@ export function createLiveTranscriptionClient({
     coalescedPartialEvents: 0,
     pendingFinalEvents: 0,
     eventPumpRunning: false,
+    timings: {
+      grantLatencyMs: null,
+      websocketOpenLatencyMs: null,
+      recorderStartLatencyMs: null,
+      firstProviderResultLatencyMs: null,
+      firstBackendEventLatencyMs: null,
+      firstLocalCaptionLatencyMs: null,
+    },
     lastProviderMessageAt: null,
     lastBackendEventAt: null,
     lastError: null,
@@ -193,6 +216,9 @@ export function createLiveTranscriptionClient({
 
     diagnostics.backendEvents += 1;
     diagnostics.lastBackendEventAt = new Date().toISOString();
+    if (!diagnostics.timings.firstBackendEventLatencyMs) {
+      diagnostics.timings.firstBackendEventLatencyMs = elapsedMs(streamAttemptStartedAtMs);
+    }
     emitDiagnostics({ status: "streaming", lastError: null });
   }
 
@@ -256,6 +282,9 @@ export function createLiveTranscriptionClient({
     // Local captions stay immediate while persistence is handled by the
     // bounded event pump. The canonical server event replaces this row.
     const observedAt = clientProviderReceivedAt || new Date().toISOString();
+    if (!diagnostics.timings.firstLocalCaptionLatencyMs) {
+      diagnostics.timings.firstLocalCaptionLatencyMs = elapsedMs(streamAttemptStartedAtMs);
+    }
     onCaption({
       id: `local:${sourceSegmentId}`,
       source: "deepgram",
@@ -362,6 +391,8 @@ export function createLiveTranscriptionClient({
   async function connectStream() {
     if (stopped) return { ok: false, reason: "transcription_stopped" };
     const generation = ++connectionGeneration;
+    const streamAttemptStartedAt = nowMs();
+    streamAttemptStartedAtMs = streamAttemptStartedAt;
     cleanupTransport();
     activeSourceSegmentId = null;
 
@@ -371,11 +402,13 @@ export function createLiveTranscriptionClient({
       recorderStarted: false,
     });
     try {
+      const grantStartedAt = nowMs();
       const grantResponse = await api.post(`/huddle/transcription/sessions/${sessionId}/grant`, {
         participantId,
         language,
         provider: "deepgram",
       });
+      diagnostics.timings.grantLatencyMs = elapsedMs(grantStartedAt);
       if (stopped || generation !== connectionGeneration) {
         return { ok: false, reason: "transcription_connection_superseded" };
       }
@@ -391,6 +424,7 @@ export function createLiveTranscriptionClient({
         provider: grant.provider,
         model: grant.model,
         language: grant.language || language,
+        timings: { ...diagnostics.timings },
       });
 
       mediaStream = new MediaStream([audioTrack]);
@@ -402,12 +436,14 @@ export function createLiveTranscriptionClient({
       websocket.onopen = () => {
         if (stopped || generation !== connectionGeneration) return;
         streamStartedAtMs = Date.now();
+        diagnostics.timings.websocketOpenLatencyMs = elapsedMs(streamAttemptStartedAt);
         reconnectAttempts = 0;
         diagnostics.reconnectAttempts = 0;
         emitDiagnostics({
           status: "streaming",
           websocketOpen: true,
           lastError: null,
+          timings: { ...diagnostics.timings },
         });
         const mimeType = preferredMimeType();
         mediaRecorder = new MediaRecorder(
@@ -428,12 +464,13 @@ export function createLiveTranscriptionClient({
           );
         };
         mediaRecorder.start(DEFAULT_TIMESLICE_MS);
+        diagnostics.timings.recorderStartLatencyMs = elapsedMs(streamAttemptStartedAt);
         keepAliveTimer = window.setInterval(() => {
           if (websocket?.readyState === WebSocket.OPEN) {
             websocket.send(JSON.stringify({ type: "KeepAlive" }));
           }
         }, KEEP_ALIVE_INTERVAL_MS);
-        emitDiagnostics({ recorderStarted: true });
+        emitDiagnostics({ recorderStarted: true, timings: { ...diagnostics.timings } });
       };
 
       websocket.onmessage = (event) => {
@@ -443,7 +480,11 @@ export function createLiveTranscriptionClient({
         clearNoProviderResultsTimer();
         diagnostics.providerMessages += 1;
         diagnostics.lastProviderMessageAt = clientProviderReceivedAt;
+        if (!diagnostics.timings.firstProviderResultLatencyMs) {
+          diagnostics.timings.firstProviderResultLatencyMs = elapsedMs(streamAttemptStartedAt);
+        }
         enqueueProviderEvent(payload, clientProviderReceivedAt);
+        emitDiagnostics({ timings: { ...diagnostics.timings } });
       };
 
       websocket.onerror = () => {

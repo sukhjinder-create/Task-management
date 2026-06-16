@@ -1087,6 +1087,7 @@ function createInitialLiveKitMetrics() {
     firstAudioSubscribeAt: null,
     firstVideoSubscribeAt: null,
     firstCaptionAt: null,
+    captionStartupTimings: null,
     roomStartedAt: null,
     roomEndedAt: null,
     reconnectStartedAt: null,
@@ -2221,10 +2222,20 @@ export function useLiveKitMediaProvider({
           firstVideoMs: providerMetrics.firstVideoSubscribeLatencyMs,
           captionsActiveMs: providerMetrics.captionsActiveLatencyMs,
           prepareLatencyMs: providerMetrics.connectionTimings?.prepareLatencyMs,
+          sdkLoadLatencyMs: providerMetrics.connectionTimings?.sdkLoadLatencyMs,
           roomEndpointLatencyMs: providerMetrics.connectionTimings?.roomEndpointLatencyMs,
           tokenEndpointLatencyMs: providerMetrics.connectionTimings?.tokenEndpointLatencyMs,
+          tokenEndpointBackendTimings: providerMetrics.connectionTimings?.tokenEndpointBackendTimings,
+          preconnectLatencyMs: providerMetrics.connectionTimings?.preconnectLatencyMs,
+          preconnectInserted: providerMetrics.connectionTimings?.preconnectInserted,
           connectLatencyMs: providerMetrics.connectionTimings?.connectLatencyMs,
           totalJoinLatencyMs: providerMetrics.connectionTimings?.totalJoinLatencyMs,
+          captionGrantLatencyMs: providerMetrics.captionStartupTimings?.grantLatencyMs,
+          captionWebsocketOpenLatencyMs: providerMetrics.captionStartupTimings?.websocketOpenLatencyMs,
+          captionRecorderStartLatencyMs: providerMetrics.captionStartupTimings?.recorderStartLatencyMs,
+          captionFirstProviderResultLatencyMs: providerMetrics.captionStartupTimings?.firstProviderResultLatencyMs,
+          captionFirstBackendEventLatencyMs: providerMetrics.captionStartupTimings?.firstBackendEventLatencyMs,
+          captionFirstLocalCaptionLatencyMs: providerMetrics.captionStartupTimings?.firstLocalCaptionLatencyMs,
         };
         diagnostics.backgroundEffect = backgroundEffectRef.current;
         const activeEffect = backgroundEffectRef.current;
@@ -2357,6 +2368,14 @@ export function useLiveKitMediaProvider({
       audioTrack,
       language: LIVE_CAPTION_LANGUAGE,
       onCaption: (caption) => {
+        const metrics = providerMetricsRef.current;
+        if (!metrics.firstCaptionAt) {
+          metrics.firstCaptionAt = metricNow();
+          metrics.captionsActiveLatencyMs = elapsedMs(
+            metrics.intentStartedAt || metrics.joinStartedAt,
+            metrics.firstCaptionAt
+          );
+        }
         const localCaption = {
           ...caption,
           speaker: {
@@ -2373,7 +2392,11 @@ export function useLiveKitMediaProvider({
           canonicalCaptionFeed([...previous, localCaption])
         );
       },
-      onDiagnostics: setTranscriptionDiagnostics,
+      onDiagnostics: (diagnostics) => {
+        providerMetricsRef.current.captionStartupTimings =
+          diagnostics?.timings || providerMetricsRef.current.captionStartupTimings;
+        setTranscriptionDiagnostics(diagnostics);
+      },
     });
     transcriptionClientRef.current = client;
 
@@ -2415,7 +2438,7 @@ export function useLiveKitMediaProvider({
     const ensureCapture = async () => {
       const result = await startLiveTranscriptionCapture();
       if (!cancelled && !result?.ok) {
-        retryTimer = window.setTimeout(ensureCapture, 15000);
+        retryTimer = window.setTimeout(ensureCapture, 1000);
       }
     };
     ensureCapture();
@@ -2780,6 +2803,8 @@ export function useLiveKitMediaProvider({
           return result;
         }
 
+        void startLiveTranscriptionCapture();
+
         result = {
           ...result,
           diagnostics: {
@@ -2794,7 +2819,7 @@ export function useLiveKitMediaProvider({
     } finally {
       setConnecting(false);
     }
-  }, [canary, connecting, connectionResult, resolvedWorkspaceId]);
+  }, [canary, connecting, connectionResult, resolvedWorkspaceId, startLiveTranscriptionCapture]);
   const leaveCall = useCallback(() => {
     const room = connectedRoomRef.current;
     try {
