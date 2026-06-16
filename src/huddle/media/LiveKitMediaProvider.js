@@ -807,6 +807,35 @@ function codecFromReportEntry(entry = {}, codecs = new Map()) {
   };
 }
 
+function rtpEncodingDiagnostics(track = null) {
+  const encodings = track?.sender?.getParameters?.().encodings;
+  if (!Array.isArray(encodings)) {
+    return {
+      senderEncodingCount: null,
+      senderActiveEncodingCount: null,
+      senderEncodings: [],
+    };
+  }
+
+  const normalized = encodings.slice(0, 5).map((encoding, index) => ({
+    index,
+    rid: safeString(encoding.rid) || null,
+    active: encoding.active !== false,
+    scaleResolutionDownBy: safeNumber(encoding.scaleResolutionDownBy),
+    maxBitrateKbps: Number.isFinite(Number(encoding.maxBitrate))
+      ? Math.round(Number(encoding.maxBitrate) / 1000)
+      : null,
+    maxFramerate: safeNumber(encoding.maxFramerate),
+    scalabilityMode: safeString(encoding.scalabilityMode) || null,
+  }));
+
+  return {
+    senderEncodingCount: encodings.length,
+    senderActiveEncodingCount: normalized.filter((encoding) => encoding.active).length,
+    senderEncodings: normalized,
+  };
+}
+
 function bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples) {
   if (!previousSamples || !sampleKey || !Number.isFinite(bytes)) return null;
   const now = Number.isFinite(Number(timestamp)) ? Number(timestamp) : Date.now();
@@ -1002,6 +1031,7 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
         videoQuality: normalizedVideoQuality(
           publication.videoQuality ?? publication.currentVideoQuality
         ),
+        ...(isLocal ? rtpEncodingDiagnostics(publication.track) : {}),
         qualityLimitationReason: null,
         publicationWidth: safeNumber(publication.dimensions?.width),
         publicationHeight: safeNumber(publication.dimensions?.height),
