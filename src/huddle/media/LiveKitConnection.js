@@ -112,7 +112,9 @@ function createLiveKitRoomOptions(sdk = {}) {
 
   return {
     adaptiveStream: true,
-    dynacast: true,
+    // Desktop Huddles need the h720 layer available immediately; dynacast was
+    // keeping the full layer inactive even when receivers requested 1280x720.
+    dynacast: mobile,
     videoCaptureDefaults: {
       resolution: balancedResolution,
       facingMode: "user",

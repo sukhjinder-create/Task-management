@@ -1111,8 +1111,8 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
   return {
     observedAt,
     provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
-    adaptiveStream: true,
-    dynacast: true,
+    adaptiveStream: room?.options?.adaptiveStream !== false,
+    dynacast: room?.options?.dynacast !== false,
     browser: typeof window === "undefined" ? {} : {
       userAgent: navigator.userAgent,
       platform: navigator.platform,
@@ -3313,7 +3313,7 @@ export function useLiveKitMediaProvider({
           publishOptions: cameraPublishOptions(mode, sdk),
           simulcastLayerCount: liveKitCameraSimulcastLayers(sdk).length,
           adaptiveStream: true,
-          dynacast: true,
+          dynacast: isMobileMediaDevice(),
           observedAt: new Date().toISOString(),
         },
       }));
