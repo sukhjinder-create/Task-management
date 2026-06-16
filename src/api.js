@@ -6,6 +6,40 @@ import axios from "axios";
 //   Mobile (real device): set to your PC's local network IP e.g. http://192.168.x.x:3000
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
+function preconnectOrigin(url, marker) {
+  if (typeof document === "undefined") return false;
+  let origin = "";
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    return false;
+  }
+  if (!origin) return false;
+  const attribute = marker || "data-api-preconnect";
+  if (document.querySelector(`link[${attribute}="${origin}"]`)) return false;
+
+  const dnsPrefetch = document.createElement("link");
+  dnsPrefetch.rel = "dns-prefetch";
+  dnsPrefetch.href = origin;
+  dnsPrefetch.setAttribute(attribute, origin);
+
+  const preconnect = document.createElement("link");
+  preconnect.rel = "preconnect";
+  preconnect.href = origin;
+  preconnect.crossOrigin = "anonymous";
+  preconnect.setAttribute(attribute, origin);
+
+  document.head?.appendChild(dnsPrefetch);
+  document.head?.appendChild(preconnect);
+  return true;
+}
+
+export function preconnectApiOrigin() {
+  return preconnectOrigin(API_BASE_URL, "data-api-preconnect");
+}
+
+preconnectApiOrigin();
+
 // ── Silent refresh state ──────────────────────────────────────────────────────
 // Tracks whether a /auth/refresh call is already in flight, and queues any
 // requests that fail while the refresh is happening so they can be retried.

@@ -29,7 +29,9 @@ function safeString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function liveKitHttpsOrigin(url) {
+const LIVEKIT_ORIGIN_CACHE_KEY = "huddle.livekit.preconnectOrigin";
+
+export function liveKitHttpsOrigin(url) {
   try {
     const parsed = new URL(url);
     const protocol = parsed.protocol === "wss:" ? "https:" : parsed.protocol;
@@ -40,7 +42,7 @@ function liveKitHttpsOrigin(url) {
   }
 }
 
-function preconnectLiveKit(url) {
+export function preconnectLiveKit(url) {
   if (typeof document === "undefined") return false;
   const origin = liveKitHttpsOrigin(url);
   if (!origin) return false;
@@ -58,6 +60,27 @@ function preconnectLiveKit(url) {
   document.head?.appendChild(dnsPrefetch);
   document.head?.appendChild(preconnect);
   return true;
+}
+
+export function rememberLiveKitOrigin(url) {
+  const origin = liveKitHttpsOrigin(url);
+  if (!origin || typeof window === "undefined") return false;
+  try {
+    window.localStorage?.setItem(LIVEKIT_ORIGIN_CACHE_KEY, origin);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function preconnectCachedLiveKitOrigin() {
+  if (typeof window === "undefined") return false;
+  try {
+    const cachedOrigin = window.localStorage?.getItem(LIVEKIT_ORIGIN_CACHE_KEY);
+    return cachedOrigin ? preconnectLiveKit(cachedOrigin) : false;
+  } catch {
+    return false;
+  }
 }
 
 function createLiveKitRoomOptions(sdk = {}) {
@@ -380,6 +403,7 @@ export async function connectLiveKitRoom(params = {}) {
 
   const liveKitUrl = tokenDescriptor?.liveKit?.url;
   const token = tokenDescriptor?.liveKit?.token;
+  rememberLiveKitOrigin(liveKitUrl);
   const preconnectStartedAt = metricNow();
   const preconnectInserted = preconnectLiveKit(liveKitUrl);
   const preconnectLatencyMs = elapsedMs(preconnectStartedAt);

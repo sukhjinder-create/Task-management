@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { joinHuddle as emitJoinHuddle } from "../../socket";
 import { useMeshMediaProvider } from "./MeshMediaProvider";
 import { assertMediaProviderContract } from "./MediaProvider";
@@ -15,6 +15,8 @@ import {
   createLiveKitProviderReadinessDiagnostics,
   useLiveKitMediaProvider,
 } from "./LiveKitMediaProvider";
+import { preconnectCachedLiveKitOrigin } from "./LiveKitConnection";
+import { loadLiveKitSdk } from "./LiveKitSdk";
 
 export const WEB_MEDIA_PROVIDER_SELECTION_REASONS = Object.freeze({
   DEFAULT_MESH: "default_mesh",
@@ -130,6 +132,23 @@ export function useHuddleMediaService({
   const liveKitFallbackDiagnostics = liveKitFallbackActive
     ? liveKitFallback.diagnostics
     : null;
+
+  useEffect(() => {
+    if (!selection.canary?.providerCanActivate) return;
+    preconnectCachedLiveKitOrigin();
+    void loadLiveKitSdk({
+      enabled: Boolean(
+        selection.canary.sdkLoadEnabled &&
+        selection.canary.canaryEligible &&
+        selection.canary.runtimeConnectionsEnabled
+      ),
+    });
+  }, [
+    selection.canary?.providerCanActivate,
+    selection.canary?.sdkLoadEnabled,
+    selection.canary?.canaryEligible,
+    selection.canary?.runtimeConnectionsEnabled,
+  ]);
 
   if (selection.reason === WEB_MEDIA_PROVIDER_SELECTION_REASONS.LIVEKIT_CANARY_DISABLED) {
     console.warn("[huddle:media] LiveKit provider requested but canary is disabled; using mesh provider");

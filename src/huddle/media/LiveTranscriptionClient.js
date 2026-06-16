@@ -1,7 +1,8 @@
 import api from "../../api";
 
 const DEFAULT_LANGUAGE = "en-US";
-const DEFAULT_TIMESLICE_MS = 250;
+const DEFAULT_TIMESLICE_MS = 100;
+const DEEPGRAM_ORIGIN = "https://api.deepgram.com";
 const KEEP_ALIVE_INTERVAL_MS = 8000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 const PROVIDER_EVENT_POST_RETRIES = 3;
@@ -26,6 +27,37 @@ function elapsedMs(startedAt, endedAt = nowMs()) {
 function safeString(value, maxLength = null) {
   const normalized = typeof value === "string" ? value.trim() : "";
   return maxLength ? normalized.slice(0, maxLength) : normalized;
+}
+
+function preconnectOrigin(origin, marker) {
+  if (typeof document === "undefined") return false;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "https:") return false;
+  } catch {
+    return false;
+  }
+  const attribute = marker || "data-transcription-preconnect";
+  if (document.querySelector(`link[${attribute}="${origin}"]`)) return false;
+
+  const dnsPrefetch = document.createElement("link");
+  dnsPrefetch.rel = "dns-prefetch";
+  dnsPrefetch.href = origin;
+  dnsPrefetch.setAttribute(attribute, origin);
+
+  const preconnect = document.createElement("link");
+  preconnect.rel = "preconnect";
+  preconnect.href = origin;
+  preconnect.crossOrigin = "anonymous";
+  preconnect.setAttribute(attribute, origin);
+
+  document.head?.appendChild(dnsPrefetch);
+  document.head?.appendChild(preconnect);
+  return true;
+}
+
+function preconnectDeepgram() {
+  return preconnectOrigin(DEEPGRAM_ORIGIN, "data-deepgram-preconnect");
 }
 
 function jsonParse(value) {
@@ -119,6 +151,8 @@ export function createLiveTranscriptionClient({
     chunksSent: 0,
     providerMessages: 0,
     backendEvents: 0,
+    grantCacheHit: false,
+    grantSharedInFlight: false,
     reconnectAttempts: 0,
     noProviderResultsReconnects: 0,
     coalescedPartialEvents: 0,
@@ -393,6 +427,7 @@ export function createLiveTranscriptionClient({
     const generation = ++connectionGeneration;
     const streamAttemptStartedAt = nowMs();
     streamAttemptStartedAtMs = streamAttemptStartedAt;
+    preconnectDeepgram();
     cleanupTransport();
     activeSourceSegmentId = null;
 
@@ -424,6 +459,8 @@ export function createLiveTranscriptionClient({
         provider: grant.provider,
         model: grant.model,
         language: grant.language || language,
+        grantCacheHit: Boolean(grant.grantCacheHit),
+        grantSharedInFlight: Boolean(grant.grantSharedInFlight),
         timings: { ...diagnostics.timings },
       });
 

@@ -1088,6 +1088,8 @@ function createInitialLiveKitMetrics() {
     firstVideoSubscribeAt: null,
     firstCaptionAt: null,
     captionStartupTimings: null,
+    captionGrantCacheHit: false,
+    captionGrantSharedInFlight: false,
     roomStartedAt: null,
     roomEndedAt: null,
     reconnectStartedAt: null,
@@ -2236,6 +2238,8 @@ export function useLiveKitMediaProvider({
           captionFirstProviderResultLatencyMs: providerMetrics.captionStartupTimings?.firstProviderResultLatencyMs,
           captionFirstBackendEventLatencyMs: providerMetrics.captionStartupTimings?.firstBackendEventLatencyMs,
           captionFirstLocalCaptionLatencyMs: providerMetrics.captionStartupTimings?.firstLocalCaptionLatencyMs,
+          captionGrantCacheHit: providerMetrics.captionGrantCacheHit,
+          captionGrantSharedInFlight: providerMetrics.captionGrantSharedInFlight,
         };
         diagnostics.backgroundEffect = backgroundEffectRef.current;
         const activeEffect = backgroundEffectRef.current;
@@ -2395,6 +2399,8 @@ export function useLiveKitMediaProvider({
       onDiagnostics: (diagnostics) => {
         providerMetricsRef.current.captionStartupTimings =
           diagnostics?.timings || providerMetricsRef.current.captionStartupTimings;
+        providerMetricsRef.current.captionGrantCacheHit = Boolean(diagnostics?.grantCacheHit);
+        providerMetricsRef.current.captionGrantSharedInFlight = Boolean(diagnostics?.grantSharedInFlight);
         setTranscriptionDiagnostics(diagnostics);
       },
     });
