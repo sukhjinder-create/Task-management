@@ -165,6 +165,80 @@ function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO, sdk = null) {
   };
 }
 
+function stopPrewarmedLiveKitTracks(tracks = []) {
+  for (const track of Array.isArray(tracks) ? tracks : []) {
+    try {
+      track?.stop?.();
+    } catch {
+      // Best effort cleanup for pre-connect media warmup.
+    }
+  }
+}
+
+function localTrackKind(track = {}) {
+  return safeString(track.kind || track.mediaStreamTrack?.kind).toLowerCase();
+}
+
+async function prewarmInitialLiveKitTracks({
+  sdk = null,
+  mode = LIVEKIT_QUALITY_MODES.AUTO,
+} = {}) {
+  const startedAt = metricNow();
+  const sdkResult = sdk
+    ? { ok: true, sdk }
+    : await loadLiveKitSdk({ enabled: true });
+  const resolvedSdk = sdkResult.ok ? sdkResult.sdk : null;
+  if (!resolvedSdk?.createLocalTracks) {
+    return {
+      ok: false,
+      reason: "livekit_create_local_tracks_unavailable",
+      sdk: resolvedSdk,
+      tracks: [],
+      diagnostics: {
+        ok: false,
+        latencyMs: elapsedMs(startedAt),
+        reason: "livekit_create_local_tracks_unavailable",
+      },
+    };
+  }
+  try {
+    const tracks = await resolvedSdk.createLocalTracks({
+      audio: true,
+      video: cameraCaptureOptions(mode),
+    });
+    const audioTrackCount = tracks.filter((track) => localTrackKind(track) === "audio").length;
+    const videoTrackCount = tracks.filter((track) => localTrackKind(track) === "video").length;
+    return {
+      ok: tracks.length > 0,
+      reason: tracks.length > 0 ? "livekit_tracks_prewarmed" : "livekit_no_tracks_prewarmed",
+      sdk: resolvedSdk,
+      tracks,
+      diagnostics: {
+        ok: tracks.length > 0,
+        latencyMs: elapsedMs(startedAt),
+        trackCount: tracks.length,
+        audioTrackCount,
+        videoTrackCount,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "livekit_track_prewarm_failed",
+      sdk: resolvedSdk,
+      tracks: [],
+      diagnostics: {
+        ok: false,
+        latencyMs: elapsedMs(startedAt),
+        failure: sanitizeLiveKitMediaFailure(
+          error,
+          LIVEKIT_MEDIA_PUBLICATION_REASONS.MEDIA_PUBLICATION_FAILED
+        ),
+      },
+    };
+  }
+}
+
 const LIVE_CAPTION_LANGUAGE = "multi";
 const LIVE_CAPTION_POLL_INTERVAL_MS = 500;
 const LIVE_CAPTION_HISTORY_LIMIT = 1500;
@@ -1105,6 +1179,9 @@ function createInitialLiveKitMetrics() {
     captionStartupTimings: null,
     captionGrantCacheHit: false,
     captionGrantSharedInFlight: false,
+    mediaPrewarmLatencyMs: null,
+    mediaPrewarmOk: false,
+    mediaPrewarmTrackCount: 0,
     roomStartedAt: null,
     roomEndedAt: null,
     reconnectStartedAt: null,
@@ -1412,15 +1489,135 @@ function sanitizeLiveKitMediaFailure(error, reason) {
   };
 }
 
-export async function publishInitialLiveKitMedia(room) {
-  const publishStartedAt = metricNow();
+async function publishPrewarmedLiveKitMedia(room, {
+  tracks = [],
+  sdk = null,
+  mode = LIVEKIT_QUALITY_MODES.AUTO,
+} = {}) {
+  const startedAt = metricNow();
   const diagnostics = {
+    ok: false,
+    prewarmed: true,
     microphone: { ok: false, published: false },
     camera: { ok: false, published: false },
     startedAt: new Date().toISOString(),
     completedAt: null,
     totalPublishLatencyMs: null,
   };
+  if (!Array.isArray(tracks) || tracks.length === 0 || !room?.localParticipant?.publishTrack) {
+    diagnostics.completedAt = new Date().toISOString();
+    diagnostics.totalPublishLatencyMs = elapsedMs(startedAt);
+    diagnostics.failure = {
+      reason: "prewarmed_tracks_unavailable",
+    };
+    return diagnostics;
+  }
+
+  const published = [];
+  const results = await Promise.allSettled(
+    tracks.map(async (track) => {
+      const kind = localTrackKind(track);
+      const options = kind === "video"
+        ? cameraPublishOptions(mode, sdk)
+        : undefined;
+      const publication = await room.localParticipant.publishTrack(track, options);
+      return { track, kind, publication };
+    })
+  );
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      published.push(result.value);
+      const { kind, publication } = result.value;
+      if (kind === "audio") {
+        diagnostics.microphone = {
+          ok: true,
+          published: true,
+          prewarmed: true,
+          trackSid: safeString(publication?.trackSid) || null,
+          source: HUDDLE_MEDIA_TRACK_SOURCES.microphone,
+          latencyMs: elapsedMs(startedAt),
+        };
+      } else if (kind === "video") {
+        diagnostics.camera = {
+          ok: true,
+          published: true,
+          prewarmed: true,
+          trackSid: safeString(publication?.trackSid) || null,
+          source: HUDDLE_MEDIA_TRACK_SOURCES.camera,
+          simulcastLayerCount: liveKitCameraSimulcastLayers(sdk).length,
+          latencyMs: elapsedMs(startedAt),
+        };
+      }
+    }
+  }
+
+  diagnostics.ok = Boolean(diagnostics.microphone.ok && diagnostics.camera.ok);
+  diagnostics.completedAt = new Date().toISOString();
+  diagnostics.totalPublishLatencyMs = elapsedMs(startedAt);
+  if (!diagnostics.ok) {
+    diagnostics.failure = {
+      reason: "prewarmed_media_publication_incomplete",
+      failures: results
+        .filter((result) => result.status === "rejected")
+        .map((result) =>
+          sanitizeLiveKitMediaFailure(
+            result.reason,
+            LIVEKIT_MEDIA_PUBLICATION_REASONS.MEDIA_PUBLICATION_FAILED
+          )
+        ),
+    };
+    for (const item of published) {
+      try {
+        await room.localParticipant.unpublishTrack?.(item.track, true);
+      } catch {
+        // Best effort rollback before falling back to the SDK enable path.
+      }
+    }
+    stopPrewarmedLiveKitTracks(tracks);
+  }
+  return diagnostics;
+}
+
+export async function publishInitialLiveKitMedia(room, {
+  prewarmedTracks = null,
+  prewarmDiagnostics = null,
+  sdk = null,
+  mode = LIVEKIT_QUALITY_MODES.AUTO,
+} = {}) {
+  const publishStartedAt = metricNow();
+  const diagnostics = {
+    microphone: { ok: false, published: false },
+    camera: { ok: false, published: false },
+    prewarm: prewarmDiagnostics || null,
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    totalPublishLatencyMs: null,
+  };
+
+  if (Array.isArray(prewarmedTracks) && prewarmedTracks.length > 0) {
+    const prewarmed = await publishPrewarmedLiveKitMedia(room, {
+      tracks: prewarmedTracks,
+      sdk,
+      mode,
+    });
+    if (prewarmed.ok) {
+      return {
+        ok: true,
+        reason: LIVEKIT_MEDIA_PUBLICATION_REASONS.MEDIA_PUBLISHED,
+        diagnostics: {
+          ...diagnostics,
+          ...prewarmed,
+          prewarm: prewarmDiagnostics || prewarmed.prewarm || null,
+        },
+      };
+    }
+    diagnostics.prewarm = {
+      ...(prewarmDiagnostics || {}),
+      publishFailure: prewarmed.failure || null,
+      publishLatencyMs: prewarmed.totalPublishLatencyMs,
+    };
+  }
 
   const combinedStartedAt = metricNow();
   try {
@@ -1436,8 +1633,8 @@ export async function publishInitialLiveKitMedia(room) {
       room?.localParticipant?.setMicrophoneEnabled?.(true),
       room?.localParticipant?.setCameraEnabled?.(
         true,
-        cameraCaptureOptions(),
-        cameraPublishOptions(LIVEKIT_QUALITY_MODES.AUTO, sdk)
+        cameraCaptureOptions(mode),
+        cameraPublishOptions(mode, sdk)
       ),
     ]);
     diagnostics.microphone = microphoneResult.status === "fulfilled"
@@ -2262,6 +2459,9 @@ export function useLiveKitMediaProvider({
           captionFirstLocalCaptionLatencyMs: providerMetrics.captionStartupTimings?.firstLocalCaptionLatencyMs,
           captionGrantCacheHit: providerMetrics.captionGrantCacheHit,
           captionGrantSharedInFlight: providerMetrics.captionGrantSharedInFlight,
+          mediaPrewarmLatencyMs: providerMetrics.mediaPrewarmLatencyMs,
+          mediaPrewarmOk: providerMetrics.mediaPrewarmOk,
+          mediaPrewarmTrackCount: providerMetrics.mediaPrewarmTrackCount,
         };
         diagnostics.backgroundEffect = backgroundEffectRef.current;
         const activeEffect = backgroundEffectRef.current;
@@ -2782,6 +2982,9 @@ export function useLiveKitMediaProvider({
         joinStartedAt: metricNow(),
       };
       streamCacheRef.current.clear();
+      const mediaPrewarmPromise = prewarmInitialLiveKitTracks({
+        mode: qualityMode,
+      });
       let result = await connectLiveKitRoom({
         canary,
         workspaceId: resolvedWorkspaceId,
@@ -2808,7 +3011,30 @@ export function useLiveKitMediaProvider({
           joinLatencyMs: providerMetricsRef.current.joinLatencyMs,
         });
         markExistingSubscribedTracks(providerMetricsRef.current, result.connection.room);
-        const publishResult = await publishInitialLiveKitMedia(result.connection.room);
+        const prewarmResult = await mediaPrewarmPromise.catch((error) => ({
+          ok: false,
+          reason: "livekit_track_prewarm_failed",
+          tracks: [],
+          sdk: null,
+          diagnostics: {
+            ok: false,
+            failure: sanitizeLiveKitMediaFailure(
+              error,
+              LIVEKIT_MEDIA_PUBLICATION_REASONS.MEDIA_PUBLICATION_FAILED
+            ),
+          },
+        }));
+        providerMetricsRef.current.mediaPrewarmLatencyMs =
+          prewarmResult?.diagnostics?.latencyMs || null;
+        providerMetricsRef.current.mediaPrewarmOk = Boolean(prewarmResult?.ok);
+        providerMetricsRef.current.mediaPrewarmTrackCount =
+          prewarmResult?.diagnostics?.trackCount || 0;
+        const publishResult = await publishInitialLiveKitMedia(result.connection.room, {
+          prewarmedTracks: prewarmResult?.tracks || null,
+          prewarmDiagnostics: prewarmResult?.diagnostics || null,
+          sdk: prewarmResult?.sdk || null,
+          mode: qualityMode,
+        });
         providerMetricsRef.current.publishLatencyMs =
           publishResult.diagnostics?.totalPublishLatencyMs || null;
         setPublicationDiagnostics(publishResult.diagnostics);
@@ -2857,13 +3083,18 @@ export function useLiveKitMediaProvider({
           },
         };
       }
+      if (!result.ok) {
+        void mediaPrewarmPromise
+          .then((prewarmResult) => stopPrewarmedLiveKitTracks(prewarmResult?.tracks || []))
+          .catch(noop);
+      }
 
       setConnectionResult(result);
       return result;
     } finally {
       setConnecting(false);
     }
-  }, [canary, connecting, connectionResult, resolvedWorkspaceId, startLiveTranscriptionCapture]);
+  }, [canary, connecting, connectionResult, qualityMode, resolvedWorkspaceId, startLiveTranscriptionCapture]);
   const leaveCall = useCallback(() => {
     const room = connectedRoomRef.current;
     try {
