@@ -236,17 +236,32 @@ export function HuddleProvider({ children }) {
   // ---------------------------
   const acceptHuddle = useCallback(() => {
     if (!incomingHuddle) return;
+    const acceptedHuddle = incomingHuddle;
     markCallIntent();
     if (activeHuddleRef.current) {
       call.leaveCall();
     }
     // Immediately update refs so any concurrent socket events see correct state
-    if (incomingHuddle.channelId) call.setChannelId(incomingHuddle.channelId);
-    if (incomingHuddle.huddleId) call.setHuddleId(incomingHuddle.huddleId);
-    activeHuddleRef.current = incomingHuddle;
+    if (acceptedHuddle.channelId) call.setChannelId(acceptedHuddle.channelId);
+    if (acceptedHuddle.huddleId) call.setHuddleId(acceptedHuddle.huddleId);
+    activeHuddleRef.current = acceptedHuddle;
     incomingHuddleRef.current = null;
-    publishActiveHuddle(incomingHuddle);
+    publishActiveHuddle(acceptedHuddle);
     setIncomingHuddle(null);
+    if (acceptedHuddle.huddleId && joinedHuddleRef.current !== acceptedHuddle.huddleId) {
+      joinedHuddleRef.current = acceptedHuddle.huddleId;
+      const intentStartedAt =
+        callIntentStartedAtRef.current ||
+        (typeof performance !== "undefined" ? performance.now() : Date.now());
+      callIntentStartedAtRef.current = null;
+      void call.startCall({
+        channelId: acceptedHuddle.channelId,
+        huddleId: acceptedHuddle.huddleId,
+        sessionId: acceptedHuddle.sessionId || acceptedHuddle.huddleId,
+        intentStartedAt,
+        ...providerJoinOptions(acceptedHuddle),
+      });
+    }
   }, [incomingHuddle, call, markCallIntent, publishActiveHuddle]);
 
   // ---------------------------

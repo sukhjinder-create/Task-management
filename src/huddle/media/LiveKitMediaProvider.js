@@ -878,6 +878,13 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
         width: safeNumber(settings.width),
         height: safeNumber(settings.height),
         framesPerSecond: safeNumber(settings.frameRate),
+        mediaSourceWidth: safeNumber(settings.width),
+        mediaSourceHeight: safeNumber(settings.height),
+        mediaSourceFrameRate: safeNumber(settings.frameRate),
+        mediaSourceFacingMode: safeString(settings.facingMode) || null,
+        mediaSourceResizeMode: safeString(settings.resizeMode) || null,
+        mediaSourceDisplaySurface: safeString(settings.displaySurface) || null,
+        mediaTrackContentHint: safeString(mediaTrack?.contentHint) || null,
         bitrateKbps: null,
         availableOutgoingBitrateKbps: null,
         availableIncomingBitrateKbps: null,
@@ -1071,6 +1078,7 @@ function createInitialLiveKitMetrics() {
     firstAudioSubscribeLatencyMs: null,
     firstVideoSubscribeLatencyMs: null,
     captionsActiveLatencyMs: null,
+    connectionTimings: null,
     screenShareLatencyMs: null,
     firstSubscribeAt: null,
     firstAudioSubscribeAt: null,
@@ -2209,6 +2217,11 @@ export function useLiveKitMediaProvider({
           firstAudioMs: providerMetrics.firstAudioSubscribeLatencyMs,
           firstVideoMs: providerMetrics.firstVideoSubscribeLatencyMs,
           captionsActiveMs: providerMetrics.captionsActiveLatencyMs,
+          prepareLatencyMs: providerMetrics.connectionTimings?.prepareLatencyMs,
+          roomEndpointLatencyMs: providerMetrics.connectionTimings?.roomEndpointLatencyMs,
+          tokenEndpointLatencyMs: providerMetrics.connectionTimings?.tokenEndpointLatencyMs,
+          connectLatencyMs: providerMetrics.connectionTimings?.connectLatencyMs,
+          totalJoinLatencyMs: providerMetrics.connectionTimings?.totalJoinLatencyMs,
         };
         diagnostics.backgroundEffect = backgroundEffectRef.current;
         const activeEffect = backgroundEffectRef.current;
@@ -2715,6 +2728,8 @@ export function useLiveKitMediaProvider({
         providerMetricsRef.current.joinLatencyMs =
           result.diagnostics?.timings?.totalJoinLatencyMs ||
           elapsedMs(providerMetricsRef.current.joinStartedAt);
+        providerMetricsRef.current.connectionTimings =
+          result.diagnostics?.timings || null;
         providerMetricsRef.current.intentToJoinLatencyMs = elapsedMs(
           providerMetricsRef.current.intentStartedAt
         );
