@@ -148,8 +148,7 @@ function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
         mode === LIVEKIT_QUALITY_MODES.HD
           ? (mobile ? 1_500_000 : 2_500_000)
           : (mobile ? 1_300_000 : 2_000_000),
-      maxFramerate:
-        mode === LIVEKIT_QUALITY_MODES.HD && !mobile ? 30 : 24,
+      maxFramerate: mobile ? 24 : 30,
     },
   };
 }
@@ -1396,30 +1395,12 @@ export async function publishInitialLiveKitMedia(room) {
 
   const combinedStartedAt = metricNow();
   try {
-    if (typeof room?.localParticipant?.enableCameraAndMicrophone !== "function") {
-      throw new Error("combined_media_enable_unavailable");
+    if (
+      typeof room?.localParticipant?.setMicrophoneEnabled !== "function" ||
+      typeof room?.localParticipant?.setCameraEnabled !== "function"
+    ) {
+      throw new Error("explicit_media_enable_unavailable");
     }
-    await room.localParticipant.enableCameraAndMicrophone();
-    const microphonePublication =
-      room.localParticipant.getTrackPublication?.(HUDDLE_MEDIA_TRACK_SOURCES.microphone);
-    const cameraPublication =
-      room.localParticipant.getTrackPublication?.(HUDDLE_MEDIA_TRACK_SOURCES.camera);
-    const latencyMs = elapsedMs(combinedStartedAt);
-    diagnostics.microphone = {
-      ok: Boolean(microphonePublication || room.localParticipant.isMicrophoneEnabled),
-      published: Boolean(microphonePublication || room.localParticipant.isMicrophoneEnabled),
-      trackSid: safeString(microphonePublication?.trackSid) || null,
-      source: HUDDLE_MEDIA_TRACK_SOURCES.microphone,
-      latencyMs,
-    };
-    diagnostics.camera = {
-      ok: Boolean(cameraPublication || room.localParticipant.isCameraEnabled),
-      published: Boolean(cameraPublication || room.localParticipant.isCameraEnabled),
-      trackSid: safeString(cameraPublication?.trackSid) || null,
-      source: HUDDLE_MEDIA_TRACK_SOURCES.camera,
-      latencyMs,
-    };
-  } catch (combinedError) {
     const [microphoneResult, cameraResult] = await Promise.allSettled([
       room?.localParticipant?.setMicrophoneEnabled?.(true),
       room?.localParticipant?.setCameraEnabled?.(
@@ -1440,7 +1421,7 @@ export async function publishInitialLiveKitMedia(room) {
           ok: false,
           published: false,
           failure: sanitizeLiveKitMediaFailure(
-            microphoneResult.reason || combinedError,
+            microphoneResult.reason,
             LIVEKIT_MEDIA_PUBLICATION_REASONS.MICROPHONE_PUBLICATION_FAILED
           ),
           latencyMs: null,
@@ -1457,11 +1438,56 @@ export async function publishInitialLiveKitMedia(room) {
           ok: false,
           published: false,
           failure: sanitizeLiveKitMediaFailure(
-            cameraResult.reason || combinedError,
+            cameraResult.reason,
             LIVEKIT_MEDIA_PUBLICATION_REASONS.CAMERA_PUBLICATION_FAILED
           ),
           latencyMs: null,
         };
+  } catch (explicitError) {
+    try {
+      if (typeof room?.localParticipant?.enableCameraAndMicrophone !== "function") {
+        throw explicitError;
+      }
+      await room.localParticipant.enableCameraAndMicrophone();
+      const microphonePublication =
+        room.localParticipant.getTrackPublication?.(HUDDLE_MEDIA_TRACK_SOURCES.microphone);
+      const cameraPublication =
+        room.localParticipant.getTrackPublication?.(HUDDLE_MEDIA_TRACK_SOURCES.camera);
+      const latencyMs = elapsedMs(combinedStartedAt);
+      diagnostics.microphone = {
+        ok: Boolean(microphonePublication || room.localParticipant.isMicrophoneEnabled),
+        published: Boolean(microphonePublication || room.localParticipant.isMicrophoneEnabled),
+        trackSid: safeString(microphonePublication?.trackSid) || null,
+        source: HUDDLE_MEDIA_TRACK_SOURCES.microphone,
+        latencyMs,
+        fallback: "combined_media_enable",
+      };
+      diagnostics.camera = {
+        ok: Boolean(cameraPublication || room.localParticipant.isCameraEnabled),
+        published: Boolean(cameraPublication || room.localParticipant.isCameraEnabled),
+        trackSid: safeString(cameraPublication?.trackSid) || null,
+        source: HUDDLE_MEDIA_TRACK_SOURCES.camera,
+        latencyMs,
+        fallback: "combined_media_enable",
+      };
+    } catch (combinedError) {
+      const failure = sanitizeLiveKitMediaFailure(
+        combinedError,
+        LIVEKIT_MEDIA_PUBLICATION_REASONS.MEDIA_PUBLICATION_FAILED
+      );
+      diagnostics.microphone = {
+        ok: false,
+        published: false,
+        failure,
+        latencyMs: null,
+      };
+      diagnostics.camera = {
+        ok: false,
+        published: false,
+        failure,
+        latencyMs: null,
+      };
+    }
   }
 
   diagnostics.completedAt = new Date().toISOString();

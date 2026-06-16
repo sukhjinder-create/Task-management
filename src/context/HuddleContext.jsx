@@ -110,6 +110,35 @@ export function HuddleProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    if (!user?.id || typeof window === "undefined") return undefined;
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    const connection = nav?.connection || nav?.mozConnection || nav?.webkitConnection;
+    const effectiveType = safeString(connection?.effectiveType).toLowerCase();
+    if (connection?.saveData || effectiveType === "slow-2g" || effectiveType === "2g") {
+      return undefined;
+    }
+
+    let timeoutId = null;
+    let idleId = null;
+    const preload = () => {
+      void loadLiveKitSdk({ enabled: true });
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(preload, { timeout: 1500 });
+    } else {
+      timeoutId = window.setTimeout(preload, 1200);
+    }
+
+    return () => {
+      if (idleId !== null && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!incomingHuddle?.huddleId) return;
     void loadLiveKitSdk({ enabled: true });
   }, [incomingHuddle?.huddleId]);
