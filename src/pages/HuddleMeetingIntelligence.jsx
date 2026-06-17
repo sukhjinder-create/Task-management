@@ -87,6 +87,28 @@ function confidenceLabel(value) {
   return `${Math.round(number * 100)}% confidence`;
 }
 
+function isGenericParticipantLabel(value) {
+  return /^participant(?:\s+\d+)?$/i.test(String(value || "").trim());
+}
+
+function safeDisplayName(value, fallback = "Speaker") {
+  const label = String(value || "").trim();
+  if (!label || isGenericParticipantLabel(label)) return fallback;
+  return label;
+}
+
+function speakerNameFromReview(review, segment, fallback = "Speaker") {
+  const speaker = segment?.speaker || {};
+  const participants = Array.isArray(review?.participants) ? review.participants : [];
+  const direct = safeDisplayName(speaker.label, "");
+  if (direct) return direct;
+  const match = participants.find((participant) =>
+    String(participant.participantId || participant.id) === String(speaker.participantId || segment?.participantId) ||
+    String(participant.userId) === String(speaker.userId)
+  );
+  return safeDisplayName(match?.displayName, fallback);
+}
+
 function artifactContentText(artifactType, content) {
   if (artifactType === "summary") {
     return [
@@ -99,7 +121,7 @@ function artifactContentText(artifactType, content) {
       ...(content.discussionSummary || []).map((item) => `- ${item.text}`),
       "Discussion Highlights",
       ...(content.discussionHighlights || []).map(
-        (item) => `- ${item.speaker || "Participant"}: ${item.text}`
+        (item) => `- ${safeDisplayName(item.speaker, "Speaker")}: ${item.text}`
       ),
       "Important Points",
       ...(content.keyPoints || []).map((item) => `- ${item.text}`),
@@ -156,7 +178,7 @@ function reportMarkdown(review) {
     "",
     ...(report.discussionHighlights || []).map(
       (item) =>
-        `- **${item.speaker || "Participants"}:** ${item.text}${evidence(item.evidenceSegmentIds)}`
+        `- **${safeDisplayName(item.speaker, "Speakers")}:** ${item.text}${evidence(item.evidenceSegmentIds)}`
     ),
     "",
     "## Chronological Conversation",
@@ -210,7 +232,7 @@ function reportMarkdown(review) {
     "",
     ...(review?.transcript || []).map(
       (segment) =>
-        `- **${segment.speaker?.label || "Participant"}** (${timeOnly(segment.startedAt)}): ${segment.text} _(T:${segment.id})_`
+        `- **${speakerNameFromReview(review, segment)}** (${timeOnly(segment.startedAt)}): ${segment.text} _(T:${segment.id})_`
     ),
   ];
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -957,7 +979,7 @@ export default function HuddleMeetingIntelligence() {
     heading("Transcript");
     review.transcript.forEach((segment) =>
       write(
-        `${timeOnly(segment.startedAt)} | ${segment.speaker?.label || "Participant"}: ${segment.text} [T:${segment.id}]`,
+        `${timeOnly(segment.startedAt)} | ${speakerNameFromReview(review, segment)}: ${segment.text} [T:${segment.id}]`,
         { size: 9, gap: 5 }
       )
     );
@@ -991,21 +1013,33 @@ export default function HuddleMeetingIntelligence() {
   const summary = review.artifacts.summary;
   const decisions = review.artifacts.decisions;
   const actions = review.artifacts.actions;
+  const decisionList = review.report?.decisions || decisions?.contentJson?.decisions || [];
+  const actionList = review.report?.actionItems || actions?.contentJson?.actionItems || [];
+  const pendingReviewCount = Number(review.status.pendingReviewCount || 0);
   const transcriptText = review.transcript
-    .map((segment) => `${segment.speaker?.label || "Participant"}: ${segment.text}`)
+    .map((segment) => `${speakerNameFromReview(review, segment)}: ${segment.text}`)
     .join("\n");
   const summaryText = summary?.contentText || artifactContentText("summary", summary?.contentJson || {});
+  const headerStats = [
+    ["Summary", review.status.summaryAvailable ? "Ready" : "Unavailable"],
+    ["Decisions", review.status.decisionCount],
+    ["Actions", review.status.actionItemCount],
+    ["Review", pendingReviewCount > 0 ? `${pendingReviewCount} pending` : "Clear"],
+  ];
 
   return (
     <main className="min-h-full bg-[var(--background)] text-[color:var(--text)]">
-      <header className="border-b border-[color:var(--border)] px-4 py-5 sm:px-7">
+      <header className="border-b border-[color:var(--border)] bg-[var(--surface)] px-4 py-6 sm:px-7">
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase text-[color:var(--primary)]">Meeting Intelligence</p>
-              <h1 className="mt-1 text-2xl font-semibold">{review.session.title}</h1>
-              <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--primary)]">Meeting Intelligence</p>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight">{review.session.title}</h1>
+              <p className="mt-2 text-sm text-[color:var(--text-muted)]">
                 {dateTime(review.session.startedAt)} · {review.participants.length} participant{review.participants.length === 1 ? "" : "s"}
+              </p>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--text-muted)]">
+                Evidence-linked summary, decisions, actions, transcript, and review controls for this Huddle.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1028,6 +1062,14 @@ export default function HuddleMeetingIntelligence() {
               </details>
             </div>
           </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {headerStats.map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-[color:var(--border)] bg-[var(--background)] px-4 py-3">
+                <div className="text-xs font-medium text-[color:var(--text-muted)]">{label}</div>
+                <div className="mt-1 text-lg font-semibold">{value}</div>
+              </div>
+            ))}
+          </div>
           <div className="mt-3 flex flex-wrap gap-2" aria-label="Meeting participants">
             {review.participants.map((participant) => (
               <span
@@ -1038,16 +1080,10 @@ export default function HuddleMeetingIntelligence() {
               </span>
             ))}
           </div>
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[color:var(--text-muted)]">
-            <span>{review.status.summaryAvailable ? "Summary ready" : "Summary unavailable"}</span>
-            <span>{review.status.decisionCount} decisions</span>
-            <span>{review.status.actionItemCount} action items</span>
-            <span>{review.status.pendingReviewCount} awaiting review</span>
-          </div>
         </div>
       </header>
 
-      <nav className="border-b border-[color:var(--border)] px-4 sm:px-7" aria-label="Meeting intelligence sections">
+      <nav className="sticky top-0 z-10 border-b border-[color:var(--border)] bg-[var(--background)]/95 px-4 backdrop-blur sm:px-7" aria-label="Meeting intelligence sections">
         <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto py-2">
           {TABS.map(({ id, label, group }, index) => (
             <button
@@ -1120,7 +1156,7 @@ export default function HuddleMeetingIntelligence() {
                 <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
                   {(summary.contentJson?.discussionHighlights || []).map((point) => (
                     <div key={point.id} className="py-4">
-                      <div className="text-xs font-semibold text-[color:var(--primary)]">{point.speaker}</div>
+                      <div className="text-xs font-semibold text-[color:var(--primary)]">{safeDisplayName(point.speaker, "Speaker")}</div>
                       <p className="mt-1 text-sm leading-6">{point.text}</p>
                       <div className="mt-2"><EvidenceButton ids={point.evidenceSegmentIds} onOpen={showEvidence} /></div>
                     </div>
@@ -1265,7 +1301,7 @@ export default function HuddleMeetingIntelligence() {
                     className={`grid gap-2 py-4 sm:grid-cols-[140px_1fr] ${highlighted ? "bg-[var(--primary)]/8 px-3" : ""}`}
                   >
                     <div>
-                      <div className="text-sm font-semibold">{segment.speaker?.label || "Participant"}</div>
+                      <div className="text-sm font-semibold">{speakerNameFromReview(review, segment)}</div>
                       <div className="text-xs text-[color:var(--text-muted)]">{timeOnly(segment.startedAt)}</div>
                     </div>
                     <div>
@@ -1288,7 +1324,7 @@ export default function HuddleMeetingIntelligence() {
               <div className="flex flex-wrap items-center gap-2"><ReviewStatus artifact={decisions} /><ArtifactActions artifact={decisions} canReview={review.permissions.canReviewArtifacts} canEdit={decisions?.approvalStatus !== "approved" || review.permissions.canEditApprovedArtifacts} onEdit={setEditing} onDecision={decideArtifact} busy={busyId === decisions?.id} /></div>
             </div>
             <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-              {(review.report?.decisions || decisions?.contentJson?.decisions || []).map((item) => (
+              {decisionList.map((item) => (
                 <article key={item.id} className="py-5">
                   <div className="flex flex-wrap items-start justify-between gap-3"><h3 className="font-semibold">{item.title}</h3><span className="text-xs text-[color:var(--text-muted)]">{confidenceLabel(item.confidence)}</span></div>
                   <p className="mt-2 text-sm leading-6">{item.decision}</p>
@@ -1301,6 +1337,11 @@ export default function HuddleMeetingIntelligence() {
                   <div className="mt-3"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
                 </article>
               ))}
+              {decisionList.length === 0 && (
+                <p className="py-7 text-sm text-[color:var(--text-muted)]">
+                  No explicit decision was identified in this meeting.
+                </p>
+              )}
             </div>
             <Provenance artifact={decisions} />
             {decisions?.approvalStatus === "approved" && (
@@ -1318,7 +1359,7 @@ export default function HuddleMeetingIntelligence() {
               <div className="flex flex-wrap items-center gap-2"><ReviewStatus artifact={actions} /><ArtifactActions artifact={actions} canReview={review.permissions.canReviewArtifacts} canEdit={actions?.approvalStatus !== "approved" || review.permissions.canEditApprovedArtifacts} onEdit={setEditing} onDecision={decideArtifact} busy={busyId === actions?.id} /></div>
             </div>
             <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-              {(review.report?.actionItems || actions?.contentJson?.actionItems || []).map((item) => {
+              {actionList.map((item) => {
                 const linkedTask = (review.actionTasks || []).find(
                   (task) => String(task.source?.actionItemId) === String(item.id)
                 );
@@ -1373,6 +1414,11 @@ export default function HuddleMeetingIntelligence() {
                 </article>
                 );
               })}
+              {actionList.length === 0 && (
+                <p className="py-7 text-sm text-[color:var(--text-muted)]">
+                  No explicit action item was identified in this meeting.
+                </p>
+              )}
             </div>
             <Provenance artifact={actions} />
             {actions?.approvalStatus === "approved" && (

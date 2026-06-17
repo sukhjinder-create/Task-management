@@ -53,6 +53,21 @@ function useCallTimer(startedAt) {
   return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
 }
 
+function captionTime(value) {
+  const timestamp = value ? new Date(value) : null;
+  if (!timestamp || Number.isNaN(timestamp.getTime())) return "";
+  return timestamp.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function cleanSpeakerLabel(value) {
+  const label = String(value || "").trim();
+  if (!label || /^participant(?:\s+\d+)?$/i.test(label)) return "";
+  return label;
+}
+
 // ── Build a video ref that forces the muted HTML attribute ───────────────────
 // React has a known bug: <video muted={true}> sets video.muted = true (JS
 // property) but does NOT add the `muted` HTML attribute to the DOM. Android
@@ -560,6 +575,71 @@ export default function GlobalHuddleWindow() {
 
   // Grid layout for group calls
   const participants = [localParticipant, ...remotePeers.map((p) => ({ userId: p.userId, username: p.username || "User", stream: p.stream, videoTrack: p.videoTrack, videoPublication: p.videoPublication, selectedVideoSource: p.selectedVideoSource, isMuted: p.isMuted, isCameraOff: p.isCameraOff, connectionState: p.connectionState, isLocal: false }))];
+  const captionItems = useMemo(() => {
+    const remoteName = (id) => {
+      const peer = remotePeers.find(
+        (item) =>
+          String(item.userId) === String(id) ||
+          String(item.participantId) === String(id)
+      );
+      return cleanSpeakerLabel(peer?.username || peer?.name);
+    };
+    const resolveSpeaker = (caption, fallbackId) => {
+      const speaker = caption?.speaker || {};
+      return (
+        cleanSpeakerLabel(speaker.label) ||
+        (String(speaker.userId) === String(currentUser?.id)
+          ? cleanSpeakerLabel(currentUser?.username || currentUser?.name) || "You"
+          : "") ||
+        remoteName(speaker.userId || speaker.participantId || caption?.speakerId || fallbackId) ||
+        "Speaker"
+      );
+    };
+    if (canonicalCaptionFeed.length > 0) {
+      return canonicalCaptionFeed.map((caption) => ({
+        key:
+          caption.transcriptSegmentId ||
+          caption.metadata?.sourceSegmentId ||
+          caption.sourceSegmentId ||
+          caption.id,
+        speaker: resolveSpeaker(caption),
+        text: caption.text,
+        status: caption.status || (caption.isFinal ? "final" : "partial"),
+        time: captionTime(caption.emittedAt || caption.createdAt || caption.at),
+      }));
+    }
+    return Object.entries(rtc?.subtitles || {})
+      .map(([uid, entry]) => {
+        if (!entry?.text) return null;
+        const speaker =
+          uid === "local"
+            ? cleanSpeakerLabel(currentUser?.username || currentUser?.name) || "You"
+            : remoteName(uid) || "Speaker";
+        return {
+          key: uid,
+          speaker,
+          text: entry.text,
+          status: entry.status || "partial",
+          time: captionTime(entry.emittedAt || entry.at),
+        };
+      })
+      .filter(Boolean);
+  }, [
+    canonicalCaptionFeed,
+    currentUser?.id,
+    currentUser?.name,
+    currentUser?.username,
+    remotePeers,
+    rtc?.subtitles,
+  ]);
+  const captionStatusLabel =
+    rtc?.captionStatus === "failed"
+      ? "Unavailable"
+      : rtc?.captionStatus === "reconnecting"
+        ? "Reconnecting"
+        : captionItems.length > 0
+          ? "Live"
+          : "Listening";
   const presentingParticipant = participants.find(
     (participant) =>
       !participant.isLocal &&
@@ -825,10 +905,10 @@ export default function GlobalHuddleWindow() {
       {/* ── SUBTITLE OVERLAY ─────────────────────────────────────────────── */}
       {rtc?.subtitlesEnabled && !showMissedPanel && (
         <section
-          className={`absolute z-30 overflow-hidden border border-white/15 bg-black/80 shadow-xl backdrop-blur-sm ${
+          className={`absolute z-30 overflow-hidden border border-white/15 bg-[#0b1220]/95 shadow-2xl backdrop-blur-md ${
             isMobileDevice
-              ? "inset-x-2 max-h-[48%]"
-              : "right-3 w-[min(380px,46%)] max-h-[52%]"
+              ? "inset-x-2 max-h-[50%]"
+              : "right-3 w-[min(430px,50%)] max-h-[58%]"
           }`}
           style={{
             borderRadius: 8,
@@ -836,64 +916,69 @@ export default function GlobalHuddleWindow() {
           }}
           aria-label="Live meeting transcript"
         >
-          <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-300">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                rtc?.captionStatus === "failed"
-                  ? "bg-red-400"
-                  : rtc?.captionStatus === "reconnecting"
-                    ? "bg-amber-400"
-                    : "bg-emerald-400"
-              }`}
-            />
-            {rtc?.captionStatus === "reconnecting"
-              ? "Reconnecting captions"
-              : rtc?.captionStatus === "failed"
-                ? "Captions unavailable"
-                : "Live transcript"}
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    rtc?.captionStatus === "failed"
+                      ? "bg-red-400"
+                      : rtc?.captionStatus === "reconnecting"
+                        ? "bg-amber-400"
+                        : "bg-emerald-400"
+                  }`}
+                />
+                {captionStatusLabel}
+              </div>
+              <div className="truncate text-sm font-semibold text-white">Meeting transcript</div>
+            </div>
+            <div className="shrink-0 rounded border border-white/10 bg-white/10 px-2 py-1 text-[11px] text-slate-300">
+              {captionItems.length} line{captionItems.length === 1 ? "" : "s"}
+            </div>
           </div>
           <div
             ref={captionFeedRef}
             onScroll={handleCaptionScroll}
-            className="max-h-[inherit] overflow-y-auto px-3 py-2"
+            className="max-h-[inherit] overflow-y-auto px-3 py-3"
           >
-            {canonicalCaptionFeed.length > 0 ? (
-              canonicalCaptionFeed.map((caption) => (
-                <div key={caption.transcriptSegmentId || caption.metadata?.sourceSegmentId || caption.id} className="mb-2 last:mb-0">
-                  <div className="text-[11px] font-semibold text-sky-300">
-                    {caption.speaker?.label ||
-                      (String(caption.speaker?.userId) === String(currentUser?.id)
-                        ? currentUser?.username || "You"
-                        : "Participant")}
+            {captionItems.length > 0 ? (
+              <div className="space-y-3">
+                {captionItems.map((caption) => (
+                  <div key={caption.key} className="grid grid-cols-[28px_1fr] gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-400/15 text-[11px] font-semibold text-sky-200">
+                      {caption.speaker.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-[12px] font-semibold text-sky-200">{caption.speaker}</span>
+                        {caption.time && <span className="text-[10px] text-slate-500">{caption.time}</span>}
+                        {caption.status === "partial" && (
+                          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                            live
+                          </span>
+                        )}
+                      </div>
+                      <div className={`mt-0.5 text-sm leading-5 text-white ${caption.status === "partial" ? "opacity-80" : ""}`}>
+                        {caption.text}
+                      </div>
+                    </div>
                   </div>
-                  <div className={`text-sm leading-5 text-white ${caption.status === "partial" ? "opacity-75" : ""}`}>
-                    {caption.text}
-                  </div>
-                </div>
-              ))
+                ))}
+              </div>
             ) : (
-              Object.entries(rtc?.subtitles || {}).map(([uid, entry]) => {
-                if (!entry?.text) return null;
-                const name = uid === "local"
-                  ? (currentUser?.username || "You")
-                  : (remotePeers.find((p) => String(p.userId) === String(uid))?.username || "Participant");
-                return (
-                  <div key={uid} className="mb-2 last:mb-0">
-                    <div className="text-[11px] font-semibold text-sky-300">{name}</div>
-                    <div className="text-sm leading-5 text-white">{entry.text}</div>
-                  </div>
-                );
-              })
-            )}
-            {canonicalCaptionFeed.length === 0 && Object.keys(rtc?.subtitles || {}).length === 0 && (
-              <div className="py-2 text-center text-xs text-slate-400">Listening...</div>
+              <div className="py-5 text-center">
+                <div className="text-sm font-medium text-slate-200">Listening for speech</div>
+                <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-slate-400">
+                  Captions from every speaker will appear here as the meeting continues.
+                </p>
+              </div>
             )}
           </div>
           {!followLatestCaption && (
             <button
               type="button"
               onClick={jumpToLatestCaption}
-              className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white shadow-lg"
+              className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-sky-400"
             >
               <ArrowDown size={13} /> Latest
             </button>
