@@ -77,6 +77,25 @@ function getFullWindowLayout() {
   return { pos: { x: 0, y: 0 }, size: { w: viewport.w, h: viewport.h } };
 }
 
+function getDesktopDefaultLayout() {
+  const viewport = getViewportSize();
+  const maxW = Math.max(720, viewport.w - 32);
+  const maxH = Math.max(420, viewport.h - 56);
+  const w = Math.min(Math.max(880, Math.round(viewport.w * 0.72)), maxW);
+  const h = Math.min(Math.max(560, Math.round(viewport.h * 0.72)), maxH);
+  const size = {
+    w,
+    h,
+  };
+  return {
+    pos: {
+      x: Math.max(16, Math.round((viewport.w - size.w) / 2)),
+      y: Math.max(16, Math.round((viewport.h - size.h) / 2)),
+    },
+    size,
+  };
+}
+
 function getMobileCompactLayout() {
   const viewport = getViewportSize();
   const w = Math.min(Math.max(300, viewport.w - 16), 380);
@@ -305,10 +324,10 @@ export default function GlobalHuddleWindow() {
   const [isMobileDevice, setIsMobileDevice] = useState(() => isMobileViewport());
   const [isMaximized, setIsMaximized] = useState(() => isMobileViewport());
   const [pos, setPos] = useState(() => (
-    isMobileViewport() ? getFullWindowLayout().pos : { x: 200, y: 120 }
+    isMobileViewport() ? getFullWindowLayout().pos : getDesktopDefaultLayout().pos
   ));
   const [size, setSize] = useState(() => (
-    isMobileViewport() ? getFullWindowLayout().size : { w: 620, h: 440 }
+    isMobileViewport() ? getFullWindowLayout().size : getDesktopDefaultLayout().size
   ));
   const [pendingControl, setPendingControl] = useState(null);
   const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
@@ -616,8 +635,9 @@ export default function GlobalHuddleWindow() {
         return;
       }
       const prev = prevSizeRef.current;
-      setPos(prev.pos ? clampWindowLayout(prev.pos, prev.size || { w: 620, h: 440 }, { reserveBottom: 40 }) : { x: 200, y: 120 });
-      setSize(prev.size || { w: 620, h: 440 });
+      const fallback = getDesktopDefaultLayout();
+      setPos(prev.pos ? clampWindowLayout(prev.pos, prev.size || fallback.size, { reserveBottom: 40 }) : fallback.pos);
+      setSize(prev.size || fallback.size);
       setIsMaximized(false);
     }
   };

@@ -840,7 +840,7 @@ function bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples) {
   if (!previousSamples || !sampleKey || !Number.isFinite(bytes)) return null;
   const now = Number.isFinite(Number(timestamp)) ? Number(timestamp) : Date.now();
   const previous = previousSamples.get(sampleKey);
-  previousSamples.set(sampleKey, { bytes, timestamp: now });
+  previousSamples.set(sampleKey, { ...previous, bytes, timestamp: now });
   if (!previous || !Number.isFinite(previous.bytes) || !Number.isFinite(previous.timestamp)) {
     return null;
   }
@@ -849,7 +849,50 @@ function bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples) {
   return Math.round((deltaBytes * 8) / elapsedMsForSample);
 }
 
-function applyQualityStatsEntry(track, entry = {}, codecs = new Map()) {
+function counterDelta(current, previous) {
+  const currentNumber = Number(current);
+  const previousNumber = Number(previous);
+  if (!Number.isFinite(currentNumber)) return null;
+  if (!Number.isFinite(previousNumber)) return null;
+  return Number(Math.max(0, currentNumber - previousNumber).toFixed(3));
+}
+
+function applyCounterDeltas(track, sampleKey, previousSamples) {
+  if (!previousSamples || !sampleKey) return;
+  const previous = previousSamples.get(sampleKey) || {};
+  const previousCounters = previous.counters || {};
+  const counters = {
+    framesDecoded: track.framesDecoded,
+    framesRendered: track.framesRendered,
+    framesDropped: track.framesDropped,
+    freezeCount: track.freezeCount,
+    totalFreezesDuration: track.totalFreezesDuration,
+    pauseCount: track.pauseCount,
+    totalPausesDuration: track.totalPausesDuration,
+  };
+
+  track.framesDecodedDelta = counterDelta(counters.framesDecoded, previousCounters.framesDecoded);
+  track.framesRenderedDelta = counterDelta(counters.framesRendered, previousCounters.framesRendered);
+  track.framesDroppedDelta = counterDelta(counters.framesDropped, previousCounters.framesDropped);
+  track.freezeCountDelta = counterDelta(counters.freezeCount, previousCounters.freezeCount);
+  track.totalFreezesDurationDelta = counterDelta(
+    counters.totalFreezesDuration,
+    previousCounters.totalFreezesDuration
+  );
+  track.pauseCountDelta = counterDelta(counters.pauseCount, previousCounters.pauseCount);
+  track.totalPausesDurationDelta = counterDelta(
+    counters.totalPausesDuration,
+    previousCounters.totalPausesDuration
+  );
+
+  previousSamples.set(sampleKey, { ...previous, counters });
+}
+
+function candidateById(candidates, id) {
+  return id ? candidates.get(id) || null : null;
+}
+
+function applyQualityStatsEntry(track, entry = {}, codecs = new Map(), candidates = new Map()) {
   if (entry.type === "codec") return;
 
   if (entry.type === "candidate-pair" && (entry.selected || entry.nominated)) {
@@ -862,6 +905,21 @@ function applyQualityStatsEntry(track, entry = {}, codecs = new Map()) {
     if (Number.isFinite(Number(entry.availableIncomingBitrate))) {
       track.availableIncomingBitrateKbps = Math.round(Number(entry.availableIncomingBitrate) / 1000);
     }
+    const localCandidate = candidateById(candidates, entry.localCandidateId);
+    const remoteCandidate = candidateById(candidates, entry.remoteCandidateId);
+    track.selectedCandidatePairId = safeString(entry.id) || null;
+    track.candidatePairState = safeString(entry.state) || null;
+    track.candidatePairNominated = entry.nominated === true;
+    track.candidatePairSelected = entry.selected === true || entry.nominated === true;
+    track.localCandidateType = safeString(localCandidate?.candidateType) || null;
+    track.remoteCandidateType = safeString(remoteCandidate?.candidateType) || null;
+    track.localCandidateProtocol = safeString(localCandidate?.protocol) || null;
+    track.remoteCandidateProtocol = safeString(remoteCandidate?.protocol) || null;
+    track.localRelayProtocol = safeString(localCandidate?.relayProtocol) || null;
+    track.remoteRelayProtocol = safeString(remoteCandidate?.relayProtocol) || null;
+    track.localNetworkType = safeString(localCandidate?.networkType) || null;
+    track.usingTurnRelay =
+      track.localCandidateType === "relay" || track.remoteCandidateType === "relay";
   }
 
   if (entry.type === "remote-inbound-rtp" && Number.isFinite(Number(entry.roundTripTime))) {
@@ -1048,11 +1106,17 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
       const report = await publication.track?.getRTCStatsReport?.().catch(() => null);
       const entries = rtcReportEntries(report);
       const codecs = new Map(entries.filter((entry) => entry.type === "codec").map((entry) => [entry.id, entry]));
-      entries.forEach((entry) => applyQualityStatsEntry(track, entry, codecs));
+      const candidates = new Map(
+        entries
+          .filter((entry) => entry.type === "local-candidate" || entry.type === "remote-candidate")
+          .map((entry) => [entry.id, entry])
+      );
+      entries.forEach((entry) => applyQualityStatsEntry(track, entry, codecs, candidates));
 
       const bytes = safeNumber((track.bytesSent || 0) + (track.bytesReceived || 0));
       const timestamp = entries.find((entry) => Number.isFinite(Number(entry.timestamp)))?.timestamp;
       track.bitrateKbps = bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples);
+      applyCounterDeltas(track, sampleKey, previousSamples);
       const packetTotal = (track.packetsSent || track.packetsReceived || 0) + (track.packetsLost || 0);
       track.packetLoss = packetTotal > 0
         ? Number(((track.packetsLost || 0) / packetTotal).toFixed(4))
@@ -1107,6 +1171,8 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
     0
   );
   const freezeTracks = receiveVideoTracks.filter((track) => Number(track.freezeCount) > 0);
+  const freezeDeltaTracks = receiveVideoTracks.filter((track) => Number(track.freezeCountDelta) > 0);
+  const turnRelayTracks = tracks.filter((track) => track.usingTurnRelay === true);
 
   return {
     observedAt,
@@ -1175,11 +1241,21 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
       selectedMediumLayerCount: tracks.filter((track) => track.videoQuality === "medium").length,
       selectedHighLayerCount: tracks.filter((track) => track.videoQuality === "high").length,
       freezeTrackCount: freezeTracks.length,
-      totalFreezeCount: sumBy(receiveVideoTracks, "freezeCount") || null,
-      totalFreezeDurationSeconds: sumBy(receiveVideoTracks, "totalFreezesDuration") || null,
-      totalFramesDropped: sumBy(receiveVideoTracks, "framesDropped") || null,
-      totalFramesDecoded: sumBy(receiveVideoTracks, "framesDecoded") || null,
-      totalFramesRendered: sumBy(receiveVideoTracks, "framesRendered") || null,
+      freezeDeltaTrackCount: freezeDeltaTracks.length,
+      totalFreezeCount: sumBy(receiveVideoTracks, "freezeCountDelta") || null,
+      totalFreezeDurationSeconds: sumBy(receiveVideoTracks, "totalFreezesDurationDelta") || null,
+      totalFramesDropped: sumBy(receiveVideoTracks, "framesDroppedDelta") || null,
+      totalFramesDecoded: sumBy(receiveVideoTracks, "framesDecodedDelta") || null,
+      totalFramesRendered: sumBy(receiveVideoTracks, "framesRenderedDelta") || null,
+      totalFreezeCountCumulative: sumBy(receiveVideoTracks, "freezeCount") || null,
+      totalFreezeDurationCumulativeSeconds: sumBy(receiveVideoTracks, "totalFreezesDuration") || null,
+      totalFramesDroppedCumulative: sumBy(receiveVideoTracks, "framesDropped") || null,
+      totalFramesDecodedCumulative: sumBy(receiveVideoTracks, "framesDecoded") || null,
+      totalFramesRenderedCumulative: sumBy(receiveVideoTracks, "framesRendered") || null,
+      turnRelayTrackCount: turnRelayTracks.length,
+      selectedCandidatePairCount: tracks.filter((track) => track.candidatePairSelected).length,
+      localRelayCandidateTrackCount: tracks.filter((track) => track.localCandidateType === "relay").length,
+      remoteRelayCandidateTrackCount: tracks.filter((track) => track.remoteCandidateType === "relay").length,
     },
     participants: participantSummaries,
     tracks,
