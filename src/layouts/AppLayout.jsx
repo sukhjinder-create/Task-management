@@ -13,8 +13,6 @@ import { usePlan } from "../context/PlanContext";
 import { cn } from "../utils/cn";
 import { useIsMobile } from "../hooks/useIsMobile";
 import MobileLayout from "./MobileLayout";
-import { useAppUpdate } from "../hooks/useAppUpdate";
-import AppUpdateModal from "../components/AppUpdateModal";
 import HuddleIncomingCall from "../components/HuddleIncomingCall";
 import { useHuddle } from "../context/HuddleContext";
 
@@ -22,7 +20,6 @@ const SIDEBAR_KEY = "sidebarCollapsed";
 
 export default function AppLayout({ children }) {
   const isMobile = useIsMobile();
-  const { updateInfo, dismissUpdate } = useAppUpdate();
   const { incomingHuddle, acceptHuddle, declineHuddle } = useHuddle();
   if (isMobile) return <MobileLayout />;
 
@@ -232,13 +229,6 @@ export default function AppLayout({ children }) {
 
   return (
     <div className="flex h-screen overflow-hidden theme-bg theme-text">
-      {updateInfo && (
-        <AppUpdateModal
-          version={updateInfo.version}
-          apkUrl={updateInfo.apkUrl}
-          onDismiss={dismissUpdate}
-        />
-      )}
       {incomingHuddle && (
         <HuddleIncomingCall
           invite={incomingHuddle}

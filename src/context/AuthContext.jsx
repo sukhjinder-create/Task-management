@@ -16,25 +16,6 @@ export function AuthProvider({ children }) {
         Also handles ?_t=TOKEN from workspace subdomain redirects
   --------------------------------------------- */
   useEffect(() => {
-    // On Capacitor (mobile), detect a fresh install and clear any auth
-    // that Android Auto Backup may have restored from a previous install.
-    // We mark the install via Preferences (native storage). If the marker
-    // is absent we know the app data was never initialised by THIS install.
-    async function clearAuthIfFreshInstall() {
-      if (!window.Capacitor) return;
-      try {
-        const { Preferences } = await import("@capacitor/preferences");
-        const { value } = await Preferences.get({ key: "install_v1" });
-        if (!value) {
-          localStorage.removeItem("auth");
-          await Preferences.set({ key: "install_v1", value: "1" });
-        }
-      } catch {
-        // Preferences not available — ignore
-      }
-    }
-
-    clearAuthIfFreshInstall().then(() => {
     try {
       // Check for token passed via URL (cross-subdomain redirect)
       const params = new URLSearchParams(window.location.search);
@@ -87,7 +68,6 @@ export function AuthProvider({ children }) {
         // Initialize socket immediately so huddle/chat works on any page (not just Chat)
         if (parsed?.token) {
           window.dispatchEvent(new CustomEvent("auth:updated", { detail: { user: parsed?.user, token: parsed?.token } }));
-          // Register Capacitor push handlers on every app start (not just fresh login)
           initPush(parsed.token).catch(() => {});
         }
 
@@ -103,7 +83,6 @@ export function AuthProvider({ children }) {
       console.warn("Unable to restore auth", e);
       setAuth((prev) => ({ ...prev, isReady: true }));
     }
-    }); // end clearAuthIfFreshInstall().then
   }, []);
 
   /* ---------------------------------------------
@@ -122,26 +101,6 @@ export function AuthProvider({ children }) {
     };
     window.addEventListener("auth:token-refreshed", handler);
     return () => window.removeEventListener("auth:token-refreshed", handler);
-  }, []);
-
-  /* ---------------------------------------------
-     2b. On Capacitor app resume: re-register FCM
-     token so it's always current in the DB.
-  --------------------------------------------- */
-  useEffect(() => {
-    if (!window.Capacitor) return;
-    let cleanup = () => {};
-    import("@capacitor/app").then(({ App }) => {
-      const listener = App.addListener("appStateChange", ({ isActive }) => {
-        if (isActive) {
-          const stored = (() => { try { return JSON.parse(localStorage.getItem("auth")); } catch { return null; } })();
-          const token = stored?.token;
-          if (token) initPush(token).catch(() => {});
-        }
-      });
-      cleanup = () => listener.then?.(l => l.remove()).catch(() => {});
-    }).catch(() => {});
-    return () => cleanup();
   }, []);
 
   /* ---------------------------------------------

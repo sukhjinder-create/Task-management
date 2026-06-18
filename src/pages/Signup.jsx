@@ -17,7 +17,6 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { isCapacitor } from "../utils/native";
 
 const BACKEND_URL = API_BASE_URL;
 
@@ -422,8 +421,7 @@ export default function Signup() {
               </button>
             </form>
 
-            {!isCapacitor && (
-              <>
+            <>
                 <div className="flex items-center gap-3 my-6">
                   <div className="flex-1 h-px bg-[color:var(--border)]" />
                   <span className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-soft)] font-semibold">
@@ -440,8 +438,7 @@ export default function Signup() {
                   <Sparkles className="w-4 h-4 brand-orange-text" />
                   Sign up with Google
                 </button>
-              </>
-            )}
+            </>
 
             <p className="text-center text-sm text-[color:var(--text-muted)] mt-6 leading-6">
               Already have an account?{" "}

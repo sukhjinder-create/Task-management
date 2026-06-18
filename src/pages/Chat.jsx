@@ -727,7 +727,7 @@ const [reportContext, setReportContext] = useState(null);
     api.post("/chat/mark-read", { channelKey: requestedChannel }).catch(() => {});
   }, [channels, location.search, activeChannelKey]);
 
-  // Switch channel from push notification tap (native app)
+  // Switch channel from a push-notification tap.
   useEffect(() => {
     const openChannel = (key) => {
       if (!key) return;

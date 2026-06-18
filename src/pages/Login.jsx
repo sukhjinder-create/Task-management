@@ -6,51 +6,22 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import {
+  ArrowRight,
+  Check,
   Eye,
   EyeOff,
-  ShieldCheck,
-  ArrowRight,
+  KeyRound,
   Lock,
   Mail,
-  ClipboardCheck,
-  MessageSquare,
-  Brain,
-  Activity,
-  Users,
-  CalendarClock,
-  CheckCircle2,
+  ShieldCheck,
 } from "lucide-react";
-import { isCapacitor } from "../utils/native";
 
 const BACKEND_URL = API_BASE_URL;
 
-const PRODUCT_FEATURES = [
-  {
-    icon: ClipboardCheck,
-    title: "Project execution",
-    description: "Track projects, tasks, subtasks, owners, blockers, and due dates from one operational workspace.",
-  },
-  {
-    icon: MessageSquare,
-    title: "Team chat",
-    description: "Keep project conversations, huddles, mentions, and workspace updates close to the work.",
-  },
-  {
-    icon: Brain,
-    title: "AI intelligence",
-    description: "Use workspace signals, executive summaries, and AI-assisted views to spot risk earlier.",
-  },
-  {
-    icon: CalendarClock,
-    title: "Attendance and reviews",
-    description: "Connect daily presence, leave, performance reviews, and reporting into the same execution layer.",
-  },
-];
-
-const PRODUCT_SIGNALS = [
-  { label: "Task health", value: "Live" },
-  { label: "Workspace memory", value: "AI" },
-  { label: "Admin controls", value: "Built in" },
+const WORKSPACE_BENEFITS = [
+  "Projects, tasks, and decisions stay connected.",
+  "Workspace access remains role and tenant isolated.",
+  "MFA and secure session recovery are built in.",
 ];
 
 export default function Login() {
@@ -81,7 +52,9 @@ export default function Login() {
       try {
         window.__AUTH_TOKEN__ = token;
         window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || "GLOBAL";
-      } catch {}
+      } catch {
+        // Runtime globals are an optional compatibility bridge.
+      }
       window.dispatchEvent(new Event("auth:updated"));
     } catch (err) {
       console.warn("Failed to persist auth to localStorage:", err);
@@ -144,279 +117,227 @@ export default function Login() {
     }
   };
 
-  const authForm = (
-    <>
-      <div className="mb-8">
-        <p className="text-xs uppercase tracking-[0.16em] brand-orange-text font-semibold mb-2.5">
-          {mfaRequired ? "Two-factor authentication" : "Sign in"}
-        </p>
-        <h1 className="text-[38px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">
-          {mfaRequired ? "Verify it's you." : "Welcome back."}
-        </h1>
-        <p className="mt-3 text-[17px] text-[color:var(--text-muted)] leading-8">
-          {mfaRequired
-            ? "Enter the 6-digit code from your authenticator app to continue."
-            : "Sign in to your workspace to access projects, chat, and operational intelligence."}
-        </p>
-      </div>
+  return (
+    <div className="login-page relative min-h-screen overflow-hidden bg-[var(--app-bg)] text-[color:var(--text)]">
+      <div className="login-page-grid pointer-events-none absolute inset-0" aria-hidden="true" />
+      <div className="pointer-events-none absolute -left-32 top-[-12rem] h-[32rem] w-[32rem] rounded-full bg-[color:var(--primary)] opacity-[0.06] blur-[120px]" />
 
-      {mfaRequired ? (
-        <form className="space-y-5" onSubmit={handleMfaSubmit}>
-          <div className="flex items-start gap-2.5 p-3 rounded-lg border brand-orange-border">
-            <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0 brand-orange-text" />
-            <p className="text-sm text-[color:var(--text-muted)] leading-6">
-              Two-factor authentication is enabled on this account.
+      <header className="relative z-10 mx-auto flex w-full max-w-[1280px] items-center justify-between px-5 py-5 sm:px-8 lg:px-10 lg:py-7">
+        <Link to="/" className="group flex items-center gap-3" aria-label="Asystence home">
+          <img src="/asystence-logo.png" alt="" className="h-10 w-10 object-contain sm:h-11 sm:w-11" />
+          <div>
+            <p className="text-lg font-semibold leading-none tracking-[-0.03em]">Asystence</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-soft)]">
+              System Intelligence
             </p>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2 tracking-tight">
-              Authenticator code
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={8}
-              autoFocus
-              className="w-full h-16 bg-[var(--surface)] border border-[color:var(--border)] rounded-lg px-4 text-center tracking-[0.5em] text-2xl text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]"
-              value={mfaCode}
-              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-              placeholder="000000"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-16 inline-flex items-center justify-center gap-2 bg-[var(--primary)] text-[color:var(--primary-contrast)] rounded-lg text-[17px] font-semibold hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors"
-          >
-            {loading ? "Verifying..." : (<>Verify and continue <ArrowRight className="w-4 h-4" /></>)}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setMfaRequired(false); setMfaToken(""); setMfaCode(""); }}
-            className="w-full text-center text-sm text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors"
-          >
-            Back to sign-in
-          </button>
-        </form>
-      ) : (
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div>
-            <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2 tracking-tight">
-              Email
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[color:var(--text-soft)] pointer-events-none" />
-              <input
-                type="email"
-                className="w-full h-16 bg-[var(--surface)] border border-[color:var(--border)] rounded-lg pl-12 pr-4 text-[17px] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                placeholder="you@company.com"
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-medium text-[color:var(--text-muted)] tracking-tight">
-                Password
-              </label>
-              <Link
-                to="/forgot-password"
-                className="text-sm brand-orange-text hover:opacity-80 transition-opacity"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[color:var(--text-soft)] pointer-events-none" />
-              <input
-                type={showPassword ? "text" : "password"}
-                className="w-full h-16 bg-[var(--surface)] border border-[color:var(--border)] rounded-lg pl-12 pr-12 text-[17px] text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                placeholder="Enter your password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[color:var(--text-soft)] hover:text-[color:var(--text)] transition-colors"
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-16 inline-flex items-center justify-center gap-2 bg-[var(--primary)] text-[color:var(--primary-contrast)] rounded-lg text-[17px] font-semibold hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors"
-          >
-            {loading ? "Signing in..." : (<>Sign in <ArrowRight className="w-4 h-4" /></>)}
-          </button>
-        </form>
-      )}
-
-      {!mfaRequired && !isCapacitor && (
-        <>
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-[color:var(--border)]" />
-            <span className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-soft)] font-semibold">or continue with</span>
-            <div className="flex-1 h-px bg-[color:var(--border)]" />
-          </div>
-
-          <a
-            href={`${BACKEND_URL}/auth/google`}
-            className="flex items-center justify-center gap-2.5 w-full h-16 bg-[var(--surface)] hover:bg-[var(--surface-soft)] border border-[color:var(--border)] hover:border-[color:var(--border-strong)] text-[color:var(--text)] rounded-lg text-[17px] font-medium transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-            </svg>
-            Continue with Google
-          </a>
-        </>
-      )}
-
-      {!mfaRequired && (
-        <div className="mt-6 space-y-3 text-center text-sm text-[color:var(--text-muted)] leading-6">
-          <p>
-            New workspace?{" "}
-            <Link to="/signup" className="brand-orange-text hover:opacity-80 transition-opacity">
-              Start a free trial
-            </Link>
-          </p>
-          <p>
-            Imported via Slack or another tool?{" "}
-            <span className="brand-orange-text">Check your email for your access link.</span>
-          </p>
-        </div>
-      )}
-    </>
-  );
-
-  return (
-    <div className="min-h-screen bg-[var(--app-bg)] text-[color:var(--text)] relative overflow-hidden">
-      <div className="fixed top-4 right-4 z-20">
+        </Link>
         <ThemeSwitcher compact />
-      </div>
+      </header>
 
-      <main className="min-h-screen grid lg:grid-cols-2 gap-10 lg:gap-12 xl:gap-14 px-6 py-8 sm:px-10 lg:px-12 xl:px-14">
-        <section className="relative min-h-[46vh] lg:min-h-[calc(100vh-4rem)] flex">
-          <div className="w-full flex flex-col">
-            <div className="mb-7 flex items-center gap-2.5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center -ml-1">
-                <img
-                  src="/asystence-logo.png"
-                  alt="Asystence"
-                  className="h-16 w-16 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-[32px] font-semibold tracking-tight leading-none text-[color:var(--text)]">
-                  Asystence
-                </p>
-                <p className="mt-1.5 text-[10px] uppercase tracking-[0.18em] font-semibold text-[color:var(--text-soft)]">
-                  System Intelligence
-                </p>
-              </div>
-            </div>
+      <main className="relative z-10 mx-auto grid min-h-[calc(100vh-88px)] w-full max-w-[1280px] items-center gap-12 px-5 pb-10 sm:px-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(420px,0.92fr)] lg:px-10 lg:pb-16">
+        <section className="hidden max-w-[640px] lg:block">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface)]/75 px-3 py-1.5 text-xs font-medium text-[color:var(--text-muted)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--primary)]" />
+            Secure workspace access
+          </div>
 
-            <div className="flex-1 flex flex-col justify-between gap-7">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] brand-orange-text font-semibold mb-3">
-                  Workspace command center
-                </p>
-                <h2 className="max-w-3xl text-[34px] sm:text-[44px] xl:text-[54px] font-semibold tracking-tight leading-[1.05] text-[color:var(--text)]">
-                  Run projects, people, and intelligence from one focused workspace.
-                </h2>
-                <p className="mt-5 max-w-2xl text-base leading-7 text-[color:var(--text-muted)]">
-                  Asystence brings task execution, team communication, AI insights, attendance, reviews, and admin control into a single operational surface.
-                </p>
-              </div>
+          <h1 className="mt-8 max-w-[620px] text-[clamp(2.75rem,5vw,4.8rem)] font-semibold leading-[0.98] tracking-[-0.055em] text-[color:var(--text)]">
+            Get back to the work that matters.
+          </h1>
+          <p className="mt-6 max-w-[560px] text-[17px] leading-8 text-[color:var(--text-muted)]">
+            One workspace for execution, communication, and operational intelligence—without losing context between them.
+          </p>
 
-              <div className="grid grid-cols-3 gap-3">
-                {PRODUCT_SIGNALS.map((signal) => (
-                  <div key={signal.label} className="border border-[color:var(--border)] rounded-lg p-4">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-soft)] font-semibold">
-                      {signal.label}
-                    </p>
-                    <p className="mt-2 text-lg font-semibold brand-orange-text">{signal.value}</p>
-                  </div>
-                ))}
+          <div className="mt-10 space-y-4">
+            {WORKSPACE_BENEFITS.map((benefit) => (
+              <div key={benefit} className="flex items-center gap-3 text-sm text-[color:var(--text-muted)]">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-strong)] bg-[color:var(--surface)]">
+                  <Check className="h-3.5 w-3.5 text-[color:var(--primary)]" strokeWidth={2.5} />
+                </span>
+                <span>{benefit}</span>
               </div>
+            ))}
+          </div>
 
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                {PRODUCT_FEATURES.map(({ icon: Icon, title, description }) => (
-                  <div key={title} className="border border-[color:var(--border)] rounded-lg p-4 flex gap-3">
-                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border brand-orange-border">
-                      <Icon className="h-4 w-4 brand-orange-text" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-[color:var(--text)]">{title}</h3>
-                      <p className="mt-1 text-xs leading-5 text-[color:var(--text-muted)]">{description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border border-[color:var(--border)] rounded-lg p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg brand-orange-bg text-[#0a0a0b]">
-                      <Activity className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-[color:var(--text)]">Live operational pulse</p>
-                      <p className="text-xs text-[color:var(--text-muted)]">Tasks, blockers, people, and workspace health stay connected.</p>
-                    </div>
-                  </div>
-                  <CheckCircle2 className="hidden sm:block h-5 w-5 brand-orange-text" />
-                </div>
-              </div>
-            </div>
+          <div className="mt-14 flex items-center gap-3 border-t border-[color:var(--border)] pt-6 text-xs text-[color:var(--text-soft)]">
+            <ShieldCheck className="h-4 w-4 text-[color:var(--primary)]" />
+            <span>Encrypted sessions</span>
+            <span aria-hidden="true">•</span>
+            <span>Workspace isolation</span>
+            <span aria-hidden="true">•</span>
+            <span>MFA ready</span>
           </div>
         </section>
 
-        <aside className="min-h-[46vh] lg:min-h-[calc(100vh-4rem)] flex items-center">
-          <div className="w-full">
-            <div className="w-full">
-              <div className="mb-7 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-soft)] font-semibold">Secure access</p>
-                  <p className="mt-1 text-sm text-[color:var(--text-muted)]">Workspace login</p>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border brand-orange-border">
-                  <Users className="h-4 w-4 brand-orange-text" />
-                </div>
+        <section className="mx-auto w-full max-w-[480px]">
+          <div className="login-card rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-6 sm:p-8 lg:p-9">
+            <div className="mb-7 flex items-start justify-between gap-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--primary)]">
+                  {mfaRequired ? "Identity verification" : "Workspace sign in"}
+                </p>
+                <h2 className="mt-3 text-[30px] font-semibold leading-tight tracking-[-0.04em] text-[color:var(--text)] sm:text-[34px]">
+                  {mfaRequired ? "Enter your security code" : "Welcome back"}
+                </h2>
+                <p className="mt-2.5 text-sm leading-6 text-[color:var(--text-muted)]">
+                  {mfaRequired
+                    ? "Use the 6-digit code from your authenticator app."
+                    : "Sign in with your work account to continue."}
+                </p>
               </div>
-
-              {authForm}
-
-              <div className="mt-8 pt-6 border-t border-[color:var(--border)] text-xs text-[color:var(--text-soft)] flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 min-w-0">
-                  <img
-                    src="/asystence-logo.png"
-                    alt=""
-                    aria-hidden="true"
-                    className="h-4 w-4 object-contain shrink-0"
-                  />
-                  <span>{new Date().getFullYear()} Asystence</span>
-                </div>
-                <Link to="/sla" className="hover:text-[color:var(--text-muted)] transition-colors">SLA</Link>
-              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)]">
+                {mfaRequired
+                  ? <KeyRound className="h-5 w-5 text-[color:var(--primary)]" />
+                  : <Lock className="h-5 w-5 text-[color:var(--primary)]" />}
+              </span>
             </div>
+
+            {mfaRequired ? (
+              <form className="space-y-5" onSubmit={handleMfaSubmit}>
+                <div>
+                  <label htmlFor="mfa-code" className="mb-2 block text-sm font-medium text-[color:var(--text)]">
+                    Authenticator code
+                  </label>
+                  <input
+                    id="mfa-code"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={8}
+                    autoFocus
+                    autoComplete="one-time-code"
+                    className="login-input h-14 w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--app-bg)] px-4 text-center text-xl tracking-[0.42em] text-[color:var(--text)] outline-none transition"
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="000000"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  aria-busy={loading}
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[color:var(--primary)] px-5 text-sm font-semibold text-[color:var(--primary-contrast)] transition hover:bg-[color:var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {loading ? "Verifying…" : <>Verify and continue <ArrowRight className="h-4 w-4" /></>}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setMfaRequired(false); setMfaToken(""); setMfaCode(""); }}
+                  className="w-full text-center text-sm font-medium text-[color:var(--text-muted)] transition hover:text-[color:var(--text)]"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            ) : (
+              <>
+                <>
+                    <a
+                      href={`${BACKEND_URL}/auth/google`}
+                      className="flex h-13 min-h-[52px] w-full items-center justify-center gap-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--app-bg)] px-4 text-sm font-semibold text-[color:var(--text)] transition hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-soft)]"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                      </svg>
+                      Continue with Google
+                    </a>
+
+                    <div className="my-6 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-[color:var(--border)]" />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-soft)]">
+                        or use email
+                      </span>
+                      <div className="h-px flex-1 bg-[color:var(--border)]" />
+                    </div>
+                </>
+
+                <form className="space-y-4" onSubmit={handleSubmit}>
+                  <div>
+                    <label htmlFor="email" className="mb-2 block text-sm font-medium text-[color:var(--text)]">
+                      Work email
+                    </label>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[color:var(--text-soft)]" />
+                      <input
+                        id="email"
+                        type="email"
+                        className="login-input h-13 min-h-[52px] w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--app-bg)] pl-11 pr-4 text-sm text-[color:var(--text)] outline-none transition placeholder:text-[color:var(--text-soft)]"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        autoComplete="email"
+                        autoFocus
+                        placeholder="name@company.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-4">
+                      <label htmlFor="password" className="text-sm font-medium text-[color:var(--text)]">
+                        Password
+                      </label>
+                      <Link to="/forgot-password" className="text-xs font-semibold text-[color:var(--primary)] transition hover:opacity-75">
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <div className="relative">
+                      <Lock className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[color:var(--text-soft)]" />
+                      <input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        className="login-input h-13 min-h-[52px] w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--app-bg)] pl-11 pr-12 text-sm text-[color:var(--text)] outline-none transition placeholder:text-[color:var(--text-soft)]"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((value) => !value)}
+                        className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[color:var(--text-soft)] transition hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--text)]"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    aria-busy={loading}
+                    className="mt-1 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[color:var(--primary)] px-5 text-sm font-semibold text-[color:var(--primary-contrast)] transition hover:bg-[color:var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {loading ? "Signing in…" : <>Sign in to workspace <ArrowRight className="h-4 w-4" /></>}
+                  </button>
+                </form>
+
+                <div className="mt-7 border-t border-[color:var(--border)] pt-6 text-center">
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    New to Asystence?{" "}
+                    <Link to="/signup" className="font-semibold text-[color:var(--primary)] transition hover:opacity-75">
+                      Create a workspace
+                    </Link>
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-[color:var(--text-soft)]">
+                    Invited or imported? Use the email address that received your access link.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
-        </aside>
+
+          <div className="mt-5 flex items-center justify-center gap-3 text-xs text-[color:var(--text-soft)]">
+            <span>© {new Date().getFullYear()} Asystence</span>
+            <span aria-hidden="true">•</span>
+            <Link to="/sla" className="transition hover:text-[color:var(--text-muted)]">SLA</Link>
+          </div>
+        </section>
       </main>
     </div>
   );

@@ -8,8 +8,5 @@ export default defineConfig({
     include: ["react-quill"],
   },
   build: {
-    rollupOptions: {
-      external: (id) => id.startsWith("@capacitor/"),
-    },
   },
 })
