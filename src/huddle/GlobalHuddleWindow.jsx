@@ -1,37 +1,17 @@
 // src/huddle/GlobalHuddleWindow.jsx
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { memo, useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useHuddle } from "../context/HuddleContext";
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Maximize2, Minimize2, VolumeX, Captions,
-  BookOpenText, Gauge, Image, Sparkles, X, ArrowDown,
+  BookOpenText, Gauge, X, ArrowDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useApi } from "../api";
-import { preloadBackgroundEffects } from "./media/BackgroundEffects";
 import {
   clearLiveKitRenderTarget,
   updateLiveKitRenderTarget,
 } from "./media/LiveKitRenderTarget";
-
-const CURATED_HUDDLE_BACKGROUNDS = [
-  {
-    label: "Modern office",
-    path: "/huddle-backgrounds/office-premium.jpg",
-  },
-  {
-    label: "Conference room",
-    path: "/huddle-backgrounds/conference-room-premium.jpg",
-  },
-  {
-    label: "Executive office",
-    path: "/huddle-backgrounds/executive-office-premium.jpg",
-  },
-  {
-    label: "Enterprise abstract",
-    path: "/huddle-backgrounds/enterprise-abstract-premium.jpg",
-  },
-];
 
 // ── Call timer ──────────────────────────────────────────────────────────────
 function useCallTimer(startedAt) {
@@ -52,6 +32,11 @@ function useCallTimer(startedAt) {
   const s = String(elapsed % 60).padStart(2, "0");
   return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
 }
+
+const CallTimer = memo(function CallTimer({ startedAt }) {
+  const elapsed = useCallTimer(startedAt);
+  return <span className="font-mono text-xs text-slate-400">{elapsed}</span>;
+});
 
 function captionTime(value) {
   const timestamp = value ? new Date(value) : null;
@@ -80,6 +65,8 @@ function getViewportSize() {
   return {
     w: Math.round(visualViewport?.width || window.innerWidth || 390),
     h: Math.round(visualViewport?.height || window.innerHeight || 844),
+    x: Math.round(visualViewport?.offsetLeft || 0),
+    y: Math.round(visualViewport?.offsetTop || 0),
   };
 }
 
@@ -89,7 +76,10 @@ function isMobileViewport() {
 
 function getFullWindowLayout() {
   const viewport = getViewportSize();
-  return { pos: { x: 0, y: 0 }, size: { w: viewport.w, h: viewport.h } };
+  return {
+    pos: { x: viewport.x, y: viewport.y },
+    size: { w: viewport.w, h: viewport.h },
+  };
 }
 
 function getDesktopDefaultLayout() {
@@ -204,6 +194,8 @@ function RemoteAudioTrack({ track }) {
   return <audio ref={ref} className="hidden" aria-hidden="true" />;
 }
 
+const MemoizedRemoteAudioTrack = memo(RemoteAudioTrack);
+
 // ── Single video tile ────────────────────────────────────────────────────────
 function VideoTile({
   stream,
@@ -217,15 +209,32 @@ function VideoTile({
   isActiveSpeaker = false,
   compact = false,
   connectionState = "connected",
+  onOrientationChange = null,
+  mobileViewport = false,
 }) {
   const { setRef } = useVideoMediaRef(stream, liveKitTrack, isLocal || Boolean(liveKitTrack));
   const tileRef = useRef(null);
+  const portraitVideoRef = useRef(false);
   const [portraitVideo, setPortraitVideo] = useState(false);
   const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
   const initials = (name || "?")[0].toUpperCase();
   const showAvatar = (!stream && !liveKitTrack) || isCameraOff;
   const reconnecting = connectionState === "reconnecting";
   const screenShare = videoSource === "screen" || videoSource === "screen_share";
+  const updateVideoGeometry = useCallback((video) => {
+    const portrait = video.videoHeight > video.videoWidth;
+    const width = video.videoWidth || 0;
+    const height = video.videoHeight || 0;
+    if (portraitVideoRef.current !== portrait) {
+      portraitVideoRef.current = portrait;
+      setPortraitVideo(portrait);
+      onOrientationChange?.(portrait);
+    }
+    setVideoSize((current) => {
+      if (current.width === width && current.height === height) return current;
+      return { width, height };
+    });
+  }, [onOrientationChange]);
 
   useEffect(() => {
     const tile = tileRef.current;
@@ -266,18 +275,16 @@ function VideoTile({
       <video
         ref={setRef}
         onLoadedMetadata={(event) => {
-          const video = event.currentTarget;
-          setPortraitVideo(video.videoHeight > video.videoWidth);
-          setVideoSize({ width: video.videoWidth || 0, height: video.videoHeight || 0 });
+          updateVideoGeometry(event.currentTarget);
         }}
         onResize={(event) => {
-          const video = event.currentTarget;
-          setPortraitVideo(video.videoHeight > video.videoWidth);
-          setVideoSize({ width: video.videoWidth || 0, height: video.videoHeight || 0 });
+          updateVideoGeometry(event.currentTarget);
         }}
         onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
         className={`absolute inset-0 h-full w-full ${
-          screenShare || portraitVideo ? "object-contain bg-black" : "object-cover"
+          screenShare || portraitVideo || mobileViewport
+            ? "object-contain bg-black"
+            : "object-cover"
         }`}
         style={isLocal ? { transform: "scaleX(-1)" } : undefined}
       />
@@ -303,6 +310,8 @@ function VideoTile({
     </div>
   );
 }
+
+const MemoizedVideoTile = memo(VideoTile);
 
 // ── Control button ────────────────────────────────────────────────────────────
 function CtrlBtn({ onClick, title, active = false, danger = false, wide = false, disabled = false, children }) {
@@ -332,7 +341,6 @@ export default function GlobalHuddleWindow() {
   const currentUser = huddleCtx?.currentUser || null;
 
   const isHost = String(activeHuddle?.startedBy?.userId) === String(currentUser?.id);
-  const callTimer = useCallTimer(activeHuddle?.at);
   const activeSpeakerId = rtc?.activeSpeakerId;
   const networkQuality = rtc?.networkQuality || "good";
 
@@ -344,20 +352,57 @@ export default function GlobalHuddleWindow() {
   const [size, setSize] = useState(() => (
     isMobileViewport() ? getFullWindowLayout().size : getDesktopDefaultLayout().size
   ));
+  const [mobileControlsVisible, setMobileControlsVisible] = useState(false);
+  const [oneOnOneRemotePortrait, setOneOnOneRemotePortrait] = useState(false);
   const [pendingControl, setPendingControl] = useState(null);
-  const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showMissedPanel, setShowMissedPanel] = useState(false);
   const [missedBrief, setMissedBrief] = useState(null);
   const [missedLoading, setMissedLoading] = useState(false);
   const [followLatestCaption, setFollowLatestCaption] = useState(true);
   const captionFeedRef = useRef(null);
-  const replacementInputRef = useRef(null);
-  const replacementUrlRef = useRef(null);
   const canonicalCaptionFeed = useMemo(
     () => (Array.isArray(rtc?.captionFeed) ? rtc.captionFeed : []),
     [rtc?.captionFeed]
   );
+
+  const toggleMobileControls = useCallback(() => {
+    setMobileControlsVisible((visible) => {
+      if (visible) {
+        setShowQualityMenu(false);
+        setShowMissedPanel(false);
+      }
+      return !visible;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isMobileDevice && activeHuddle?.huddleId) {
+      setMobileControlsVisible(false);
+    }
+  }, [activeHuddle?.huddleId, isMobileDevice]);
+
+  useEffect(() => {
+    if (!isMobileDevice || !activeHuddle?.huddleId) return undefined;
+    const body = document.body;
+    const root = document.documentElement;
+    const previous = {
+      bodyOverflow: body.style.overflow,
+      bodyOverscrollBehavior: body.style.overscrollBehavior,
+      rootOverflow: root.style.overflow,
+      rootOverscrollBehavior: root.style.overscrollBehavior,
+    };
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    root.style.overflow = "hidden";
+    root.style.overscrollBehavior = "none";
+    return () => {
+      body.style.overflow = previous.bodyOverflow;
+      body.style.overscrollBehavior = previous.bodyOverscrollBehavior;
+      root.style.overflow = previous.rootOverflow;
+      root.style.overscrollBehavior = previous.rootOverscrollBehavior;
+    };
+  }, [activeHuddle?.huddleId, isMobileDevice]);
 
   const runControl = useCallback(async (control, action) => {
     if (!action || pendingControl) return;
@@ -368,70 +413,6 @@ export default function GlobalHuddleWindow() {
       setPendingControl(null);
     }
   }, [pendingControl]);
-
-  useEffect(() => () => {
-    if (replacementUrlRef.current) {
-      URL.revokeObjectURL(replacementUrlRef.current);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!rtc?.joined || !rtc?.backgroundEffectsSupported) return undefined;
-    const connection = navigator.connection;
-    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || "")) {
-      return undefined;
-    }
-    const preload = () => {
-      void preloadBackgroundEffects({
-        imagePaths: CURATED_HUDDLE_BACKGROUNDS.map((background) => background.path),
-      });
-    };
-    const idleId = window.requestIdleCallback?.(preload, { timeout: 1200 });
-    const timeout = idleId === undefined
-      ? window.setTimeout(preload, 900)
-      : null;
-    return () => {
-      if (idleId !== undefined) window.cancelIdleCallback?.(idleId);
-      if (timeout !== null) window.clearTimeout(timeout);
-    };
-  }, [rtc?.backgroundEffectsSupported, rtc?.joined]);
-
-  useEffect(() => {
-    if (!showBackgroundMenu || !rtc?.backgroundEffectsSupported) return;
-    void preloadBackgroundEffects({
-      imagePaths: CURATED_HUDDLE_BACKGROUNDS.map((background) => background.path),
-    });
-  }, [rtc?.backgroundEffectsSupported, showBackgroundMenu]);
-
-  const updateBackgroundEffect = useCallback(async (mode, imagePath = null) => {
-    if (!rtc?.setBackgroundEffect) return;
-    const result = await rtc.setBackgroundEffect({ mode, imagePath });
-    if (!result?.ok) {
-      toast.error(
-        result?.reason === "background_effect_not_supported"
-          ? "Background effects are unavailable in this browser"
-          : "Background effect could not be applied"
-      );
-      return;
-    }
-    setShowBackgroundMenu(false);
-    toast.success(
-      mode === "off"
-        ? "Background effect removed"
-        : mode === "blur"
-          ? "Background blurred"
-          : "Background replaced"
-    );
-  }, [rtc]);
-
-  const chooseReplacement = useCallback((event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (replacementUrlRef.current) URL.revokeObjectURL(replacementUrlRef.current);
-    replacementUrlRef.current = URL.createObjectURL(file);
-    void updateBackgroundEffect("replacement", replacementUrlRef.current);
-    event.target.value = "";
-  }, [updateBackgroundEffect]);
 
   const updateQualityMode = useCallback(async (mode) => {
     if (!rtc?.setQualityMode) return;
@@ -488,7 +469,9 @@ export default function GlobalHuddleWindow() {
   }, [activeHuddle?.sessionId, api, showMissedPanel]);
 
   useEffect(() => {
+    let frame = null;
     const sync = () => {
+      frame = null;
       const nextMobile = isMobileViewport();
       setIsMobileDevice(nextMobile);
       if (isMaximized) {
@@ -503,11 +486,18 @@ export default function GlobalHuddleWindow() {
         setPos((current) => clampWindowLayout(current, size, { reserveBottom: 40 }));
       }
     };
-    window.addEventListener("resize", sync);
-    window.visualViewport?.addEventListener?.("resize", sync);
+    const scheduleSync = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(sync);
+    };
+    window.addEventListener("resize", scheduleSync);
+    window.visualViewport?.addEventListener?.("resize", scheduleSync);
+    window.visualViewport?.addEventListener?.("scroll", scheduleSync);
     return () => {
-      window.removeEventListener("resize", sync);
-      window.visualViewport?.removeEventListener?.("resize", sync);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", scheduleSync);
+      window.visualViewport?.removeEventListener?.("resize", scheduleSync);
+      window.visualViewport?.removeEventListener?.("scroll", scheduleSync);
     };
   }, [isMaximized, size]);
 
@@ -535,20 +525,6 @@ export default function GlobalHuddleWindow() {
     setFollowLatestCaption(true);
   }, []);
 
-  useEffect(() => {
-    if (
-      rtc?.backgroundEffect?.diagnostics?.reason ===
-      "background_effect_automatically_disabled"
-    ) {
-      toast("Background effect was disabled to protect call quality.");
-    } else if (
-      rtc?.backgroundEffect?.diagnostics?.reason ===
-      "background_replacement_degraded_to_blur"
-    ) {
-      toast("Background replacement was reduced to blur to protect call quality.");
-    }
-  }, [rtc?.backgroundEffect?.diagnostics?.reason]);
-
   const windowRef = useRef(null);
   const dragging = useRef(false);
   const resizing = useRef(false);
@@ -556,7 +532,10 @@ export default function GlobalHuddleWindow() {
   const resizeStart = useRef({ w: 0, h: 0, x: 0, y: 0 });
   const prevSizeRef = useRef({ pos: null, size: null });
 
-  const remotePeers = Array.isArray(rtc?.remotePeers) ? rtc.remotePeers : [];
+  const remotePeers = useMemo(
+    () => (Array.isArray(rtc?.remotePeers) ? rtc.remotePeers : []),
+    [rtc?.remotePeers]
+  );
 
   const localParticipant = {
     userId: "local",
@@ -722,21 +701,6 @@ export default function GlobalHuddleWindow() {
     }
   };
 
-  useEffect(() => {
-    if (!isMaximized) return;
-    const onResize = () => {
-      const full = getFullWindowLayout();
-      setSize(full.size);
-      setPos(full.pos);
-    };
-    window.addEventListener("resize", onResize);
-    window.visualViewport?.addEventListener?.("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.visualViewport?.removeEventListener?.("resize", onResize);
-    };
-  }, [isMaximized]);
-
   // Don't show video tiles while there is a pending incoming call to accept/decline
   if (!activeHuddle || !rtc || incomingHuddle) return null;
 
@@ -751,7 +715,7 @@ export default function GlobalHuddleWindow() {
     rtc?.screenShareSupported !== false &&
     typeof rtc?.startScreenShare === "function" &&
     typeof rtc?.stopScreenShare === "function";
-  const videoAreaH = Math.max(120, size.h - (isMobileDevice ? 132 : 108));
+  const videoAreaH = Math.max(120, size.h - (isMobileDevice ? 0 : 108));
 
   return (
     <div
@@ -765,20 +729,34 @@ export default function GlobalHuddleWindow() {
         borderRadius: isMaximized ? 0 : "0.75rem",
         border: isMaximized ? "none" : "1px solid #1e293b",
         transition: isMaximized ? "all 0.18s ease" : "none",
+        touchAction: isMobileDevice ? "manipulation" : undefined,
       }}
     >
       {/* ── TOP BAR ───────────────────────────────────────────────────────── */}
       <div
         onMouseDown={onMouseDownDrag}
-        className="w-full px-4 py-2.5 bg-[#1b1e27] flex justify-between items-center shrink-0 cursor-move"
-        style={{ borderRadius: isMaximized ? 0 : "0.75rem 0.75rem 0 0" }}
+        className={`w-full px-4 py-2.5 bg-[#1b1e27]/95 flex justify-between items-center shrink-0 ${
+          isMobileDevice
+            ? `absolute inset-x-0 top-0 z-40 cursor-default transition-all duration-200 ${
+                mobileControlsVisible
+                  ? "translate-y-0 opacity-100"
+                  : "-translate-y-full opacity-0 pointer-events-none"
+              }`
+            : "cursor-move"
+        }`}
+        style={{
+          borderRadius: isMaximized ? 0 : "0.75rem 0.75rem 0 0",
+          paddingTop: isMobileDevice
+            ? "calc(0.625rem + env(safe-area-inset-top))"
+            : undefined,
+        }}
       >
         <div className="flex items-center gap-2.5">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
           <span className="font-semibold text-sm truncate max-w-[180px]">
             {activeHuddle.startedBy?.username || "Huddle"}
           </span>
-          <span className="font-mono text-xs text-slate-400">{callTimer}</span>
+          <CallTimer startedAt={activeHuddle?.at} />
         </div>
 
         <div className="flex items-center gap-3">
@@ -798,9 +776,17 @@ export default function GlobalHuddleWindow() {
       </div>
 
       {/* ── VIDEO AREA ────────────────────────────────────────────────────── */}
-      <div className="flex-1 relative bg-[#0f111a] overflow-hidden min-h-0" style={{ height: videoAreaH }}>
+      <div
+        className="flex-1 relative bg-[#0f111a] overflow-hidden min-h-0"
+        style={{ height: videoAreaH }}
+        onClick={() => {
+          if (isMobileDevice) {
+            toggleMobileControls();
+          }
+        }}
+      >
         {remotePeers.map((peer) => (
-          <RemoteAudioTrack key={`audio:${peer.userId}`} track={peer.audioTrack} />
+          <MemoizedRemoteAudioTrack key={`audio:${peer.userId}`} track={peer.audioTrack} />
         ))}
         {rtc?.error && (
           <div className="absolute top-2 left-2 right-2 z-30 rounded-md border border-red-400/40 bg-red-950/85 px-3 py-2 text-xs text-red-100 shadow-lg">
@@ -810,7 +796,7 @@ export default function GlobalHuddleWindow() {
         {presentingParticipant ? (
           <div className="flex h-full min-h-0 flex-col gap-2 p-2 lg:flex-row">
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-white/10 bg-black">
-              <VideoTile
+              <MemoizedVideoTile
                 stream={presentingParticipant.stream}
                 liveKitTrack={presentingParticipant.videoTrack}
                 liveKitPublication={presentingParticipant.videoPublication}
@@ -819,11 +805,12 @@ export default function GlobalHuddleWindow() {
                 isMuted={presentingParticipant.isMuted}
                 isCameraOff={false}
                 connectionState={presentingParticipant.connectionState}
+                mobileViewport={isMobileDevice}
               />
             </div>
             <div className="grid h-24 shrink-0 grid-flow-col auto-cols-[120px] gap-2 overflow-x-auto lg:h-full lg:w-36 lg:grid-flow-row lg:auto-rows-[100px] lg:grid-cols-1 lg:overflow-y-auto">
               {gridParticipants.map((participant) => (
-                <VideoTile
+                <MemoizedVideoTile
                   key={`presenting:${participant.userId}`}
                   stream={participant.stream}
                   liveKitTrack={participant.videoTrack}
@@ -835,6 +822,7 @@ export default function GlobalHuddleWindow() {
                   isLocal={participant.isLocal}
                   compact
                   connectionState={participant.connectionState}
+                  mobileViewport={isMobileDevice}
                 />
               ))}
             </div>
@@ -843,8 +831,25 @@ export default function GlobalHuddleWindow() {
           /* ── WhatsApp-style 1-on-1 ── */
           <>
             {/* Remote: full-screen background */}
-            <div className="absolute inset-0">
-              <VideoTile
+            <div
+              className={`absolute inset-0 flex items-center justify-center ${
+                oneOnOneRemotePortrait && !isMobileDevice
+                  ? "bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-3"
+                  : ""
+              }`}
+            >
+              <div
+                className="h-full w-full"
+                style={
+                  oneOnOneRemotePortrait && !isMobileDevice
+                    ? {
+                        width: `min(58vw, ${Math.round(videoAreaH * 0.75)}px)`,
+                        maxWidth: "100%",
+                      }
+                    : undefined
+                }
+              >
+              <MemoizedVideoTile
                 stream={remoteParticipant.stream}
                 liveKitTrack={remoteParticipant.videoTrack}
                 liveKitPublication={remoteParticipant.videoPublication}
@@ -855,21 +860,32 @@ export default function GlobalHuddleWindow() {
                 isLocal={false}
                 isActiveSpeaker={activeSpeakerId === remoteParticipant.userId}
                 connectionState={remoteParticipant.connectionState}
+                onOrientationChange={setOneOnOneRemotePortrait}
+                mobileViewport={isMobileDevice}
               />
+              </div>
             </div>
 
             {/* Local: PIP corner (bottom-right, above controls) */}
             <div
               className="absolute z-20 rounded-xl overflow-hidden border-2 border-white/20 shadow-xl"
-              style={{ width: 100, height: 134, bottom: 12, right: 12 }}
+              style={{
+                width: 100,
+                height: 134,
+                right: 12,
+                ...(isMobileDevice
+                  ? { top: "calc(56px + env(safe-area-inset-top))" }
+                  : { bottom: 12 }),
+              }}
             >
-              <VideoTile
+              <MemoizedVideoTile
                 stream={localParticipant.stream}
                 name={localParticipant.username}
                 isMuted={localParticipant.isMuted}
                 isCameraOff={localParticipant.isCameraOff}
                 isLocal={true}
                 compact={true}
+                mobileViewport={isMobileDevice}
               />
             </div>
           </>
@@ -884,7 +900,7 @@ export default function GlobalHuddleWindow() {
             }}
           >
             {gridParticipants.map((p) => (
-              <VideoTile
+              <MemoizedVideoTile
                 key={p.userId}
                 stream={p.stream}
                 liveKitTrack={p.videoTrack}
@@ -896,6 +912,7 @@ export default function GlobalHuddleWindow() {
                 isLocal={p.isLocal}
                 isActiveSpeaker={activeSpeakerId === (p.isLocal ? "local" : p.userId)}
                 connectionState={p.connectionState}
+                mobileViewport={isMobileDevice}
               />
             ))}
           </div>
@@ -905,6 +922,7 @@ export default function GlobalHuddleWindow() {
       {/* ── SUBTITLE OVERLAY ─────────────────────────────────────────────── */}
       {rtc?.subtitlesEnabled && !showMissedPanel && (
         <section
+          onClick={(event) => event.stopPropagation()}
           className={`absolute z-30 overflow-hidden border border-white/15 bg-[#0b1220]/95 shadow-2xl backdrop-blur-md ${
             isMobileDevice
               ? "inset-x-2 max-h-[50%]"
@@ -912,7 +930,10 @@ export default function GlobalHuddleWindow() {
           }`}
           style={{
             borderRadius: 8,
-            bottom: isMobileDevice ? 132 : 88,
+            bottom: isMobileDevice
+              ? (mobileControlsVisible ? 116 : 12)
+              : 88,
+            touchAction: "pan-y",
           }}
           aria-label="Live meeting transcript"
         >
@@ -988,12 +1009,19 @@ export default function GlobalHuddleWindow() {
 
       {showMissedPanel && (
         <section
+          onClick={(event) => event.stopPropagation()}
           className={`absolute z-40 overflow-hidden border border-white/15 bg-[#111827]/95 shadow-xl ${
             isMobileDevice
               ? "inset-x-2 top-12"
               : "left-3 top-14 w-[min(430px,62%)]"
           }`}
-          style={{ borderRadius: 8, bottom: isMobileDevice ? 132 : 88 }}
+          style={{
+            borderRadius: 8,
+            bottom: isMobileDevice
+              ? (mobileControlsVisible ? 116 : 12)
+              : 88,
+            touchAction: "pan-y",
+          }}
           aria-label="What did I miss"
         >
           <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
@@ -1039,63 +1067,6 @@ export default function GlobalHuddleWindow() {
         </section>
       )}
 
-      {showBackgroundMenu && (
-        <div
-          className="absolute z-50 w-72 border border-white/15 bg-[#1b1e27] p-2 shadow-xl"
-          style={{ borderRadius: 8, bottom: isMobileDevice ? 126 : 82, left: "50%", transform: "translateX(-50%)" }}
-        >
-          <button type="button" onClick={() => updateBackgroundEffect("off")} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10">
-            <Video size={15} /> No effect
-          </button>
-          <button type="button" onClick={() => updateBackgroundEffect("blur")} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10">
-            <Sparkles size={15} /> Blur background
-          </button>
-          <button
-            type="button"
-            onClick={() => replacementInputRef.current?.click()}
-            disabled={rtc?.backgroundEffectSupport?.replacementSupported === false}
-            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
-            title={
-              rtc?.backgroundEffectSupport?.replacementSupported === false
-                ? "Background replacement is disabled on this device to protect call quality"
-                : "Replace background"
-            }
-          >
-            <Image size={15} /> Replace background
-          </button>
-          {rtc?.backgroundEffectSupport?.replacementSupported !== false && (
-            <div className="mt-2 border-t border-white/10 pt-2">
-              <div className="px-1 pb-2 text-[11px] font-semibold uppercase text-slate-400">
-                Included backgrounds
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {CURATED_HUDDLE_BACKGROUNDS.map((background) => (
-                  <button
-                    key={background.path}
-                    type="button"
-                    onClick={() =>
-                      updateBackgroundEffect("replacement", background.path)
-                    }
-                    className="overflow-hidden rounded border border-white/10 text-left hover:border-sky-400"
-                    title={background.label}
-                  >
-                    <img
-                      src={background.path}
-                      alt=""
-                      className="aspect-video w-full object-cover"
-                    />
-                    <span className="block truncate px-1.5 py-1 text-[10px] text-slate-300">
-                      {background.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <input ref={replacementInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={chooseReplacement} />
-        </div>
-      )}
-
       {showQualityMenu && (
         <div
           className="absolute z-50 w-52 border border-white/15 bg-[#1b1e27] p-2 shadow-xl"
@@ -1123,8 +1094,15 @@ export default function GlobalHuddleWindow() {
 
       {/* ── CONTROL BAR ───────────────────────────────────────────────────── */}
       <div
-        className={`w-full bg-[#1b1e27] flex justify-center items-center shrink-0 ${
-          isMobileDevice ? "py-3 px-3 gap-2 flex-wrap" : "py-4 px-6 gap-4"
+        onClick={(event) => event.stopPropagation()}
+        className={`w-full bg-[#1b1e27]/95 flex justify-center items-center shrink-0 ${
+          isMobileDevice
+            ? `absolute inset-x-0 bottom-0 z-40 py-3 px-3 gap-2 flex-wrap transition-all duration-200 ${
+                mobileControlsVisible
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-full opacity-0 pointer-events-none"
+              }`
+            : "py-4 px-6 gap-4"
         }`}
         style={{
           borderRadius: isMaximized ? 0 : "0 0 0.75rem 0.75rem",
@@ -1153,8 +1131,8 @@ export default function GlobalHuddleWindow() {
           {rtc.isCameraOff ? <VideoOff size={18} /> : <Video size={18} />}
         </CtrlBtn>
 
-        {/* Screen share */}
-        {(!isMobileDevice || isMaximized) && (
+        {/* Desktop-only secondary controls stay out of the phone control row. */}
+        {!isMobileDevice && (
           <>
         <CtrlBtn
           onClick={() => runControl(
@@ -1172,20 +1150,6 @@ export default function GlobalHuddleWindow() {
           {rtc.isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
         </CtrlBtn>
 
-        {/* Background effects */}
-        <CtrlBtn
-          onClick={() => setShowBackgroundMenu((value) => !value)}
-          title={
-            rtc.backgroundEffectsSupported
-              ? "Background effects"
-              : "Background effects are unavailable in this browser"
-          }
-          active={rtc.backgroundEffect?.active}
-          disabled={!rtc.backgroundEffectsSupported || pendingControl === "background"}
-        >
-          <Sparkles size={18} />
-        </CtrlBtn>
-
         <CtrlBtn
           onClick={() => setShowQualityMenu((value) => !value)}
           title={`Video quality: ${rtc.qualityMode || "auto"}`}
@@ -1195,7 +1159,10 @@ export default function GlobalHuddleWindow() {
           <Gauge size={18} />
         </CtrlBtn>
 
-        {/* CC / Live subtitles */}
+          </>
+        )}
+
+        {/* CC / Live subtitles remains available on mobile. */}
         <CtrlBtn
           onClick={() => subtitlesSupported && runControl("subtitles", rtc?.toggleSubtitles)}
           title={
@@ -1209,6 +1176,8 @@ export default function GlobalHuddleWindow() {
           <Captions size={18} />
         </CtrlBtn>
 
+        {!isMobileDevice && (
+          <>
         {/* What did I miss */}
         <CtrlBtn
           onClick={loadWhatDidIMiss}

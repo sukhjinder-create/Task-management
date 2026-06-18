@@ -10,10 +10,15 @@ function bounded(value, minimum, maximum) {
 }
 
 function isMobileMediaDevice() {
-  return (
-    typeof navigator !== "undefined" &&
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
-  );
+  if (typeof navigator === "undefined") return false;
+  const mobileUserAgent =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  const coarseTouch =
+    navigator.maxTouchPoints > 0 &&
+    (typeof window === "undefined" ||
+      window.matchMedia?.("(pointer: coarse)")?.matches === true ||
+      window.innerWidth < 1024);
+  return mobileUserAgent || coarseTouch;
 }
 
 export function getLiveKitRenderTarget(publication) {
@@ -56,8 +61,8 @@ export function updateLiveKitRenderTarget(publication, {
   }
   const maxCameraWidth = sourcePortrait ? 720 : 1280;
   const maxCameraHeight = sourcePortrait ? 1280 : 720;
-  const minimumCameraWidth = mobile ? 160 : maxCameraWidth;
-  const minimumCameraHeight = mobile ? 90 : maxCameraHeight;
+  const minimumCameraWidth = mobile ? 160 : 240;
+  const minimumCameraHeight = mobile ? 90 : 135;
   const rawTargetWidth = targetCssWidth * pixelRatio;
   const rawTargetHeight = targetCssHeight * pixelRatio;
   const target = {
@@ -77,7 +82,7 @@ export function updateLiveKitRenderTarget(publication, {
       90,
       screenShare ? 1080 : maxCameraHeight
     ),
-    framesPerSecond: screenShare ? 30 : cssWidth >= 720 ? 30 : 24,
+    framesPerSecond: screenShare ? 15 : 24,
     pixelRatio,
     source,
     visible: Boolean(visible),

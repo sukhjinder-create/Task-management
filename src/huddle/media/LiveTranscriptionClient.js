@@ -165,6 +165,7 @@ export function createLiveTranscriptionClient({
       firstProviderResultLatencyMs: null,
       firstBackendEventLatencyMs: null,
       firstLocalCaptionLatencyMs: null,
+      firstCaptionDeliveryLatencyMs: null,
     },
     lastProviderMessageAt: null,
     lastBackendEventAt: null,
@@ -316,6 +317,21 @@ export function createLiveTranscriptionClient({
     // Local captions stay immediate while persistence is handled by the
     // bounded event pump. The canonical server event replaces this row.
     const observedAt = clientProviderReceivedAt || new Date().toISOString();
+    const timing = segmentTiming(payload, streamStartedAtMs);
+    const speechEndedAtMs = timing.endedAt
+      ? new Date(timing.endedAt).getTime()
+      : null;
+    const observedAtMs = new Date(observedAt).getTime();
+    if (
+      !diagnostics.timings.firstCaptionDeliveryLatencyMs &&
+      Number.isFinite(speechEndedAtMs) &&
+      Number.isFinite(observedAtMs)
+    ) {
+      diagnostics.timings.firstCaptionDeliveryLatencyMs = Math.max(
+        0,
+        Math.round(observedAtMs - speechEndedAtMs)
+      );
+    }
     if (!diagnostics.timings.firstLocalCaptionLatencyMs) {
       diagnostics.timings.firstLocalCaptionLatencyMs = elapsedMs(streamAttemptStartedAtMs);
     }

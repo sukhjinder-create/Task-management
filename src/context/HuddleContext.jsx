@@ -5,6 +5,7 @@ import { getSocket, joinHuddle as emitJoinHuddle } from "../socket";
 import { useAuth } from "./AuthContext";
 import toast from "react-hot-toast";
 import { loadLiveKitSdk } from "../huddle/media/LiveKitSdk";
+import { prefetchLiveKitToken } from "../huddle/media/LiveKitConnection";
 
 const HuddleContext = createContext(null);
 const ACTIVE_HUDDLE_STORAGE_KEY = "asystence.activeHuddle.v1";
@@ -141,7 +142,19 @@ export function HuddleProvider({ children }) {
   useEffect(() => {
     if (!incomingHuddle?.huddleId) return;
     void loadLiveKitSdk({ enabled: true });
-  }, [incomingHuddle?.huddleId]);
+    void prefetchLiveKitToken({
+      workspaceId: user?.workspaceId || user?.workspace_id,
+      channelId: incomingHuddle.channelId,
+      huddleId: incomingHuddle.huddleId,
+      sessionId: incomingHuddle.sessionId || incomingHuddle.huddleId,
+    });
+  }, [
+    incomingHuddle?.channelId,
+    incomingHuddle?.huddleId,
+    incomingHuddle?.sessionId,
+    user?.workspaceId,
+    user?.workspace_id,
+  ]);
 
   // ---------------------------
   // WebRTC Hook
@@ -335,9 +348,6 @@ export function HuddleProvider({ children }) {
     isCameraOff: !call.camEnabled,
     isScreenSharing: call.screenSharing,
     screenShareSupported: call.screenShareSupported !== false,
-    backgroundEffectsSupported: call.backgroundEffectsSupported === true,
-    backgroundEffectSupport: call.backgroundEffectSupport || null,
-    backgroundEffect: call.backgroundEffect || { mode: "off", active: false },
     activeSpeakerId: call.activeSpeakerId,
     networkQuality: call.networkQuality,
     qualityMode: call.qualityMode || "auto",
@@ -348,7 +358,6 @@ export function HuddleProvider({ children }) {
     toggleCamera: call.toggleCamera,
     startScreenShare: call.startScreenShare,
     stopScreenShare: call.stopScreenShare,
-    setBackgroundEffect: call.setBackgroundEffect,
     setQualityMode: call.setQualityMode,
     joinHuddle: call.startCall,
     leaveHuddle: call.leaveCall,
@@ -363,11 +372,10 @@ export function HuddleProvider({ children }) {
   }), [
     call.localStream, call.remotePeers,
     call.micEnabled, call.camEnabled, call.screenSharing, call.screenShareSupported,
-    call.backgroundEffectsSupported, call.backgroundEffectSupport, call.backgroundEffect,
     call.activeSpeakerId, call.networkQuality, call.qualityMode,
     call.inCall, call.connecting,
     call.toggleMic, call.toggleCamera,
-    call.startScreenShare, call.stopScreenShare, call.setBackgroundEffect, call.setQualityMode,
+    call.startScreenShare, call.stopScreenShare, call.setQualityMode,
     call.startCall, call.leaveCall, call.muteAll,
     call.subtitlesSupported, call.subtitlesEnabled, call.subtitles, call.captionFeed, call.captionStatus, call.toggleSubtitles,
     endHuddleForAll,

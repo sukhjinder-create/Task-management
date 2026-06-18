@@ -1263,12 +1263,6 @@ export function useMeshMediaProvider({ currentUser }) {
     camEnabled,
     screenSharing,
     screenShareSupported: browserSupportsScreenShare(),
-    backgroundEffectsSupported: false,
-    backgroundEffect: {
-      mode: "off",
-      active: false,
-      reason: "mesh_background_effect_not_supported",
-    },
     subtitlesSupported: browserSupportsSpeechRecognition(),
     subtitlesEnabled,
     subtitles,
@@ -1278,10 +1272,6 @@ export function useMeshMediaProvider({ currentUser }) {
     toggleCamera,
     startScreenShare,
     stopScreenShare,
-    setBackgroundEffect: async () => ({
-      ok: false,
-      reason: "mesh_background_effect_not_supported",
-    }),
     setQualityMode: async () => ({
       ok: false,
       reason: "mesh_quality_mode_not_supported",

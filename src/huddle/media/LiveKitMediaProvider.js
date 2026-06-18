@@ -31,12 +31,6 @@ import {
   elapsedMs,
   metricNow,
 } from "./providerDiagnostics";
-import {
-  applyBackgroundEffect,
-  destroyBackgroundEffect,
-  getBackgroundEffectSupport,
-  HUDDLE_BACKGROUND_EFFECTS,
-} from "./BackgroundEffects";
 import { getLiveKitRenderTarget } from "./LiveKitRenderTarget";
 
 export const LIVEKIT_MEDIA_PROVIDER_READINESS = Object.freeze({
@@ -99,53 +93,48 @@ const LIVEKIT_QUALITY_CAPTURE_OPTIONS = Object.freeze({
     resolution: { width: 960, height: 540, frameRate: 24 },
   },
   [LIVEKIT_QUALITY_MODES.HD]: {
-    resolution: { width: 1280, height: 720, frameRate: 30 },
+    resolution: { width: 1280, height: 720, frameRate: 24 },
   },
 });
 
 function isMobileMediaDevice() {
-  return (
-    typeof navigator !== "undefined" &&
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
-  );
-}
-
-function isMobileBackgroundEffectDevice() {
-  return isMobileMediaDevice();
+  if (typeof navigator === "undefined") return false;
+  const mobileUserAgent =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  const coarseTouch =
+    navigator.maxTouchPoints > 0 &&
+    (typeof window === "undefined" ||
+      window.matchMedia?.("(pointer: coarse)")?.matches === true ||
+      window.innerWidth < 1024);
+  return mobileUserAgent || coarseTouch;
 }
 
 function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
   if (isMobileMediaDevice()) {
-    const portrait =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(orientation: portrait)")?.matches !== false;
     const standard = mode === LIVEKIT_QUALITY_MODES.STANDARD;
     return {
       facingMode: "user",
       resolution: {
-        width: portrait ? (standard ? 540 : 720) : (standard ? 960 : 1280),
-        height: portrait ? (standard ? 960 : 1280) : (standard ? 540 : 720),
+        width: standard ? 540 : 720,
+        height: standard ? 720 : 960,
         frameRate: 24,
-        aspectRatio: portrait ? 9 / 16 : 16 / 9,
       },
     };
   }
   return (
     LIVEKIT_QUALITY_CAPTURE_OPTIONS[mode] || {
       facingMode: "user",
-      resolution: { width: 1280, height: 720, frameRate: 30 },
+      resolution: { width: 960, height: 540, frameRate: 24 },
     }
   );
 }
 
 function liveKitCameraSimulcastLayers(sdk = null) {
-  const presets = sdk?.VideoPresets || {};
-  const mobile = isMobileMediaDevice();
-  return (
-    mobile
-      ? [presets.h180, presets.h360, presets.h540]
-      : [presets.h180, presets.h360, presets.h720]
-  ).filter(Boolean);
+  const presets =
+    (isMobileMediaDevice() ? sdk?.VideoPresets43 : sdk?.VideoPresets) ||
+    sdk?.VideoPresets ||
+    {};
+  return [presets.h180, presets.h360, presets.h540].filter(Boolean);
 }
 
 function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO, sdk = null) {
@@ -157,9 +146,9 @@ function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO, sdk = null) {
     videoEncoding: {
       maxBitrate:
         mode === LIVEKIT_QUALITY_MODES.HD
-          ? (mobile ? 1_500_000 : 2_500_000)
-          : (mobile ? 1_300_000 : 2_000_000),
-      maxFramerate: mobile ? 24 : 30,
+          ? (mobile ? 900_000 : 1_100_000)
+          : (mobile ? 750_000 : 900_000),
+      maxFramerate: 24,
     },
     ...(layers.length ? { videoSimulcastLayers: layers } : {}),
   };
@@ -240,7 +229,7 @@ async function prewarmInitialLiveKitTracks({
 }
 
 const LIVE_CAPTION_LANGUAGE = "multi";
-const LIVE_CAPTION_POLL_INTERVAL_MS = 500;
+const LIVE_CAPTION_POLL_INTERVAL_MS = 2000;
 const LIVE_CAPTION_HISTORY_LIMIT = 1500;
 const LIVE_CAPTION_CURSOR_OVERLAP_MS = 2000;
 
@@ -1272,12 +1261,17 @@ function createInitialLiveKitMetrics() {
     subscribeLatencyMs: null,
     firstAudioSubscribeLatencyMs: null,
     firstVideoSubscribeLatencyMs: null,
+    firstRemoteParticipantLatencyMs: null,
+    firstAudioAfterParticipantMs: null,
+    firstVideoAfterParticipantMs: null,
     captionsActiveLatencyMs: null,
+    firstCaptionLatencyMs: null,
     connectionTimings: null,
     screenShareLatencyMs: null,
     firstSubscribeAt: null,
     firstAudioSubscribeAt: null,
     firstVideoSubscribeAt: null,
+    firstRemoteParticipantAt: null,
     firstCaptionAt: null,
     captionTransportReadyAt: null,
     captionTransportReadyLatencyMs: null,
@@ -1335,6 +1329,13 @@ function markExistingSubscribedTracks(metrics, room) {
   if (!metrics || !room) return;
   const now = metricNow();
   for (const participant of remoteParticipantsFromRoom(room)) {
+    if (!metrics.firstRemoteParticipantAt) {
+      metrics.firstRemoteParticipantAt = metrics.roomStartedAt || now;
+      metrics.firstRemoteParticipantLatencyMs = elapsedMs(
+        metrics.intentStartedAt || metrics.joinStartedAt,
+        metrics.firstRemoteParticipantAt
+      );
+    }
     for (const publication of uniqueTrackPublications(participant)) {
       const hasTrack =
         publication?.isSubscribed === true ||
@@ -1355,11 +1356,19 @@ function markExistingSubscribedTracks(metrics, room) {
           metrics.intentStartedAt || metrics.joinStartedAt,
           metrics.firstAudioSubscribeAt
         );
+        metrics.firstAudioAfterParticipantMs = elapsedMs(
+          metrics.firstRemoteParticipantAt,
+          metrics.firstAudioSubscribeAt
+        );
       }
       if (trackKind === "video" && !metrics.firstVideoSubscribeAt) {
         metrics.firstVideoSubscribeAt = now;
         metrics.firstVideoSubscribeLatencyMs = elapsedMs(
           metrics.intentStartedAt || metrics.joinStartedAt,
+          metrics.firstVideoSubscribeAt
+        );
+        metrics.firstVideoAfterParticipantMs = elapsedMs(
+          metrics.firstRemoteParticipantAt,
           metrics.firstVideoSubscribeAt
         );
       }
@@ -1880,7 +1889,7 @@ export async function startLiveKitScreenShare(room) {
             resolution: {
               width: 1920,
               height: 1080,
-              frameRate: 30,
+              frameRate: 15,
               aspectRatio: 16 / 9,
             },
           }),
@@ -1888,12 +1897,12 @@ export async function startLiveKitScreenShare(room) {
     const publishOptions = {
       simulcast: true,
       videoEncoding: {
-        maxBitrate: 2_500_000,
-        maxFramerate: 30,
+        maxBitrate: 1_500_000,
+        maxFramerate: 15,
       },
       screenShareEncoding: {
-        maxBitrate: 2_500_000,
-        maxFramerate: 30,
+        maxBitrate: 1_500_000,
+        maxFramerate: 15,
       },
     };
     const result = await room.localParticipant.setScreenShareEnabled(
@@ -2329,23 +2338,13 @@ export function useLiveKitMediaProvider({
   const transcriptionClientRef = useRef(null);
   const transcriptionStartingRef = useRef(false);
   const captionCursorRef = useRef(null);
-  const backgroundProcessorRef = useRef(null);
-  const backgroundTrackRef = useRef(null);
-  const backgroundEffectRef = useRef({
-    mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
-    active: false,
-  });
-  const backgroundStressSamplesRef = useRef(0);
+  const activeSpeakerIdRef = useRef(null);
+  const pendingLocalCaptionRef = useRef(null);
+  const localCaptionFlushTimerRef = useRef(null);
   const [connectedRoom, setConnectedRoom] = useState(null);
   const [connectionResult, setConnectionResult] = useState(null);
   const [publicationDiagnostics, setPublicationDiagnostics] = useState(null);
   const [screenShareDiagnostics, setScreenShareDiagnostics] = useState(null);
-  const [backgroundEffect, setBackgroundEffectState] = useState({
-    mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
-    active: false,
-    imagePathConfigured: false,
-    diagnostics: null,
-  });
   const [transcriptionDiagnostics, setTranscriptionDiagnostics] = useState(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [subtitles, setSubtitles] = useState({});
@@ -2453,7 +2452,11 @@ export function useLiveKitMediaProvider({
         intentToJoinMs: metrics.intentToJoinLatencyMs,
         firstAudioMs: metrics.firstAudioSubscribeLatencyMs,
         firstVideoMs: metrics.firstVideoSubscribeLatencyMs,
+        firstRemoteParticipantMs: metrics.firstRemoteParticipantLatencyMs,
+        firstAudioAfterParticipantMs: metrics.firstAudioAfterParticipantMs,
+        firstVideoAfterParticipantMs: metrics.firstVideoAfterParticipantMs,
         captionsActiveMs: metrics.captionsActiveLatencyMs,
+        firstCaptionMs: metrics.firstCaptionLatencyMs,
         captionTransportReadyMs: metrics.captionTransportReadyLatencyMs,
         captionTransportReadyFromIntentMs: metrics.captionTransportReadyFromIntentMs,
       },
@@ -2498,7 +2501,6 @@ export function useLiveKitMediaProvider({
         latestNetworkStatsRef.current = stats;
         if (!cancelled) {
           setNetworkStatsByParticipant(stats);
-          setRevision((value) => value + 1);
         }
       } catch (error) {
         recordMetricFailure(providerMetricsRef.current, {
@@ -2506,12 +2508,11 @@ export function useLiveKitMediaProvider({
           reason: "network_quality_stats_failed",
           message: safeString(error?.message) || null,
         });
-        if (!cancelled) setRevision((value) => value + 1);
       }
     };
 
     collect();
-    const interval = window.setInterval(collect, 5000);
+    const interval = window.setInterval(collect, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -2545,7 +2546,14 @@ export function useLiveKitMediaProvider({
           intentToJoinMs: providerMetrics.intentToJoinLatencyMs,
           firstAudioMs: providerMetrics.firstAudioSubscribeLatencyMs,
           firstVideoMs: providerMetrics.firstVideoSubscribeLatencyMs,
+          firstRemoteParticipantMs:
+            providerMetrics.firstRemoteParticipantLatencyMs,
+          firstAudioAfterParticipantMs:
+            providerMetrics.firstAudioAfterParticipantMs,
+          firstVideoAfterParticipantMs:
+            providerMetrics.firstVideoAfterParticipantMs,
           captionsActiveMs: providerMetrics.captionsActiveLatencyMs,
+          firstCaptionMs: providerMetrics.firstCaptionLatencyMs,
           prepareLatencyMs: providerMetrics.connectionTimings?.prepareLatencyMs,
           sdkLoadLatencyMs: providerMetrics.connectionTimings?.sdkLoadLatencyMs,
           roomEndpointLatencyMs: providerMetrics.connectionTimings?.roomEndpointLatencyMs,
@@ -2563,73 +2571,13 @@ export function useLiveKitMediaProvider({
           captionFirstProviderResultLatencyMs: providerMetrics.captionStartupTimings?.firstProviderResultLatencyMs,
           captionFirstBackendEventLatencyMs: providerMetrics.captionStartupTimings?.firstBackendEventLatencyMs,
           captionFirstLocalCaptionLatencyMs: providerMetrics.captionStartupTimings?.firstLocalCaptionLatencyMs,
+          captionFirstDeliveryLatencyMs: providerMetrics.captionStartupTimings?.firstCaptionDeliveryLatencyMs,
           captionGrantCacheHit: providerMetrics.captionGrantCacheHit,
           captionGrantSharedInFlight: providerMetrics.captionGrantSharedInFlight,
           mediaPrewarmLatencyMs: providerMetrics.mediaPrewarmLatencyMs,
           mediaPrewarmOk: providerMetrics.mediaPrewarmOk,
           mediaPrewarmTrackCount: providerMetrics.mediaPrewarmTrackCount,
         };
-        diagnostics.backgroundEffect = backgroundEffectRef.current;
-        const activeEffect = backgroundEffectRef.current;
-        const localCamera = diagnostics.tracks.find(
-          (track) =>
-            track.isLocal &&
-            track.direction === "send" &&
-            track.kind === "video" &&
-            track.source === HUDDLE_MEDIA_TRACK_SOURCES.camera
-        );
-        const effectUnderStress = Boolean(
-          activeEffect?.active &&
-          localCamera &&
-          (
-            localCamera.qualityLimitationReason === "cpu" ||
-            (
-              Number(localCamera.framesPerSecond) > 0 &&
-              Number(localCamera.framesPerSecond) < 21
-            )
-          )
-        );
-        backgroundStressSamplesRef.current = effectUnderStress
-          ? backgroundStressSamplesRef.current + 1
-          : 0;
-        if (
-          activeEffect?.active &&
-          backgroundStressSamplesRef.current >= 1
-        ) {
-          const localTrack = liveKitLocalCameraTrack(room);
-          const nextMode =
-            activeEffect.mode === HUDDLE_BACKGROUND_EFFECTS.REPLACEMENT
-              ? HUDDLE_BACKGROUND_EFFECTS.BLUR
-              : HUDDLE_BACKGROUND_EFFECTS.OFF;
-          const degraded = await applyBackgroundEffect({
-            localVideoTrack: localTrack,
-            processor: backgroundProcessorRef.current,
-            mode: nextMode,
-            blurRadius: 8,
-          });
-          if (degraded.ok) {
-            backgroundProcessorRef.current = degraded.processor;
-            const nextEffect = {
-              mode: nextMode,
-              active: nextMode !== HUDDLE_BACKGROUND_EFFECTS.OFF,
-              imagePath: null,
-              imagePathConfigured: false,
-              diagnostics: {
-                reason:
-                  nextMode === HUDDLE_BACKGROUND_EFFECTS.BLUR
-                    ? "background_replacement_degraded_to_blur"
-                    : "background_effect_automatically_disabled",
-                trigger: localCamera.qualityLimitationReason || "low_frame_rate",
-                framesPerSecond: localCamera.framesPerSecond,
-                timings: degraded.timings || null,
-                observedAt: new Date().toISOString(),
-              },
-            };
-            backgroundEffectRef.current = nextEffect;
-            setBackgroundEffectState(nextEffect);
-            backgroundStressSamplesRef.current = 0;
-          }
-        }
         await api.post("/huddle/media/livekit/diagnostics", {
           provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
           workspaceId: resolvedWorkspaceId,
@@ -2648,14 +2596,13 @@ export function useLiveKitMediaProvider({
           reason: "quality_diagnostics_persist_failed",
           message: safeString(error?.message) || null,
         });
-        setRevision((value) => value + 1);
       } finally {
         qualityPostInFlightRef.current = false;
       }
     };
 
     postDiagnostics();
-    const interval = window.setInterval(postDiagnostics, 10000);
+    const interval = window.setInterval(postDiagnostics, 30000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -2663,6 +2610,11 @@ export function useLiveKitMediaProvider({
   }, [connectedRoom, connectionPlan.room?.providerRoomId, connectionResult?.connection?.roomName, resolvedWorkspaceId]);
 
   const stopLiveTranscription = useCallback(() => {
+    if (localCaptionFlushTimerRef.current) {
+      window.clearTimeout(localCaptionFlushTimerRef.current);
+      localCaptionFlushTimerRef.current = null;
+    }
+    pendingLocalCaptionRef.current = null;
     try {
       transcriptionClientRef.current?.stop?.();
     } catch {
@@ -2677,14 +2629,16 @@ export function useLiveKitMediaProvider({
     }));
   }, []);
 
-  const startLiveTranscriptionCapture = useCallback(async () => {
+  const startLiveTranscriptionCapture = useCallback(async ({
+    audioTrackOverride = null,
+  } = {}) => {
     if (transcriptionClientRef.current || transcriptionStartingRef.current) {
       return { ok: true, alreadyStarted: true };
     }
     const room = connectedRoomRef.current || connectedRoom;
     const sessionId = sessionIdRef.current || huddleIdRef.current;
-    const audioTrack = liveKitLocalAudioTrack(room);
-    if (!room || !sessionId) {
+    const audioTrack = audioTrackOverride || liveKitLocalAudioTrack(room);
+    if (!sessionId) {
       return { ok: false, reason: "livekit_not_connected" };
     }
     if (!liveTranscriptionSupported()) {
@@ -2703,7 +2657,7 @@ export function useLiveKitMediaProvider({
         const metrics = providerMetricsRef.current;
         if (!metrics.firstCaptionAt) {
           metrics.firstCaptionAt = metricNow();
-          metrics.captionsActiveLatencyMs = elapsedMs(
+          metrics.firstCaptionLatencyMs = elapsedMs(
             metrics.intentStartedAt || metrics.joinStartedAt,
             metrics.firstCaptionAt
           );
@@ -2716,13 +2670,31 @@ export function useLiveKitMediaProvider({
             label: currentUser?.username || currentUser?.name || "You",
           },
         };
-        setSubtitles((previous) => ({
-          ...previous,
-          local: localCaption,
-        }));
-        setCaptionFeed((previous) =>
-          canonicalCaptionFeed([...previous, localCaption])
-        );
+        const commitCaption = (nextCaption) => {
+          setSubtitles((previous) => ({
+            ...previous,
+            local: nextCaption,
+          }));
+          setCaptionFeed((previous) =>
+            canonicalCaptionFeed([...previous, nextCaption])
+          );
+        };
+        pendingLocalCaptionRef.current = localCaption;
+        if (localCaption.isFinal) {
+          if (localCaptionFlushTimerRef.current) {
+            window.clearTimeout(localCaptionFlushTimerRef.current);
+            localCaptionFlushTimerRef.current = null;
+          }
+          pendingLocalCaptionRef.current = null;
+          commitCaption(localCaption);
+        } else if (!localCaptionFlushTimerRef.current) {
+          localCaptionFlushTimerRef.current = window.setTimeout(() => {
+            const pending = pendingLocalCaptionRef.current;
+            pendingLocalCaptionRef.current = null;
+            localCaptionFlushTimerRef.current = null;
+            if (pending) commitCaption(pending);
+          }, 120);
+        }
       },
       onDiagnostics: (diagnostics) => {
         const metrics = providerMetricsRef.current;
@@ -2744,6 +2716,10 @@ export function useLiveKitMediaProvider({
             metrics.intentStartedAt || metrics.joinStartedAt,
             metrics.captionTransportReadyAt
           );
+          if (!metrics.captionsActiveLatencyMs) {
+            metrics.captionsActiveLatencyMs =
+              metrics.captionTransportReadyFromIntentMs;
+          }
         }
         setTranscriptionDiagnostics(diagnostics);
       },
@@ -2835,7 +2811,7 @@ export function useLiveKitMediaProvider({
             const metrics = providerMetricsRef.current;
             if (!metrics.firstCaptionAt) {
               metrics.firstCaptionAt = metricNow();
-              metrics.captionsActiveLatencyMs = elapsedMs(
+              metrics.firstCaptionLatencyMs = elapsedMs(
                 metrics.intentStartedAt || metrics.joinStartedAt,
                 metrics.firstCaptionAt
               );
@@ -2847,16 +2823,18 @@ export function useLiveKitMediaProvider({
               canonicalCaptionFeed([...previous, ...incoming])
             );
           }
-          setTranscriptionDiagnostics((previous) => ({
-            ...(previous || {}),
-            captionFeedStatus: "streaming",
-            captionFeedLastEventAt:
-              incoming[incoming.length - 1]?.emittedAt ||
-              previous?.captionFeedLastEventAt ||
-              null,
-            captionFeedEventCount: incoming.length,
-            observedAt: new Date().toISOString(),
-          }));
+          if (incoming.length > 0) {
+            setTranscriptionDiagnostics((previous) => ({
+              ...(previous || {}),
+              captionFeedStatus: "streaming",
+              captionFeedLastEventAt:
+                incoming[incoming.length - 1]?.emittedAt ||
+                previous?.captionFeedLastEventAt ||
+                null,
+              captionFeedEventCount: incoming.length,
+              observedAt: new Date().toISOString(),
+            }));
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -2920,8 +2898,18 @@ export function useLiveKitMediaProvider({
         metrics.reconnectStartedAt = null;
         recordAndBump("reconnected", { reconnectLatencyMs: metrics.reconnectLatencyMs });
       },
-      participantConnected: (participant) =>
-        recordAndBump("participantConnected", { participantId: participantIdentity(participant) }),
+      participantConnected: (participant) => {
+        if (!metrics.firstRemoteParticipantAt) {
+          metrics.firstRemoteParticipantAt = metricNow();
+          metrics.firstRemoteParticipantLatencyMs = elapsedMs(
+            metrics.intentStartedAt || metrics.joinStartedAt,
+            metrics.firstRemoteParticipantAt
+          );
+        }
+        recordAndBump("participantConnected", {
+          participantId: participantIdentity(participant),
+        });
+      },
       participantDisconnected: (participant) =>
         recordAndBump("participantDisconnected", { participantId: participantIdentity(participant) }),
       trackPublished: (_publication, participant) =>
@@ -2940,11 +2928,19 @@ export function useLiveKitMediaProvider({
             metrics.intentStartedAt || metrics.joinStartedAt,
             metrics.firstAudioSubscribeAt
           );
+          metrics.firstAudioAfterParticipantMs = elapsedMs(
+            metrics.firstRemoteParticipantAt,
+            metrics.firstAudioSubscribeAt
+          );
         }
         if (trackKind === "video" && !metrics.firstVideoSubscribeAt) {
           metrics.firstVideoSubscribeAt = metricNow();
           metrics.firstVideoSubscribeLatencyMs = elapsedMs(
             metrics.intentStartedAt || metrics.joinStartedAt,
+            metrics.firstVideoSubscribeAt
+          );
+          metrics.firstVideoAfterParticipantMs = elapsedMs(
+            metrics.firstRemoteParticipantAt,
             metrics.firstVideoSubscribeAt
           );
         }
@@ -3022,14 +3018,18 @@ export function useLiveKitMediaProvider({
             rank: index + 1,
             audioLevel: Number.isFinite(Number(speaker.audioLevel)) ? Number(speaker.audioLevel) : null,
           }));
-        recordMetricEvent(metrics, "activeSpeakerEvents", {
-          activeSpeakerId: ranking[0]?.participantId || null,
-          speakerRanking: ranking,
-        });
-        recordAndBump("activeSpeakersChanged", {
-          activeSpeakerId: ranking[0]?.participantId || null,
-          speakerCount: ranking.length,
-        });
+        const nextActiveSpeakerId = ranking[0]?.participantId || null;
+        if (activeSpeakerIdRef.current !== nextActiveSpeakerId) {
+          activeSpeakerIdRef.current = nextActiveSpeakerId;
+          recordMetricEvent(metrics, "activeSpeakerEvents", {
+            activeSpeakerId: nextActiveSpeakerId,
+            speakerRanking: ranking,
+          });
+          recordAndBump("activeSpeakersChanged", {
+            activeSpeakerId: nextActiveSpeakerId,
+            speakerCount: ranking.length,
+          });
+        }
       },
       mediaDevicesError: (error, kind) => {
         recordMetricFailure(metrics, {
@@ -3091,6 +3091,17 @@ export function useLiveKitMediaProvider({
       const mediaPrewarmPromise = prewarmInitialLiveKitTracks({
         mode: qualityMode,
       });
+      void mediaPrewarmPromise.then((prewarmResult) => {
+        const prewarmedAudioTrack = (prewarmResult?.tracks || [])
+          .find((track) => localTrackKind(track) === "audio");
+        const mediaStreamTrack =
+          prewarmedAudioTrack?.mediaStreamTrack || prewarmedAudioTrack || null;
+        if (mediaStreamTrack) {
+          void startLiveTranscriptionCapture({
+            audioTrackOverride: mediaStreamTrack,
+          });
+        }
+      }).catch(noop);
       let result = await connectLiveKitRoom({
         canary,
         workspaceId: resolvedWorkspaceId,
@@ -3190,6 +3201,7 @@ export function useLiveKitMediaProvider({
         };
       }
       if (!result.ok) {
+        stopLiveTranscription();
         void mediaPrewarmPromise
           .then((prewarmResult) => stopPrewarmedLiveKitTracks(prewarmResult?.tracks || []))
           .catch(noop);
@@ -3200,7 +3212,7 @@ export function useLiveKitMediaProvider({
     } finally {
       setConnecting(false);
     }
-  }, [canary, connecting, connectionResult, qualityMode, resolvedWorkspaceId, startLiveTranscriptionCapture]);
+  }, [canary, connecting, connectionResult, qualityMode, resolvedWorkspaceId, startLiveTranscriptionCapture, stopLiveTranscription]);
   const leaveCall = useCallback(() => {
     const room = connectedRoomRef.current;
     try {
@@ -3217,20 +3229,7 @@ export function useLiveKitMediaProvider({
     setConnectedRoom(null);
     setPublicationDiagnostics(null);
     setScreenShareDiagnostics(null);
-    void destroyBackgroundEffect(backgroundProcessorRef.current);
-    backgroundProcessorRef.current = null;
-    backgroundTrackRef.current = null;
-    setBackgroundEffectState({
-      mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
-      active: false,
-      imagePathConfigured: false,
-      diagnostics: null,
-    });
-    backgroundEffectRef.current = {
-      mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
-      active: false,
-    };
-    backgroundStressSamplesRef.current = 0;
+    activeSpeakerIdRef.current = null;
     setNetworkStatsByParticipant({});
     latestNetworkStatsRef.current = {};
     qualityStatsPreviousRef.current.clear();
@@ -3306,33 +3305,6 @@ export function useLiveKitMediaProvider({
         },
       }));
       setRevision((value) => value + 1);
-      if (nextEnabled && backgroundEffect.mode !== HUDDLE_BACKGROUND_EFFECTS.OFF) {
-        window.setTimeout(() => {
-          const nextTrack = liveKitLocalCameraTrack(room);
-          if (!nextTrack) return;
-          if (backgroundTrackRef.current && backgroundTrackRef.current !== nextTrack) {
-            void destroyBackgroundEffect(backgroundProcessorRef.current);
-            backgroundProcessorRef.current = null;
-          }
-          backgroundTrackRef.current = nextTrack;
-          void applyBackgroundEffect({
-            localVideoTrack: nextTrack,
-            processor: backgroundProcessorRef.current,
-            mode: backgroundEffect.mode,
-            imagePath: backgroundEffect.imagePath || null,
-          }).then((result) => {
-            if (!result.ok) return;
-            backgroundProcessorRef.current = result.processor;
-            setBackgroundEffectState((current) => ({
-              ...current,
-              diagnostics: {
-                ...result,
-                timings: result.timings || null,
-              },
-            }));
-          });
-        }, 250);
-      }
       return { ok: true, enabled: nextEnabled };
     } catch (error) {
       const failure = sanitizeLiveKitMediaFailure(
@@ -3349,7 +3321,7 @@ export function useLiveKitMediaProvider({
       }));
       return { ok: false, reason: failure.reason, diagnostics: failure };
     }
-  }, [backgroundEffect.imagePath, backgroundEffect.mode, qualityMode]);
+  }, [qualityMode]);
   const setQualityMode = useCallback(async (requestedMode = LIVEKIT_QUALITY_MODES.AUTO) => {
     const mode = Object.values(LIVEKIT_QUALITY_MODES).includes(requestedMode)
       ? requestedMode
@@ -3389,7 +3361,7 @@ export function useLiveKitMediaProvider({
           publishOptions: cameraPublishOptions(mode, sdk),
           simulcastLayerCount: liveKitCameraSimulcastLayers(sdk).length,
           adaptiveStream: true,
-          dynacast: isMobileMediaDevice(),
+          dynacast: true,
           observedAt: new Date().toISOString(),
         },
       }));
@@ -3400,99 +3372,6 @@ export function useLiveKitMediaProvider({
         ok: false,
         reason: safeString(error?.message) || "livekit_quality_mode_failed",
       };
-    }
-  }, []);
-  const setBackgroundEffect = useCallback(async ({
-    mode = HUDDLE_BACKGROUND_EFFECTS.OFF,
-    imagePath = null,
-    blurRadius = 12,
-  } = {}) => {
-    const room = connectedRoomRef.current;
-    const localVideoTrack = liveKitLocalCameraTrack(room);
-    if (!room || !localVideoTrack) {
-      return { ok: false, reason: "livekit_camera_track_required" };
-    }
-    if (
-      isMobileBackgroundEffectDevice() &&
-      mode !== HUDDLE_BACKGROUND_EFFECTS.OFF
-    ) {
-      const next = {
-        mode: HUDDLE_BACKGROUND_EFFECTS.OFF,
-        active: false,
-        imagePath: null,
-        imagePathConfigured: false,
-        diagnostics: {
-          reason: "background_effect_disabled_on_mobile_for_call_quality",
-          requestedMode: mode,
-          observedAt: new Date().toISOString(),
-        },
-      };
-      await destroyBackgroundEffect(backgroundProcessorRef.current);
-      backgroundProcessorRef.current = null;
-      backgroundEffectRef.current = next;
-      backgroundStressSamplesRef.current = 0;
-      setBackgroundEffectState(next);
-      setPublicationDiagnostics((previous) => ({
-        ...(previous || {}),
-        backgroundEffect: next,
-      }));
-      setRevision((value) => value + 1);
-      return {
-        ok: false,
-        reason: next.diagnostics.reason,
-        backgroundEffect: next,
-      };
-    }
-    if (
-      backgroundTrackRef.current &&
-      backgroundTrackRef.current !== localVideoTrack
-    ) {
-      await destroyBackgroundEffect(backgroundProcessorRef.current);
-      backgroundProcessorRef.current = null;
-    }
-    backgroundTrackRef.current = localVideoTrack;
-    try {
-      const result = await applyBackgroundEffect({
-        localVideoTrack,
-        processor: backgroundProcessorRef.current,
-        mode,
-        imagePath,
-        blurRadius,
-      });
-      if (!result.ok) return result;
-      backgroundProcessorRef.current = result.processor;
-      const next = {
-        mode,
-        active: mode !== HUDDLE_BACKGROUND_EFFECTS.OFF,
-        imagePath: mode === HUDDLE_BACKGROUND_EFFECTS.REPLACEMENT ? imagePath : null,
-        imagePathConfigured:
-          mode === HUDDLE_BACKGROUND_EFFECTS.REPLACEMENT && Boolean(imagePath),
-        diagnostics: {
-          reason: result.reason,
-          modern: result.modern,
-          timings: result.timings || null,
-          observedAt: result.observedAt,
-        },
-      };
-      backgroundEffectRef.current = next;
-      backgroundStressSamplesRef.current = 0;
-      setBackgroundEffectState(next);
-      setPublicationDiagnostics((previous) => ({
-        ...(previous || {}),
-        backgroundEffect: next,
-      }));
-      setRevision((value) => value + 1);
-      return { ...result, ...next };
-    } catch (error) {
-      const diagnostics = {
-        reason: safeString(error?.message) || "background_effect_failed",
-        observedAt: new Date().toISOString(),
-      };
-      setBackgroundEffectState((current) => ({
-        ...current,
-        diagnostics,
-      }));
-      return { ok: false, reason: diagnostics.reason, diagnostics };
     }
   }, []);
   const startScreenShare = useCallback(async () => {
@@ -3578,10 +3457,6 @@ export function useLiveKitMediaProvider({
   const setHuddleId = useCallback((id) => {
     huddleIdRef.current = safeString(id) || null;
   }, []);
-  const backgroundEffectSupport = getBackgroundEffectSupport();
-  const backgroundEffectsEnabled =
-    backgroundEffectSupport.supported && !isMobileBackgroundEffectDevice();
-
   return {
     inCall: Boolean(connectedRoom),
     connecting,
@@ -3595,14 +3470,6 @@ export function useLiveKitMediaProvider({
       typeof navigator !== "undefined" &&
       navigator.mediaDevices?.getDisplayMedia
     ),
-    backgroundEffectsSupported: backgroundEffectsEnabled,
-    backgroundEffectSupport: {
-      ...backgroundEffectSupport,
-      supported: backgroundEffectsEnabled,
-      mobileDisabledForCallQuality:
-        backgroundEffectSupport.supported && isMobileBackgroundEffectDevice(),
-    },
-    backgroundEffect,
     subtitlesSupported: Boolean(connectedRoom && liveTranscriptionSupported()),
     subtitlesEnabled,
     subtitles,
@@ -3622,7 +3489,6 @@ export function useLiveKitMediaProvider({
         connectionResult: connectionResult?.diagnostics || null,
         publication: publicationDiagnostics,
         screenShare: screenShareDiagnostics,
-        backgroundEffect,
         transcription: transcriptionDiagnostics,
         activeSpeaker: activeSpeakerDiagnostics,
         networkQuality: networkQualityDiagnostics,
@@ -3636,7 +3502,6 @@ export function useLiveKitMediaProvider({
     toggleCamera,
     startScreenShare,
     stopScreenShare,
-    setBackgroundEffect,
     setQualityMode,
     toggleSubtitles,
     startRecording: noop,

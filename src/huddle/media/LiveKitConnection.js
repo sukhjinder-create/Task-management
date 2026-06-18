@@ -30,6 +30,8 @@ function safeString(value) {
 }
 
 const LIVEKIT_ORIGIN_CACHE_KEY = "huddle.livekit.preconnectOrigin";
+const liveKitTokenPrefetches = new Map();
+const LIVEKIT_TOKEN_PREFETCH_TTL_MS = 2 * 60 * 1000;
 
 export function liveKitHttpsOrigin(url) {
   try {
@@ -84,37 +86,33 @@ export function preconnectCachedLiveKitOrigin() {
 }
 
 function createLiveKitRoomOptions(sdk = {}) {
-  const videoPresets = sdk.VideoPresets || {};
-  const mobile =
-    typeof navigator !== "undefined" &&
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
-  const portrait =
-    mobile &&
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(orientation: portrait)")?.matches !== false;
-  const layers = mobile
-    ? [videoPresets.h180, videoPresets.h360, videoPresets.h540].filter(Boolean)
-    : [videoPresets.h180, videoPresets.h360, videoPresets.h720].filter(Boolean);
+  const mobile = isMobileMediaDevice();
+  const videoPresets =
+    (mobile ? sdk.VideoPresets43 : sdk.VideoPresets) ||
+    sdk.VideoPresets ||
+    {};
+  const layers = [
+    videoPresets.h180,
+    videoPresets.h360,
+    videoPresets.h540,
+  ].filter(Boolean);
   const balancedResolution = mobile
     ? {
-        width: portrait ? 720 : 1280,
-        height: portrait ? 1280 : 720,
+        width: 720,
+        height: 960,
         frameRate: 24,
-        aspectRatio: portrait ? 9 / 16 : 16 / 9,
       }
     : {
-        ...(videoPresets.h720?.resolution || {
-          width: 1280,
-          height: 720,
+        ...(videoPresets.h540?.resolution || {
+          width: 960,
+          height: 540,
         }),
-        frameRate: 30,
+        frameRate: 24,
       };
 
   return {
     adaptiveStream: true,
-    // Desktop Huddles need the h720 layer available immediately; dynacast was
-    // keeping the full layer inactive even when receivers requested 1280x720.
-    dynacast: mobile,
+    dynacast: true,
     videoCaptureDefaults: {
       resolution: balancedResolution,
       facingMode: "user",
@@ -122,8 +120,8 @@ function createLiveKitRoomOptions(sdk = {}) {
     publishDefaults: {
       simulcast: true,
       videoEncoding: {
-        maxBitrate: mobile ? 1_400_000 : 2_200_000,
-        maxFramerate: mobile ? 24 : 30,
+        maxBitrate: mobile ? 750_000 : 900_000,
+        maxFramerate: 24,
       },
       videoSimulcastLayers: layers,
       screenShareEncoding: {
@@ -132,6 +130,18 @@ function createLiveKitRoomOptions(sdk = {}) {
       },
     },
   };
+}
+
+function isMobileMediaDevice() {
+  if (typeof navigator === "undefined") return false;
+  const mobileUserAgent =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  const coarseTouch =
+    navigator.maxTouchPoints > 0 &&
+    (typeof window === "undefined" ||
+      window.matchMedia?.("(pointer: coarse)")?.matches === true ||
+      window.innerWidth < 1024);
+  return mobileUserAgent || coarseTouch;
 }
 
 function createDisabledRoomDiagnostic({
@@ -259,29 +269,6 @@ export async function prepareLiveKitConnection({
   };
 }
 
-async function fetchLiveKitRoomDescriptor({
-  channelId,
-  huddleId,
-  sessionId,
-  workspaceId,
-  deviceId,
-} = {}) {
-  const clientCapabilities = createWebHuddleClientCapabilities({
-    provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
-  });
-  const { data } = await api.post("/huddle/media/livekit/room", {
-    provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
-    channelId,
-    huddleId,
-    sessionId,
-    workspaceId,
-    deviceId,
-    platform: clientCapabilities.platform,
-    clientCapabilities,
-  });
-  return data;
-}
-
 async function fetchLiveKitToken({
   channelId,
   huddleId,
@@ -305,6 +292,39 @@ async function fetchLiveKitToken({
     clientCapabilities,
   });
   return data;
+}
+
+function liveKitTokenPrefetchKey(params = {}) {
+  return [
+    safeString(params.workspaceId),
+    safeString(params.sessionId || params.huddleId),
+    safeString(params.deviceId),
+  ].join(":");
+}
+
+export function prefetchLiveKitToken(params = {}) {
+  const key = liveKitTokenPrefetchKey(params);
+  if (!safeString(params.workspaceId) || !safeString(params.sessionId || params.huddleId)) {
+    return Promise.resolve(null);
+  }
+  const existing = liveKitTokenPrefetches.get(key);
+  if (existing && Date.now() - existing.createdAt < LIVEKIT_TOKEN_PREFETCH_TTL_MS) {
+    return existing.promise;
+  }
+  const promise = fetchLiveKitToken(params).catch(() => null);
+  liveKitTokenPrefetches.set(key, { createdAt: Date.now(), promise });
+  return promise;
+}
+
+async function consumePrefetchedLiveKitToken(params = {}) {
+  const key = liveKitTokenPrefetchKey(params);
+  const existing = liveKitTokenPrefetches.get(key);
+  if (!existing || Date.now() - existing.createdAt >= LIVEKIT_TOKEN_PREFETCH_TTL_MS) {
+    liveKitTokenPrefetches.delete(key);
+    return null;
+  }
+  liveKitTokenPrefetches.delete(key);
+  return existing.promise;
 }
 
 async function timedLiveKitRequest(request) {
@@ -363,7 +383,10 @@ export async function connectLiveKitRoom(params = {}) {
     };
   }
 
-  const tokenRequest = await timedLiveKitRequest(() => fetchLiveKitToken(params));
+  const tokenRequest = await timedLiveKitRequest(async () => (
+    (await consumePrefetchedLiveKitToken(params)) ||
+    fetchLiveKitToken(params)
+  ));
   const roomEndpointLatencyMs = null;
   const tokenEndpointLatencyMs = tokenRequest.latencyMs;
   const tokenEndpointBackendTimings =
