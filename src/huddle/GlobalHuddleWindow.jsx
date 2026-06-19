@@ -923,21 +923,20 @@ export default function GlobalHuddleWindow() {
       {rtc?.subtitlesEnabled && !showMissedPanel && (
         <section
           onClick={(event) => event.stopPropagation()}
-          className={`absolute z-30 overflow-hidden border border-white/15 bg-[#0b1220]/95 shadow-2xl backdrop-blur-md ${
+          className={`absolute z-30 flex flex-col overflow-hidden border border-white/12 bg-[#0b1220]/96 shadow-2xl backdrop-blur-md ${
             isMobileDevice
-              ? "inset-x-2 max-h-[50%]"
-              : "right-3 w-[min(430px,50%)] max-h-[58%]"
+              ? "inset-x-0 max-h-[46svh] rounded-t-2xl border-x-0 border-b-0"
+              : "right-4 w-[min(460px,calc(100vw-2rem))] max-h-[min(56vh,520px)] rounded-lg"
           }`}
           style={{
-            borderRadius: 8,
             bottom: isMobileDevice
-              ? (mobileControlsVisible ? 116 : 12)
-              : 88,
+              ? (mobileControlsVisible ? 104 : 0)
+              : 92,
             touchAction: "pan-y",
           }}
           aria-label="Live meeting transcript"
         >
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2.5">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300">
                 <span
@@ -951,7 +950,7 @@ export default function GlobalHuddleWindow() {
                 />
                 {captionStatusLabel}
               </div>
-              <div className="truncate text-sm font-semibold text-white">Meeting transcript</div>
+              <div className="truncate text-sm font-semibold text-white">Live transcript</div>
             </div>
             <div className="shrink-0 rounded border border-white/10 bg-white/10 px-2 py-1 text-[11px] text-slate-300">
               {captionItems.length} line{captionItems.length === 1 ? "" : "s"}
@@ -960,36 +959,34 @@ export default function GlobalHuddleWindow() {
           <div
             ref={captionFeedRef}
             onScroll={handleCaptionScroll}
-            className="max-h-[inherit] overflow-y-auto px-3 py-3"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3"
+            style={{
+              WebkitOverflowScrolling: "touch",
+            }}
           >
             {captionItems.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-3 pb-3">
                 {captionItems.map((caption) => (
-                  <div key={caption.key} className="grid grid-cols-[28px_1fr] gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-400/15 text-[11px] font-semibold text-sky-200">
-                      {caption.speaker.slice(0, 1).toUpperCase()}
+                  <div key={caption.key} className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-[12px] font-semibold text-sky-200">{caption.speaker}</span>
+                      {caption.time && <span className="text-[11px] text-slate-500">{caption.time}</span>}
+                      {caption.status === "partial" && (
+                        <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                          live
+                        </span>
+                      )}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-[12px] font-semibold text-sky-200">{caption.speaker}</span>
-                        {caption.time && <span className="text-[10px] text-slate-500">{caption.time}</span>}
-                        {caption.status === "partial" && (
-                          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
-                            live
-                          </span>
-                        )}
-                      </div>
-                      <div className={`mt-0.5 text-sm leading-5 text-white ${caption.status === "partial" ? "opacity-80" : ""}`}>
-                        {caption.text}
-                      </div>
+                    <div className={`mt-1 whitespace-pre-wrap text-[15px] leading-6 text-white ${caption.status === "partial" ? "opacity-80" : ""}`}>
+                      {caption.text}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="py-5 text-center">
-                <div className="text-sm font-medium text-slate-200">Listening for speech</div>
-                <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-slate-400">
+              <div className="py-8 text-center">
+                <div className="text-sm font-semibold text-slate-100">Listening for speech</div>
+                <p className="mx-auto mt-1 max-w-xs text-sm leading-6 text-slate-400">
                   Captions from every speaker will appear here as the meeting continues.
                 </p>
               </div>
