@@ -107,11 +107,96 @@ function presenceLabel(status) {
 }
 
 function normalizeMessage(msg) {
+  const huddleCall = resolveHuddleCall(msg);
   return {
     ...msg,
     userId: msg.userId || msg.user_id,
     reactions: msg.reactions || {},
+    huddleCall,
   };
+}
+
+function parseMessageEnvelope(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function resolveHuddleCall(message = {}) {
+  if (message.huddleCall && typeof message.huddleCall === "object") {
+    return message.huddleCall;
+  }
+  const envelope =
+    parseMessageEnvelope(message.encrypted) ||
+    parseMessageEnvelope(message.encrypted_json);
+  return envelope?.__huddle_call_log === true && envelope?.huddleCall
+    ? envelope.huddleCall
+    : null;
+}
+
+function formatHuddleDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  if (!total) return "";
+  const minutes = Math.floor(total / 60);
+  const remaining = total % 60;
+  if (!minutes) return `${remaining}s`;
+  return remaining ? `${minutes}m ${remaining}s` : `${minutes}m`;
+}
+
+function HuddleCallMessage({ message, currentUserId }) {
+  const call = message.huddleCall || {};
+  const participantIds = new Set(
+    Array.isArray(call.participantIds) ? call.participantIds.map(String) : []
+  );
+  const outgoing = String(call.startedBy || "") === String(currentUserId || "");
+  const missed =
+    call.status === "missed" ||
+    (!outgoing &&
+      Boolean(currentUserId) &&
+      !participantIds.has(String(currentUserId)));
+  const label = missed
+    ? outgoing
+      ? "Unanswered Huddle call"
+      : "Missed Huddle call"
+    : outgoing
+      ? "Outgoing Huddle call"
+      : "Incoming Huddle call";
+  const duration = formatHuddleDuration(call.durationSeconds);
+  const time = message.createdAt
+    ? new Date(message.createdAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+
+  return (
+    <div className="my-2 flex justify-center">
+      <div className="flex max-w-sm items-center gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] px-4 py-3">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+            missed
+              ? "bg-red-500/12 text-red-500"
+              : "bg-[color:var(--primary)]/12 text-[color:var(--primary)]"
+          }`}
+        >
+          <Phone size={17} />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[13px] font-semibold text-[color:var(--text)]">
+            {label}
+          </span>
+          <span className="mt-0.5 block text-[11px] text-[color:var(--text-muted)]">
+            {[duration, time].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
 }
 
 /* -------------------------
@@ -1206,10 +1291,12 @@ useEffect(() => {
         reactions: m.reactions || {},
         attachments: m.attachments || [],
         encrypted: m.encrypted,
+        encrypted_json: m.encrypted_json,
         senderPublicKeyJwk:
           m.senderPublicKeyJwk || m.sender_public_key,
         fallbackText: m.fallbackText || m.fallback_text,
         isAiMessage: m.isAiMessage === true,
+        huddleCall: resolveHuddleCall(m),
       };
 
       const decryptedText = await decryptForDisplay(
@@ -1329,6 +1416,8 @@ if (msg?.textHtml?.startsWith("__REPORT_READY__")) {
     reactions: msg.reactions || {},
     attachments: msg.attachments || [],
     isAiMessage: msg.isAiMessage === true,
+    encrypted: msg.encrypted || msg.encrypted_json || null,
+    huddleCall: resolveHuddleCall(msg),
   };
 
   // Clear AI typing indicator for this channel when the AI message arrives
@@ -2845,9 +2934,13 @@ useEffect(() => {
                   const dateDividerLabel = thisDate ? formatDateLabel(m.createdAt) : null;
 
                   const FIVE_MIN = 5 * 60 * 1000;
-                  const prevNonSystem = messagesToRender.slice(0, idx).filter(x => !x.system).at(-1);
+                  const prevNonSystem = messagesToRender
+                    .slice(0, idx)
+                    .filter((x) => !x.system && !x.huddleCall)
+                    .at(-1);
                   const isGrouped =
                     !isSystem &&
+                    !m.huddleCall &&
                     prevNonSystem &&
                     (prevNonSystem.userId || prevNonSystem.user_id) === (m.userId || m.user_id) &&
                     m.createdAt && prevNonSystem.createdAt &&
@@ -2866,7 +2959,9 @@ useEffect(() => {
                           </div>
                       )}
 
-                      {isSystem ? (
+                      {m.huddleCall ? (
+                        <HuddleCallMessage message={m} currentUserId={user.id} />
+                      ) : isSystem ? (
                           <div className="flex items-center justify-center my-1.5">
                             <span className="text-[10px] theme-text-muted theme-surface-soft border theme-border rounded-full px-3 py-0.5">
                               {m.textHtml || m.text}
@@ -3000,7 +3095,7 @@ useEffect(() => {
                             )}
 
                             {/* Per-message action row (always visible on mobile) */}
-                            {!m.deletedAt && activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
+                            {!m.huddleCall && !m.deletedAt && activeChannelKey !== AVAILABILITY_CHANNEL_KEY && (
                               <div className="mt-1.5 flex items-center gap-1">
                                 <button
                                   type="button"
@@ -3891,9 +3986,13 @@ useEffect(() => {
               const dateDividerLabel = thisDate ? formatDateLabel(m.createdAt) : null;
 
               const FIVE_MIN = 5 * 60 * 1000;
-              const prevNonSystem = messagesToRender.slice(0, idx).filter(x => !x.system).at(-1);
+              const prevNonSystem = messagesToRender
+                .slice(0, idx)
+                .filter((x) => !x.system && !x.huddleCall)
+                .at(-1);
               const isGrouped =
                 !isSystem &&
+                !m.huddleCall &&
                 prevNonSystem &&
                 (prevNonSystem.userId || prevNonSystem.user_id) === (m.userId || m.user_id) &&
                 m.createdAt && prevNonSystem.createdAt &&
@@ -3916,7 +4015,9 @@ useEffect(() => {
                   )}
 
                   {/* System message */}
-                  {isSystem ? (
+                  {m.huddleCall ? (
+                    <HuddleCallMessage message={m} currentUserId={user.id} />
+                  ) : isSystem ? (
                     <div className="flex items-center justify-center my-1.5">
                       <span className="text-[10px] theme-text-muted theme-surface-soft border theme-border rounded-full px-3 py-0.5">
                         {m.textHtml || m.text}
@@ -4087,7 +4188,7 @@ useEffect(() => {
                       </div>
 
                       {/* ── Right-side action toolbar (appears on row hover) ── */}
-                      {activeChannelKey !== AVAILABILITY_CHANNEL_KEY && !m.deletedAt && (
+                      {!m.huddleCall && activeChannelKey !== AVAILABILITY_CHANNEL_KEY && !m.deletedAt && (
                         <div className="absolute top-1.5 right-4 hidden group-hover:flex items-center theme-surface border theme-border rounded-lg overflow-hidden z-20">
                           <button
                             type="button"
