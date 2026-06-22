@@ -6,6 +6,11 @@ import { useAuth } from "./AuthContext";
 import toast from "react-hot-toast";
 import { loadLiveKitSdk } from "../huddle/media/LiveKitSdk";
 import { prefetchLiveKitToken } from "../huddle/media/LiveKitConnection";
+import {
+  publishIncomingHuddleFromPayload,
+  readPendingHuddleInviteFromUrl,
+  recordHuddleCallTrace,
+} from "../huddle/callTrace";
 
 const HuddleContext = createContext(null);
 const ACTIVE_HUDDLE_STORAGE_KEY = "asystence.activeHuddle.v1";
@@ -92,7 +97,7 @@ export function HuddleProvider({ children }) {
       window.__PENDING_HUDDLE_INVITE__ = null;
       return invite;
     }
-    return null;
+    return readPendingHuddleInviteFromUrl();
   });
 
   // Keep refs in sync so socket handlers always see the latest state
@@ -141,6 +146,14 @@ export function HuddleProvider({ children }) {
 
   useEffect(() => {
     if (!incomingHuddle?.huddleId) return;
+    void recordHuddleCallTrace({
+      step: "incoming_call_displayed",
+      channelId: incomingHuddle.channelId,
+      huddleId: incomingHuddle.huddleId,
+      sessionId: incomingHuddle.sessionId || incomingHuddle.huddleId,
+      status: "success",
+      metadata: { source: incomingHuddle.source || "huddle_context" },
+    });
     void loadLiveKitSdk({ enabled: true });
     void prefetchLiveKitToken({
       workspaceId: user?.workspaceId || user?.workspace_id,
@@ -184,7 +197,7 @@ export function HuddleProvider({ children }) {
     if (activeHuddle?.huddleId) call.setHuddleId(activeHuddle.huddleId);
   }, [activeHuddle]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Join call when a huddle becomes active — only once per huddleId
+  // Join call when a huddle becomes active â€” only once per huddleId
   const joinedHuddleRef = useRef(null);
   useEffect(() => {
     if (!activeHuddle?.huddleId) {
@@ -251,6 +264,22 @@ export function HuddleProvider({ children }) {
     if (!incomingHuddle) return;
     const acceptedHuddle = incomingHuddle;
     markCallIntent();
+    void recordHuddleCallTrace({
+      step: "answer_pressed",
+      channelId: acceptedHuddle.channelId,
+      huddleId: acceptedHuddle.huddleId,
+      sessionId: acceptedHuddle.sessionId || acceptedHuddle.huddleId,
+      status: "success",
+      metadata: { source: "huddle_incoming_modal" },
+    });
+    void recordHuddleCallTrace({
+      step: "join_request_sent",
+      channelId: acceptedHuddle.channelId,
+      huddleId: acceptedHuddle.huddleId,
+      sessionId: acceptedHuddle.sessionId || acceptedHuddle.huddleId,
+      status: "attempted",
+      metadata: { source: "huddle_incoming_modal", provider: acceptedHuddle.provider || null },
+    });
     if (activeHuddleRef.current) {
       call.leaveCall();
     }
@@ -278,12 +307,20 @@ export function HuddleProvider({ children }) {
   }, [incomingHuddle, call, markCallIntent, publishActiveHuddle]);
 
   // ---------------------------
-  // Decline incoming huddle invite — notify initiator via socket
+  // Decline incoming huddle invite â€” notify initiator via socket
   // ---------------------------
   const declineHuddle = useCallback(() => {
     if (incomingHuddle) {
       const socket = getSocket();
       if (socket?.connected) {
+        void recordHuddleCallTrace({
+          step: "decline_pressed",
+          channelId: incomingHuddle.channelId,
+          huddleId: incomingHuddle.huddleId,
+          sessionId: incomingHuddle.sessionId || incomingHuddle.huddleId,
+          status: "success",
+          metadata: { source: "huddle_incoming_modal" },
+        });
         socket.emit("huddle:decline", {
           channelId: incomingHuddle.channelId,
           huddleId: incomingHuddle.huddleId,
@@ -313,13 +350,13 @@ export function HuddleProvider({ children }) {
   }, [call]);
 
   // ---------------------------
-  // Stable ref for remotePeers count — avoids stale closures in socket handlers
+  // Stable ref for remotePeers count â€” avoids stale closures in socket handlers
   // ---------------------------
   const remotePeersLengthRef = useRef(0);
   useEffect(() => { remotePeersLengthRef.current = call.remotePeers.length; }, [call.remotePeers.length]);
 
   // ---------------------------
-  // Listen for huddle:declined — the person we called declined the invite
+  // Listen for huddle:declined â€” the person we called declined the invite
   // ---------------------------
   useEffect(() => {
     const socket = getSocket();
@@ -339,7 +376,7 @@ export function HuddleProvider({ children }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------
-  // Memoized rtc object exposed to UI — stable reference reduces re-renders
+  // Memoized rtc object exposed to UI â€” stable reference reduces re-renders
   // ---------------------------
   const rtc = useMemo(() => ({
     localStream: call.localStream,
@@ -388,21 +425,37 @@ export function HuddleProvider({ children }) {
     const handler = (e) => {
       const data = e.detail;
       if (!data?.huddleId || !data?.channelId) return;
-      if (String(data.startedBy) === String(userRef.current?.id)) return;
+      const startedByValue = data.startedBy?.userId || data.startedBy;
+      if (String(startedByValue) === String(userRef.current?.id)) return;
       // Skip if we're already in this exact huddle or already showing this invite
       if (data.huddleId === activeHuddleRef.current?.huddleId) return;
       if (data.huddleId === incomingHuddleRef.current?.huddleId) return;
       const invite = {
         huddleId: data.huddleId,
         channelId: data.channelId,
-        startedByName: data.startedByName || "Someone",
-        startedBy: { userId: data.startedBy, username: data.startedByName || "Someone" },
+        sessionId: data.sessionId || data.huddleId,
+        provider: data.provider || null,
+        startedByName: data.startedByName || data.startedBy?.username || "Someone",
+        startedBy: {
+          userId: startedByValue,
+          username: data.startedByName || data.startedBy?.username || "Someone",
+        },
+        source: data.source || "huddle_incoming_event",
       };
       incomingHuddleRef.current = invite;
       setIncomingHuddle(invite);
     };
+    const pushMessageHandler = (event) => {
+      const payload = event?.data || {};
+      if (payload?.type !== "huddle:notification-click") return;
+      publishIncomingHuddleFromPayload(payload.payload || {}, "service_worker_click");
+    };
+    navigator.serviceWorker?.addEventListener?.("message", pushMessageHandler);
     window.addEventListener("huddle:incoming", handler);
-    return () => window.removeEventListener("huddle:incoming", handler);
+    return () => {
+      navigator.serviceWorker?.removeEventListener?.("message", pushMessageHandler);
+      window.removeEventListener("huddle:incoming", handler);
+    };
   }, [user?.id]);
 
   // ---------------------------
@@ -440,10 +493,10 @@ export function HuddleProvider({ children }) {
         if (huddleData.huddleId === incomingHuddleRef.current?.huddleId) return;
 
         if (startedById && String(startedById) === String(userRef.current?.id)) {
-          // We started this call — show video tiles
+          // We started this call â€” show video tiles
           publishActiveHuddle(huddleData);
         } else if (!activeHuddleRef.current) {
-          // Someone else started — show invitation modal
+          // Someone else started â€” show invitation modal
           incomingHuddleRef.current = { ...huddleData, startedByName };
           setIncomingHuddle({ ...huddleData, startedByName });
         }

@@ -9,6 +9,7 @@ import {
   liveTranscriptionSupported,
 } from "./LiveTranscriptionClient";
 import api from "../../api";
+import { recordHuddleCallTrace } from "../callTrace";
 import { getCachedLiveKitSdkDiagnostics, loadLiveKitSdk } from "./LiveKitSdk";
 import {
   createHuddleMediaDeviceV2,
@@ -3155,6 +3156,34 @@ export function useLiveKitMediaProvider({
         providerMetricsRef.current.publishLatencyMs =
           publishResult.diagnostics?.totalPublishLatencyMs || null;
         setPublicationDiagnostics(publishResult.diagnostics);
+        if (publishResult.diagnostics?.microphone?.published) {
+          void recordHuddleCallTrace({
+            step: "audio_connected",
+            channelId,
+            huddleId,
+            sessionId,
+            status: "success",
+            metadata: {
+              source: "web_livekit_provider",
+              trackSid: publishResult.diagnostics.microphone.trackSid || null,
+              latencyMs: publishResult.diagnostics.microphone.latencyMs || null,
+            },
+          });
+        }
+        if (publishResult.diagnostics?.camera?.published) {
+          void recordHuddleCallTrace({
+            step: "video_connected",
+            channelId,
+            huddleId,
+            sessionId,
+            status: "success",
+            metadata: {
+              source: "web_livekit_provider",
+              trackSid: publishResult.diagnostics.camera.trackSid || null,
+              latencyMs: publishResult.diagnostics.camera.latencyMs || null,
+            },
+          });
+        }
 
         if (!publishResult.ok) {
           recordMetricFailure(providerMetricsRef.current, {

@@ -11,6 +11,7 @@ import {
   loadLiveKitSdk,
 } from "./LiveKitSdk";
 import { elapsedMs, metricNow } from "./providerDiagnostics";
+import { recordHuddleCallTrace } from "../callTrace";
 
 export const LIVEKIT_CONNECTION_REASONS = Object.freeze({
   CANARY_DISABLED: "livekit_canary_disabled",
@@ -463,8 +464,28 @@ export async function connectLiveKitRoom(params = {}) {
     const roomOptions = createLiveKitRoomOptions(prepared.sdk);
     const liveKitRoom = new prepared.sdk.Room(roomOptions);
     const connectStartedAt = metricNow();
+    void recordHuddleCallTrace({
+      step: "room_connect_started",
+      channelId: params.channelId,
+      huddleId: params.huddleId,
+      sessionId: params.sessionId || params.huddleId,
+      status: "attempted",
+      metadata: { source: "web_livekit_connection" },
+    });
     await liveKitRoom.connect(liveKitUrl, token);
     const connectLatencyMs = elapsedMs(connectStartedAt);
+    void recordHuddleCallTrace({
+      step: "room_connect_success",
+      channelId: params.channelId,
+      huddleId: params.huddleId,
+      sessionId: params.sessionId || params.huddleId,
+      status: "success",
+      metadata: {
+        source: "web_livekit_connection",
+        connectLatencyMs,
+        roomName: tokenDescriptor.liveKit.roomName,
+      },
+    });
     return {
       ok: true,
       reason: "livekit_connected",
@@ -513,6 +534,18 @@ export async function connectLiveKitRoom(params = {}) {
       },
     };
   } catch (error) {
+    void recordHuddleCallTrace({
+      step: "room_connect_failed",
+      channelId: params.channelId,
+      huddleId: params.huddleId,
+      sessionId: params.sessionId || params.huddleId,
+      status: "failure",
+      reason: LIVEKIT_CONNECTION_REASONS.CONNECTION_FAILED,
+      metadata: {
+        source: "web_livekit_connection",
+        error: error?.message || String(error),
+      },
+    });
     return {
       ok: false,
       reason: LIVEKIT_CONNECTION_REASONS.CONNECTION_FAILED,
