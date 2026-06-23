@@ -221,6 +221,7 @@ function VideoTile({
   const showAvatar = (!stream && !liveKitTrack) || isCameraOff;
   const reconnecting = connectionState === "reconnecting";
   const screenShare = videoSource === "screen" || videoSource === "screen_share";
+  const fitWithoutCropping = screenShare || portraitVideo || mobileViewport || !isLocal;
   const updateVideoGeometry = useCallback((video) => {
     const portrait = video.videoHeight > video.videoWidth;
     const width = video.videoWidth || 0;
@@ -282,7 +283,7 @@ function VideoTile({
         }}
         onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
         className={`absolute inset-0 h-full w-full ${
-          screenShare || portraitVideo || mobileViewport
+          fitWithoutCropping
             ? "object-contain bg-black"
             : "object-cover"
         }`}
