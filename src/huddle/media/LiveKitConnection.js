@@ -101,7 +101,7 @@ function createLiveKitRoomOptions(sdk = {}) {
     ? {
         width: 720,
         height: 960,
-        frameRate: 24,
+        frameRate: 30,
         aspectRatio: 3 / 4,
       }
     : {
@@ -109,7 +109,7 @@ function createLiveKitRoomOptions(sdk = {}) {
           width: 960,
           height: 540,
         }),
-        frameRate: 24,
+        frameRate: 30,
       };
 
   return {
@@ -123,7 +123,7 @@ function createLiveKitRoomOptions(sdk = {}) {
       simulcast: true,
       videoEncoding: {
         maxBitrate: mobile ? 750_000 : 900_000,
-        maxFramerate: 24,
+        maxFramerate: 30,
       },
       videoSimulcastLayers: layers,
       screenShareEncoding: {

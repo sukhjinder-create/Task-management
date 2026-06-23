@@ -239,15 +239,20 @@ function VideoTile({
     screenShare || mobileViewport || (portraitVideo && !composedRemoteCamera);
   const composedVideoStyle = composedRemoteCamera
     ? {
-        width: portraitVideo ? "min(52%, 520px)" : "min(68%, 720px)",
-        height: "92%",
+        width: "auto",
+        height: portraitVideo ? "90%" : "88%",
+        maxWidth: portraitVideo ? "62%" : "76%",
+        aspectRatio:
+          videoSize.width > 0 && videoSize.height > 0
+            ? `${videoSize.width} / ${videoSize.height}`
+            : undefined,
         left: "50%",
         top: "50%",
         right: "auto",
         bottom: "auto",
         transform: "translate(-50%, -50%)",
-        objectFit: "cover",
-        objectPosition: "center 38%",
+        objectFit: "contain",
+        objectPosition: "center center",
         borderRadius: "8px",
       }
     : isLocal
@@ -327,7 +332,7 @@ function VideoTile({
           fitWithoutCropping
             ? "object-contain bg-[#11151e]"
             : composedRemoteCamera
-              ? "object-cover bg-[#11151e] shadow-2xl"
+              ? "object-contain bg-[#11151e] shadow-2xl"
               : "object-cover"
         }`}
         style={composedVideoStyle}

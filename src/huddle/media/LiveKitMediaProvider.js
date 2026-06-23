@@ -91,10 +91,10 @@ const LIVEKIT_QUALITY_MODES = Object.freeze({
 
 const LIVEKIT_QUALITY_CAPTURE_OPTIONS = Object.freeze({
   [LIVEKIT_QUALITY_MODES.STANDARD]: {
-    resolution: { width: 960, height: 540, frameRate: 24 },
+    resolution: { width: 960, height: 540, frameRate: 30 },
   },
   [LIVEKIT_QUALITY_MODES.HD]: {
-    resolution: { width: 1280, height: 720, frameRate: 24 },
+    resolution: { width: 1280, height: 720, frameRate: 30 },
   },
 });
 
@@ -118,7 +118,7 @@ function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
       resolution: {
         width: standard ? 540 : 720,
         height: standard ? 720 : 960,
-        frameRate: 24,
+        frameRate: 30,
         aspectRatio: 3 / 4,
       },
     };
@@ -126,7 +126,7 @@ function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
   return (
     LIVEKIT_QUALITY_CAPTURE_OPTIONS[mode] || {
       facingMode: "user",
-      resolution: { width: 960, height: 540, frameRate: 24 },
+      resolution: { width: 960, height: 540, frameRate: 30 },
     }
   );
 }
@@ -150,7 +150,7 @@ function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO, sdk = null) {
         mode === LIVEKIT_QUALITY_MODES.HD
           ? (mobile ? 900_000 : 1_100_000)
           : (mobile ? 750_000 : 900_000),
-      maxFramerate: 24,
+      maxFramerate: 30,
     },
     ...(layers.length ? { videoSimulcastLayers: layers } : {}),
   };
@@ -774,6 +774,7 @@ function safeNumber(value, fallback = null) {
 }
 
 function normalizeKbps(value, fallback = null) {
+  if (value === null || value === undefined || value === "") return fallback;
   let number = Number(value);
   if (!Number.isFinite(number) || number < 0) return fallback;
   // RTC and LiveKit APIs may expose bits/sec while the persisted contract is kbps.
@@ -1122,9 +1123,10 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
 
       const bytes = safeNumber((track.bytesSent || 0) + (track.bytesReceived || 0));
       const timestamp = entries.find((entry) => Number.isFinite(Number(entry.timestamp)))?.timestamp;
-      track.bitrateKbps = normalizeKbps(
-        bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples)
-      );
+      track.bitrateKbps =
+        normalizeKbps(
+          bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples)
+        ) ?? normalizeKbps(track.currentBitrateKbps);
       applyCounterDeltas(track, sampleKey, previousSamples);
       const packetTotal = (track.packetsSent || track.packetsReceived || 0) + (track.packetsLost || 0);
       track.packetLoss = packetTotal > 0

@@ -1122,10 +1122,9 @@ export default function HuddleMeetingIntelligence() {
                   <div>
                     <div className="text-xs font-semibold uppercase text-[color:var(--text-muted)]">Overall outcome</div>
                     <p className="mt-1 text-sm leading-6">{review.report?.executiveSummary?.outcome}</p>
+                    <EvidenceButton ids={review.report?.executiveSummary?.evidenceSegmentIds} onOpen={showEvidence} />
                   </div>
                 </div>
-                <p className="max-w-4xl whitespace-pre-wrap text-[15px] leading-7">{summary.contentJson?.overview}</p>
-                <EvidenceButton ids={summary.contentJson?.overviewEvidenceSegmentIds} onOpen={showEvidence} />
                 {(review.report?.discussionSummary || []).length > 0 && (
                   <>
                     <h3 className="mb-3 mt-7 font-semibold">Discussion summary</h3>

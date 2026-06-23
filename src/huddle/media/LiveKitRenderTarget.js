@@ -88,7 +88,7 @@ export function updateLiveKitRenderTarget(publication, {
       90,
       screenShare ? 1080 : maxCameraHeight
     ),
-    framesPerSecond: screenShare ? 15 : 24,
+    framesPerSecond: screenShare ? 15 : 30,
     pixelRatio,
     source,
     visible: Boolean(visible),
