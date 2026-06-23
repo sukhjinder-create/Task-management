@@ -4,7 +4,7 @@ import { useHuddle } from "../context/HuddleContext";
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Maximize2, Minimize2, VolumeX, Captions,
-  BookOpenText, Gauge, X, ArrowDown,
+  BookOpenText, Gauge, X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useApi } from "../api";
@@ -240,8 +240,8 @@ function VideoTile({
   const composedVideoStyle = composedRemoteCamera
     ? {
         width: "auto",
-        height: portraitVideo ? "90%" : "88%",
-        maxWidth: portraitVideo ? "62%" : "76%",
+        height: portraitVideo ? "100%" : "88%",
+        maxWidth: portraitVideo ? "100%" : "76%",
         aspectRatio:
           videoSize.width > 0 && videoSize.height > 0
             ? `${videoSize.width} / ${videoSize.height}`
@@ -253,7 +253,7 @@ function VideoTile({
         transform: "translate(-50%, -50%)",
         objectFit: "contain",
         objectPosition: "center center",
-        borderRadius: "8px",
+        borderRadius: portraitVideo ? 0 : "8px",
       }
     : isLocal
       ? { transform: "scaleX(-1)" }
@@ -408,8 +408,6 @@ export default function GlobalHuddleWindow() {
   const [showMissedPanel, setShowMissedPanel] = useState(false);
   const [missedBrief, setMissedBrief] = useState(null);
   const [missedLoading, setMissedLoading] = useState(false);
-  const [followLatestCaption, setFollowLatestCaption] = useState(true);
-  const captionFeedRef = useRef(null);
   const canonicalCaptionFeed = useMemo(
     () => (Array.isArray(rtc?.captionFeed) ? rtc.captionFeed : []),
     [rtc?.captionFeed]
@@ -549,30 +547,6 @@ export default function GlobalHuddleWindow() {
       window.visualViewport?.removeEventListener?.("scroll", scheduleSync);
     };
   }, [isMaximized, size]);
-
-  useEffect(() => {
-    if (
-      !rtc?.subtitlesEnabled ||
-      !followLatestCaption ||
-      !captionFeedRef.current
-    ) return;
-    captionFeedRef.current.scrollTop = captionFeedRef.current.scrollHeight;
-  }, [canonicalCaptionFeed, followLatestCaption, rtc?.subtitlesEnabled]);
-
-  const handleCaptionScroll = useCallback(() => {
-    const element = captionFeedRef.current;
-    if (!element) return;
-    const distanceFromBottom =
-      element.scrollHeight - element.scrollTop - element.clientHeight;
-    setFollowLatestCaption(distanceFromBottom < 28);
-  }, []);
-
-  const jumpToLatestCaption = useCallback(() => {
-    const element = captionFeedRef.current;
-    if (!element) return;
-    element.scrollTop = element.scrollHeight;
-    setFollowLatestCaption(true);
-  }, []);
 
   const windowRef = useRef(null);
   const dragging = useRef(false);
@@ -765,6 +739,22 @@ export default function GlobalHuddleWindow() {
     typeof rtc?.startScreenShare === "function" &&
     typeof rtc?.stopScreenShare === "function";
   const videoAreaH = Math.max(120, size.h - (isMobileDevice ? 0 : 108));
+  const portraitCanvasWidth = Math.max(
+    320,
+    Math.min(
+      Math.max(320, size.w - 24),
+      Math.round(videoAreaH * 0.78)
+    )
+  );
+  const portraitCanvasStyle =
+    oneOnOneRemotePortrait && !isMobileDevice
+      ? {
+          width: portraitCanvasWidth,
+          maxWidth: "calc(100vw - 32px)",
+          height: "100%",
+        }
+      : undefined;
+  const visibleCaptionItems = captionItems.filter((item) => item?.text).slice(-2);
 
   return (
     <div
@@ -883,20 +873,13 @@ export default function GlobalHuddleWindow() {
             <div
               className={`absolute inset-0 flex items-center justify-center ${
                 oneOnOneRemotePortrait && !isMobileDevice
-                  ? "bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-3"
+                  ? "bg-[#0b0f18] p-2"
                   : ""
               }`}
             >
               <div
                 className="h-full w-full"
-                style={
-                  oneOnOneRemotePortrait && !isMobileDevice
-                    ? {
-                        width: `min(58vw, ${Math.round(videoAreaH * 0.75)}px)`,
-                        maxWidth: "100%",
-                      }
-                    : undefined
-                }
+                style={portraitCanvasStyle}
               >
               <MemoizedVideoTile
                 stream={remoteParticipant.stream}
@@ -972,22 +955,31 @@ export default function GlobalHuddleWindow() {
       {rtc?.subtitlesEnabled && !showMissedPanel && (
         <section
           onClick={(event) => event.stopPropagation()}
-          className={`absolute z-30 flex flex-col overflow-hidden border border-white/12 bg-[#0b1220]/96 shadow-2xl backdrop-blur-md ${
-            isMobileDevice
-              ? "inset-x-0 max-h-[46svh] rounded-t-2xl border-x-0 border-b-0"
-              : "right-4 w-[min(460px,calc(100vw-2rem))] max-h-[min(56vh,520px)] rounded-lg"
-          }`}
+          className="pointer-events-none absolute inset-x-3 z-30 flex justify-center"
           style={{
             bottom: isMobileDevice
-              ? (mobileControlsVisible ? 104 : 0)
+              ? (mobileControlsVisible ? 112 : 28)
               : 92,
-            touchAction: "pan-y",
           }}
-          aria-label="Live meeting transcript"
+          aria-label="Live captions"
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+          <div className="max-w-[min(760px,calc(100vw-2rem))] rounded-lg bg-black/72 px-4 py-2.5 text-center text-white shadow-2xl backdrop-blur">
+            {visibleCaptionItems.length > 0 ? (
+              <div className="space-y-1">
+                {visibleCaptionItems.map((caption) => (
+                  <p
+                    key={caption.key}
+                    className={`text-sm leading-6 md:text-base ${
+                      caption.status === "partial" ? "text-white/82" : "text-white"
+                    }`}
+                  >
+                    <span className="font-semibold text-sky-200">{caption.speaker}: </span>
+                    <span>{caption.text}</span>
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 text-sm text-white/82">
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
                     rtc?.captionStatus === "failed"
@@ -999,57 +991,8 @@ export default function GlobalHuddleWindow() {
                 />
                 {captionStatusLabel}
               </div>
-              <div className="truncate text-sm font-semibold text-white">Live transcript</div>
-            </div>
-            <div className="shrink-0 rounded border border-white/10 bg-white/10 px-2 py-1 text-[11px] text-slate-300">
-              {captionItems.length} line{captionItems.length === 1 ? "" : "s"}
-            </div>
-          </div>
-          <div
-            ref={captionFeedRef}
-            onScroll={handleCaptionScroll}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3"
-            style={{
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
-            {captionItems.length > 0 ? (
-              <div className="space-y-3 pb-3">
-                {captionItems.map((caption) => (
-                  <div key={caption.key} className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-[12px] font-semibold text-sky-200">{caption.speaker}</span>
-                      {caption.time && <span className="text-[11px] text-slate-500">{caption.time}</span>}
-                      {caption.status === "partial" && (
-                        <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
-                          live
-                        </span>
-                      )}
-                    </div>
-                    <div className={`mt-1 whitespace-pre-wrap text-[15px] leading-6 text-white ${caption.status === "partial" ? "opacity-80" : ""}`}>
-                      {caption.text}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-8 text-center">
-                <div className="text-sm font-semibold text-slate-100">Listening for speech</div>
-                <p className="mx-auto mt-1 max-w-xs text-sm leading-6 text-slate-400">
-                  Captions from every speaker will appear here as the meeting continues.
-                </p>
-              </div>
             )}
           </div>
-          {!followLatestCaption && (
-            <button
-              type="button"
-              onClick={jumpToLatestCaption}
-              className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-sky-400"
-            >
-              <ArrowDown size={13} /> Latest
-            </button>
-          )}
         </section>
       )}
 
