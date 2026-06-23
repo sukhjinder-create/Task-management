@@ -119,6 +119,7 @@ function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
         width: standard ? 540 : 720,
         height: standard ? 720 : 960,
         frameRate: 24,
+        aspectRatio: 3 / 4,
       },
     };
   }

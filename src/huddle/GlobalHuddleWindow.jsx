@@ -212,8 +212,11 @@ function VideoTile({
   onOrientationChange = null,
   mobileViewport = false,
 }) {
-  const { setRef } = useVideoMediaRef(stream, liveKitTrack, isLocal || Boolean(liveKitTrack));
-  const { setRef: setBackdropRef } = useVideoMediaRef(stream, liveKitTrack, true);
+  const { setRef, ref: videoRef } = useVideoMediaRef(
+    stream,
+    liveKitTrack,
+    isLocal || Boolean(liveKitTrack)
+  );
   const tileRef = useRef(null);
   const portraitVideoRef = useRef(false);
   const [portraitVideo, setPortraitVideo] = useState(false);
@@ -222,8 +225,34 @@ function VideoTile({
   const showAvatar = (!stream && !liveKitTrack) || isCameraOff;
   const reconnecting = connectionState === "reconnecting";
   const screenShare = videoSource === "screen" || videoSource === "screen_share";
-  const portraitFill = !isLocal && !screenShare && portraitVideo;
-  const fitWithoutCropping = screenShare || portraitVideo || mobileViewport;
+  const videoAspectRatio =
+    videoSize.width > 0 && videoSize.height > 0
+      ? videoSize.width / videoSize.height
+      : null;
+  const composedRemoteCamera =
+    !isLocal &&
+    !screenShare &&
+    !mobileViewport &&
+    videoAspectRatio !== null &&
+    videoAspectRatio < 1.5;
+  const fitWithoutCropping =
+    screenShare || mobileViewport || (portraitVideo && !composedRemoteCamera);
+  const composedVideoStyle = composedRemoteCamera
+    ? {
+        width: portraitVideo ? "min(52%, 520px)" : "min(68%, 720px)",
+        height: "92%",
+        left: "50%",
+        top: "50%",
+        right: "auto",
+        bottom: "auto",
+        transform: "translate(-50%, -50%)",
+        objectFit: "cover",
+        objectPosition: "center 38%",
+        borderRadius: "8px",
+      }
+    : isLocal
+      ? { transform: "scaleX(-1)" }
+      : undefined;
   const updateVideoGeometry = useCallback((video) => {
     const portrait = video.videoHeight > video.videoWidth;
     const width = video.videoWidth || 0;
@@ -244,7 +273,8 @@ function VideoTile({
     if (!tile || !liveKitPublication || isLocal) return undefined;
 
     const update = () => {
-      const rect = tile.getBoundingClientRect();
+      const renderedVideo = videoRef.current;
+      const rect = renderedVideo?.getBoundingClientRect() || tile.getBoundingClientRect();
       updateLiveKitRenderTarget(liveKitPublication, {
         width: rect.width,
         height: rect.height,
@@ -259,13 +289,22 @@ function VideoTile({
       ? new ResizeObserver(update)
       : null;
     observer?.observe(tile);
+    if (videoRef.current) observer?.observe(videoRef.current);
     window.addEventListener("resize", update);
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", update);
       clearLiveKitRenderTarget(liveKitPublication);
     };
-  }, [isLocal, liveKitPublication, videoSize.height, videoSize.width, videoSource]);
+  }, [
+    composedRemoteCamera,
+    isLocal,
+    liveKitPublication,
+    videoRef,
+    videoSize.height,
+    videoSize.width,
+    videoSource,
+  ]);
 
   return (
     <div
@@ -275,15 +314,6 @@ function VideoTile({
       } ${compact ? "rounded-xl" : "rounded-xl"}`}
     >
       {/* Local video is mirrored (selfie-style); remote is natural */}
-      {portraitFill && (
-        <video
-          ref={setBackdropRef}
-          aria-hidden="true"
-          muted
-          playsInline
-          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-55 blur-2xl saturate-125"
-        />
-      )}
       <video
         ref={setRef}
         onLoadedMetadata={(event) => {
@@ -295,12 +325,12 @@ function VideoTile({
         onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
         className={`absolute inset-0 h-full w-full ${
           fitWithoutCropping
-            ? portraitFill
-              ? "object-contain bg-transparent"
-              : "object-contain bg-black"
-            : "object-cover"
+            ? "object-contain bg-[#11151e]"
+            : composedRemoteCamera
+              ? "object-cover bg-[#11151e] shadow-2xl"
+              : "object-cover"
         }`}
-        style={isLocal ? { transform: "scaleX(-1)" } : undefined}
+        style={composedVideoStyle}
       />
 
       {showAvatar && (

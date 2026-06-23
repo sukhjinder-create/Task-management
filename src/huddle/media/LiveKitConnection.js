@@ -102,6 +102,7 @@ function createLiveKitRoomOptions(sdk = {}) {
         width: 720,
         height: 960,
         frameRate: 24,
+        aspectRatio: 3 / 4,
       }
     : {
         ...(videoPresets.h540?.resolution || {
