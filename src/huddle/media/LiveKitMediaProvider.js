@@ -772,6 +772,22 @@ function safeNumber(value, fallback = null) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function normalizeKbps(value, fallback = null) {
+  let number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return fallback;
+  // RTC and LiveKit APIs may expose bits/sec while the persisted contract is kbps.
+  if (number > 100000) number = number / 1000;
+  if (number > 20000) return fallback;
+  return Number(number.toFixed(1));
+}
+
+function estimatedMegabytesPerHourFromKbps(kbps) {
+  const normalized = normalizeKbps(kbps);
+  return normalized === null
+    ? null
+    : Number(((normalized * 3600) / 8 / 1000).toFixed(1));
+}
+
 function qualityParticipantName(participant = {}) {
   return safeHumanName(
     participant.name,
@@ -1105,7 +1121,9 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
 
       const bytes = safeNumber((track.bytesSent || 0) + (track.bytesReceived || 0));
       const timestamp = entries.find((entry) => Number.isFinite(Number(entry.timestamp)))?.timestamp;
-      track.bitrateKbps = bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples);
+      track.bitrateKbps = normalizeKbps(
+        bitrateFromDelta(sampleKey, bytes, timestamp, previousSamples)
+      );
       applyCounterDeltas(track, sampleKey, previousSamples);
       const packetTotal = (track.packetsSent || track.packetsReceived || 0) + (track.packetsLost || 0);
       track.packetLoss = packetTotal > 0
@@ -1119,7 +1137,7 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
 
   const rttValues = tracks.map((track) => track.rttMs).filter((value) => Number.isFinite(value));
   const packetLossValues = tracks.map((track) => track.packetLoss).filter((value) => Number.isFinite(value));
-  const bitrateValues = tracks.map((track) => track.bitrateKbps).filter((value) => Number.isFinite(value));
+  const bitrateValues = tracks.map((track) => normalizeKbps(track.bitrateKbps)).filter((value) => Number.isFinite(value));
   const sendBitrateValues = tracks
     .filter((track) => track.direction === "send")
     .map((track) => track.bitrateKbps)
@@ -1192,22 +1210,17 @@ async function collectLiveKitQualitySnapshot(room, networkStatsByParticipant = {
         ? Number((packetLossValues.reduce((total, value) => total + value, 0) / packetLossValues.length).toFixed(4))
         : null,
       totalBitrateKbps: bitrateValues.length
-        ? Math.round(bitrateValues.reduce((total, value) => total + value, 0))
+        ? normalizeKbps(bitrateValues.reduce((total, value) => total + value, 0))
         : null,
       sendBitrateKbps: sendBitrateValues.length
-        ? Math.round(sendBitrateValues.reduce((total, value) => total + value, 0))
+        ? normalizeKbps(sendBitrateValues.reduce((total, value) => total + value, 0))
         : null,
       receiveBitrateKbps: receiveBitrateValues.length
-        ? Math.round(receiveBitrateValues.reduce((total, value) => total + value, 0))
+        ? normalizeKbps(receiveBitrateValues.reduce((total, value) => total + value, 0))
         : null,
       estimatedMegabytesPerHour: bitrateValues.length
-        ? Number(
-            (
-              (bitrateValues.reduce((total, value) => total + value, 0) *
-                3600) /
-              8 /
-              1024
-            ).toFixed(1)
+        ? estimatedMegabytesPerHourFromKbps(
+            bitrateValues.reduce((total, value) => total + value, 0)
           )
         : null,
       maxSendWidth: maxBy(sendVideoTracks, "width"),

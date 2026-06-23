@@ -213,6 +213,7 @@ function VideoTile({
   mobileViewport = false,
 }) {
   const { setRef } = useVideoMediaRef(stream, liveKitTrack, isLocal || Boolean(liveKitTrack));
+  const { setRef: setBackdropRef } = useVideoMediaRef(stream, liveKitTrack, true);
   const tileRef = useRef(null);
   const portraitVideoRef = useRef(false);
   const [portraitVideo, setPortraitVideo] = useState(false);
@@ -221,7 +222,8 @@ function VideoTile({
   const showAvatar = (!stream && !liveKitTrack) || isCameraOff;
   const reconnecting = connectionState === "reconnecting";
   const screenShare = videoSource === "screen" || videoSource === "screen_share";
-  const fitWithoutCropping = screenShare || portraitVideo || mobileViewport || !isLocal;
+  const portraitFill = !isLocal && !screenShare && portraitVideo;
+  const fitWithoutCropping = screenShare || portraitVideo || mobileViewport;
   const updateVideoGeometry = useCallback((video) => {
     const portrait = video.videoHeight > video.videoWidth;
     const width = video.videoWidth || 0;
@@ -273,6 +275,15 @@ function VideoTile({
       } ${compact ? "rounded-xl" : "rounded-xl"}`}
     >
       {/* Local video is mirrored (selfie-style); remote is natural */}
+      {portraitFill && (
+        <video
+          ref={setBackdropRef}
+          aria-hidden="true"
+          muted
+          playsInline
+          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-55 blur-2xl saturate-125"
+        />
+      )}
       <video
         ref={setRef}
         onLoadedMetadata={(event) => {
@@ -284,7 +295,9 @@ function VideoTile({
         onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
         className={`absolute inset-0 h-full w-full ${
           fitWithoutCropping
-            ? "object-contain bg-black"
+            ? portraitFill
+              ? "object-contain bg-transparent"
+              : "object-contain bg-black"
             : "object-cover"
         }`}
         style={isLocal ? { transform: "scaleX(-1)" } : undefined}

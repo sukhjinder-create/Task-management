@@ -52,11 +52,17 @@ export function updateLiveKitRenderTarget(publication, {
   const mobile = isMobileMediaDevice();
   let targetCssWidth = cssWidth;
   let targetCssHeight = cssHeight;
+  let contentCssWidth = cssWidth;
+  let contentCssHeight = cssHeight;
   if (!screenShare && sourceWidth && sourceHeight) {
     const scale = Math.min(cssWidth / sourceWidth, cssHeight / sourceHeight);
     if (scale > 0) {
-      targetCssWidth = sourceWidth * scale;
-      targetCssHeight = sourceHeight * scale;
+      contentCssWidth = sourceWidth * scale;
+      contentCssHeight = sourceHeight * scale;
+      if (!sourcePortrait) {
+        targetCssWidth = contentCssWidth;
+        targetCssHeight = contentCssHeight;
+      }
     }
   }
   const maxCameraWidth = sourcePortrait ? 720 : 1280;
@@ -68,8 +74,8 @@ export function updateLiveKitRenderTarget(publication, {
   const target = {
     cssWidth: Math.round(cssWidth),
     cssHeight: Math.round(cssHeight),
-    contentCssWidth: Math.round(targetCssWidth),
-    contentCssHeight: Math.round(targetCssHeight),
+    contentCssWidth: Math.round(contentCssWidth),
+    contentCssHeight: Math.round(contentCssHeight),
     sourceWidth: sourceWidth || null,
     sourceHeight: sourceHeight || null,
     width: bounded(
