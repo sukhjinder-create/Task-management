@@ -64,11 +64,11 @@ const SCORE_SURFACE = {
 };
 
 const DASHBOARD_TIME_RANGES = [
-  { value: "7d", label: "7D", description: "Last 7 days" },
   { value: "30d", label: "30D", description: "Last 30 days" },
   { value: "90d", label: "90D", description: "Last 90 days" },
   { value: "6m", label: "6M", description: "Last 6 months" },
   { value: "1y", label: "1Y", description: "Last 1 year" },
+  { value: "all", label: "ALL", description: "Full available history" },
 ];
 
 function getScoreTone(value, { direction = "high", goodAt = 75, warningAt = 50 } = {}) {
@@ -177,7 +177,9 @@ async function openExecutiveDetail(view = "summary") {
     setExecutiveDetailLoading(true);
     setExecutiveModalView(view);
     setExecutiveDetailOpen(true);
-    const res = await api.get("/dashboard/executive-detail");
+    const res = await api.get("/dashboard/executive-detail", {
+      params: { range: dashboardRange },
+    });
     setExecutiveDetail(res.data);
   } catch (err) {
     toast.error(err?.response?.data?.error || "Failed to load executive detail");
@@ -247,7 +249,9 @@ if (overview?.executiveSummary) {
     status: "ready",
     headline: overview.executiveSummary.headline || "",
     text: overview.executiveSummary.narrative || "",
-    reasoning: null,
+    reasoning: overview.executiveSummary.drivers || null,
+    outlook: overview.executiveSummary.outlook || overview.forecast?.reasoning || null,
+    range: overview.executiveSummary.period || overview.dashboardRange || null,
   });
 }
 
@@ -298,7 +302,7 @@ if (isAdmin) {
 
     const month = new Date().toISOString().slice(0, 7);
 
-    const insightsRes = await getAdminInsights(month);
+    const insightsRes = await getAdminInsights(month, dashboardRange);
 
     setIntelligence(insightsRes.data);
   } catch (err) {
@@ -426,7 +430,7 @@ useEffect(() => {
 
       // refresh admin insights if admin
       if (isAdmin) {
-        const insightsRes = await getAdminInsights(month);
+        const insightsRes = await getAdminInsights(month, dashboardRange);
         setIntelligence(insightsRes.data);
       }
 
@@ -484,6 +488,7 @@ useEffect(() => {
     dashboardOverview?.counts?.overdueTasks ??
     tasksForStats.filter((t) => isTaskOverdue(t)).length;
 
+  const dashboardForecast = dashboardOverview?.forecast || intelligence?.forecast || null;
 
 /* ======================================
    AUTONOMOUS AI INSIGHT ENGINE
@@ -492,7 +497,7 @@ useEffect(() => {
 const autonomousInsight = useMemo(() => {
   const risk = myPerformance?.intelligence?.risk?.level;
   const overdue = overdueCount;
-  const trend = intelligence?.forecast?.trend;
+  const trend = dashboardForecast?.trend;
   const inProgress = inProgressCount;
   const completed = completedCount;
   const total = totalTasks;
@@ -567,7 +572,7 @@ const autonomousInsight = useMemo(() => {
       { label: "Completed", value: completed, color: "text-[color:var(--text-soft)]" },
     ],
   };
-}, [myPerformance, overdueCount, intelligence, inProgressCount, completedCount, totalTasks, totalProjects]);
+}, [myPerformance, overdueCount, dashboardForecast, inProgressCount, completedCount, totalTasks, totalProjects]);
 
   // My tasks subset (for admin/manager too)
   const myTasks = useMemo(
@@ -642,6 +647,81 @@ const autonomousInsight = useMemo(() => {
           metricText: "theme-text",
         };
 
+  const liveAttendancePanel = (liveAttendance || liveAttendanceLoading) ? (
+    <section className="border border-[color:var(--border)] rounded-lg p-5">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+            Live Operations
+          </p>
+          <h2 className="text-sm font-bold theme-text">Live Attendance</h2>
+          <p className="text-[11px] theme-text-muted">
+            Today {liveAttendance?.date ? `- ${liveAttendance.date}` : ""} - updates on attendance changes
+          </p>
+        </div>
+        <span className="text-[10px] px-2 py-0.5 rounded-md border border-[color:var(--border)] theme-text-muted">
+          {liveAttendanceLoading ? "Refreshing" : "Live"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+        {[
+          { label: "Present", value: liveAttendance?.totals?.present ?? 0, status: "available" },
+          { label: "Available", value: liveAttendance?.totals?.available ?? 0, status: "available" },
+          { label: "Lunch", value: liveAttendance?.totals?.lunch ?? 0, status: "lunch" },
+          { label: "AWS", value: liveAttendance?.totals?.aws ?? 0, status: "aws" },
+          { label: "On Leave", value: liveAttendance?.totals?.onLeave ?? 0, status: "on_leave" },
+        ].map((item) => {
+          const tone = attendanceTone(item.status);
+          return (
+            <div key={item.label} className={`rounded-lg border ${tone.border} p-3`}>
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
+                <span className="text-[11px] font-semibold theme-text-muted">{item.label}</span>
+              </div>
+              <div className={`mt-2 text-xl font-semibold ${tone.text}`}>{item.value}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-2">
+        {liveAttendanceRows.length > 0 ? (
+          liveAttendanceRows.map((user) => {
+            const tone = attendanceTone(user.status);
+            const detail =
+              user.status === "on_leave"
+                ? user.leave?.type || "Leave"
+                : user.status === "offline"
+                ? "Not signed in"
+                : user.statusMinutes != null
+                ? `${user.label} - ${formatLiveMinutes(user.statusMinutes)}`
+                : user.label;
+
+            return (
+              <div key={user.userId} className="flex items-center gap-3 rounded-lg border border-[color:var(--border)] px-3 py-2">
+                <span className={`h-2 w-2 rounded-full shrink-0 ${tone.dot}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold theme-text truncate">{user.username}</div>
+                  <div className="text-[10px] theme-text-muted truncate">{detail}</div>
+                </div>
+                <span className={`text-[10px] font-bold uppercase shrink-0 ${tone.text}`}>{user.label}</span>
+              </div>
+            );
+          })
+        ) : (
+          <div className="md:col-span-2 rounded-lg border border-[color:var(--border)] px-3 py-4 text-xs theme-text-muted text-center">
+            No live attendance activity is available yet.
+          </div>
+        )}
+      </div>
+
+      <p className="mt-3 text-[10px] theme-text-muted">
+        {liveAttendance?.totals?.notSignedIn ?? 0} not signed in. Attendance scoring remains end-of-day; this panel is live operational status.
+      </p>
+    </section>
+  ) : null;
+
   return (
   <div className="max-w-[1400px] mx-auto w-full space-y-6">
 
@@ -663,6 +743,29 @@ const autonomousInsight = useMemo(() => {
         </p>
       </div>
       <div className="flex items-center gap-2">
+        {healthScore != null && (
+          <div className="inline-flex items-center gap-2 px-3 h-9 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
+            <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-soft)] font-semibold">Health</span>
+            <span className={`text-[15px] font-semibold font-mono ${getScoreTextClass(healthScore)}`}>{healthScore}</span>
+            <span className="text-[11px] text-[color:var(--text-soft)]">/100</span>
+          </div>
+        )}
+      </div>
+    </header>
+
+    {liveAttendancePanel}
+
+    <section className="border border-[color:var(--border)] rounded-lg p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+            Performance Intelligence
+          </p>
+          <h2 className="text-sm font-bold theme-text">Selected Period: {dashboardRangeLabel(dashboardRange)}</h2>
+          <p className="text-[11px] theme-text-muted">
+            Executive summary, trends, charts, and outlook below use this period.
+          </p>
+        </div>
         <div className="inline-flex h-9 items-center overflow-hidden rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
           {DASHBOARD_TIME_RANGES.map((range) => (
             <button
@@ -680,15 +783,8 @@ const autonomousInsight = useMemo(() => {
             </button>
           ))}
         </div>
-        {healthScore != null && (
-          <div className="inline-flex items-center gap-2 px-3 h-9 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-soft)] font-semibold">Health</span>
-            <span className={`text-[15px] font-semibold font-mono ${getScoreTextClass(healthScore)}`}>{healthScore}</span>
-            <span className="text-[11px] text-[color:var(--text-soft)]">/100</span>
-          </div>
-        )}
       </div>
-    </header>
+    </section>
 
 {/* ======================================
    AUTONOMOUS AI INSIGHT CARD
@@ -898,78 +994,6 @@ const autonomousInsight = useMemo(() => {
       </div>
     </div>
   </div>
-)}
-
-{(liveAttendance || liveAttendanceLoading) && (
-  <section className="border border-[color:var(--border)] rounded-lg p-5">
-    <div className="flex items-start justify-between gap-3 mb-4">
-      <div>
-        <h2 className="text-sm font-bold theme-text">Live Attendance</h2>
-        <p className="text-[11px] theme-text-muted">
-          Today {liveAttendance?.date ? `- ${liveAttendance.date}` : ""} - updates on attendance changes
-        </p>
-      </div>
-      <span className="text-[10px] px-2 py-0.5 rounded-md border border-[color:var(--border)] theme-text-muted">
-        {liveAttendanceLoading ? "Refreshing" : "Live"}
-      </span>
-    </div>
-
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-      {[
-        { label: "Present", value: liveAttendance?.totals?.present ?? 0, status: "available" },
-        { label: "Available", value: liveAttendance?.totals?.available ?? 0, status: "available" },
-        { label: "Lunch", value: liveAttendance?.totals?.lunch ?? 0, status: "lunch" },
-        { label: "AWS", value: liveAttendance?.totals?.aws ?? 0, status: "aws" },
-        { label: "On Leave", value: liveAttendance?.totals?.onLeave ?? 0, status: "on_leave" },
-      ].map((item) => {
-        const tone = attendanceTone(item.status);
-        return (
-          <div key={item.label} className={`rounded-lg border ${tone.border} p-3`}>
-            <div className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
-              <span className="text-[11px] font-semibold theme-text-muted">{item.label}</span>
-            </div>
-            <div className={`mt-2 text-xl font-semibold ${tone.text}`}>{item.value}</div>
-          </div>
-        );
-      })}
-    </div>
-
-    <div className="grid gap-2 md:grid-cols-2">
-      {liveAttendanceRows.length > 0 ? (
-        liveAttendanceRows.map((user) => {
-          const tone = attendanceTone(user.status);
-          const detail =
-            user.status === "on_leave"
-              ? user.leave?.type || "Leave"
-              : user.status === "offline"
-              ? "Not signed in"
-              : user.statusMinutes != null
-              ? `${user.label} - ${formatLiveMinutes(user.statusMinutes)}`
-              : user.label;
-
-          return (
-            <div key={user.userId} className="flex items-center gap-3 rounded-lg border border-[color:var(--border)] px-3 py-2">
-              <span className={`h-2 w-2 rounded-full shrink-0 ${tone.dot}`} />
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold theme-text truncate">{user.username}</div>
-                <div className="text-[10px] theme-text-muted truncate">{detail}</div>
-              </div>
-              <span className={`text-[10px] font-bold uppercase shrink-0 ${tone.text}`}>{user.label}</span>
-            </div>
-          );
-        })
-      ) : (
-        <div className="md:col-span-2 rounded-lg border border-[color:var(--border)] px-3 py-4 text-xs theme-text-muted text-center">
-          No live attendance activity is available yet.
-        </div>
-      )}
-    </div>
-
-    <p className="mt-3 text-[10px] theme-text-muted">
-      {liveAttendance?.totals?.notSignedIn ?? 0} not signed in. Attendance scoring remains end-of-day; this panel is live operational status.
-    </p>
-  </section>
 )}
 
 {dashboardOverview?.scoreCard && (
@@ -1589,8 +1613,8 @@ const autonomousInsight = useMemo(() => {
 })()}
 </div>
 
-{isAdmin && intelligence?.forecast && (() => {
-  const rawForecastTrend = intelligence.forecast.trend || intelligence.forecast.direction || "stable";
+{isAdmin && dashboardForecast && (() => {
+  const rawForecastTrend = dashboardForecast.trend || dashboardForecast.direction || "stable";
   const forecastTrend =
     rawForecastTrend === "up"
       ? "improving"
@@ -1599,8 +1623,13 @@ const autonomousInsight = useMemo(() => {
       : rawForecastTrend === "flat"
       ? "stable"
       : rawForecastTrend;
-  const predictedAverage = intelligence.forecast.predictedAverage ?? "Needs snapshots";
-  const riskProjection = intelligence.forecast.riskProjection ?? intelligence.execution?.risk ?? "unknown";
+  const predictedAverage = dashboardForecast.predictedAverage ?? dashboardForecast.currentScore ?? "Needs history";
+  const riskProjection = dashboardForecast.riskProjection ?? intelligence?.execution?.risk ?? "unknown";
+  const outlookText =
+    dashboardOverview?.executiveSummary?.outlook ||
+    executiveSummary?.outlook ||
+    dashboardForecast?.reasoning ||
+    null;
   const riskProjectionTone =
     String(riskProjection).toLowerCase() === "high"
       ? SCORE_TEXT.danger
@@ -1623,7 +1652,7 @@ const autonomousInsight = useMemo(() => {
       </h2>
 
       <span className="text-xs px-2 py-1 rounded-full theme-surface-soft theme-text font-medium">
-        {forecastTrend}
+        {forecastTrend} - {dashboardRangeLabel(dashboardRange)}
       </span>
     </div>
 
@@ -1660,14 +1689,14 @@ const autonomousInsight = useMemo(() => {
     </div>
 
     {/* AI Interpretation */}
-    {executiveSummary?.outlook && (
+    {outlookText && (
       <div className="border-t pt-4">
         <div className="text-xs font-semibold theme-text-muted mb-2">
           AI PERFORMANCE INTERPRETATION
         </div>
 
         <p className="text-sm theme-text leading-relaxed">
-          {executiveSummary.outlook}
+          {outlookText}
         </p>
       </div>
     )}
@@ -1684,7 +1713,7 @@ const autonomousInsight = useMemo(() => {
 </div>
 
     {/* ✅ AI Forecast Reasoning */}
-{intelligence?.forecast?.reasoning && (
+{dashboardForecast?.reasoning && (
   <div className="mt-5 border-t pt-4">
     <button
       onClick={() => setForecastReasoningOpen(true)}
@@ -1979,7 +2008,7 @@ const autonomousInsight = useMemo(() => {
       </h2>
 
       <div className="text-sm theme-text whitespace-pre-line leading-relaxed max-h-[60vh] overflow-y-auto">
-  {intelligence?.forecast?.reasoning || "Forecast reasoning unavailable"}
+  {dashboardForecast?.reasoning || "Forecast reasoning unavailable"}
 </div>
     </div>
   </div>

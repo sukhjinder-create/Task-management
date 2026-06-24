@@ -22,11 +22,11 @@ export const getUserMonthlyPerformance = (month) => {
  * - Organization insights
  * - Coaching effectiveness
  */
-export const getAdminInsights = (month) => {
+export const getAdminInsights = (month, range = "30d") => {
   const api = useApi();
 
   return api.get("/intelligence/insights", {
-    params: { month },
+    params: { month, range },
   });
 };
 
@@ -37,10 +37,10 @@ export const getAdminInsights = (month) => {
  * - Aggregated monthly summary
  * - No user-level data
  */
-export const getExecutiveSummary = (month) => {
+export const getExecutiveSummary = (month, range = "30d") => {
   const api = useApi();
 
   return api.get("/intelligence/admin/executive-summary", {
-    params: { month },
+    params: { month, range },
   });
 };
