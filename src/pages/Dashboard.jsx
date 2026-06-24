@@ -23,6 +23,12 @@ import {
   TrendingUp, TrendingDown, Award, BarChart2,
   Trophy, Medal,
 } from "lucide-react";
+import {
+  dashboardChartTickInterval,
+  formatDashboardChartDateLabel,
+  formatDashboardChartTooltipLabel,
+  withDashboardChartDateLabels,
+} from "../utils/dashboardChartDates";
 import { getUserProfilePath } from "../utils/userProfiles";
 
 function isTaskOverdue(task) {
@@ -118,11 +124,11 @@ function attendanceTone(status) {
   }
 }
 
-function normalizeTrendPoint(point, index) {
-  const rawLabel = point?.month || point?.date || point?.label || `P${index + 1}`;
+function normalizeTrendPoint(point, index, range = "30d", allPoints = []) {
   return {
     ...point,
-    label: String(rawLabel).slice(5) || String(rawLabel),
+    label: formatDashboardChartDateLabel(point, range, allPoints) || `P${index + 1}`,
+    tooltipLabel: formatDashboardChartTooltipLabel(point, range, allPoints) || point?.tooltipLabel,
     score: Number(point?.score ?? point?.value ?? 0),
   };
 }
@@ -593,10 +599,17 @@ const autonomousInsight = useMemo(() => {
   }, [tasksForStats, dashboardOverview]);
 
   const intelligenceCharts = useMemo(() => {
-    return (dashboardOverview?.visualizations?.charts || []).filter(
-      (chart) => chart?.type === "line" || chart?.data?.length
-    );
-  }, [dashboardOverview]);
+    return (dashboardOverview?.visualizations?.charts || [])
+      .filter((chart) => chart?.type === "line" || chart?.data?.length)
+      .map((chart) => {
+        if (chart?.type !== "line") return chart;
+        const rangeValue = chart?.range?.value || dashboardRange;
+        return {
+          ...chart,
+          data: withDashboardChartDateLabels(chart?.data || [], rangeValue),
+        };
+      });
+  }, [dashboardOverview, dashboardRange]);
 
   const liveAttendanceRows = useMemo(() => {
     if (!liveAttendance?.buckets) return [];
@@ -1002,9 +1015,11 @@ const autonomousInsight = useMemo(() => {
       const dataKey = chartDataKey(chart);
       const usablePoints = usableChartPoints(chart);
       const sparseLine = chart.type !== "bar" && usablePoints.length < 2;
+      const chartRange = chart.range?.value || dashboardRange;
       const rangeLabel = chart.range?.label || dashboardRangeLabel(dashboardRange);
       const granularityLabel = chart.granularity ? `${chart.granularity} buckets` : chart.source;
       const singlePoint = usablePoints[0] || null;
+      const tickInterval = dashboardChartTickInterval(chartRange, chart.data?.length || 0);
 
       return (
       <div key={chart.key} className="border border-[color:var(--border)] rounded-lg p-5 min-w-0">
@@ -1054,9 +1069,10 @@ const autonomousInsight = useMemo(() => {
               ) : (
                 <LineChart data={chart.data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
                   <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} interval={tickInterval} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
                   <Tooltip
+                    labelFormatter={(label, payload) => payload?.[0]?.payload?.tooltipLabel || label}
                     contentStyle={{
                       background: "var(--surface)",
                       border: "1px solid var(--border)",
@@ -1315,9 +1331,10 @@ const autonomousInsight = useMemo(() => {
       {/* TREND */}
       {performanceTrend.length > 0 && (() => {
         const trendPoints = performanceTrend
-          .map(normalizeTrendPoint)
+          .map((point, index) => normalizeTrendPoint(point, index, dashboardRange, performanceTrend))
           .filter((point) => Number.isFinite(Number(point.score)));
         const singlePoint = trendPoints[0] || null;
+        const tickInterval = dashboardChartTickInterval(dashboardRange, trendPoints.length);
         return (
         <div>
           <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-2">Score Trend</div>
@@ -1338,9 +1355,10 @@ const autonomousInsight = useMemo(() => {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendPoints} margin={{ top: 8, right: 8, left: -28, bottom: 0 }}>
                   <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} interval={tickInterval} />
                   <YAxis domain={[0, 100]} hide />
                   <Tooltip
+                    labelFormatter={(label, payload) => payload?.[0]?.payload?.tooltipLabel || label}
                     contentStyle={{
                       background: "var(--surface)",
                       border: "1px solid var(--border)",
