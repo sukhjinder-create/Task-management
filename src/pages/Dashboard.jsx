@@ -158,7 +158,12 @@ if (isAdmin) {
       // Fetch performance trend (last 3 months)
 try {
   const trendRes = await api.get("/intelligence/user/trend");
-  setPerformanceTrend(trendRes.data || []);
+  const trendPayload = trendRes.data;
+  setPerformanceTrend(
+    Array.isArray(trendPayload)
+      ? trendPayload
+      : trendPayload?.series || trendPayload?.rows || []
+  );
 } catch (err) {
   console.warn("Trend not available");
 }
@@ -166,7 +171,12 @@ try {
 // Fetch project-wise performance
 try {
   const projectPerfRes = await api.get("/intelligence/user/project-performance");
-  setProjectPerformance(projectPerfRes.data || []);
+  const projectPayload = projectPerfRes.data;
+  setProjectPerformance(
+    Array.isArray(projectPayload)
+      ? projectPayload
+      : projectPayload?.projects || projectPayload?.rows || []
+  );
 } catch (err) {
   console.warn("Project performance not available");
 }
