@@ -7,6 +7,17 @@ import { getAdminInsights } from "../services/intelligence.api";
 import { getSocket } from "../socket";
 import { Card, Badge, Button, Skeleton } from "../components/ui";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   CheckSquare, AlertTriangle, Clock, FolderKanban,
   Users, Shield, ArrowRight, ChevronRight,
   TrendingUp, TrendingDown, Award, BarChart2,
@@ -449,6 +460,10 @@ const autonomousInsight = useMemo(() => {
     return arr.slice(0, 5);
   }, [tasksForStats, dashboardOverview]);
 
+  const intelligenceCharts = useMemo(() => {
+    return (dashboardOverview?.visualizations?.charts || []).filter((chart) => chart?.data?.length);
+  }, [dashboardOverview]);
+
   function getRiskLevel(score) {
   if (score >= 75) return { label: "Low Risk", color: SCORE_TEXT.good };
   if (score >= 50) return { label: "Medium Risk", color: SCORE_TEXT.warning };
@@ -728,6 +743,65 @@ const autonomousInsight = useMemo(() => {
   </div>
 )}
 
+{dashboardOverview?.scoreCard && (
+  <div className="grid gap-4 lg:grid-cols-2">
+    {intelligenceCharts.length > 0 ? intelligenceCharts.map((chart) => (
+      <div key={chart.key} className="border border-[color:var(--border)] rounded-lg p-5 min-w-0">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-sm font-bold theme-text">{chart.title}</h2>
+            <p className="text-[11px] theme-text-muted">{chart.source}</p>
+          </div>
+          <span className="text-[11px] font-semibold theme-text-muted">
+            {chart.metric}
+          </span>
+        </div>
+        <div className="h-[190px]">
+          <ResponsiveContainer width="100%" height="100%">
+            {chart.type === "bar" ? (
+              <BarChart data={chart.data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} interval={0} height={42} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text)",
+                  }}
+                />
+                <Bar dataKey={chart.dataKey || "value"} fill="var(--primary)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            ) : (
+              <LineChart data={chart.data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text)",
+                  }}
+                />
+                <Line type="monotone" dataKey={chart.dataKey || "value"} stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              </LineChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      </div>
+    )) : (
+      <div className="border border-[color:var(--border)] rounded-lg p-5 min-w-0 lg:col-span-2">
+        <div className="h-[190px] flex items-center justify-center text-xs theme-text-muted">
+          Intelligence charts will appear after repository snapshots are populated.
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
 {/* ================================
     MY PERFORMANCE SNAPSHOT
 ================================ */}
@@ -845,15 +919,15 @@ const autonomousInsight = useMemo(() => {
         />
       </div>
 
-      {/* SCORE COMPOSITION — explains what goes into the score */}
+      {/* INTELLIGENCE EVIDENCE — renders backend-provided dimensions */}
       {breakdown && (
         <div className="rounded-lg border border-[color:var(--primary)]/16 bg-[color:var(--surface)] p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide">Score Composition</div>
-              <div className="text-xs theme-text-muted">Weighted from attendance and productivity</div>
+              <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide">Intelligence Evidence</div>
+              <div className="text-xs theme-text-muted">Repository-backed attendance and delivery signals</div>
             </div>
-            <span className="rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] font-bold theme-text-muted">100 pts</span>
+            <span className="rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] font-bold theme-text-muted">Enterprise</span>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <div className={`rounded-lg border p-3 ${getScoreSurfaceClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>
@@ -864,9 +938,8 @@ const autonomousInsight = useMemo(() => {
               <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
                 <div className={`h-1 rounded-full ${getScoreBgClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${breakdown.attendanceScore ?? 0}%` }} />
               </div>
-              <div className="mt-1 text-[10px] theme-text-muted">30% of score</div>
               {breakdown.hasAttendanceTracking === false && (
-                <div className={`mt-1 text-[10px] font-semibold ${SCORE_TEXT.warning}`}>Attendance not tracked - neutral score applied</div>
+                <div className={`mt-1 text-[10px] font-semibold ${SCORE_TEXT.warning}`}>Attendance evidence not closed for this window</div>
               )}
             </div>
             <div className={`rounded-lg border p-3 ${getScoreSurfaceClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>
@@ -876,39 +949,6 @@ const autonomousInsight = useMemo(() => {
               </div>
               <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
                 <div className={`h-1 rounded-full ${getScoreBgClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${breakdown.productivityScore ?? 0}%` }} />
-              </div>
-              <div className="mt-1 text-[10px] theme-text-muted">70% of score</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {false && breakdown && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-2">
-          <div className="text-[10px] font-semibold theme-text-muted uppercase tracking-wide mb-1.5">Score Composition</div>
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <div className="flex justify-between text-[10px] mb-0.5">
-                <span className="theme-text-muted">Attendance <span className="font-semibold theme-text">{breakdown.attendanceScore ?? "—"}</span>/100</span>
-                <span className="theme-text-muted">30%</span>
-              </div>
-              <div className="w-full bg-[var(--surface-strong)] rounded-full h-1.5">
-                <div className={`h-1.5 rounded-full ${getScoreBgClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`}
-                  style={{ width: `${breakdown.attendanceScore ?? 0}%` }} />
-              </div>
-              {breakdown.hasAttendanceTracking === false && (
-                <div className={`text-[9px] ${SCORE_TEXT.warning} mt-0.5`}>Attendance not tracked — neutral score applied</div>
-              )}
-            </div>
-            <div className="text-[10px] theme-text-muted shrink-0">+</div>
-            <div className="flex-1">
-              <div className="flex justify-between text-[10px] mb-0.5">
-                <span className="theme-text-muted">Productivity <span className="font-semibold theme-text">{breakdown.productivityScore ?? "—"}</span>/100</span>
-                <span className="theme-text-muted">70%</span>
-              </div>
-              <div className="w-full bg-[var(--surface-strong)] rounded-full h-1.5">
-                <div className={`h-1.5 rounded-full ${getScoreBgClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`}
-                  style={{ width: `${breakdown.productivityScore ?? 0}%` }} />
               </div>
             </div>
           </div>
