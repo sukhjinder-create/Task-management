@@ -63,6 +63,14 @@ const SCORE_SURFACE = {
   neutral: "border-[color:var(--border)]",
 };
 
+const DASHBOARD_TIME_RANGES = [
+  { value: "7d", label: "7D", description: "Last 7 days" },
+  { value: "30d", label: "30D", description: "Last 30 days" },
+  { value: "90d", label: "90D", description: "Last 90 days" },
+  { value: "6m", label: "6M", description: "Last 6 months" },
+  { value: "1y", label: "1Y", description: "Last 1 year" },
+];
+
 function getScoreTone(value, { direction = "high", goodAt = 75, warningAt = 50 } = {}) {
   const score = Number(value);
   if (!Number.isFinite(score)) return "neutral";
@@ -119,6 +127,19 @@ function normalizeTrendPoint(point, index) {
   };
 }
 
+function chartDataKey(chart) {
+  return chart?.dataKey || chart?.series?.[0]?.dataKey || "value";
+}
+
+function usableChartPoints(chart) {
+  const key = chartDataKey(chart);
+  return (chart?.data || []).filter((point) => Number.isFinite(Number(point?.[key])));
+}
+
+function dashboardRangeLabel(range) {
+  return DASHBOARD_TIME_RANGES.find((item) => item.value === range)?.label || "30D";
+}
+
 export default function Dashboard() {
   const api = useApi();
   const { auth } = useAuth();
@@ -149,6 +170,7 @@ export default function Dashboard() {
   const [executiveModalView, setExecutiveModalView] = useState("summary");
   const [liveAttendance, setLiveAttendance] = useState(null);
   const [liveAttendanceLoading, setLiveAttendanceLoading] = useState(false);
+  const [dashboardRange, setDashboardRange] = useState("30d");
 
 async function openExecutiveDetail(view = "summary") {
   try {
@@ -171,7 +193,9 @@ async function openExecutiveDetail(view = "summary") {
       setError("");
       let overview = null;
       try {
-        const overviewRes = await api.get("/dashboard/overview");
+        const overviewRes = await api.get("/dashboard/overview", {
+          params: { range: dashboardRange },
+        });
         overview = overviewRes.data;
         setDashboardOverview(overview);
         if (typeof overview?.healthScore === "number") {
@@ -192,7 +216,9 @@ if (isAdmin) {
 
       // Fetch performance trend (last 3 months)
 try {
-  const trendRes = await api.get("/intelligence/user/trend");
+  const trendRes = await api.get("/intelligence/user/trend", {
+    params: { range: dashboardRange },
+  });
   const trendPayload = trendRes.data;
   setPerformanceTrend(
     Array.isArray(trendPayload)
@@ -292,7 +318,7 @@ if (isAdmin) {
     }
 
     loadData();
-  }, []);
+  }, [api, auth.user.id, dashboardRange, isAdmin, role]);
 
   useEffect(() => {
     let active = true;
@@ -388,13 +414,25 @@ useEffect(() => {
       );
       setMyPerformance(perfRes.data);
 
+      const trendRes = await api.get("/intelligence/user/trend", {
+        params: { range: dashboardRange },
+      });
+      const trendPayload = trendRes.data;
+      setPerformanceTrend(
+        Array.isArray(trendPayload)
+          ? trendPayload
+          : trendPayload?.series || trendPayload?.rows || []
+      );
+
       // refresh admin insights if admin
       if (isAdmin) {
         const insightsRes = await getAdminInsights(month);
         setIntelligence(insightsRes.data);
       }
 
-      const overviewRes = await api.get("/dashboard/overview");
+      const overviewRes = await api.get("/dashboard/overview", {
+        params: { range: dashboardRange },
+      });
       setDashboardOverview(overviewRes.data);
 
     } catch (err) {
@@ -410,7 +448,7 @@ useEffect(() => {
       handleIntelligenceUpdate
     );
   };
-}, [api, isAdmin]);
+}, [api, dashboardRange, isAdmin]);
 
   // Flatten tasks with project reference
   const flatTasks = useMemo(() => {
@@ -550,7 +588,9 @@ const autonomousInsight = useMemo(() => {
   }, [tasksForStats, dashboardOverview]);
 
   const intelligenceCharts = useMemo(() => {
-    return (dashboardOverview?.visualizations?.charts || []).filter((chart) => chart?.data?.length);
+    return (dashboardOverview?.visualizations?.charts || []).filter(
+      (chart) => chart?.type === "line" || chart?.data?.length
+    );
   }, [dashboardOverview]);
 
   const liveAttendanceRows = useMemo(() => {
@@ -623,6 +663,23 @@ const autonomousInsight = useMemo(() => {
         </p>
       </div>
       <div className="flex items-center gap-2">
+        <div className="inline-flex h-9 items-center overflow-hidden rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
+          {DASHBOARD_TIME_RANGES.map((range) => (
+            <button
+              key={range.value}
+              type="button"
+              title={range.description}
+              onClick={() => setDashboardRange(range.value)}
+              className={`h-full px-2.5 text-[11px] font-semibold transition-colors ${
+                dashboardRange === range.value
+                  ? "bg-[color:var(--primary)] text-[color:var(--primary-contrast)]"
+                  : "theme-text-muted hover:theme-text hover:bg-[var(--surface)]"
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
         {healthScore != null && (
           <div className="inline-flex items-center gap-2 px-3 h-9 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
             <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-soft)] font-semibold">Health</span>
@@ -917,54 +974,81 @@ const autonomousInsight = useMemo(() => {
 
 {dashboardOverview?.scoreCard && (
   <div className="grid gap-4 lg:grid-cols-2">
-    {intelligenceCharts.length > 0 ? intelligenceCharts.map((chart) => (
+    {intelligenceCharts.length > 0 ? intelligenceCharts.map((chart) => {
+      const dataKey = chartDataKey(chart);
+      const usablePoints = usableChartPoints(chart);
+      const sparseLine = chart.type !== "bar" && usablePoints.length < 2;
+      const rangeLabel = chart.range?.label || dashboardRangeLabel(dashboardRange);
+      const granularityLabel = chart.granularity ? `${chart.granularity} buckets` : chart.source;
+      const singlePoint = usablePoints[0] || null;
+
+      return (
       <div key={chart.key} className="border border-[color:var(--border)] rounded-lg p-5 min-w-0">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-sm font-bold theme-text">{chart.title}</h2>
-            <p className="text-[11px] theme-text-muted">{chart.source}</p>
+            <p className="text-[11px] theme-text-muted">
+              {chart.source} · {rangeLabel} · {granularityLabel}
+            </p>
           </div>
           <span className="text-[11px] font-semibold theme-text-muted">
             {chart.metric}
           </span>
         </div>
         <div className="h-[190px]">
-          <ResponsiveContainer width="100%" height="100%">
-            {chart.type === "bar" ? (
-              <BarChart data={chart.data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} interval={0} height={42} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    color: "var(--text)",
-                  }}
-                />
-                <Bar dataKey={chart.dataKey || "value"} fill="var(--primary)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            ) : (
-              <LineChart data={chart.data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    color: "var(--text)",
-                  }}
-                />
-                <Line type="monotone" dataKey={chart.dataKey || "value"} stroke="var(--primary)" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} />
-              </LineChart>
-            )}
-          </ResponsiveContainer>
+          {sparseLine ? (
+            <div className="h-full rounded-lg border border-[color:var(--border)] flex flex-col items-center justify-center text-center px-4">
+              <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">
+                {usablePoints.length === 1 ? "Single snapshot available" : "No trend history yet"}
+              </div>
+              <div className="mt-2 text-2xl font-semibold theme-text">
+                {singlePoint ? Math.round(Number(singlePoint[dataKey])) : "-"}
+              </div>
+              <p className="mt-1 text-[11px] theme-text-muted max-w-[260px]">
+                {singlePoint
+                  ? `${chart.metric} has one valid point in ${rangeLabel}. Trendline will appear after another snapshot.`
+                  : `${chart.metric} has no snapshot points in ${rangeLabel}.`}
+              </p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              {chart.type === "bar" ? (
+                <BarChart data={chart.data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} interval={0} height={42} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      color: "var(--text)",
+                    }}
+                  />
+                  <Bar dataKey={dataKey} fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              ) : (
+                <LineChart data={chart.data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      color: "var(--text)",
+                    }}
+                  />
+                  <Line type="monotone" dataKey={dataKey} stroke="var(--primary)" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} connectNulls={false} />
+                </LineChart>
+              )}
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
-    )) : (
+      );
+    }) : (
       <div className="border border-[color:var(--border)] rounded-lg p-5 min-w-0 lg:col-span-2">
         <div className="h-[190px] flex items-center justify-center text-xs theme-text-muted">
           Intelligence charts will appear after repository snapshots are populated.
@@ -1205,29 +1289,49 @@ const autonomousInsight = useMemo(() => {
       )}
 
       {/* TREND */}
-      {performanceTrend.length > 0 && (
+      {performanceTrend.length > 0 && (() => {
+        const trendPoints = performanceTrend
+          .map(normalizeTrendPoint)
+          .filter((point) => Number.isFinite(Number(point.score)));
+        const singlePoint = trendPoints[0] || null;
+        return (
         <div>
           <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-2">Score Trend</div>
           <div className="h-[120px] rounded-lg border border-[color:var(--border)] p-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={performanceTrend.map(normalizeTrendPoint)} margin={{ top: 8, right: 8, left: -28, bottom: 0 }}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 100]} hide />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    color: "var(--text)",
-                  }}
-                />
-                <Line type="monotone" dataKey="score" stroke="var(--primary)" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            {trendPoints.length < 2 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center px-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">
+                  {trendPoints.length === 1 ? "Single snapshot available" : "No trend history yet"}
+                </div>
+                <div className="mt-1 text-xl font-semibold theme-text">
+                  {singlePoint ? Math.round(Number(singlePoint.score)) : "-"}
+                </div>
+                <p className="mt-1 text-[10px] theme-text-muted">
+                  {dashboardRangeLabel(dashboardRange)} needs at least two snapshots for a trendline.
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendPoints} margin={{ top: 8, right: 8, left: -28, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 100]} hide />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      color: "var(--text)",
+                    }}
+                  />
+                  <Line type="monotone" dataKey="score" stroke="var(--primary)" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* PROJECT BREAKDOWN */}
       {projectPerformance.length > 0 && (
