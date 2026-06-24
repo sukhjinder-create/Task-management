@@ -86,6 +86,39 @@ function getScoreSurfaceClass(value, options) {
   return SCORE_SURFACE[getScoreTone(value, options)];
 }
 
+function formatLiveMinutes(minutes) {
+  const value = Number(minutes);
+  if (!Number.isFinite(value) || value < 0) return "";
+  if (value < 60) return `${value}m`;
+  const hours = Math.floor(value / 60);
+  const mins = value % 60;
+  return mins ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+function attendanceTone(status) {
+  switch (status) {
+    case "available":
+      return { text: SCORE_TEXT.good, dot: "bg-[color:var(--score-good)]", border: "border-[color:var(--border)]" };
+    case "aws":
+      return { text: SCORE_TEXT.warning, dot: "bg-[color:var(--score-warning)]", border: "border-[color:var(--border)]" };
+    case "lunch":
+      return { text: "text-[color:var(--primary)]", dot: "brand-orange-bg", border: "border-[color:var(--border)]" };
+    case "on_leave":
+      return { text: "theme-text-muted", dot: "bg-[color:var(--surface-strong)]", border: "border-[color:var(--border)]" };
+    default:
+      return { text: "theme-text-muted", dot: "bg-[color:var(--border)]", border: "border-[color:var(--border)]" };
+  }
+}
+
+function normalizeTrendPoint(point, index) {
+  const rawLabel = point?.month || point?.date || point?.label || `P${index + 1}`;
+  return {
+    ...point,
+    label: String(rawLabel).slice(5) || String(rawLabel),
+    score: Number(point?.score ?? point?.value ?? 0),
+  };
+}
+
 export default function Dashboard() {
   const api = useApi();
   const { auth } = useAuth();
@@ -114,6 +147,8 @@ export default function Dashboard() {
   const [executiveDetailLoading, setExecutiveDetailLoading] = useState(false);
   const [executiveDetailOpen, setExecutiveDetailOpen] = useState(false);
   const [executiveModalView, setExecutiveModalView] = useState("summary");
+  const [liveAttendance, setLiveAttendance] = useState(null);
+  const [liveAttendanceLoading, setLiveAttendanceLoading] = useState(false);
 
 async function openExecutiveDetail(view = "summary") {
   try {
@@ -258,6 +293,50 @@ if (isAdmin) {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadLiveAttendance() {
+      try {
+        setLiveAttendanceLoading(true);
+        const res = await api.get("/attendance/live");
+        if (active) setLiveAttendance(res.data || null);
+      } catch (err) {
+        if (active) setLiveAttendance(null);
+        console.warn("Live attendance not available");
+      } finally {
+        if (active) setLiveAttendanceLoading(false);
+      }
+    }
+
+    const socket = getSocket();
+    const subscribe = () => {
+      socket?.emit("workspace:subscribe");
+      loadLiveAttendance();
+    };
+    const handleAttendanceUpdate = () => {
+      loadLiveAttendance();
+    };
+
+    loadLiveAttendance();
+
+    if (socket) {
+      if (socket.connected) {
+        socket.emit("workspace:subscribe");
+      }
+      socket.on("connect", subscribe);
+      socket.on("attendance:updated", handleAttendanceUpdate);
+    }
+
+    return () => {
+      active = false;
+      if (socket) {
+        socket.off("connect", subscribe);
+        socket.off("attendance:updated", handleAttendanceUpdate);
+      }
+    };
+  }, [api]);
 
   useEffect(() => {
   if (!isAdmin) return; // workspace health pulse is admin-only
@@ -473,6 +552,17 @@ const autonomousInsight = useMemo(() => {
   const intelligenceCharts = useMemo(() => {
     return (dashboardOverview?.visualizations?.charts || []).filter((chart) => chart?.data?.length);
   }, [dashboardOverview]);
+
+  const liveAttendanceRows = useMemo(() => {
+    if (!liveAttendance?.buckets) return [];
+    return [
+      ...(liveAttendance.buckets.available || []),
+      ...(liveAttendance.buckets.lunch || []),
+      ...(liveAttendance.buckets.aws || []),
+      ...(liveAttendance.buckets.onLeave || []),
+      ...(liveAttendance.buckets.notSignedIn || []),
+    ].slice(0, 8);
+  }, [liveAttendance]);
 
   function getRiskLevel(score) {
   if (score >= 75) return { label: "Low Risk", color: SCORE_TEXT.good };
@@ -753,6 +843,78 @@ const autonomousInsight = useMemo(() => {
   </div>
 )}
 
+{(liveAttendance || liveAttendanceLoading) && (
+  <section className="border border-[color:var(--border)] rounded-lg p-5">
+    <div className="flex items-start justify-between gap-3 mb-4">
+      <div>
+        <h2 className="text-sm font-bold theme-text">Live Attendance</h2>
+        <p className="text-[11px] theme-text-muted">
+          Today {liveAttendance?.date ? `- ${liveAttendance.date}` : ""} - updates on attendance changes
+        </p>
+      </div>
+      <span className="text-[10px] px-2 py-0.5 rounded-md border border-[color:var(--border)] theme-text-muted">
+        {liveAttendanceLoading ? "Refreshing" : "Live"}
+      </span>
+    </div>
+
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+      {[
+        { label: "Present", value: liveAttendance?.totals?.present ?? 0, status: "available" },
+        { label: "Available", value: liveAttendance?.totals?.available ?? 0, status: "available" },
+        { label: "Lunch", value: liveAttendance?.totals?.lunch ?? 0, status: "lunch" },
+        { label: "AWS", value: liveAttendance?.totals?.aws ?? 0, status: "aws" },
+        { label: "On Leave", value: liveAttendance?.totals?.onLeave ?? 0, status: "on_leave" },
+      ].map((item) => {
+        const tone = attendanceTone(item.status);
+        return (
+          <div key={item.label} className={`rounded-lg border ${tone.border} p-3`}>
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
+              <span className="text-[11px] font-semibold theme-text-muted">{item.label}</span>
+            </div>
+            <div className={`mt-2 text-xl font-semibold ${tone.text}`}>{item.value}</div>
+          </div>
+        );
+      })}
+    </div>
+
+    <div className="grid gap-2 md:grid-cols-2">
+      {liveAttendanceRows.length > 0 ? (
+        liveAttendanceRows.map((user) => {
+          const tone = attendanceTone(user.status);
+          const detail =
+            user.status === "on_leave"
+              ? user.leave?.type || "Leave"
+              : user.status === "offline"
+              ? "Not signed in"
+              : user.statusMinutes != null
+              ? `${user.label} - ${formatLiveMinutes(user.statusMinutes)}`
+              : user.label;
+
+          return (
+            <div key={user.userId} className="flex items-center gap-3 rounded-lg border border-[color:var(--border)] px-3 py-2">
+              <span className={`h-2 w-2 rounded-full shrink-0 ${tone.dot}`} />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold theme-text truncate">{user.username}</div>
+                <div className="text-[10px] theme-text-muted truncate">{detail}</div>
+              </div>
+              <span className={`text-[10px] font-bold uppercase shrink-0 ${tone.text}`}>{user.label}</span>
+            </div>
+          );
+        })
+      ) : (
+        <div className="md:col-span-2 rounded-lg border border-[color:var(--border)] px-3 py-4 text-xs theme-text-muted text-center">
+          No live attendance activity is available yet.
+        </div>
+      )}
+    </div>
+
+    <p className="mt-3 text-[10px] theme-text-muted">
+      {liveAttendance?.totals?.notSignedIn ?? 0} not signed in. Attendance scoring remains end-of-day; this panel is live operational status.
+    </p>
+  </section>
+)}
+
 {dashboardOverview?.scoreCard && (
   <div className="grid gap-4 lg:grid-cols-2">
     {intelligenceCharts.length > 0 ? intelligenceCharts.map((chart) => (
@@ -796,7 +958,7 @@ const autonomousInsight = useMemo(() => {
                     color: "var(--text)",
                   }}
                 />
-                <Line type="monotone" dataKey={chart.dataKey || "value"} stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey={chart.dataKey || "value"} stroke="var(--primary)" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -1046,21 +1208,23 @@ const autonomousInsight = useMemo(() => {
       {performanceTrend.length > 0 && (
         <div>
           <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-2">Score Trend</div>
-          <div className="flex items-end gap-2">
-            {performanceTrend.map((item, idx) => {
-              const h = Math.max(8, Math.round((item.score / 100) * 48));
-              const isLatest = idx === performanceTrend.length - 1;
-              return (
-                <div key={idx} className="flex flex-col items-center gap-1 flex-1">
-                  <span className="text-[10px] font-bold theme-text-muted">{item.score}</span>
-                  <div
-                    className={`w-full rounded-t-sm transition-all ${isLatest ? getScoreBgClass(item.score) : "bg-[var(--surface-strong)]"}`}
-                    style={{ height: `${h}px` }}
-                  />
-                  <span className="text-[10px] theme-text-muted">{item.month?.slice(5)}</span>
-                </div>
-              );
-            })}
+          <div className="h-[120px] rounded-lg border border-[color:var(--border)] p-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={performanceTrend.map(normalizeTrendPoint)} margin={{ top: 8, right: 8, left: -28, bottom: 0 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} hide />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text)",
+                  }}
+                />
+                <Line type="monotone" dataKey="score" stroke="var(--primary)" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
@@ -1321,7 +1485,32 @@ const autonomousInsight = useMemo(() => {
 })()}
 </div>
 
-{isAdmin && intelligence?.forecast && (
+{isAdmin && intelligence?.forecast && (() => {
+  const rawForecastTrend = intelligence.forecast.trend || intelligence.forecast.direction || "stable";
+  const forecastTrend =
+    rawForecastTrend === "up"
+      ? "improving"
+      : rawForecastTrend === "down"
+      ? "declining"
+      : rawForecastTrend === "flat"
+      ? "stable"
+      : rawForecastTrend;
+  const predictedAverage = intelligence.forecast.predictedAverage ?? "Needs snapshots";
+  const riskProjection = intelligence.forecast.riskProjection ?? intelligence.execution?.risk ?? "unknown";
+  const riskProjectionTone =
+    String(riskProjection).toLowerCase() === "high"
+      ? SCORE_TEXT.danger
+      : String(riskProjection).toLowerCase() === "low"
+      ? SCORE_TEXT.good
+      : SCORE_TEXT.warning;
+  const recommendedAction =
+    forecastTrend === "declining"
+      ? "Intervention recommended. Focus on overdue workload and coaching reinforcement."
+      : forecastTrend === "improving"
+      ? "Momentum positive. Maintain execution cadence and reinforce high performers."
+      : "Performance stable. Monitor workload balance and prevent execution drift.";
+
+  return (
   <section className="border border-[color:var(--border)] rounded-lg p-6 space-y-4">
 
     <div className="flex justify-between items-center">
@@ -1330,7 +1519,7 @@ const autonomousInsight = useMemo(() => {
       </h2>
 
       <span className="text-xs px-2 py-1 rounded-full theme-surface-soft theme-text font-medium">
-        {intelligence.forecast.trend}
+        {forecastTrend}
       </span>
     </div>
 
@@ -1339,28 +1528,28 @@ const autonomousInsight = useMemo(() => {
 
       <div>
         <div className="theme-text-muted">Predicted Average</div>
-        <div className="text-2xl font-semibold">
-          {intelligence.forecast.predictedAverage ?? "-"}
+        <div className={`font-semibold ${typeof predictedAverage === "number" ? "text-2xl" : "text-sm theme-text-muted"}`}>
+          {predictedAverage}
         </div>
       </div>
 
       <div>
         <div className="theme-text-muted">Trend Direction</div>
         <div className={`text-lg font-semibold ${
-          intelligence.forecast.trend === "declining"
+          forecastTrend === "declining"
             ? SCORE_TEXT.danger
-            : intelligence.forecast.trend === "improving"
+            : forecastTrend === "improving"
             ? SCORE_TEXT.good
             : SCORE_TEXT.warning
         }`}>
-          {intelligence.forecast.trend}
+          {forecastTrend}
         </div>
       </div>
 
       <div>
         <div className="theme-text-muted">Risk Projection</div>
-        <div className={`text-lg font-semibold ${SCORE_TEXT.danger}`}>
-          {intelligence.forecast.riskProjection ?? "-"}
+        <div className={`text-lg font-semibold ${riskProjectionTone}`}>
+          {riskProjection}
         </div>
       </div>
 
@@ -1386,11 +1575,7 @@ const autonomousInsight = useMemo(() => {
   </div>
 
   <p className="text-sm theme-text">
-    {intelligence.forecast.trend === "declining"
-      ? "Intervention recommended. Focus on overdue workload and coaching reinforcement."
-      : intelligence.forecast.trend === "improving"
-      ? "Momentum positive. Maintain execution cadence and reinforce high performers."
-      : "Performance stable. Monitor workload balance and prevent execution drift."}
+    {recommendedAction}
   </p>
 </div>
 
@@ -1406,7 +1591,8 @@ const autonomousInsight = useMemo(() => {
   </div>
 )}
   </section>
-)}
+  );
+})()}
         <div>
           <h1 className="text-lg font-semibold">Dashboard</h1>
           {/* ===============================
