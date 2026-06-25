@@ -21,7 +21,7 @@ import {
   CheckSquare, AlertTriangle, Clock, FolderKanban,
   Users, Shield, ArrowRight, ChevronRight,
   TrendingUp, TrendingDown, Award, BarChart2,
-  Trophy, Medal,
+  Trophy, Medal, Info,
 } from "lucide-react";
 import {
   dashboardChartTickInterval,
@@ -1130,6 +1130,7 @@ const autonomousInsight = useMemo(() => {
   const breakdown = myPerformance.breakdown || {};
   const scoreExplanation = myPerformance.scoreExplanation || {};
   const scoreNarrative = scoreExplanation.scoreNarrative || {};
+  const scoreCalculation = scoreExplanation.scoreCalculation || {};
   const attendanceContribution = scoreExplanation.attendanceContribution || {};
   const scoreComposition = Array.isArray(scoreExplanation.scoreComposition) && scoreExplanation.scoreComposition.length
     ? scoreExplanation.scoreComposition.filter((row) => row?.score != null)
@@ -1175,6 +1176,29 @@ const autonomousInsight = useMemo(() => {
   const visibleDiagnosticDrivers = diagnosticDrivers
     .filter((row) => row.value != null)
     .slice(0, 8);
+  const scoreCalculationDomains = Array.isArray(scoreCalculation.domainContributions)
+    ? scoreCalculation.domainContributions.filter((row) => row?.score != null)
+    : [];
+  const scoreCalculationFormation = scoreCalculation.professionalDisciplineFormation || {};
+  const scoreCalculationAttendance = scoreCalculation.attendanceEffect || attendanceContribution || {};
+  const scoreFormulaParts = [
+    scoreCalculation.coreContributionPoints != null && {
+      label: "Core block",
+      value: `${scoreCalculation.coreScore ?? "-"} x ${scoreCalculation.coreMultiplier ?? "0.82"} = ${scoreCalculation.coreContributionPoints}`,
+    },
+    scoreCalculation.professionalDisciplineContributionPoints != null && {
+      label: "Professional Discipline",
+      value: `${scoreCalculation.professionalDisciplineScore ?? "-"} x ${scoreCalculation.professionalDisciplineMultiplier ?? "0.18"} = ${scoreCalculation.professionalDisciplineContributionPoints}`,
+    },
+    scoreCalculation.directAttendanceAdjustment != null && {
+      label: "Attendance lift / drag",
+      value: `${scoreCalculation.directAttendanceAdjustment >= 0 ? "+" : ""}${scoreCalculation.directAttendanceAdjustment}`,
+    },
+    scoreCalculation.rawScoreBeforeRounding != null && {
+      label: "Rounded output",
+      value: `${scoreCalculation.rawScoreBeforeRounding} -> ${scoreCalculation.finalScore ?? score}`,
+    },
+  ].filter(Boolean);
   const riskTone = risk?.level === "High" ? "danger" : risk?.level === "Medium" ? "warning" : risk?.level ? "good" : "neutral";
 
   const getDriverOptions = (driver) => {
@@ -1185,6 +1209,12 @@ const autonomousInsight = useMemo(() => {
 
   const getDriverText = (driver) => {
     return getScoreTextClass(driver.value, getDriverOptions(driver));
+  };
+
+  const getEvidenceTone = (item) => {
+    if (item.effectTone === "positive") return SCORE_TEXT.good;
+    if (item.effectTone === "negative") return SCORE_TEXT.danger;
+    return "theme-text-muted";
   };
 
   return (
@@ -1201,10 +1231,21 @@ const autonomousInsight = useMemo(() => {
             <p className="text-[10px] theme-text-muted mt-1 max-w-2xl leading-relaxed">{liftSummary}</p>
           )}
         </div>
-        <div className={`rounded-lg border p-4 ${getScoreSurfaceClass(score)}`}>
+        <div className={`relative group rounded-lg border p-4 ${getScoreSurfaceClass(score)}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[10px] font-bold uppercase theme-text-muted">Score</div>
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase theme-text-muted">
+                <span>Score</span>
+                {scoreCalculation.finalScore != null && (
+                  <button
+                    type="button"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--border)] theme-text-muted hover:text-[color:var(--primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]/30"
+                    aria-label="Show score calculation"
+                  >
+                    <Info className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
               <div className={`text-3xl font-semibold leading-none ${getScoreTextClass(score)}`}>
                 {score}
                 <span className={`text-base font-bold ${getScoreTextClass(score)}`}>/100</span>
@@ -1223,6 +1264,71 @@ const autonomousInsight = useMemo(() => {
           {delta != null && (
             <div className={`mt-2 text-xs font-semibold ${delta >= 0 ? SCORE_TEXT.good : SCORE_TEXT.danger}`}>
               {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} vs previous intelligence point
+            </div>
+          )}
+          {scoreCalculation.finalScore != null && (
+            <div className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 hidden w-[min(92vw,420px)] rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-left shadow-xl group-hover:block group-focus-within:block">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Score Calculation</div>
+                  <div className="text-sm font-semibold theme-text">
+                    {scoreCalculation.finalScore}/100 from {scoreCalculation.scoreAuthority || "user_intelligence.score"}
+                  </div>
+                </div>
+                <span className="rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] font-bold theme-text-muted">Canonical</span>
+              </div>
+              <div className="space-y-1.5">
+                {scoreFormulaParts.map((part) => (
+                  <div key={part.label} className="flex items-center justify-between gap-3 text-[11px]">
+                    <span className="theme-text-muted">{part.label}</span>
+                    <span className="font-semibold theme-text">{part.value}</span>
+                  </div>
+                ))}
+              </div>
+              {scoreCalculationDomains.length > 0 && (
+                <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide theme-text-muted">Domain Impact</div>
+                  <div className="space-y-1.5">
+                    {scoreCalculationDomains.slice(0, 5).map((domain) => (
+                      <div key={domain.key} className="grid grid-cols-[1fr_auto] gap-3 text-[11px]">
+                        <span className="truncate theme-text-muted">{domain.label}</span>
+                        <span className={`font-semibold ${domain.finalScoreImpactVsNeutral >= 0 ? SCORE_TEXT.good : SCORE_TEXT.danger}`}>
+                          {domain.finalScoreImpactVsNeutral >= 0 ? "+" : ""}{domain.finalScoreImpactVsNeutral} vs neutral
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[10px] leading-snug theme-text-muted">
+                    Core domains are normalized together, so impact is shown as final-score movement versus a neutral 60/100 domain.
+                  </p>
+                </div>
+              )}
+              {scoreCalculationAttendance?.score != null && (
+                <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Attendance Effect</div>
+                  <p className="mt-1 text-[11px] leading-snug theme-text-muted">
+                    Attendance {scoreCalculationAttendance.score}/100 feeds Professional Discipline. Without attendance evidence, Professional Discipline would be {scoreCalculationAttendance.professionalWithoutAttendanceSignal ?? "-"} and final score would be {scoreCalculationAttendance.finalWithoutAttendanceSignal ?? "-"}.
+                  </p>
+                  <div className={`mt-1 text-[11px] font-semibold ${Number(scoreCalculationAttendance.effectiveFinalLiftVsNoAttendanceSignal || 0) >= 0 ? SCORE_TEXT.good : SCORE_TEXT.danger}`}>
+                    Final score effect: {Number(scoreCalculationAttendance.effectiveFinalLiftVsNoAttendanceSignal || 0) >= 0 ? "+" : ""}{scoreCalculationAttendance.effectiveFinalLiftVsNoAttendanceSignal ?? 0}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(scoreCalculationFormation.inputs) && scoreCalculationFormation.inputs.length > 0 && (
+                <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Professional Discipline Inputs</div>
+                  <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] theme-text-muted">
+                    {scoreCalculationFormation.inputs.map((input) => (
+                      <div key={input.key} className="flex items-center justify-between gap-2">
+                        <span className="truncate">{input.label}</span>
+                        <span className={`font-semibold ${input.effect?.tone === "negative" ? SCORE_TEXT.danger : input.effect?.tone === "positive" ? SCORE_TEXT.good : "theme-text"}`}>
+                          {input.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1271,7 +1377,7 @@ const autonomousInsight = useMemo(() => {
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide">Score Composition</div>
-              <div className="text-xs theme-text-muted">Canonical user_intelligence domains that produce the final score.</div>
+              <div className="text-xs theme-text-muted">These are the canonical score domains that directly produce the final score.</div>
             </div>
             <span className="rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] font-bold theme-text-muted">Enterprise</span>
           </div>
@@ -1306,20 +1412,26 @@ const autonomousInsight = useMemo(() => {
         <div>
           <div className="mb-2">
             <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide">Evidence Inputs</div>
-            <div className="text-xs theme-text-muted">Supporting signals feeding the domains above, not a second score formula.</div>
+            <div className="text-xs theme-text-muted">These signals do not form a second score. They feed one or more score-composition domains above.</div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             {visibleEvidenceInputs.map((item) => {
               const value = Math.round(Number(item.score ?? 0));
+              const feedLabel = Array.isArray(item.feedsDomains) && item.feedsDomains.length
+                ? item.feedsDomains.join(" / ")
+                : item.parentDomain || "score domain";
               return (
                 <div key={item.key} className="rounded-lg border border-[color:var(--border)] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-xs font-semibold theme-text">{item.label}</div>
-                      <div className="text-[10px] theme-text-muted">Feeds {item.parentDomain || "score domain"}</div>
+                      <div className="text-[10px] theme-text-muted">Feeds {feedLabel}</div>
                     </div>
                     <span className={`text-sm font-semibold ${getScoreTextClass(value, { goodAt: 70, warningAt: 40 })}`}>{item.score ?? "-"}</span>
                   </div>
+                  {item.effectLabel && (
+                    <div className={`mt-1 text-[10px] font-semibold ${getEvidenceTone(item)}`}>{item.effectLabel}</div>
+                  )}
                   <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
                     <div className={`h-1 rounded-full ${getScoreBgClass(value, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
                   </div>
