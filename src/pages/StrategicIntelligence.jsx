@@ -21,8 +21,8 @@ function avatarSrc(url) {
 
 function ScoreBadge({ score }) {
   const color =
-    score >= 80 ? 'text-[color:var(--score-good)]' :
-    score >= 50 ? 'text-[color:var(--score-warning)]' :
+    score >= 80 ? 'text-[color:var(--primary)]' :
+    score >= 50 ? 'text-[color:var(--primary)]' :
     'text-[color:var(--score-danger)]';
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded border border-[color:var(--border)] text-xs font-semibold ${color}`}>
@@ -33,8 +33,8 @@ function ScoreBadge({ score }) {
 
 function RiskBadge({ level }) {
   const styles = {
-    low:      'text-[color:var(--score-good)]',
-    medium:   'text-[color:var(--score-warning)]',
+    low:      'text-[color:var(--primary)]',
+    medium:   'text-[color:var(--primary)]',
     high:     'text-[color:var(--score-danger)]',
     critical: 'text-[color:var(--score-danger)]',
   };
@@ -48,8 +48,8 @@ function RiskBadge({ level }) {
 function StatCard({ icon: Icon, label, value, sub, color = 'indigo' }) {
   const iconColor = {
     indigo: 'text-[color:var(--primary)]',
-    green:  'text-[color:var(--score-good)]',
-    yellow: 'text-[color:var(--score-warning)]',
+    green:  'text-[color:var(--primary)]',
+    yellow: 'text-[color:var(--primary)]',
     red:    'text-[color:var(--score-danger)]',
     blue:   'text-[color:var(--primary)]',
   };
@@ -112,7 +112,7 @@ function DashboardTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${healthScore >= 75 ? 'bg-[var(--score-good)]' : healthScore >= 50 ? 'bg-[var(--score-warning)]' : 'bg-[var(--score-danger)]'}`} />
+          <div className={`w-3 h-3 rounded-full ${healthScore >= 50 ? 'bg-[var(--primary)]' : 'bg-[var(--score-danger)]'}`} />
           <span className="text-sm font-medium text-[color:var(--text-muted)]">
             Workspace Health: <strong className="text-[color:var(--text)]">{healthScore}</strong>/100
           </span>
@@ -264,16 +264,15 @@ function ProjectsTab() {
         <p className="text-center text-[color:var(--text-soft)] py-8">No projects found.</p>
       ) : projects.map(p => {
         const statusColorClass =
-          p.status === 'healthy'  ? 'text-[color:var(--score-good)]' :
-          p.status === 'at_risk'  ? 'text-[color:var(--score-warning)]' :
+          p.status === 'healthy'  ? 'text-[color:var(--primary)]' :
+          p.status === 'at_risk'  ? 'text-[color:var(--primary)]' :
           'text-[color:var(--score-danger)]';
         const healthColorClass =
-          p.healthScore >= 75 ? 'text-[color:var(--score-good)]' :
-          p.healthScore >= 50 ? 'text-[color:var(--score-warning)]' :
+          p.healthScore >= 75 ? 'text-[color:var(--primary)]' :
+          p.healthScore >= 50 ? 'text-[color:var(--primary)]' :
           'text-[color:var(--score-danger)]';
         const barColorClass =
-          p.completionRate >= 75 ? 'bg-[var(--score-good)]' :
-          p.completionRate >= 40 ? 'bg-[var(--score-warning)]' : 'bg-[var(--score-danger)]';
+          p.completionRate >= 40 ? 'bg-[var(--primary)]' : 'bg-[var(--score-danger)]';
 
         return (
           <div key={p.projectId} className="border border-[color:var(--border)] rounded-lg p-4">
@@ -288,7 +287,7 @@ function ProjectsTab() {
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[color:var(--text-muted)]">
                   <span>Total: {p.totalTasks}</span>
-                  <span className="text-[color:var(--score-good)]">Done: {p.completedTasks}</span>
+                  <span className="text-[color:var(--primary)]">Done: {p.completedTasks}</span>
                   <span className="text-[color:var(--primary)]">Active: {p.activeTasks}</span>
                   {p.overdueTasks > 0 && (
                     <span className="text-[color:var(--score-danger)] font-medium">Overdue: {p.overdueTasks}</span>

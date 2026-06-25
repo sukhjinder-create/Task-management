@@ -73,9 +73,9 @@ function RiskBadge({ level }) {
   const map = {
     critical: "text-[color:var(--score-danger)]",
     high:     "text-[color:var(--score-danger)]",
-    medium:   "text-[color:var(--score-warning)]",
-    low:      "text-[color:var(--score-good)]",
-    clean:    "text-[color:var(--score-good)]",
+    medium:   "text-[color:var(--primary)]",
+    low:      "text-[color:var(--primary)]",
+    clean:    "text-[color:var(--primary)]",
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full border border-[color:var(--border)] text-xs font-semibold capitalize ${map[level] || map.medium}`}>
@@ -89,9 +89,9 @@ function ScoreBar({ value, max = 100, color = "indigo" }) {
   const colors = {
     indigo: "bg-[var(--primary)]",
     red:    "bg-[var(--score-danger)]",
-    green:  "bg-[var(--score-good)]",
-    yellow: "bg-[var(--score-warning)]",
-    orange: "bg-[var(--score-warning)]",
+    green:  "bg-[var(--primary)]",
+    yellow: "bg-[var(--primary)]",
+    orange: "bg-[var(--primary)]",
   };
   return (
     <div className="flex items-center gap-2">
@@ -107,8 +107,8 @@ function StatPill({ label, value, color = "gray" }) {
   const textColor = {
     gray:   "text-[color:var(--text-muted)]",
     red:    "text-[color:var(--score-danger)]",
-    green:  "text-[color:var(--score-good)]",
-    yellow: "text-[color:var(--score-warning)]",
+    green:  "text-[color:var(--primary)]",
+    yellow: "text-[color:var(--primary)]",
   };
   return (
     <div className={`flex flex-col items-center px-3 py-2 rounded-lg border border-[color:var(--border)]`}>
@@ -125,13 +125,13 @@ function AIInsightCard({ insights, emptyMsg = "No AI insights available." }) {
   const priorityColor = {
     high:               "text-[color:var(--score-danger)]",
     critical:           "text-[color:var(--score-danger)]",
-    medium:             "text-[color:var(--score-warning)]",
-    low:                "text-[color:var(--score-good)]",
+    medium:             "text-[color:var(--primary)]",
+    low:                "text-[color:var(--primary)]",
     immediate:          "text-[color:var(--score-danger)]",
-    this_week:          "text-[color:var(--score-warning)]",
-    this_month:         "text-[color:var(--score-good)]",
+    this_week:          "text-[color:var(--primary)]",
+    this_month:         "text-[color:var(--primary)]",
     process_issue:      "text-[color:var(--primary)]",
-    needs_investigation:"text-[color:var(--score-warning)]",
+    needs_investigation:"text-[color:var(--primary)]",
     monitor:            "text-[color:var(--text-muted)]",
   };
   return (
@@ -254,7 +254,7 @@ function ProfitabilityOracle() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="text-right">
-                      <span className={`text-sm font-bold ${p.profitScore >= 70 ? "text-[color:var(--score-good)]" : p.profitScore >= 40 ? "text-[color:var(--score-warning)]" : "text-[color:var(--score-danger)]"}`}>
+                      <span className={`text-sm font-bold ${p.profitScore >= 70 ? "text-[color:var(--primary)]" : p.profitScore >= 40 ? "text-[color:var(--primary)]" : "text-[color:var(--score-danger)]"}`}>
                         {p.profitScore}
                       </span>
                       <p className="text-xs text-[color:var(--text-soft)]">health score</p>
@@ -267,7 +267,7 @@ function ProfitabilityOracle() {
                 {p.isActive && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-2">
                     <div>
-                      <p className={`font-semibold ${p.netVelocity < 0 ? "text-[color:var(--score-danger)]" : "text-[color:var(--score-good)]"}`}>
+                      <p className={`font-semibold ${p.netVelocity < 0 ? "text-[color:var(--score-danger)]" : "text-[color:var(--primary)]"}`}>
                         {p.netVelocity > 0 ? "+" : ""}{p.netVelocity}/wk
                       </p>
                       <p className="text-[color:var(--text-soft)]">Net velocity</p>
@@ -277,7 +277,7 @@ function ProfitabilityOracle() {
                       <p className="text-[color:var(--text-soft)]">Burn rate</p>
                     </div>
                     <div>
-                      <p className={`font-semibold ${p.growthRatePerWeek > p.burnRatePerWeek ? "text-[color:var(--score-warning)]" : "text-[color:var(--text-muted)]"}`}>
+                      <p className={`font-semibold ${p.growthRatePerWeek > p.burnRatePerWeek ? "text-[color:var(--primary)]" : "text-[color:var(--text-muted)]"}`}>
                         {p.growthRatePerWeek}/wk
                       </p>
                       <p className="text-[color:var(--text-soft)]">Backlog growth</p>
@@ -299,7 +299,7 @@ function ProfitabilityOracle() {
                       <p className="text-[color:var(--text-soft)]">Completion</p>
                     </div>
                     <div>
-                      <p className={`font-semibold ${p.taskGrowthPct > 50 ? "text-[color:var(--score-warning)]" : "text-[color:var(--text-muted)]"}`}>
+                      <p className={`font-semibold ${p.taskGrowthPct > 50 ? "text-[color:var(--primary)]" : "text-[color:var(--text-muted)]"}`}>
                         {p.taskGrowthPct != null ? `+${p.taskGrowthPct}%` : "—"}
                       </p>
                       <p className="text-[color:var(--text-soft)]">Task growth</p>
@@ -331,7 +331,7 @@ function ProfitabilityOracle() {
 
                 {/* Velocity trend for active projects */}
                 {p.isActive && p.velocityTrend != null && p.velocityTrend !== 0 && (
-                  <p className={`text-xs mt-2 ${p.velocityTrend > 0 ? "text-[color:var(--score-good)]" : "text-[color:var(--score-warning)]"}`}>
+                  <p className={`text-xs mt-2 ${p.velocityTrend > 0 ? "text-[color:var(--primary)]" : "text-[color:var(--primary)]"}`}>
                     <Activity size={10} className="inline mr-1" />
                     Burn rate {p.velocityTrend > 0 ? "up" : "down"} {Math.abs(p.velocityTrend)}% vs last month
                   </p>
@@ -399,7 +399,7 @@ function ResignationRadar() {
             badge={
               <div className="flex items-center gap-2">
                 <div className="text-right">
-                  <span className={`text-base font-bold ${u.riskScore >= 55 ? "text-[color:var(--score-danger)]" : u.riskScore >= 35 ? "text-[color:var(--score-warning)]" : u.riskScore >= 20 ? "text-[color:var(--score-warning)]" : "text-[color:var(--score-good)]"}`}>
+                  <span className={`text-base font-bold ${u.riskScore >= 55 ? "text-[color:var(--score-danger)]" : u.riskScore >= 35 ? "text-[color:var(--primary)]" : u.riskScore >= 20 ? "text-[color:var(--primary)]" : "text-[color:var(--primary)]"}`}>
                     {u.riskScore}
                   </span>
                   <p className="text-xs text-[color:var(--text-soft)] leading-none">risk</p>
@@ -456,11 +456,11 @@ function ResignationRadar() {
           <div className="space-y-3">
             {aiInsights.map((ins, i) => (
               <div key={i} className="flex gap-3 p-3 border border-[color:var(--border)] rounded-lg">
-                <AlertTriangle size={14} className="text-[color:var(--score-warning)] mt-0.5 shrink-0" />
+                <AlertTriangle size={14} className="text-[color:var(--primary)] mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs font-semibold text-[color:var(--text)]">{ins.username}</p>
                   <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{ins.action}</p>
-                  <span className="text-xs capitalize font-medium text-[color:var(--score-warning)]">{ins.urgency?.replace(/_/g, " ")}</span>
+                  <span className="text-xs capitalize font-medium text-[color:var(--primary)]">{ins.urgency?.replace(/_/g, " ")}</span>
                 </div>
               </div>
             ))}
@@ -522,7 +522,7 @@ function GhostWorkDetection() {
             badge={
               <div className="flex items-center gap-2">
                 <div className="text-right">
-                  <span className={`text-base font-bold ${u.ghostScore >= 55 ? "text-[color:var(--score-danger)]" : u.ghostScore >= 35 ? "text-[color:var(--score-warning)]" : u.ghostScore >= 15 ? "text-[color:var(--score-warning)]" : "text-[color:var(--score-good)]"}`}>
+                  <span className={`text-base font-bold ${u.ghostScore >= 55 ? "text-[color:var(--score-danger)]" : u.ghostScore >= 35 ? "text-[color:var(--primary)]" : u.ghostScore >= 15 ? "text-[color:var(--primary)]" : "text-[color:var(--primary)]"}`}>
                     {u.ghostScore}
                   </span>
                   <p className="text-xs text-[color:var(--text-soft)] leading-none">score</p>
@@ -535,14 +535,14 @@ function GhostWorkDetection() {
                 {u.flags.length > 0 ? (
                   <div className="space-y-2">
                     {u.flags.map((f, i) => (
-                      <div key={i} className={`p-2.5 rounded-lg border border-[color:var(--border)] text-xs ${f.severity === "high" ? "text-[color:var(--score-danger)]" : "text-[color:var(--score-warning)]"}`}>
+                      <div key={i} className={`p-2.5 rounded-lg border border-[color:var(--border)] text-xs ${f.severity === "high" ? "text-[color:var(--score-danger)]" : "text-[color:var(--primary)]"}`}>
                         <p className="font-semibold">{f.label}</p>
                         <p className="opacity-80 mt-0.5 text-[color:var(--text-muted)]">{f.detail}</p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[color:var(--score-good)] flex items-center gap-1"><CheckCircle2 size={12} /> No anomalies detected</p>
+                  <p className="text-xs text-[color:var(--primary)] flex items-center gap-1"><CheckCircle2 size={12} /> No anomalies detected</p>
                 )}
                 <div className="grid grid-cols-3 gap-2 text-xs text-[color:var(--text-muted)]">
                   <div><p className="font-medium text-[color:var(--text-soft)]">Attendance</p><p>{u.metrics.avgAttendanceMinutes} min/day</p></div>
@@ -566,7 +566,7 @@ function GhostWorkDetection() {
             {aiInsights.map((ins, i) => {
               const framingTextColor = {
                 process_issue:        "text-[color:var(--primary)]",
-                needs_investigation:  "text-[color:var(--score-warning)]",
+                needs_investigation:  "text-[color:var(--primary)]",
                 monitor:              "text-[color:var(--text-soft)]",
               }[ins.framing] || "text-[color:var(--text-soft)]";
               return (
@@ -591,10 +591,10 @@ function GhostWorkDetection() {
 const ARCHETYPE_CFG = {
   cornerstone:           { color: "text-[color:var(--primary)] border-[color:var(--border)]",         icon: "⚓", desc: "Critical dependency — single point of failure risk" },
   multiplier:            { color: "text-[color:var(--primary)] border-[color:var(--border)]",         icon: "⚡", desc: "Amplifies the entire team's effectiveness" },
-  invisible_contributor: { color: "text-[color:var(--score-good)] border-[color:var(--border)]",      icon: "👁",  desc: "Significant value delivered without visibility" },
+  invisible_contributor: { color: "text-[color:var(--primary)] border-[color:var(--border)]",      icon: "👁",  desc: "Significant value delivered without visibility" },
   bottleneck:            { color: "text-[color:var(--score-danger)] border-[color:var(--border)]",    icon: "🚧", desc: "Others wait on them — blocking team velocity" },
-  solo_performer:        { color: "text-[color:var(--score-warning)] border-[color:var(--border)]",   icon: "🎯", desc: "High output, low collaboration" },
-  orchestrator:          { color: "text-[color:var(--score-warning)] border-[color:var(--border)]",   icon: "🎻", desc: "Coordinates and delegates rather than executing" },
+  solo_performer:        { color: "text-[color:var(--primary)] border-[color:var(--border)]",   icon: "🎯", desc: "High output, low collaboration" },
+  orchestrator:          { color: "text-[color:var(--primary)] border-[color:var(--border)]",   icon: "🎻", desc: "Coordinates and delegates rather than executing" },
   contributor:           { color: "text-[color:var(--text-muted)] border-[color:var(--border)]",      icon: "👤", desc: "Standard contributor" },
 };
 
@@ -635,7 +635,7 @@ function OrgTruthMap() {
           )}
           {keyRisks.invisible.length > 0 && (
             <div className="border border-[color:var(--border)] rounded-lg p-3">
-              <p className="text-xs font-semibold text-[color:var(--score-good)] mb-1">👁 Invisible Heroes</p>
+              <p className="text-xs font-semibold text-[color:var(--primary)] mb-1">👁 Invisible Heroes</p>
               <p className="text-xs text-[color:var(--text)] font-medium">{keyRisks.invisible.join(", ")}</p>
               <p className="text-xs text-[color:var(--text-soft)] mt-1">Delivering above expectations without recognition.</p>
             </div>
@@ -704,7 +704,7 @@ function OrgTruthMap() {
                     <div><p className="font-medium text-[color:var(--text-soft)]">Tasks done</p><p>{u.metrics.tasksCompleted}</p></div>
                     <div><p className="font-medium text-[color:var(--text-soft)]">Projects</p><p>{u.metrics.projectsTouched}</p></div>
                     <div><p className="font-medium text-[color:var(--text-soft)]">Helped</p><p>{u.metrics.peopleHelped} people</p></div>
-                    <div><p className="font-medium text-[color:var(--text-soft)]">Hidden load</p><p className={u.metrics.hiddenLoadPct > 40 ? "text-[color:var(--score-warning)]" : ""}>{u.metrics.hiddenLoadPct}% backlog</p></div>
+                    <div><p className="font-medium text-[color:var(--text-soft)]">Hidden load</p><p className={u.metrics.hiddenLoadPct > 40 ? "text-[color:var(--primary)]" : ""}>{u.metrics.hiddenLoadPct}% backlog</p></div>
                     <div><p className="font-medium text-[color:var(--text-soft)]">Comments on others</p><p>{u.metrics.commentsOnOthers}</p></div>
                     <div><p className="font-medium text-[color:var(--text-soft)]">Tasks created</p><p>{u.metrics.tasksCreated}</p></div>
                   </div>

@@ -46,16 +46,16 @@ function isTaskOverdue(task) {
 }
 
 const SCORE_TEXT = {
-  good: "text-[color:var(--score-good)]",
-  warning: "text-[color:var(--score-warning)]",
+  good: "text-[color:var(--primary)]",
+  warning: "text-[color:var(--primary)]",
   danger: "text-[color:var(--score-danger)]",
   neutral: "theme-text-muted",
 };
 
 const SCORE_BG = {
-  good: "bg-[color:var(--score-good)]",
-  warning: "bg-[color:var(--score-warning)]",
-  danger: "bg-[color:var(--score-danger)]",
+  good: "bg-[color:var(--primary)]",
+  warning: "bg-[color:var(--primary)]",
+  danger: "bg-[color:var(--primary)]",
   neutral: "bg-[color:var(--surface-strong)]",
 };
 
@@ -112,9 +112,9 @@ function formatLiveMinutes(minutes) {
 function attendanceTone(status) {
   switch (status) {
     case "available":
-      return { text: SCORE_TEXT.good, dot: "bg-[color:var(--score-good)]", border: "border-[color:var(--border)]" };
+      return { text: SCORE_TEXT.good, dot: "bg-[color:var(--primary)]", border: "border-[color:var(--border)]" };
     case "aws":
-      return { text: SCORE_TEXT.warning, dot: "bg-[color:var(--score-warning)]", border: "border-[color:var(--border)]" };
+      return { text: SCORE_TEXT.warning, dot: "bg-[color:var(--primary)]", border: "border-[color:var(--border)]" };
     case "lunch":
       return { text: "text-[color:var(--primary)]", dot: "brand-orange-bg", border: "border-[color:var(--border)]" };
     case "on_leave":
@@ -144,6 +144,36 @@ function usableChartPoints(chart) {
 
 function dashboardRangeLabel(range) {
   return DASHBOARD_TIME_RANGES.find((item) => item.value === range)?.label || "30D";
+}
+
+function cloneScoringConfig(config) {
+  return config ? JSON.parse(JSON.stringify(config)) : null;
+}
+
+function weightPercent(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number * 100) : 0;
+}
+
+function percentToWeight(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0.01;
+  return Math.max(0.01, Math.min(0.99, number / 100));
+}
+
+function scoringPayloadFromDraft(draft) {
+  if (!draft?.groups) return { groups: {} };
+  return {
+    groups: Object.fromEntries(
+      Object.entries(draft.groups).map(([key, group]) => [
+        key,
+        {
+          changedKey: group.changedKey || null,
+          weights: group.weights || {},
+        },
+      ])
+    ),
+  };
 }
 
 export default function Dashboard() {
@@ -177,6 +207,10 @@ export default function Dashboard() {
   const [liveAttendance, setLiveAttendance] = useState(null);
   const [liveAttendanceLoading, setLiveAttendanceLoading] = useState(false);
   const [dashboardRange, setDashboardRange] = useState("30d");
+  const [workspaceHealth, setWorkspaceHealth] = useState(null);
+  const [scoringConfig, setScoringConfig] = useState(null);
+  const [scoringDraft, setScoringDraft] = useState(null);
+  const [scoringSaving, setScoringSaving] = useState(false);
 
 async function openExecutiveDetail(view = "summary") {
   try {
@@ -192,6 +226,54 @@ async function openExecutiveDetail(view = "summary") {
     setExecutiveDetailOpen(false);
   } finally {
     setExecutiveDetailLoading(false);
+  }
+}
+
+function updateScoringDraftWeight(groupKey, slotKey, nextWeight) {
+  setScoringDraft((current) => {
+    const draft = cloneScoringConfig(current || scoringConfig);
+    if (!draft?.groups?.[groupKey]) return current;
+    const group = draft.groups[groupKey];
+    const keys = Object.keys(group.weights || {});
+    const weight = percentToWeight(nextWeight);
+    group.weights = { ...(group.weights || {}), [slotKey]: weight };
+    group.changedKey = slotKey;
+    if (group.type === "pair" && keys.length === 2) {
+      const other = keys.find((key) => key !== slotKey);
+      if (other) group.weights[other] = Math.max(0.01, Math.min(0.99, 1 - weight));
+    }
+    return draft;
+  });
+}
+
+async function saveScoringConfiguration() {
+  if (!scoringDraft) return;
+  try {
+    setScoringSaving(true);
+    const res = await api.put("/intelligence/scoring-config", scoringPayloadFromDraft(scoringDraft));
+    const nextConfig = res.data?.config || null;
+    setScoringConfig(nextConfig);
+    setScoringDraft(cloneScoringConfig(nextConfig));
+
+    const month = new Date().toISOString().slice(0, 7);
+    const [overviewRes, healthRes, perfRes] = await Promise.all([
+      api.get("/dashboard/overview", { params: { range: dashboardRange } }),
+      api.get("/intelligence/workspace/health"),
+      api.get(`/intelligence/user/performance?month=${month}`),
+    ]);
+    setDashboardOverview(overviewRes.data);
+    setWorkspaceHealth(healthRes.data || null);
+    setHealthScore(healthRes.data?.healthScore ?? null);
+    setMyPerformance(perfRes.data || null);
+    if (isAdmin) {
+      const insightsRes = await getAdminInsights(month, dashboardRange);
+      setIntelligence(insightsRes.data);
+    }
+    toast.success("Scoring weightage saved and intelligence refreshed");
+  } catch (err) {
+    toast.error(err?.response?.data?.error || "Failed to save scoring weightage");
+  } finally {
+    setScoringSaving(false);
   }
 }
 
@@ -216,9 +298,17 @@ async function openExecutiveDetail(view = "summary") {
 if (isAdmin) {
   try {
     const healthRes = await api.get("/intelligence/workspace/health");
+    setWorkspaceHealth(healthRes.data || null);
     setHealthScore(healthRes.data.healthScore);
   } catch (err) {
     console.warn("Health not available yet");
+  }
+  try {
+    const configRes = await api.get("/intelligence/scoring-config");
+    setScoringConfig(configRes.data?.config || null);
+    setScoringDraft(cloneScoringConfig(configRes.data?.config || null));
+  } catch (err) {
+    console.warn("Scoring configuration not available yet");
   }
 }
 
@@ -444,6 +534,11 @@ useEffect(() => {
         params: { range: dashboardRange },
       });
       setDashboardOverview(overviewRes.data);
+      if (isAdmin) {
+        const healthRes = await api.get("/intelligence/workspace/health");
+        setWorkspaceHealth(healthRes.data || null);
+        setHealthScore(healthRes.data?.healthScore ?? overviewRes.data?.healthScore ?? null);
+      }
 
     } catch (err) {
       console.warn("Live intelligence refresh failed");
@@ -495,6 +590,14 @@ useEffect(() => {
     tasksForStats.filter((t) => isTaskOverdue(t)).length;
 
   const dashboardForecast = dashboardOverview?.forecast || intelligence?.forecast || null;
+  const workspaceScoreExplanation =
+    workspaceHealth?.scoreExplanation ||
+    dashboardOverview?.scoreCard?.scoreExplanation ||
+    dashboardOverview?.scoreExplanation ||
+    null;
+  const workspaceScoreDomains = Array.isArray(workspaceScoreExplanation?.domainContributions)
+    ? workspaceScoreExplanation.domainContributions.filter((row) => row?.score != null)
+    : [];
 
 /* ======================================
    AUTONOMOUS AI INSIGHT ENGINE
@@ -639,16 +742,16 @@ const autonomousInsight = useMemo(() => {
       : autonomousInsight?.type === "warning"
       ? {
           panel: "border-[color:var(--border)]",
-          icon: "bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)]",
-          label: "bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)] border border-[color:var(--score-warning-border)]",
+          icon: "bg-[color:var(--surface-soft)] text-[color:var(--primary)]",
+          label: "bg-[color:var(--surface-soft)] text-[color:var(--primary)] border border-[color:var(--border)]",
           metric: SCORE_SURFACE.warning,
           metricText: SCORE_TEXT.warning,
         }
       : autonomousInsight?.type === "positive"
       ? {
           panel: "border-[color:var(--border)]",
-          icon: "bg-[color:var(--score-good-bg)] text-[color:var(--score-good)]",
-          label: "bg-[color:var(--score-good-bg)] text-[color:var(--score-good)] border border-[color:var(--score-good-border)]",
+          icon: "bg-[color:var(--surface-soft)] text-[color:var(--primary)]",
+          label: "bg-[color:var(--surface-soft)] text-[color:var(--primary)] border border-[color:var(--border)]",
           metric: SCORE_SURFACE.good,
           metricText: SCORE_TEXT.good,
         }
@@ -757,10 +860,50 @@ const autonomousInsight = useMemo(() => {
       </div>
       <div className="flex items-center gap-2">
         {healthScore != null && (
-          <div className="inline-flex items-center gap-2 px-3 h-9 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
+          <div className="relative group inline-flex items-center gap-2 px-3 h-9 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)]">
             <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-soft)] font-semibold">Health</span>
             <span className={`text-[15px] font-semibold font-mono ${getScoreTextClass(healthScore)}`}>{healthScore}</span>
             <span className="text-[11px] text-[color:var(--text-soft)]">/100</span>
+            {workspaceScoreExplanation && (
+              <>
+                <button
+                  type="button"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--border)] theme-text-muted hover:text-[color:var(--primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]/30"
+                  aria-label="Show workspace health calculation"
+                >
+                  <Info className="h-3 w-3" />
+                </button>
+                <div className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-40 hidden w-[min(92vw,440px)] rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-left shadow-xl group-hover:block group-focus-within:block">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Workspace Health Calculation</div>
+                      <div className="text-sm font-semibold theme-text">
+                        {workspaceScoreExplanation.finalScore}/100 from {workspaceScoreExplanation.scoreAuthority || "workspace_intelligence.score"}
+                      </div>
+                    </div>
+                    <span className="rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] font-bold theme-text-muted">Canonical</span>
+                  </div>
+                  <p className="text-[11px] leading-snug theme-text-muted">{workspaceScoreExplanation.formulaReadable}</p>
+                  <div className="mt-3 space-y-1.5">
+                    {workspaceScoreDomains.slice(0, 6).map((domain) => (
+                      <div key={domain.key} className="grid grid-cols-[1fr_auto_auto] gap-2 text-[11px]">
+                        <span className="truncate theme-text-muted">{domain.label}</span>
+                        <span className="font-semibold theme-text">{Math.round((domain.weight || 0) * 100)}%</span>
+                        <span className={`font-semibold ${Number(domain.finalScoreImpactVsNeutral || 0) < 0 ? SCORE_TEXT.danger : SCORE_TEXT.good}`}>
+                          {Number(domain.finalScoreImpactVsNeutral || 0) >= 0 ? "+" : ""}{domain.finalScoreImpactVsNeutral} vs neutral
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {workspaceScoreExplanation.attendanceEffect && (
+                    <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Attendance Readiness</div>
+                      <p className="mt-1 text-[11px] leading-snug theme-text-muted">{workspaceScoreExplanation.attendanceEffect.summary}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -798,6 +941,74 @@ const autonomousInsight = useMemo(() => {
         </div>
       </div>
     </section>
+
+    {isAdmin && scoringDraft?.groups && (
+      <section className="border border-[color:var(--border)] rounded-lg p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
+              Scoring Weightage
+            </p>
+            <h2 className="text-sm font-bold theme-text">Workspace-admin controlled score model</h2>
+            <p className="text-[11px] theme-text-muted max-w-2xl">
+              These weights are stored by the backend and applied by the canonical intelligence engine. Multi-weight groups are normalized to 100%; paired weights auto-complement.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={saveScoringConfiguration}
+            disabled={scoringSaving}
+            className="h-9 rounded-lg bg-[color:var(--primary)] px-3 text-xs font-semibold text-[color:var(--primary-contrast)] hover:bg-[color:var(--primary-hover)] disabled:opacity-50"
+          >
+            {scoringSaving ? "Saving..." : "Save weightage"}
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {Object.values(scoringDraft.groups).map((group) => {
+            const entries = Object.entries(group.weights || {});
+            const isPair = group.type === "pair";
+            const totalPct = Math.round(entries.reduce((sum, [, value]) => sum + Number(value || 0), 0) * 100);
+            return (
+              <div key={group.key} className="rounded-lg border border-[color:var(--border)] p-3">
+                <div className="mb-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-xs font-semibold theme-text">{group.label}</h3>
+                    <span className="text-[10px] font-bold uppercase theme-text-muted">{totalPct}%</span>
+                  </div>
+                  <p className="mt-1 text-[10px] leading-snug theme-text-muted">{group.description}</p>
+                </div>
+                <div className="space-y-2">
+                  {entries.map(([slotKey, weight]) => {
+                    const label = group.slots?.[slotKey]?.label || slotKey;
+                    const pct = weightPercent(weight);
+                    return (
+                      <div key={slotKey}>
+                        <div className="mb-1 flex items-center justify-between gap-3">
+                          <span className="truncate text-[11px] font-semibold theme-text-muted">{label}</span>
+                          <span className="text-[11px] font-semibold text-[color:var(--primary)]">{pct}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="99"
+                          step="1"
+                          value={pct}
+                          onChange={(event) => updateScoringDraftWeight(group.key, slotKey, event.target.value)}
+                          className="w-full accent-[var(--primary)]"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 text-[10px] theme-text-muted">
+                  {isPair ? "Two-way pair: changing one side automatically sets the paired side." : "Multi-weight group: backend normalizes all slots to a deterministic 100% total."}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    )}
 
 {/* ======================================
    AUTONOMOUS AI INSIGHT CARD
@@ -1184,11 +1395,11 @@ const autonomousInsight = useMemo(() => {
   const scoreFormulaParts = [
     scoreCalculation.coreContributionPoints != null && {
       label: "Core block",
-      value: `${scoreCalculation.coreScore ?? "-"} x ${scoreCalculation.coreMultiplier ?? "0.82"} = ${scoreCalculation.coreContributionPoints}`,
+      value: `${scoreCalculation.coreScore ?? "-"} x ${scoreCalculation.coreMultiplier ?? "-"} = ${scoreCalculation.coreContributionPoints}`,
     },
     scoreCalculation.professionalDisciplineContributionPoints != null && {
       label: "Professional Discipline",
-      value: `${scoreCalculation.professionalDisciplineScore ?? "-"} x ${scoreCalculation.professionalDisciplineMultiplier ?? "0.18"} = ${scoreCalculation.professionalDisciplineContributionPoints}`,
+      value: `${scoreCalculation.professionalDisciplineScore ?? "-"} x ${scoreCalculation.professionalDisciplineMultiplier ?? "-"} = ${scoreCalculation.professionalDisciplineContributionPoints}`,
     },
     scoreCalculation.directAttendanceAdjustment != null && {
       label: "Attendance lift / drag",
@@ -1490,14 +1701,30 @@ const autonomousInsight = useMemo(() => {
               const options = getDriverOptions(driver);
               const barColor = getScoreBgClass(value, options);
               const textColor = getDriverText(driver);
+              const feedsLabel = Array.isArray(driver.feedsDomains) && driver.feedsDomains.length
+                ? driver.feedsDomains.join(" / ")
+                : driver.parentDomain;
+              const impactLabel = driver.scoreAffecting === false
+                ? "Context only"
+                : driver.impactType === "direct_domain_input"
+                  ? "Direct domain input"
+                  : driver.impactType || "Domain signal";
               return (
                 <div key={driver.key} className="border border-[color:var(--border)] rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="min-w-0">
                       <div className="truncate text-xs theme-text font-semibold">{driver.label}</div>
-                      <div className="truncate text-[10px] theme-text-muted">{driver.parentDomain}</div>
+                      <div className="truncate text-[10px] theme-text-muted">Feeds {feedsLabel}</div>
                     </div>
                     <span className={`text-sm font-semibold ${textColor}`}>{value}</span>
+                  </div>
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-md border border-[color:var(--border)] px-1.5 py-0.5 text-[9px] font-semibold uppercase theme-text-muted">{impactLabel}</span>
+                    {driver.effectLabel && (
+                      <span className={`rounded-md border border-[color:var(--border)] px-1.5 py-0.5 text-[9px] font-semibold uppercase ${driver.effectTone === "negative" ? SCORE_TEXT.danger : driver.effectTone === "positive" ? SCORE_TEXT.good : "theme-text-muted"}`}>
+                        {driver.effectLabel}
+                      </span>
+                    )}
                   </div>
                   <div className="w-full bg-[var(--surface-soft)] rounded-full h-1">
                     <div className={`${barColor} h-1 rounded-full transition-all duration-700`} style={{ width: `${Math.min(value, 100)}%` }} />
@@ -1661,7 +1888,7 @@ const autonomousInsight = useMemo(() => {
       icon: <CheckSquare className="w-4 h-4" />,
       valueClass: SCORE_TEXT.good,
       bg: SCORE_SURFACE.good,
-      iconBg: "bg-[color:var(--score-good-bg)] text-[color:var(--score-good)]",
+      iconBg: "bg-[color:var(--surface-soft)] text-[color:var(--primary)]",
     },
     {
       label: "Projects",
@@ -1700,7 +1927,7 @@ const autonomousInsight = useMemo(() => {
       icon: <TrendingUp className="w-4 h-4" />,
       valueClass: SCORE_TEXT.good,
       bg: SCORE_SURFACE.good,
-      iconBg: "bg-[color:var(--score-good-bg)] text-[color:var(--score-good)]",
+      iconBg: "bg-[color:var(--surface-soft)] text-[color:var(--primary)]",
     },
     {
       label: "At Risk",
@@ -1961,9 +2188,35 @@ const autonomousInsight = useMemo(() => {
 {isAdmin && (
 <section className="rounded-lg p-4 border border-[color:var(--border)]">
   <div className="flex justify-between items-center mb-2">
-    <h2 className="text-sm font-semibold">
-      Workspace Health Pulse
-    </h2>
+    <div className="flex items-center gap-1.5">
+      <h2 className="text-sm font-semibold">
+        Workspace Health Pulse
+      </h2>
+      {workspaceScoreExplanation && (
+        <div className="relative group">
+          <button
+            type="button"
+            className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--border)] theme-text-muted hover:text-[color:var(--primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]/30"
+            aria-label="Show workspace health calculation"
+          >
+            <Info className="h-3 w-3" />
+          </button>
+          <div className="pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 hidden w-[min(92vw,420px)] rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-left shadow-xl group-hover:block group-focus-within:block">
+            <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Canonical Health Score</div>
+            <div className="mt-1 text-sm font-semibold theme-text">{workspaceScoreExplanation.finalScore}/100 from workspace_intelligence.score</div>
+            <p className="mt-2 text-[11px] leading-snug theme-text-muted">{workspaceScoreExplanation.summary}</p>
+            <div className="mt-3 space-y-1.5">
+              {workspaceScoreDomains.slice(0, 5).map((domain) => (
+                <div key={domain.key} className="flex items-center justify-between gap-3 text-[11px]">
+                  <span className="truncate theme-text-muted">{domain.label}</span>
+                  <span className="font-semibold text-[color:var(--primary)]">{domain.score} · {Math.round((domain.weight || 0) * 100)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
     <span
   className={`text-xs font-semibold ${
     healthScore === null
