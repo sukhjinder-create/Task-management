@@ -1129,35 +1129,62 @@ const autonomousInsight = useMemo(() => {
   };
   const breakdown = myPerformance.breakdown || {};
   const scoreExplanation = myPerformance.scoreExplanation || {};
-  const evidenceBars = Array.isArray(scoreExplanation.evidenceBars) && scoreExplanation.evidenceBars.length
-    ? scoreExplanation.evidenceBars
+  const scoreNarrative = scoreExplanation.scoreNarrative || {};
+  const attendanceContribution = scoreExplanation.attendanceContribution || {};
+  const scoreComposition = Array.isArray(scoreExplanation.scoreComposition) && scoreExplanation.scoreComposition.length
+    ? scoreExplanation.scoreComposition.filter((row) => row?.score != null)
+    : Array.isArray(scoreExplanation.domainRows)
+      ? scoreExplanation.domainRows.filter((row) => row?.score != null)
+      : [];
+  const evidenceInputs = Array.isArray(scoreExplanation.evidenceInputs) && scoreExplanation.evidenceInputs.length
+    ? scoreExplanation.evidenceInputs.filter((row) => row?.score != null)
     : [
-        {
-          key: "attendanceScore",
+        breakdown.attendanceScore != null && {
+          key: "attendanceEvidence",
           label: "Attendance Evidence",
           score: breakdown.attendanceScore,
-          note: "Attendance is one evidence dimension, not the final score.",
+          parentDomain: "Professional Discipline",
+          note: "Attendance supports Professional Discipline; it is not a peer final-score domain.",
         },
-        {
-          key: "deliveryEffectiveness",
-          label: "Delivery Effectiveness",
+        breakdown.productivityScore != null && {
+          key: "deliveryEvidence",
+          label: "Delivery Evidence",
           score: breakdown.productivityScore,
-          note: "Delivery effectiveness is one core domain, not the final score.",
+          parentDomain: "Delivery Effectiveness",
+          note: "Delivery evidence explains the Delivery Effectiveness domain.",
         },
-      ];
-  const explanationDomains = Array.isArray(scoreExplanation.domainRows)
-    ? scoreExplanation.domainRows.filter((row) => row?.score != null)
-    : [];
+      ].filter(Boolean);
+  const diagnosticDrivers = Array.isArray(scoreExplanation.diagnosticDrivers) && scoreExplanation.diagnosticDrivers.length
+    ? scoreExplanation.diagnosticDrivers.filter((row) => row?.value != null)
+    : Object.entries(dims).map(([key, value]) => ({
+        key,
+        label: dimMeta[key]?.label || key.replace(/([A-Z])/g, " $1"),
+        value,
+        parentDomain: "Diagnostic Signal",
+        direction: dimMeta[key]?.good === "low" ? "lower_is_better" : "higher_is_better",
+        note: dimMeta[key]?.tip,
+      }));
+  const mainConcerns = scoreComposition
+    .filter((row) => Number.isFinite(Number(row.score)))
+    .sort((a, b) => Number(a.score) - Number(b.score))
+    .slice(0, 2);
+  const narrativeSummary = scoreNarrative.summary || scoreExplanation.summary || myPerformance.explanation || "";
+  const liftSummary = scoreNarrative.liftSummary || "";
+  const attendanceSummary = attendanceContribution.summary || "Attendance supports Professional Discipline; it is not shown as a peer final-score domain.";
+  const visibleEvidenceInputs = evidenceInputs.filter((row) => !["deliveryEffectiveness", "deliveryEvidence"].includes(row.key));
+  const visibleDiagnosticDrivers = diagnosticDrivers
+    .filter((row) => row.value != null)
+    .slice(0, 8);
   const riskTone = risk?.level === "High" ? "danger" : risk?.level === "Medium" ? "warning" : risk?.level ? "good" : "neutral";
 
-  const getDimColor = (key, value) => {
-    const isGoodHigh = dimMeta[key]?.good === "high";
-    return getScoreBgClass(value, isGoodHigh ? { goodAt: 70, warningAt: 40 } : { direction: "low", goodAt: 40, warningAt: 70 });
+  const getDriverOptions = (driver) => {
+    return driver?.direction === "lower_is_better"
+      ? { direction: "low", goodAt: 40, warningAt: 70 }
+      : { goodAt: 70, warningAt: 40 };
   };
 
-  const getDimTextColor = (key, value) => {
-    const isGoodHigh = dimMeta[key]?.good === "high";
-    return getScoreTextClass(value, isGoodHigh ? { goodAt: 70, warningAt: 40 } : { direction: "low", goodAt: 40, warningAt: 70 });
+  const getDriverText = (driver) => {
+    return getScoreTextClass(driver.value, getDriverOptions(driver));
   };
 
   return (
@@ -1167,8 +1194,11 @@ const autonomousInsight = useMemo(() => {
         <div className="min-w-0">
           <div className="text-xs theme-text-muted font-bold uppercase tracking-wide mb-1">My Performance</div>
           <div className="text-xl font-bold theme-text">{monthLabel}</div>
-          {myPerformance.explanation && (
-            <p className="text-xs theme-text-muted mt-2 max-w-2xl leading-relaxed">{myPerformance.explanation}</p>
+          {narrativeSummary && (
+            <p className="text-xs theme-text-muted mt-2 max-w-2xl leading-relaxed">{narrativeSummary}</p>
+          )}
+          {liftSummary && (
+            <p className="text-[10px] theme-text-muted mt-1 max-w-2xl leading-relaxed">{liftSummary}</p>
           )}
         </div>
         <div className={`rounded-lg border p-4 ${getScoreSurfaceClass(score)}`}>
@@ -1235,51 +1265,77 @@ const autonomousInsight = useMemo(() => {
         />
       </div>
 
-      {/* SCORE EVIDENCE — renders backend-provided dimensions */}
-      {breakdown && (
+      {/* SCORE COMPOSITION - canonical final-score domains */}
+      {scoreComposition.length > 0 && (
         <div className="rounded-lg border border-[color:var(--primary)]/16 bg-[color:var(--surface)] p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide">Score Evidence Dimensions</div>
-              <div className="text-xs theme-text-muted">
-                {scoreExplanation.summary || "Repository-backed dimensions that explain the final score; these bars are not averaged into the score."}
-              </div>
+              <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide">Score Composition</div>
+              <div className="text-xs theme-text-muted">Canonical user_intelligence domains that produce the final score.</div>
             </div>
             <span className="rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] font-bold theme-text-muted">Enterprise</span>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {evidenceBars.map((bar) => {
-              const value = Math.round(Number(bar.score ?? 0));
+          <div className="grid gap-3 md:grid-cols-5">
+            {scoreComposition.map((row) => {
+              const value = Math.round(Number(row.score ?? 0));
               return (
-                <div key={bar.key} className={`rounded-lg border p-3 ${getScoreSurfaceClass(value, { goodAt: 70, warningAt: 40 })}`}>
+                <div key={row.key} className={`rounded-lg border p-3 ${getScoreSurfaceClass(value, { goodAt: 70, warningAt: 40 })}`}>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold theme-text">{bar.label}</span>
-                    <span className={`text-sm font-semibold ${getScoreTextClass(value, { goodAt: 70, warningAt: 40 })}`}>{bar.score ?? "-"}/100</span>
+                    <span className="text-xs font-semibold theme-text truncate">{row.label}</span>
+                    <span className={`text-sm font-semibold ${getScoreTextClass(value, { goodAt: 70, warningAt: 40 })}`}>{row.score ?? "-"}</span>
                   </div>
                   <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
                     <div className={`h-1 rounded-full ${getScoreBgClass(value, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
                   </div>
-                  {bar.note && (
-                    <div className="mt-1 text-[10px] leading-snug theme-text-muted">{bar.note}</div>
+                  {mainConcerns.some((concern) => concern.key === row.key) && (
+                    <div className={`mt-1 text-[10px] font-semibold ${SCORE_TEXT.warning}`}>Primary pressure</div>
                   )}
-                  {bar.key === "attendanceScore" && breakdown.hasAttendanceTracking === false && (
+                </div>
+              );
+            })}
+          </div>
+          {mainConcerns.length > 0 && (
+            <p className="mt-3 text-[10px] theme-text-muted leading-relaxed">
+              Main drag: {mainConcerns.map((row) => `${row.label} ${row.score}/100`).join(" and ")}.
+            </p>
+          )}
+        </div>
+      )}
+
+      {visibleEvidenceInputs.length > 0 && (
+        <div>
+          <div className="mb-2">
+            <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide">Evidence Inputs</div>
+            <div className="text-xs theme-text-muted">Supporting signals feeding the domains above, not a second score formula.</div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {visibleEvidenceInputs.map((item) => {
+              const value = Math.round(Number(item.score ?? 0));
+              return (
+                <div key={item.key} className="rounded-lg border border-[color:var(--border)] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-semibold theme-text">{item.label}</div>
+                      <div className="text-[10px] theme-text-muted">Feeds {item.parentDomain || "score domain"}</div>
+                    </div>
+                    <span className={`text-sm font-semibold ${getScoreTextClass(value, { goodAt: 70, warningAt: 40 })}`}>{item.score ?? "-"}</span>
+                  </div>
+                  <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
+                    <div className={`h-1 rounded-full ${getScoreBgClass(value, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
+                  </div>
+                  {item.note && (
+                    <div className="mt-1 text-[10px] leading-snug theme-text-muted">{item.note}</div>
+                  )}
+                  {item.key === "attendanceEvidence" && breakdown.hasAttendanceTracking === false && (
                     <div className={`mt-1 text-[10px] font-semibold ${SCORE_TEXT.warning}`}>Attendance evidence not closed for this window</div>
                   )}
                 </div>
               );
             })}
           </div>
-          {explanationDomains.length > 0 && (
-            <div className="mt-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-3">
-              <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide mb-2">Score Composition Read</div>
-              <div className="grid gap-2 md:grid-cols-5">
-                {explanationDomains.map((row) => (
-                  <div key={row.key} className="min-w-0">
-                    <div className="truncate text-[10px] font-semibold theme-text-muted">{row.label}</div>
-                    <div className={`text-sm font-bold ${getScoreTextClass(row.score, { goodAt: 70, warningAt: 40 })}`}>{row.score}/100</div>
-                  </div>
-                ))}
-              </div>
+          {attendanceContribution?.score != null && (
+            <div className="mt-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-3 py-2 text-[10px] theme-text-muted">
+              Attendance is supporting evidence for Professional Discipline. {attendanceSummary}
             </div>
           )}
         </div>
@@ -1302,34 +1358,41 @@ const autonomousInsight = useMemo(() => {
 
       {/* COMPLETION RATE BAR */}
       <div className="flex items-center gap-3">
-        <span className="text-xs theme-text-muted w-28 shrink-0">Completion rate</span>
+        <span className="text-xs theme-text-muted w-28 shrink-0">Live completion</span>
         <div className="flex-1 bg-[var(--surface-soft)] rounded-full h-2">
           <div className="bg-[color:var(--text-soft)] h-2 rounded-full transition-all duration-700" style={{ width: `${myCompletionRate}%` }} />
         </div>
         <span className="text-xs font-bold text-[color:var(--text-soft)] w-8 text-right">{myCompletionRate}%</span>
       </div>
 
-      {/* BEHAVIORAL DIMENSIONS */}
-      {Object.keys(dims).length > 0 && (
+      {/* DIAGNOSTIC DRIVERS - behavioral drilldown */}
+      {visibleDiagnosticDrivers.length > 0 && (
         <div>
-          <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide mb-3">Behavioral Profile</div>
+          <div className="mb-3">
+            <div className="text-xs font-semibold theme-text-muted uppercase tracking-wide">Behavioral / Diagnostic Drivers</div>
+            <div className="text-xs theme-text-muted">Operating signals that explain the domains; these are not a separate score layer.</div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            {Object.entries(dims).map(([key, value]) => {
-              const meta = dimMeta[key] || { label: key.replace(/([A-Z])/g, " $1"), icon: "•" };
-              const barColor = getDimColor(key, value);
-              const textColor = getDimTextColor(key, value);
+            {visibleDiagnosticDrivers.map((driver) => {
+              const value = Math.round(Number(driver.value ?? 0));
+              const options = getDriverOptions(driver);
+              const barColor = getScoreBgClass(value, options);
+              const textColor = getDriverText(driver);
               return (
-                <div key={key} className="border border-[color:var(--border)] rounded-lg p-3">
+                <div key={driver.key} className="border border-[color:var(--border)] rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-base">{meta.icon}</span>
-                      <span className="text-xs theme-text-muted font-medium">{meta.label}</span>
+                    <div className="min-w-0">
+                      <div className="truncate text-xs theme-text font-semibold">{driver.label}</div>
+                      <div className="truncate text-[10px] theme-text-muted">{driver.parentDomain}</div>
                     </div>
-                    <span className={`text-sm font-semibold ${textColor}`}>{Math.round(value)}</span>
+                    <span className={`text-sm font-semibold ${textColor}`}>{value}</span>
                   </div>
                   <div className="w-full bg-[var(--surface-soft)] rounded-full h-1">
                     <div className={`${barColor} h-1 rounded-full transition-all duration-700`} style={{ width: `${Math.min(value, 100)}%` }} />
                   </div>
+                  {driver.note && (
+                    <div className="mt-1 text-[10px] theme-text-muted leading-snug">{driver.note}</div>
+                  )}
                 </div>
               );
             })}
