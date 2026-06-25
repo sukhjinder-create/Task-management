@@ -155,6 +155,12 @@ function weightPercent(value) {
   return Number.isFinite(number) ? Math.round(number * 100) : 0;
 }
 
+function formatWeightPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "-";
+  return `${Math.round(number * 1000) / 10}%`;
+}
+
 function percentToWeight(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 0.01;
@@ -251,7 +257,7 @@ async function saveScoringConfiguration() {
   try {
     setScoringSaving(true);
     const res = await api.put("/intelligence/scoring-config", scoringPayloadFromDraft(scoringDraft));
-    const nextConfig = res.data?.config || null;
+    const nextConfig = res.data?.editableConfig || res.data?.adminSurface || res.data?.config || null;
     setScoringConfig(nextConfig);
     setScoringDraft(cloneScoringConfig(nextConfig));
 
@@ -305,8 +311,9 @@ if (isAdmin) {
   }
   try {
     const configRes = await api.get("/intelligence/scoring-config");
-    setScoringConfig(configRes.data?.config || null);
-    setScoringDraft(cloneScoringConfig(configRes.data?.config || null));
+    const editableConfig = configRes.data?.editableConfig || configRes.data?.adminSurface || configRes.data?.config || null;
+    setScoringConfig(editableConfig);
+    setScoringDraft(cloneScoringConfig(editableConfig));
   } catch (err) {
     console.warn("Scoring configuration not available yet");
   }
@@ -595,9 +602,25 @@ useEffect(() => {
     dashboardOverview?.scoreCard?.scoreExplanation ||
     dashboardOverview?.scoreExplanation ||
     null;
-  const workspaceScoreDomains = Array.isArray(workspaceScoreExplanation?.domainContributions)
-    ? workspaceScoreExplanation.domainContributions.filter((row) => row?.score != null)
+  const workspaceScoreCalculation = workspaceScoreExplanation?.scoreCalculation || workspaceScoreExplanation || {};
+  const workspaceScoreDomains = Array.isArray(workspaceScoreCalculation?.domainContributions)
+    ? workspaceScoreCalculation.domainContributions.filter((row) => row?.score != null)
+    : Array.isArray(workspaceScoreExplanation?.domainContributions)
+      ? workspaceScoreExplanation.domainContributions.filter((row) => row?.score != null)
+      : [];
+  const workspaceFormulaComponents = Array.isArray(workspaceScoreCalculation?.formulaComponents)
+    ? workspaceScoreCalculation.formulaComponents.filter((row) => row?.score != null)
     : [];
+  const workspaceAttendanceContribution =
+    workspaceScoreCalculation?.attendanceReadinessContribution ||
+    workspaceScoreExplanation?.attendanceEffect ||
+    null;
+  const workspaceScorePropagation =
+    workspaceScoreCalculation?.userScoreBalancePropagation ||
+    workspaceScoreExplanation?.userScoreBalancePropagation ||
+    null;
+  const adminScoringGroups = Object.values(scoringDraft?.groups || {})
+    .filter((group) => group?.key === "userFinalBalance");
 
 /* ======================================
    AUTONOMOUS AI INSIGHT ENGINE
@@ -873,32 +896,65 @@ const autonomousInsight = useMemo(() => {
                 >
                   <Info className="h-3 w-3" />
                 </button>
-                <div className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-40 hidden w-[min(92vw,440px)] rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-left shadow-xl group-hover:block group-focus-within:block">
+                <div className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-40 hidden w-[min(94vw,520px)] rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-left shadow-xl group-hover:block group-focus-within:block">
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Workspace Health Calculation</div>
                       <div className="text-sm font-semibold theme-text">
-                        {workspaceScoreExplanation.finalScore}/100 from {workspaceScoreExplanation.scoreAuthority || "workspace_intelligence.score"}
+                        {workspaceScoreCalculation.finalScore ?? workspaceScoreExplanation.finalScore}/100 from {workspaceScoreCalculation.scoreAuthority || workspaceScoreExplanation.scoreAuthority || "workspace_intelligence.score"}
                       </div>
                     </div>
                     <span className="rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] font-bold theme-text-muted">Canonical</span>
                   </div>
-                  <p className="text-[11px] leading-snug theme-text-muted">{workspaceScoreExplanation.formulaReadable}</p>
-                  <div className="mt-3 space-y-1.5">
-                    {workspaceScoreDomains.slice(0, 6).map((domain) => (
-                      <div key={domain.key} className="grid grid-cols-[1fr_auto_auto] gap-2 text-[11px]">
+                  <p className="text-[11px] leading-snug theme-text-muted">{workspaceScoreCalculation.formulaReadable || workspaceScoreExplanation.formulaReadable}</p>
+                  {workspaceFormulaComponents.length > 0 && (
+                    <div className="mt-3 space-y-1.5 border-t border-[color:var(--border)] pt-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Adaptive Formula</div>
+                      {workspaceFormulaComponents.map((part) => (
+                        <div key={part.key} className="grid grid-cols-[1fr_auto] gap-3 text-[11px]">
+                          <span className="truncate theme-text-muted">{part.label}</span>
+                          <span className="font-semibold theme-text">{part.score} x {formatWeightPercent(part.multiplier)} = {part.contributionPoints}</span>
+                        </div>
+                      ))}
+                      {workspaceScoreCalculation.rawScoreBeforeRounding != null && (
+                        <div className="grid grid-cols-[1fr_auto] gap-3 text-[11px]">
+                          <span className="theme-text-muted">Raw to rounded</span>
+                          <span className="font-semibold theme-text">
+                            {workspaceScoreCalculation.rawScoreBeforeRounding} -&gt; {workspaceScoreCalculation.finalRoundedScore ?? workspaceScoreCalculation.finalScore}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="mt-3 space-y-1.5 border-t border-[color:var(--border)] pt-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Workspace Index Rows</div>
+                    {workspaceScoreDomains.slice(0, 8).map((domain) => (
+                      <div key={domain.key} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-[11px]">
                         <span className="truncate theme-text-muted">{domain.label}</span>
-                        <span className="font-semibold theme-text">{Math.round((domain.weight || 0) * 100)}%</span>
-                        <span className={`font-semibold ${Number(domain.finalScoreImpactVsNeutral || 0) < 0 ? SCORE_TEXT.danger : SCORE_TEXT.good}`}>
-                          {Number(domain.finalScoreImpactVsNeutral || 0) >= 0 ? "+" : ""}{domain.finalScoreImpactVsNeutral} vs neutral
-                        </span>
+                        <span className="font-semibold theme-text">{domain.score}/100</span>
+                        <span className="font-semibold theme-text">{formatWeightPercent(domain.configuredWeight ?? domain.weight)}</span>
+                        <span className="font-semibold text-[color:var(--primary)]">{domain.weightedContributionPoints}</span>
                       </div>
                     ))}
                   </div>
-                  {workspaceScoreExplanation.attendanceEffect && (
+                  {workspaceAttendanceContribution && (
                     <div className="mt-3 border-t border-[color:var(--border)] pt-3">
                       <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Attendance Readiness</div>
-                      <p className="mt-1 text-[11px] leading-snug theme-text-muted">{workspaceScoreExplanation.attendanceEffect.summary}</p>
+                      <p className="mt-1 text-[11px] leading-snug theme-text-muted">
+                        {workspaceAttendanceContribution.score}/100 x {formatWeightPercent(workspaceAttendanceContribution.configuredWeight ?? workspaceAttendanceContribution.weight)} =
+                        {" "}{workspaceAttendanceContribution.weightedContributionPoints} weighted-mean points. Path: {workspaceAttendanceContribution.directOrIndirect || "direct"}.
+                      </p>
+                    </div>
+                  )}
+                  {workspaceScorePropagation && (
+                    <div className="mt-3 border-t border-[color:var(--border)] pt-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">User Balance Propagation</div>
+                      <p className="mt-1 text-[11px] leading-snug theme-text-muted">
+                        {workspaceScorePropagation.summary}
+                      </p>
+                      <div className="mt-1 text-[11px] font-semibold theme-text">
+                        Core {formatWeightPercent(workspaceScorePropagation.userScoreBalanceWeights?.core)} / Professional Discipline {formatWeightPercent(workspaceScorePropagation.userScoreBalanceWeights?.professionalDiscipline)}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -942,16 +998,16 @@ const autonomousInsight = useMemo(() => {
       </div>
     </section>
 
-    {isAdmin && scoringDraft?.groups && (
+    {isAdmin && adminScoringGroups.length > 0 && (
       <section className="border border-[color:var(--border)] rounded-lg p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)] font-semibold mb-1">
               Scoring Weightage
             </p>
-            <h2 className="text-sm font-bold theme-text">Workspace-admin controlled score model</h2>
+            <h2 className="text-sm font-bold theme-text">User Score Balance</h2>
             <p className="text-[11px] theme-text-muted max-w-2xl">
-              These weights are stored by the backend and applied by the canonical intelligence engine. Multi-weight groups are normalized to 100%; paired weights auto-complement.
+              Workspace admins control the canonical balance between core execution domains and Professional Discipline. Internal project, team, and workspace composition weights stay engine-owned.
             </p>
           </div>
           <button
@@ -963,8 +1019,8 @@ const autonomousInsight = useMemo(() => {
             {scoringSaving ? "Saving..." : "Save weightage"}
           </button>
         </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          {Object.values(scoringDraft.groups).map((group) => {
+        <div className="mt-4 grid max-w-2xl gap-3">
+          {adminScoringGroups.map((group) => {
             const entries = Object.entries(group.weights || {});
             const isPair = group.type === "pair";
             const totalPct = Math.round(entries.reduce((sum, [, value]) => sum + Number(value || 0), 0) * 100);
@@ -1001,7 +1057,7 @@ const autonomousInsight = useMemo(() => {
                   })}
                 </div>
                 <div className="mt-2 text-[10px] theme-text-muted">
-                  {isPair ? "Two-way pair: changing one side automatically sets the paired side." : "Multi-weight group: backend normalizes all slots to a deterministic 100% total."}
+                  {isPair ? "Two-way pair: changing one side automatically sets the paired side. Bounds are 1% to 99%." : "Backend normalizes this group to a deterministic 100% total."}
                 </div>
               </div>
             );
@@ -2201,18 +2257,47 @@ const autonomousInsight = useMemo(() => {
           >
             <Info className="h-3 w-3" />
           </button>
-          <div className="pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 hidden w-[min(92vw,420px)] rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-left shadow-xl group-hover:block group-focus-within:block">
+          <div className="pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 hidden w-[min(94vw,500px)] rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-left shadow-xl group-hover:block group-focus-within:block">
             <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">Canonical Health Score</div>
-            <div className="mt-1 text-sm font-semibold theme-text">{workspaceScoreExplanation.finalScore}/100 from workspace_intelligence.score</div>
-            <p className="mt-2 text-[11px] leading-snug theme-text-muted">{workspaceScoreExplanation.summary}</p>
-            <div className="mt-3 space-y-1.5">
-              {workspaceScoreDomains.slice(0, 5).map((domain) => (
-                <div key={domain.key} className="flex items-center justify-between gap-3 text-[11px]">
+            <div className="mt-1 text-sm font-semibold theme-text">
+              {workspaceScoreCalculation.finalScore ?? workspaceScoreExplanation.finalScore}/100 from {workspaceScoreCalculation.scoreAuthority || "workspace_intelligence.score"}
+            </div>
+            <p className="mt-2 text-[11px] leading-snug theme-text-muted">{workspaceScoreCalculation.formulaReadable || workspaceScoreExplanation.summary}</p>
+            {workspaceFormulaComponents.length > 0 && (
+              <div className="mt-3 space-y-1.5 border-t border-[color:var(--border)] pt-3">
+                {workspaceFormulaComponents.slice(0, 5).map((part) => (
+                  <div key={part.key} className="flex items-center justify-between gap-3 text-[11px]">
+                    <span className="truncate theme-text-muted">{part.label}</span>
+                    <span className="font-semibold theme-text">{part.contributionPoints}</span>
+                  </div>
+                ))}
+                {workspaceScoreCalculation.rawScoreBeforeRounding != null && (
+                  <div className="flex items-center justify-between gap-3 text-[11px]">
+                    <span className="theme-text-muted">Raw to rounded</span>
+                    <span className="font-semibold theme-text">{workspaceScoreCalculation.rawScoreBeforeRounding} -&gt; {workspaceScoreCalculation.finalRoundedScore ?? workspaceScoreCalculation.finalScore}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="mt-3 space-y-1.5 border-t border-[color:var(--border)] pt-3">
+              {workspaceScoreDomains.slice(0, 8).map((domain) => (
+                <div key={domain.key} className="grid grid-cols-[1fr_auto_auto] gap-3 text-[11px]">
                   <span className="truncate theme-text-muted">{domain.label}</span>
-                  <span className="font-semibold text-[color:var(--primary)]">{domain.score} · {Math.round((domain.weight || 0) * 100)}%</span>
+                  <span className="font-semibold theme-text">{domain.score} x {formatWeightPercent(domain.configuredWeight ?? domain.weight)}</span>
+                  <span className="font-semibold text-[color:var(--primary)]">{domain.weightedContributionPoints}</span>
                 </div>
               ))}
             </div>
+            {workspaceAttendanceContribution && (
+              <div className="mt-3 border-t border-[color:var(--border)] pt-3 text-[11px] theme-text-muted">
+                Attendance Readiness: {workspaceAttendanceContribution.score}/100 x {formatWeightPercent(workspaceAttendanceContribution.configuredWeight ?? workspaceAttendanceContribution.weight)} = {workspaceAttendanceContribution.weightedContributionPoints}; path {workspaceAttendanceContribution.directOrIndirect || "direct"}.
+              </div>
+            )}
+            {workspaceScorePropagation && (
+              <p className="mt-3 border-t border-[color:var(--border)] pt-3 text-[11px] leading-snug theme-text-muted">
+                {workspaceScorePropagation.summary}
+              </p>
+            )}
           </div>
         </div>
       )}
