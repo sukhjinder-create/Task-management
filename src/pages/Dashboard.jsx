@@ -1127,7 +1127,27 @@ const autonomousInsight = useMemo(() => {
     workloadStress:      { label: "Workload Stress",       good: "low",  icon: "🔥", tip: "% of tasks currently overdue" },
     velocityScore:       { label: "Task Velocity",         good: "high", icon: "🚀", tip: "Speed of completion (50 = 7-day avg, 100 = instant)" },
   };
-  const breakdown = myPerformance.breakdown;
+  const breakdown = myPerformance.breakdown || {};
+  const scoreExplanation = myPerformance.scoreExplanation || {};
+  const evidenceBars = Array.isArray(scoreExplanation.evidenceBars) && scoreExplanation.evidenceBars.length
+    ? scoreExplanation.evidenceBars
+    : [
+        {
+          key: "attendanceScore",
+          label: "Attendance Evidence",
+          score: breakdown.attendanceScore,
+          note: "Attendance is one evidence dimension, not the final score.",
+        },
+        {
+          key: "deliveryEffectiveness",
+          label: "Delivery Effectiveness",
+          score: breakdown.productivityScore,
+          note: "Delivery effectiveness is one core domain, not the final score.",
+        },
+      ];
+  const explanationDomains = Array.isArray(scoreExplanation.domainRows)
+    ? scoreExplanation.domainRows.filter((row) => row?.score != null)
+    : [];
   const riskTone = risk?.level === "High" ? "danger" : risk?.level === "Medium" ? "warning" : risk?.level ? "good" : "neutral";
 
   const getDimColor = (key, value) => {
@@ -1172,7 +1192,7 @@ const autonomousInsight = useMemo(() => {
           </div>
           {delta != null && (
             <div className={`mt-2 text-xs font-semibold ${delta >= 0 ? SCORE_TEXT.good : SCORE_TEXT.danger}`}>
-              {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} vs last month
+              {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} vs previous intelligence point
             </div>
           )}
         </div>
@@ -1194,7 +1214,7 @@ const autonomousInsight = useMemo(() => {
           </div>
           {delta != null && (
             <div className={`text-xs font-semibold mt-0.5 ${delta >= 0 ? SCORE_TEXT.good : SCORE_TEXT.danger}`}>
-              {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} vs last month
+              {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} vs previous intelligence point
             </div>
           )}
           <div className={`text-xs font-bold mt-1 px-2 py-0.5 rounded-full inline-block ${
@@ -1215,39 +1235,53 @@ const autonomousInsight = useMemo(() => {
         />
       </div>
 
-      {/* INTELLIGENCE EVIDENCE — renders backend-provided dimensions */}
+      {/* SCORE EVIDENCE — renders backend-provided dimensions */}
       {breakdown && (
         <div className="rounded-lg border border-[color:var(--primary)]/16 bg-[color:var(--surface)] p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide">Intelligence Evidence</div>
-              <div className="text-xs theme-text-muted">Repository-backed attendance and delivery signals</div>
+              <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide">Score Evidence Dimensions</div>
+              <div className="text-xs theme-text-muted">
+                {scoreExplanation.summary || "Repository-backed dimensions that explain the final score; these bars are not averaged into the score."}
+              </div>
             </div>
             <span className="rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] font-bold theme-text-muted">Enterprise</span>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <div className={`rounded-lg border p-3 ${getScoreSurfaceClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold theme-text">Attendance</span>
-                <span className={`text-sm font-semibold ${getScoreTextClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>{breakdown.attendanceScore ?? "-"}/100</span>
-              </div>
-              <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
-                <div className={`h-1 rounded-full ${getScoreBgClass(breakdown.attendanceScore ?? 0, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${breakdown.attendanceScore ?? 0}%` }} />
-              </div>
-              {breakdown.hasAttendanceTracking === false && (
-                <div className={`mt-1 text-[10px] font-semibold ${SCORE_TEXT.warning}`}>Attendance evidence not closed for this window</div>
-              )}
-            </div>
-            <div className={`rounded-lg border p-3 ${getScoreSurfaceClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold theme-text">Productivity</span>
-                <span className={`text-sm font-semibold ${getScoreTextClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`}>{breakdown.productivityScore ?? "-"}/100</span>
-              </div>
-              <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
-                <div className={`h-1 rounded-full ${getScoreBgClass(breakdown.productivityScore ?? 0, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${breakdown.productivityScore ?? 0}%` }} />
-              </div>
-            </div>
+            {evidenceBars.map((bar) => {
+              const value = Math.round(Number(bar.score ?? 0));
+              return (
+                <div key={bar.key} className={`rounded-lg border p-3 ${getScoreSurfaceClass(value, { goodAt: 70, warningAt: 40 })}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold theme-text">{bar.label}</span>
+                    <span className={`text-sm font-semibold ${getScoreTextClass(value, { goodAt: 70, warningAt: 40 })}`}>{bar.score ?? "-"}/100</span>
+                  </div>
+                  <div className="mt-2 h-1 w-full rounded-full bg-[var(--surface-soft)] overflow-hidden">
+                    <div className={`h-1 rounded-full ${getScoreBgClass(value, { goodAt: 70, warningAt: 40 })}`} style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
+                  </div>
+                  {bar.note && (
+                    <div className="mt-1 text-[10px] leading-snug theme-text-muted">{bar.note}</div>
+                  )}
+                  {bar.key === "attendanceScore" && breakdown.hasAttendanceTracking === false && (
+                    <div className={`mt-1 text-[10px] font-semibold ${SCORE_TEXT.warning}`}>Attendance evidence not closed for this window</div>
+                  )}
+                </div>
+              );
+            })}
           </div>
+          {explanationDomains.length > 0 && (
+            <div className="mt-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-3">
+              <div className="text-[10px] font-bold theme-text-muted uppercase tracking-wide mb-2">Score Composition Read</div>
+              <div className="grid gap-2 md:grid-cols-5">
+                {explanationDomains.map((row) => (
+                  <div key={row.key} className="min-w-0">
+                    <div className="truncate text-[10px] font-semibold theme-text-muted">{row.label}</div>
+                    <div className={`text-sm font-bold ${getScoreTextClass(row.score, { goodAt: 70, warningAt: 40 })}`}>{row.score}/100</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
