@@ -131,17 +131,24 @@ function cameraCaptureOptions(mode = LIVEKIT_QUALITY_MODES.AUTO) {
   );
 }
 
-function liveKitCameraSimulcastLayers(sdk = null) {
+function liveKitCameraSimulcastLayers(sdk = null, mode = LIVEKIT_QUALITY_MODES.AUTO) {
   const presets =
     (isMobileMediaDevice() ? sdk?.VideoPresets43 : sdk?.VideoPresets) ||
     sdk?.VideoPresets ||
     {};
-  return [presets.h180, presets.h360, presets.h540].filter(Boolean);
+  // HD mode raises capture resolution to 1280x720 and the bitrate budget to
+  // match, but the simulcast ceiling stayed hardcoded at h540 regardless of
+  // mode — viewers with bandwidth to spare could never actually receive HD,
+  // because the encoder's top layer never produced it. Only raise the
+  // ceiling when the user opted into HD; Standard/Auto keep the existing
+  // h540 cap so bandwidth-constrained calls are unaffected.
+  const topLayer = mode === LIVEKIT_QUALITY_MODES.HD ? (presets.h720 || presets.h540) : presets.h540;
+  return [presets.h180, presets.h360, topLayer].filter(Boolean);
 }
 
 function cameraPublishOptions(mode = LIVEKIT_QUALITY_MODES.AUTO, sdk = null) {
   const mobile = isMobileMediaDevice();
-  const layers = liveKitCameraSimulcastLayers(sdk);
+  const layers = liveKitCameraSimulcastLayers(sdk, mode);
 
   return {
     simulcast: true,
