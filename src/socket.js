@@ -13,6 +13,24 @@ const BACKEND_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:3000";
 
+// Identifies this specific browser tab/session, not the user. Two tabs of the
+// same logged-in user must look like two different devices to the huddle
+// lifecycle, or "started by me" auto-joins every tab/device that user is on.
+const WEB_DEVICE_ID_KEY = "asystence.huddleDeviceId.v1";
+
+export function getWebDeviceId() {
+  try {
+    let id = window.sessionStorage.getItem(WEB_DEVICE_ID_KEY);
+    if (!id) {
+      id = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      window.sessionStorage.setItem(WEB_DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Create / re-create socket with JWT token from global window.__AUTH_TOKEN__
  *
@@ -33,7 +51,7 @@ function createSocket() {
   }
 
   socket = io(BACKEND_URL, {
-    auth: { token: window.__AUTH_TOKEN__ },
+    auth: { token: window.__AUTH_TOKEN__, deviceId: getWebDeviceId() },
     transports: ["websocket", "polling"],
     withCredentials: true,
     timeout: 10000,

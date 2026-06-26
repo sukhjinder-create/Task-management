@@ -1,7 +1,7 @@
 // src/context/HuddleContext.jsx
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useHuddleCall } from "../hooks/useHuddleCall";
-import { getSocket, joinHuddle as emitJoinHuddle } from "../socket";
+import { getSocket, getWebDeviceId, joinHuddle as emitJoinHuddle } from "../socket";
 import { useAuth } from "./AuthContext";
 import toast from "react-hot-toast";
 import { loadLiveKitSdk } from "../huddle/media/LiveKitSdk";
@@ -222,6 +222,7 @@ export function HuddleProvider({ children }) {
       huddleId: activeHuddle.huddleId,
       sessionId: activeHuddle.sessionId || activeHuddle.huddleId,
       intentStartedAt,
+      deviceId: getWebDeviceId(),
       ...providerJoinOptions(activeHuddle),
     });
   }, [activeHuddle?.huddleId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -308,6 +309,7 @@ export function HuddleProvider({ children }) {
         huddleId: acceptedHuddle.huddleId,
         sessionId: acceptedHuddle.sessionId || acceptedHuddle.huddleId,
         intentStartedAt,
+        deviceId: getWebDeviceId(),
         ...providerJoinOptions(acceptedHuddle),
       });
     }
@@ -482,6 +484,14 @@ export function HuddleProvider({ children }) {
       const onStarted = (payload) => {
         const startedById = payload.startedBy?.userId || payload.startedBy;
         const startedByName = payload.startedBy?.username || payload.startedByName || "Someone";
+        // If the backend told us which device started it, only that exact tab/device
+        // may auto-join and publish media. Every other tab/device of the same user
+        // — and there is often more than one open at once — must be prompted instead
+        // of silently joining and publishing its own mic/camera into the call.
+        // Missing startedByDeviceId (old client, mid-rollout) falls back to the
+        // previous userId-only behavior so a real join is never accidentally blocked.
+        const startedByThisDevice =
+          !payload.startedByDeviceId || payload.startedByDeviceId === getWebDeviceId();
         const huddleData = {
           huddleId: payload.huddleId,
           channelId: payload.channelId,
@@ -489,6 +499,7 @@ export function HuddleProvider({ children }) {
           provider: providerFromProviderLock(payload.providerLock) || normalizeHuddleProvider(payload.provider),
           providerLock: payload.providerLock || null,
           startedBy: { userId: startedById, username: startedByName },
+          startedByDeviceId: payload.startedByDeviceId || null,
           at: payload.at,
         };
 
@@ -499,13 +510,15 @@ export function HuddleProvider({ children }) {
         }
         if (huddleData.huddleId === incomingHuddleRef.current?.huddleId) return;
 
-        if (startedById && String(startedById) === String(userRef.current?.id)) {
-          // We started this call â€” show video tiles
+        const startedByMe = startedById && String(startedById) === String(userRef.current?.id);
+        if (startedByMe && startedByThisDevice) {
+          // This exact tab/device is the one that clicked Start â€” join automatically.
           publishActiveHuddle(huddleData);
         } else if (!activeHuddleRef.current) {
-          // Someone else started â€” show invitation modal
-          incomingHuddleRef.current = { ...huddleData, startedByName };
-          setIncomingHuddle({ ...huddleData, startedByName });
+          // Someone else started it, OR this account started it from a different
+          // tab/device. Either way this device must not auto-publish media.
+          incomingHuddleRef.current = { ...huddleData, startedByName, isSelfOtherDevice: Boolean(startedByMe) };
+          setIncomingHuddle({ ...huddleData, startedByName, isSelfOtherDevice: Boolean(startedByMe) });
         }
       };
 

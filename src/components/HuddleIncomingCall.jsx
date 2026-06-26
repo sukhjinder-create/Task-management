@@ -17,6 +17,7 @@ export default function HuddleIncomingCall({ invite, onAccept, onDecline }) {
 
   const callerName = invite.startedByName || "Someone";
   const channelLabel = invite.channelId?.startsWith("dm:") ? "Direct Message" : `#${invite.channelId}`;
+  const isSelfOtherDevice = Boolean(invite.isSelfOtherDevice);
 
   return (
     <div className="fixed inset-0 z-[9999999] flex items-center justify-center bg-black/60">
@@ -27,8 +28,17 @@ export default function HuddleIncomingCall({ invite, onAccept, onDecline }) {
         </div>
 
         <div className="text-center">
-          <p className="text-[color:var(--text)] font-semibold text-lg">{callerName}</p>
-          <p className="text-[color:var(--text-muted)] text-sm mt-1">Calling from {channelLabel}</p>
+          {isSelfOtherDevice ? (
+            <>
+              <p className="text-[color:var(--text)] font-semibold text-lg">Join this Huddle on this device?</p>
+              <p className="text-[color:var(--text-muted)] text-sm mt-1">You started a huddle in {channelLabel} on another device</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[color:var(--text)] font-semibold text-lg">{callerName}</p>
+              <p className="text-[color:var(--text-muted)] text-sm mt-1">Calling from {channelLabel}</p>
+            </>
+          )}
           <p className="text-[color:var(--text-soft)] text-xs mt-1">Auto-decline in {seconds}s</p>
         </div>
 
