@@ -44,7 +44,14 @@ function normalizeHuddleProvider(value) {
 }
 
 function providerJoinOptions(huddle = {}) {
-  const provider = normalizeHuddleProvider(huddle.provider);
+  const provider =
+    normalizeHuddleProvider(huddle.provider) ||
+    normalizeHuddleProvider(huddle.selectedProvider) ||
+    normalizeHuddleProvider(huddle.effectiveProvider) ||
+    providerFromProviderLock(huddle.providerLock) ||
+    providerFromProviderLock(huddle.providerLockDiagnostics) ||
+    providerFromProviderLock(huddle.providerSelection) ||
+    providerFromProviderLock(huddle.diagnostics);
   return provider ? { provider } : {};
 }
 

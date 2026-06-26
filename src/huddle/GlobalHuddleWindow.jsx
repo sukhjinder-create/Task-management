@@ -724,6 +724,45 @@ export default function GlobalHuddleWindow() {
     }
   };
 
+  useEffect(() => {
+    if (
+      isMobileDevice ||
+      isMaximized ||
+      !isOneOnOne ||
+      !oneOnOneRemotePortrait
+    ) {
+      return;
+    }
+    const viewport = getViewportSize();
+    const nextHeight = Math.min(
+      Math.max(620, Math.round(viewport.h * 0.82)),
+      Math.max(420, viewport.h - 32)
+    );
+    const nextWidth = Math.min(
+      Math.max(460, Math.round(nextHeight * 0.72)),
+      Math.max(420, viewport.w - 32)
+    );
+    setSize((current) => {
+      if (
+        Math.abs(current.w - nextWidth) < 12 &&
+        Math.abs(current.h - nextHeight) < 12
+      ) {
+        return current;
+      }
+      return { w: nextWidth, h: nextHeight };
+    });
+    setPos(
+      clampWindowLayout(
+        {
+          x: Math.round((viewport.w - nextWidth) / 2),
+          y: Math.round((viewport.h - nextHeight) / 2),
+        },
+        { w: nextWidth, h: nextHeight },
+        { reserveBottom: 40 }
+      )
+    );
+  }, [isMaximized, isMobileDevice, isOneOnOne, oneOnOneRemotePortrait]);
+
   // Don't show video tiles while there is a pending incoming call to accept/decline
   if (!activeHuddle || !rtc || incomingHuddle) return null;
 
@@ -740,10 +779,10 @@ export default function GlobalHuddleWindow() {
     typeof rtc?.stopScreenShare === "function";
   const videoAreaH = Math.max(120, size.h - (isMobileDevice ? 0 : 108));
   const portraitCanvasWidth = Math.max(
-    320,
+    360,
     Math.min(
-      Math.max(320, size.w - 24),
-      Math.round(videoAreaH * 0.78)
+      Math.max(360, size.w - 24),
+      Math.round(videoAreaH * 0.68)
     )
   );
   const portraitCanvasStyle =
@@ -958,18 +997,18 @@ export default function GlobalHuddleWindow() {
           className="pointer-events-none absolute inset-x-3 z-30 flex justify-center"
           style={{
             bottom: isMobileDevice
-              ? (mobileControlsVisible ? 112 : 28)
-              : 92,
+              ? (mobileControlsVisible ? 104 : 24)
+              : 84,
           }}
           aria-label="Live captions"
         >
-          <div className="max-w-[min(760px,calc(100vw-2rem))] rounded-lg bg-black/72 px-4 py-2.5 text-center text-white shadow-2xl backdrop-blur">
+          <div className="max-w-[min(760px,calc(100vw-2rem))] rounded-md bg-black/68 px-4 py-2 text-center text-white shadow-2xl backdrop-blur">
             {visibleCaptionItems.length > 0 ? (
               <div className="space-y-1">
                 {visibleCaptionItems.map((caption) => (
                   <p
                     key={caption.key}
-                    className={`text-sm leading-6 md:text-base ${
+                    className={`text-sm leading-5 md:text-base md:leading-6 ${
                       caption.status === "partial" ? "text-white/82" : "text-white"
                     }`}
                   >

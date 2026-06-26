@@ -174,7 +174,10 @@ export function useHuddleMediaService({
         const channelId = safeString(params.channelId);
         const huddleId = safeString(params.huddleId);
         if (channelId && huddleId) {
-          emitJoinHuddle(channelId, huddleId, { provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT });
+          emitJoinHuddle(channelId, huddleId, {
+            provider: HUDDLE_MEDIA_PROVIDER_LIVEKIT,
+            workspaceId: resolvedWorkspaceId,
+          });
         }
         return result;
       }
@@ -247,6 +250,7 @@ export function useHuddleMediaService({
     liveKitFallbackDiagnostics,
     liveKitProvider,
     meshProvider,
+    resolvedWorkspaceId,
     selection.canFallbackToMesh,
     fallbackScopeKey,
   ]);

@@ -26,7 +26,9 @@ function createSocket() {
   if (socket) {
     try {
       socket.disconnect();
-    } catch {}
+    } catch {
+      // Best-effort socket cleanup during reconnect.
+    }
     socket = null;
   }
 
@@ -61,7 +63,9 @@ export function initSocket(token) {
   if (socket) {
     try {
       socket.disconnect();
-    } catch {}
+    } catch {
+      // Best-effort socket cleanup during re-auth.
+    }
     socket = null;
   }
 
@@ -76,7 +80,9 @@ window.addEventListener("auth:updated", () => {
   if (socket) {
     try {
       socket.disconnect();
-    } catch {}
+    } catch {
+      // Best-effort socket cleanup during auth refresh.
+    }
   }
   createSocket();
 });
@@ -88,7 +94,9 @@ window.addEventListener("auth:logout", () => {
   if (socket) {
     try {
       socket.disconnect();
-    } catch {}
+    } catch {
+      // Best-effort socket cleanup during logout.
+    }
   }
   socket = null;
   window.__AUTH_TOKEN__ = null;
@@ -144,11 +152,14 @@ export function sendReaction(payload) {
 
 function createHuddleMediaSocketPayload(options = {}) {
   const requestedProvider = options.provider || options.providerType || null;
+  const explicitLiveKitRequest =
+    String(requestedProvider || "").trim().toLowerCase() ===
+    HUDDLE_MEDIA_PROVIDER_LIVEKIT;
   const canary = resolveLiveKitCanaryConfig({
     requestedProvider,
     workspaceId: options.workspaceId || window.__WORKSPACE_ID__ || null,
   });
-  const provider = canary.providerCanActivate
+  const provider = explicitLiveKitRequest || canary.providerCanActivate
     ? HUDDLE_MEDIA_PROVIDER_LIVEKIT
     : HUDDLE_MEDIA_PROVIDER_MESH;
 

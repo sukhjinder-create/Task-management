@@ -97,6 +97,37 @@ function safeDisplayName(value, fallback = "Speaker") {
   return label;
 }
 
+function normalizeReportText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function uniqueEvidenceItems(items = [], blockedTexts = []) {
+  const seen = new Set(
+    blockedTexts.map(normalizeReportText).filter(Boolean)
+  );
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const text = normalizeReportText(
+      item?.text || item?.summary || item?.description || item
+    );
+    if (!text || seen.has(text)) return false;
+    seen.add(text);
+    return true;
+  });
+}
+
+function discussionSummaryForReview(review) {
+  const report = review?.report || {};
+  const summary = review?.artifacts?.summary?.contentJson || {};
+  return uniqueEvidenceItems(report.discussionSummary || [], [
+    report.executiveSummary?.outcome,
+    summary.overview,
+    summary.outcome,
+  ]);
+}
+
 function speakerNameFromReview(review, segment, fallback = "Speaker") {
   const speaker = segment?.speaker || {};
   const participants = Array.isArray(review?.participants) ? review.participants : [];
@@ -170,7 +201,7 @@ function reportMarkdown(review) {
     "",
     "## Discussion Summary",
     "",
-    ...(report.discussionSummary || []).map(
+    ...discussionSummaryForReview(review).map(
       (item) => `- ${item.text}${evidence(item.evidenceSegmentIds)}`
     ),
     "",
@@ -937,7 +968,7 @@ export default function HuddleMeetingIntelligence() {
     heading("Meeting Purpose");
     write(review.report?.executiveSummary?.purpose || review.session.title);
     heading("Discussion Summary");
-    (review.report?.discussionSummary || []).forEach((item) =>
+    discussionSummaryForReview(review).forEach((item) =>
       bullet(`${item.text}${evidence(item.evidenceSegmentIds)}`)
     );
     heading("Discussion Highlights");
@@ -1020,6 +1051,7 @@ export default function HuddleMeetingIntelligence() {
     .map((segment) => `${speakerNameFromReview(review, segment)}: ${segment.text}`)
     .join("\n");
   const summaryText = summary?.contentText || artifactContentText("summary", summary?.contentJson || {});
+  const discussionSummaryItems = discussionSummaryForReview(review);
   const headerStats = [
     ["Summary", review.status.summaryAvailable ? "Ready" : "Unavailable"],
     ["Decisions", review.status.decisionCount],
@@ -1125,11 +1157,11 @@ export default function HuddleMeetingIntelligence() {
                     <EvidenceButton ids={review.report?.executiveSummary?.evidenceSegmentIds} onOpen={showEvidence} />
                   </div>
                 </div>
-                {(review.report?.discussionSummary || []).length > 0 && (
+                {discussionSummaryItems.length > 0 && (
                   <>
                     <h3 className="mb-3 mt-7 font-semibold">Discussion summary</h3>
                     <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-                      {review.report.discussionSummary.map((item, index) => (
+                      {discussionSummaryItems.map((item, index) => (
                         <div key={item.id || index} className="py-3">
                           <p className="text-sm leading-6">{item.text}</p>
                           <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />

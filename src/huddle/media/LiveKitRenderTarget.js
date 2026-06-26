@@ -59,10 +59,8 @@ export function updateLiveKitRenderTarget(publication, {
     if (scale > 0) {
       contentCssWidth = sourceWidth * scale;
       contentCssHeight = sourceHeight * scale;
-      if (!sourcePortrait) {
-        targetCssWidth = contentCssWidth;
-        targetCssHeight = contentCssHeight;
-      }
+      targetCssWidth = contentCssWidth;
+      targetCssHeight = contentCssHeight;
     }
   }
   const maxCameraWidth = sourcePortrait ? 720 : 1280;
