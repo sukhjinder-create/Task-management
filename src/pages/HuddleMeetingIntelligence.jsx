@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   AlertCircle,
+  AlertTriangle,
   Archive,
   Bot,
   Check,
@@ -33,6 +34,7 @@ const TABS = [
   { id: "transcript", label: "Transcript", icon: ScrollText, group: "primary" },
   { id: "decisions", label: "Decisions", icon: Gavel, group: "primary" },
   { id: "actions", label: "Actions", icon: ListChecks, group: "primary" },
+  { id: "risks", label: "Risks & Blockers", icon: AlertTriangle, group: "primary" },
   { id: "ownership", label: "Ownership", icon: UserCheck, group: "review" },
   { id: "memory", label: "Memory", icon: Database, group: "review" },
   { id: "copilot", label: "Copilot", icon: Bot, group: "review" },
@@ -58,6 +60,7 @@ function TabIcon({ id }) {
   if (id === "transcript") return <ScrollText size={15} />;
   if (id === "decisions") return <Gavel size={15} />;
   if (id === "actions") return <ListChecks size={15} />;
+  if (id === "risks") return <AlertTriangle size={15} />;
   if (id === "ownership") return <UserCheck size={15} />;
   if (id === "copilot") return <Bot size={15} />;
   if (id === "quality") return <Radio size={15} />;
@@ -553,6 +556,7 @@ export default function HuddleMeetingIntelligence() {
   const [copilotScope, setCopilotScope] = useState("meeting");
   const [copilotQueries, setCopilotQueries] = useState([]);
   const [quality, setQuality] = useState(null);
+  const [riskBlockerItems, setRiskBlockerItems] = useState([]);
   const [supplementLoading, setSupplementLoading] = useState({});
   const transcriptRefs = useRef(new Map());
   const loadedSupplementsRef = useRef(new Set());
@@ -576,6 +580,7 @@ export default function HuddleMeetingIntelligence() {
     setProjects([]);
     setCopilotQueries([]);
     setQuality(null);
+    setRiskBlockerItems([]);
     setLoading(true);
     load();
   }, [load, sessionId]);
@@ -599,6 +604,11 @@ export default function HuddleMeetingIntelligence() {
           `/huddle/media/livekit/quality/sessions/${sessionId}/summary`
         );
         setQuality(response.data?.quality || null);
+      } else if (kind === "risks") {
+        const response = await api.get(
+          `/huddle/intelligence/sessions/${sessionId}/risk-blockers`
+        );
+        setRiskBlockerItems(response.data?.items || []);
       }
     } catch {
       loadedSupplementsRef.current.delete(kind);
@@ -611,6 +621,7 @@ export default function HuddleMeetingIntelligence() {
     if (activeTab === "actions") void loadSupplement("projects");
     if (activeTab === "copilot") void loadSupplement("copilot");
     if (activeTab === "quality") void loadSupplement("quality");
+    if (activeTab === "risks") void loadSupplement("risks");
   }, [activeTab, loadSupplement]);
 
   const segmentById = useMemo(
@@ -1456,6 +1467,53 @@ export default function HuddleMeetingIntelligence() {
               <button type="button" disabled={busyId === `memory:${actions.id}`} onClick={() => addArtifactToWorkspaceMemory(actions)} className="mt-5 inline-flex items-center gap-2 rounded bg-[var(--primary)] px-3 py-2 text-sm font-medium text-[color:var(--primary-contrast)] disabled:opacity-50">
                 {busyId === `memory:${actions.id}` ? <Loader2 size={15} className="animate-spin" /> : <Database size={15} />} Add to workspace memory
               </button>
+            )}
+          </section>
+        )}
+
+        {activeTab === "risks" && (
+          <section>
+            <h2 className="text-xl font-semibold">Risks & Blockers</h2>
+            <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+              Extracted as a dedicated stage, separate from the executive summary — each item is evidence-bound to the moment it was raised.
+            </p>
+            {supplementLoading.risks ? (
+              <div className="mt-6 flex items-center gap-2 text-sm text-[color:var(--text-muted)]">
+                <Loader2 size={15} className="animate-spin" /> Loading risk register…
+              </div>
+            ) : (
+              <div className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                {riskBlockerItems.map((item) => {
+                  const severityColor =
+                    item.severity === "high"
+                      ? "text-[color:var(--score-danger)] border-[color:var(--score-danger)]"
+                      : item.severity === "low"
+                        ? "text-[color:var(--text-muted)] border-[color:var(--border)]"
+                        : "text-[color:var(--score-warning)] border-[color:var(--score-warning)]";
+                  return (
+                    <div key={item.id} className="py-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${severityColor}`}>
+                          {item.severity}
+                        </span>
+                        <span className="rounded-full border border-[color:var(--border)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[color:var(--text-muted)]">
+                          {item.itemType}
+                        </span>
+                        {item.status !== "open" && (
+                          <span className="text-[10px] font-medium text-[color:var(--text-muted)]">{item.status}</span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm leading-6">{item.text}</p>
+                      <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
+                    </div>
+                  );
+                })}
+                {riskBlockerItems.length === 0 && (
+                  <p className="py-7 text-sm text-[color:var(--text-muted)]">
+                    No risks or blockers were identified in this meeting.
+                  </p>
+                )}
+              </div>
             )}
           </section>
         )}
