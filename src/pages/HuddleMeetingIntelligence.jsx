@@ -1162,86 +1162,49 @@ export default function HuddleMeetingIntelligence() {
                     <div className="text-xs font-semibold uppercase text-[color:var(--text-muted)]">Purpose</div>
                     <p className="mt-1 text-sm leading-6">{review.report?.executiveSummary?.purpose}</p>
                   </div>
-                  <div>
-                    <div className="text-xs font-semibold uppercase text-[color:var(--text-muted)]">Overall outcome</div>
-                    <p className="mt-1 text-sm leading-6">{review.report?.executiveSummary?.outcome}</p>
-                    <EvidenceButton ids={review.report?.executiveSummary?.evidenceSegmentIds} onOpen={showEvidence} />
-                  </div>
+                  {review.report?.executiveSummary?.businessContext && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase text-[color:var(--text-muted)]">Business context</div>
+                      <p className="mt-1 text-sm leading-6">{review.report.executiveSummary.businessContext}</p>
+                    </div>
+                  )}
                 </div>
-                {discussionSummaryItems.length > 0 && (
+                {review.report?.executiveSummary?.narrative && (
                   <>
-                    <h3 className="mb-3 mt-7 font-semibold">Discussion summary</h3>
+                    <h3 className="mb-3 mt-7 font-semibold">Executive summary</h3>
+                    <div className="space-y-3 border-y border-[color:var(--border)] py-4">
+                      {review.report.executiveSummary.narrative.split(/\n{2,}|\n/).filter((p) => p.trim()).map((para, index) => (
+                        <p key={index} className="text-sm leading-7">{para.trim()}</p>
+                      ))}
+                      <EvidenceButton ids={review.report?.executiveSummary?.evidenceSegmentIds} onOpen={showEvidence} />
+                    </div>
+                  </>
+                )}
+                {(review.report?.discussionThemes || []).length > 0 && (
+                  <>
+                    <h3 className="mb-3 mt-7 font-semibold">Discussion themes</h3>
                     <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-                      {discussionSummaryItems.map((item, index) => (
-                        <div key={item.id || index} className="py-3">
-                          <p className="text-sm leading-6">{item.text}</p>
-                          <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
+                      {review.report.discussionThemes.map((item) => (
+                        <div key={item.id} className="py-4">
+                          <div className="text-sm font-semibold text-[color:var(--primary)]">{item.theme}</div>
+                          <p className="mt-1 text-sm leading-6">{item.detail}</p>
+                          <div className="mt-2"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
                         </div>
                       ))}
                     </div>
                   </>
                 )}
-                {(review.report?.executiveSummary?.conclusions || []).length > 0 && (
+                {(review.report?.recommendations || []).length > 0 && (
                   <>
-                    <h3 className="mb-3 mt-7 font-semibold">Major conclusions</h3>
-                    <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-                      {review.report.executiveSummary.conclusions.map((item, index) => (
-                        <div key={item.id || index} className="py-3">
-                          <p className="text-sm leading-6">{item.text || item}</p>
-                          <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
-                        </div>
+                    <h3 className="mb-3 mt-7 font-semibold">Recommendations</h3>
+                    <ul className="space-y-2 border-y border-[color:var(--border)] py-4 text-sm leading-6">
+                      {review.report.recommendations.map((item) => (
+                        <li key={item.id} className="flex gap-2">
+                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--primary)]" />
+                          <span>{item.text}</span>
+                        </li>
                       ))}
-                    </div>
-                  </>
-                )}
-                <h3 className="mb-3 mt-7 font-semibold">Discussion highlights</h3>
-                <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-                  {(summary.contentJson?.discussionHighlights || []).map((point) => (
-                    <div key={point.id} className="py-4">
-                      <div className="text-xs font-semibold text-[color:var(--primary)]">{safeDisplayName(point.speaker, "Speaker")}</div>
-                      <p className="mt-1 text-sm leading-6">{point.text}</p>
-                      <div className="mt-2"><EvidenceButton ids={point.evidenceSegmentIds} onOpen={showEvidence} /></div>
-                    </div>
-                  ))}
-                  {(summary.contentJson?.keyPoints || []).map((point) => (
-                    <div key={point.id} className="py-4">
-                      <p className="text-sm leading-6">{point.text}</p>
-                      <div className="mt-2"><EvidenceButton ids={point.evidenceSegmentIds} onOpen={showEvidence} /></div>
-                    </div>
-                  ))}
-                </div>
-                {(review.report?.speakerHighlights || []).length > 0 && (
-                  <>
-                    <h3 className="mb-3 mt-7 font-semibold">Speaker highlights</h3>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {review.report.speakerHighlights.map((speaker) => (
-                        <article key={speaker.speaker} className="border-l-2 border-[color:var(--primary)] pl-4">
-                          <h4 className="font-semibold">{speaker.speaker}</h4>
-                          <dl className="mt-2 space-y-2 text-sm">
-                            {speaker.keyPointsRaised.length > 0 && <div><dt className="text-xs font-medium text-[color:var(--text-muted)]">Key points</dt><dd>{speaker.keyPointsRaised.map((item) => item.text).join(" ")}</dd></div>}
-                            {speaker.commitments.length > 0 && <div><dt className="text-xs font-medium text-[color:var(--text-muted)]">Commitments</dt><dd>{speaker.commitments.map((item) => item.title).join(", ")}</dd></div>}
-                            {speaker.concernsRaised.length > 0 && <div><dt className="text-xs font-medium text-[color:var(--text-muted)]">Concerns</dt><dd>{speaker.concernsRaised.map((item) => item.text || item.question).join(" ")}</dd></div>}
-                            {speaker.decisionsInfluenced.length > 0 && <div><dt className="text-xs font-medium text-[color:var(--text-muted)]">Decisions influenced</dt><dd>{speaker.decisionsInfluenced.map((item) => item.title).join(", ")}</dd></div>}
-                          </dl>
-                        </article>
-                      ))}
-                    </div>
-                  </>
-                )}
-                {(review.report?.chronologicalConversation || []).length > 0 && (
-                  <>
-                    <h3 className="mb-3 mt-7 font-semibold">Chronological conversation</h3>
-                    <div className="border-l border-[color:var(--border)] pl-5">
-                      {review.report.chronologicalConversation.map((entry, index) => (
-                        <div key={entry.id || index} className="relative pb-5">
-                          <span className="absolute -left-[25px] top-1.5 h-2.5 w-2.5 rounded-full bg-[var(--primary)]" />
-                          <div className="text-xs text-[color:var(--text-muted)]">{timeOnly(entry.occurredAt)}</div>
-                          <div className="text-sm font-medium">{entry.title}</div>
-                          <p className="mt-1 text-sm leading-6 text-[color:var(--text-muted)]">{entry.description}</p>
-                          <EvidenceButton ids={entry.evidenceSegmentIds} onOpen={showEvidence} />
-                        </div>
-                      ))}
-                    </div>
+                    </ul>
                   </>
                 )}
                 <h3 className="mb-3 mt-7 font-semibold">Open questions</h3>
