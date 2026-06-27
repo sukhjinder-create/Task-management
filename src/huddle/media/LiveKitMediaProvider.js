@@ -9,6 +9,7 @@ import {
   liveTranscriptionSupported,
 } from "./LiveTranscriptionClient";
 import api from "../../api";
+import { getSocket } from "../../socket";
 import { recordHuddleCallTrace } from "../callTrace";
 import { getCachedLiveKitSdkDiagnostics, loadLiveKitSdk } from "./LiveKitSdk";
 import {
@@ -238,7 +239,11 @@ async function prewarmInitialLiveKitTracks({
 }
 
 const LIVE_CAPTION_LANGUAGE = "multi";
-const LIVE_CAPTION_POLL_INTERVAL_MS = 2000;
+// Captions now arrive over the socket the instant they're written (see
+// huddle:caption below). This interval is just a slow reconciliation poll
+// in case a socket event is missed across a reconnect — it is not the
+// primary delivery path anymore, so it no longer needs to be fast.
+const LIVE_CAPTION_POLL_INTERVAL_MS = 15000;
 const LIVE_CAPTION_HISTORY_LIMIT = 1500;
 const LIVE_CAPTION_CURSOR_OVERLAP_MS = 2000;
 
@@ -2876,6 +2881,35 @@ export function useLiveKitMediaProvider({
       }
     };
 
+    const applyIncomingCaption = (caption) => {
+      if (!caption) return;
+      const metrics = providerMetricsRef.current;
+      if (!metrics.firstCaptionAt) {
+        metrics.firstCaptionAt = metricNow();
+        metrics.firstCaptionLatencyMs = elapsedMs(
+          metrics.intentStartedAt || metrics.joinStartedAt,
+          metrics.firstCaptionAt
+        );
+      }
+      captionCursorRef.current = caption.emittedAt || captionCursorRef.current;
+      setCaptionFeed((previous) => canonicalCaptionFeed([...previous, caption]));
+      setTranscriptionDiagnostics((previous) => ({
+        ...(previous || {}),
+        captionFeedStatus: "streaming",
+        captionFeedLastEventAt: caption.emittedAt || previous?.captionFeedLastEventAt || null,
+        captionFeedTransport: "push",
+        observedAt: new Date().toISOString(),
+      }));
+    };
+
+    const socket = getSocket();
+    const onPushedCaption = (payload) => {
+      const sessionId = sessionIdRef.current || huddleIdRef.current;
+      if (!sessionId || payload?.sessionId !== sessionId) return;
+      applyIncomingCaption(payload?.caption);
+    };
+    socket?.on("huddle:caption", onPushedCaption);
+
     loadCaptions();
     const interval = window.setInterval(loadCaptions, LIVE_CAPTION_POLL_INTERVAL_MS);
     const refreshNow = () => {
@@ -2888,6 +2922,7 @@ export function useLiveKitMediaProvider({
       window.clearInterval(interval);
       window.removeEventListener("online", refreshNow);
       document.removeEventListener("visibilitychange", refreshNow);
+      socket?.off("huddle:caption", onPushedCaption);
     };
   }, [connectedRoom, subtitlesEnabled]);
 

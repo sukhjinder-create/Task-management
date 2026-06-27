@@ -86,44 +86,106 @@ export function preconnectCachedLiveKitOrigin() {
   }
 }
 
-function createLiveKitRoomOptions(sdk = {}) {
+const POLICY_RESOLUTION_LADDER = ["h180", "h360", "h540", "h720"];
+
+// Default per-resolution publish bitrate budgets (bps), tuned for the camera.
+// The server policy chooses the ceiling; these map it to an encoder budget.
+const POLICY_BITRATE_BY_RESOLUTION = Object.freeze({
+  h180: 200_000,
+  h360: 500_000,
+  h540: 900_000,
+  h720: 1_400_000,
+});
+
+const VALID_DEGRADATION_PREFERENCES = new Set([
+  "maintain-framerate",
+  "maintain-resolution",
+  "balanced",
+]);
+
+const VALID_VIDEO_CODECS = new Set(["vp8", "vp9", "h264", "av1"]);
+
+// Build LiveKit RoomOptions. When the backend supplies a server-authoritative
+// media policy (computed from this session's quality telemetry + platform), we
+// apply it verbatim: publish ceiling, simulcast ladder, dynacast, degradation
+// preference and codec all come from the server so a single, telemetry-aware
+// decision drives every client. When no policy is present (older backend, or
+// the field is missing) we fall back to the previous static behaviour so the
+// client never hard-depends on the policy being there.
+function createLiveKitRoomOptions(sdk = {}, mediaPolicy = null) {
   const mobile = isMobileMediaDevice();
   const videoPresets =
     (mobile ? sdk.VideoPresets43 : sdk.VideoPresets) ||
     sdk.VideoPresets ||
     {};
-  const layers = [
-    videoPresets.h180,
-    videoPresets.h360,
-    videoPresets.h540,
-  ].filter(Boolean);
+
+  const policyPublish =
+    mediaPolicy && typeof mediaPolicy === "object" ? mediaPolicy.publish || {} : {};
+  const ceiling = POLICY_RESOLUTION_LADDER.includes(policyPublish.maxResolution)
+    ? policyPublish.maxResolution
+    : "h540";
+  const ceilingIndex = POLICY_RESOLUTION_LADDER.indexOf(ceiling);
+
+  // Simulcast ladder: the policy ceiling plus up to two lower fallback layers.
+  const ladderLabels = mediaPolicy
+    ? POLICY_RESOLUTION_LADDER.slice(Math.max(0, ceilingIndex - 2), ceilingIndex + 1)
+    : ["h180", "h360", "h540"];
+  const layers = ladderLabels
+    .map((label) => videoPresets[label])
+    .filter(Boolean);
+
+  const ceilingPreset = videoPresets[ceiling] || videoPresets.h540;
+  const maxFramerate = Number(policyPublish.maxFramerate) > 0
+    ? Number(policyPublish.maxFramerate)
+    : 30;
+
   const balancedResolution = mobile
     ? {
-        width: 720,
-        height: 960,
-        frameRate: 30,
+        // Keep portrait capture on mobile; height tracks the policy ceiling.
+        width: Math.round((ceilingPreset?.resolution?.height || 540) * (3 / 4)),
+        height: ceilingPreset?.resolution?.height || 540,
+        frameRate: maxFramerate,
         aspectRatio: 3 / 4,
       }
     : {
-        ...(videoPresets.h540?.resolution || {
-          width: 960,
-          height: 540,
-        }),
-        frameRate: 30,
+        ...(ceilingPreset?.resolution || { width: 960, height: 540 }),
+        frameRate: maxFramerate,
       };
 
+  const maxBitrate = mediaPolicy
+    ? POLICY_BITRATE_BY_RESOLUTION[ceiling] || (mobile ? 750_000 : 900_000)
+    : mobile
+      ? 750_000
+      : 900_000;
+
+  const degradationPreference = VALID_DEGRADATION_PREFERENCES.has(
+    policyPublish.degradationPreference
+  )
+    ? policyPublish.degradationPreference
+    : undefined;
+
+  const videoCodec = VALID_VIDEO_CODECS.has(policyPublish.videoCodec)
+    ? policyPublish.videoCodec
+    : undefined;
+
+  const adaptiveStream =
+    mediaPolicy?.subscribe?.adaptiveStream === false ? false : true;
+  const dynacast = policyPublish.dynacast === false ? false : true;
+
   return {
-    adaptiveStream: true,
-    dynacast: true,
+    adaptiveStream,
+    dynacast,
     videoCaptureDefaults: {
       resolution: balancedResolution,
       facingMode: "user",
     },
     publishDefaults: {
-      simulcast: true,
+      simulcast: policyPublish.simulcast === false ? false : true,
+      ...(videoCodec ? { videoCodec } : {}),
       videoEncoding: {
-        maxBitrate: mobile ? 750_000 : 900_000,
-        maxFramerate: 30,
+        maxBitrate,
+        maxFramerate,
+        ...(degradationPreference ? { degradationPreference } : {}),
       },
       videoSimulcastLayers: layers,
       screenShareEncoding: {
@@ -462,7 +524,8 @@ export async function connectLiveKitRoom(params = {}) {
   }
 
   try {
-    const roomOptions = createLiveKitRoomOptions(prepared.sdk);
+    const mediaPolicy = tokenDescriptor?.liveKit?.mediaPolicy || null;
+    const roomOptions = createLiveKitRoomOptions(prepared.sdk, mediaPolicy);
     const liveKitRoom = new prepared.sdk.Room(roomOptions);
     const connectStartedAt = metricNow();
     void recordHuddleCallTrace({
@@ -531,6 +594,19 @@ export async function connectLiveKitRoom(params = {}) {
           dynacast: roomOptions.dynacast,
           videoCaptureResolution: roomOptions.videoCaptureDefaults?.resolution || null,
           simulcastLayerCount: roomOptions.publishDefaults?.videoSimulcastLayers?.length || 0,
+          mediaPolicy: mediaPolicy
+            ? {
+                version: mediaPolicy.version,
+                source: mediaPolicy.source,
+                rating: mediaPolicy.rating,
+                degradationLevel: mediaPolicy.degradationLevel,
+                maxResolution: mediaPolicy.publish?.maxResolution || null,
+                degradationPreference:
+                  roomOptions.publishDefaults?.videoEncoding?.degradationPreference || null,
+                videoCodec: roomOptions.publishDefaults?.videoCodec || null,
+                reasons: mediaPolicy.reasons || [],
+              }
+            : { source: "client_default" },
         },
       },
     };
