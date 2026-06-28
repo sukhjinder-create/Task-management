@@ -388,6 +388,16 @@ function EvidenceTypeChips({ types }) {
   );
 }
 
+// The backend emits internal AI-pipeline lifecycle events ("Intelligence Job
+// Queued/Processing", "Artifact Created") that are plumbing, not meeting
+// moments. They make the timeline read like an engineering log, so they are
+// hidden from the user-facing timeline. Topic segments and real meeting events
+// (start/end, participants, decisions, tokens) are always kept.
+function isInternalTimelineEvent(entry) {
+  if (entry?.entryType === "topic_segment") return false;
+  return /(intelligence|artifact)/i.test(`${entry?.eventType || ""} ${entry?.title || ""}`);
+}
+
 // Choose an icon + tone for a timeline entry so a viewer can read the meeting's
 // shape at a glance: substantive topic transitions are emphasized in brand
 // colour; process/lifecycle events (start, join, token grants) are dimmed.
@@ -1368,11 +1378,13 @@ export default function HuddleMeetingIntelligence() {
           </section>
         )}
 
-        {activeTab === "timeline" && (
+        {activeTab === "timeline" && (() => {
+          const meaningfulTimeline = review.timeline.filter((entry) => !isInternalTimelineEvent(entry));
+          return (
           <section>
             <h2 className="text-xl font-semibold">Timeline</h2>
             <p className="mt-1 text-sm text-[color:var(--text-muted)]">How the meeting evolved — topic transitions are emphasized; lifecycle events are dimmed.</p>
-            {review.timeline.length === 0 ? (
+            {meaningfulTimeline.length === 0 ? (
               <div className="mt-5">
                 <EmptyState icon={Clock3} title="No timeline yet">
                   The timeline is reconstructed from topic segments and meeting lifecycle events after the Huddle ends. It will appear here once intelligence has finished processing.
@@ -1380,7 +1392,7 @@ export default function HuddleMeetingIntelligence() {
               </div>
             ) : (
               <div className="mt-5 border-l border-[color:var(--border)] pl-6">
-                {review.timeline.map((entry) => {
+                {meaningfulTimeline.map((entry) => {
                   const meta = timelineEntryMeta(entry);
                   const Icon = meta.Icon;
                   const isTopic = entry.entryType === "topic_segment";
@@ -1399,7 +1411,8 @@ export default function HuddleMeetingIntelligence() {
               </div>
             )}
           </section>
-        )}
+          );
+        })()}
 
         {activeTab === "transcript" && (() => {
           const speakers = [...new Set(review.transcript.map((s) => speakerNameFromReview(review, s)).filter(Boolean))];
