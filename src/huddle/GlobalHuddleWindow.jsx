@@ -314,9 +314,11 @@ function VideoTile({
   return (
     <div
       ref={tileRef}
-      className={`relative bg-[#1a1d27] overflow-hidden flex items-center justify-center w-full h-full transition-all ${
-        isActiveSpeaker ? "ring-2 ring-green-400" : ""
-      } ${compact ? "rounded-xl" : "rounded-xl"}`}
+      className={`relative bg-[#1a1d27] overflow-hidden flex items-center justify-center w-full h-full rounded-xl transition-[box-shadow] duration-200 ease-out ${
+        isActiveSpeaker
+          ? "ring-2 ring-[#f97316] shadow-[0_0_0_4px_rgba(234,88,12,0.22)]"
+          : "ring-1 ring-white/5"
+      }`}
     >
       {/* Local video is mirrored (selfie-style); remote is natural */}
       <video
@@ -348,10 +350,10 @@ function VideoTile({
       )}
 
       {!compact && (
-        <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1 bg-black/60 rounded px-2 py-0.5 text-[11px] text-white pointer-events-none">
+        <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1.5 bg-black/55 backdrop-blur-sm rounded-md px-2 py-1 text-[11px] font-medium text-white pointer-events-none ring-1 ring-white/10">
           {isMuted
-            ? <MicOff size={10} className="text-red-400 shrink-0" />
-            : <Mic size={10} className="text-green-400 shrink-0" />
+            ? <MicOff size={11} className="text-red-400 shrink-0" />
+            : <Mic size={11} className="text-emerald-400 shrink-0" />
           }
           <span className="truncate max-w-[100px]">{isLocal ? `${name} (You)` : (name || "User")}</span>
         </div>
@@ -365,16 +367,24 @@ const MemoizedVideoTile = memo(VideoTile);
 // ── Control button ────────────────────────────────────────────────────────────
 function CtrlBtn({ onClick, title, active = false, danger = false, wide = false, disabled = false, children }) {
   const isMob = typeof window !== "undefined" && window.innerWidth < 768;
-  let cls = "flex items-center justify-center rounded-full transition-colors font-medium ";
+  // Unified tactile transition: colour + a subtle press scale, with a keyboard
+  // focus ring for accessibility. Desktop now gets real hover feedback (the
+  // previous version only animated on :active press). "Active" toggles use the
+  // Asystence brand orange instead of an off-brand blue.
+  let cls =
+    "flex items-center justify-center rounded-full font-medium select-none " +
+    "transition-[background-color,box-shadow,transform] duration-150 ease-out " +
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 " +
+    "focus-visible:ring-offset-2 focus-visible:ring-offset-[#1b1e27] ";
   if (wide) cls += `gap-2 ${isMob ? "h-12 px-3 text-sm min-w-0" : "h-11 px-5 text-sm"} `;
   else cls += isMob ? "w-12 h-12 shrink-0 " : "w-11 h-11 ";
   if (disabled) cls += "bg-slate-800 text-slate-500 cursor-not-allowed opacity-60";
-  else if (danger) cls += "bg-red-600 active:bg-red-500 text-white";
-  else if (active) cls += "bg-blue-600 active:bg-blue-500 text-white";
-  else cls += "bg-slate-700 active:bg-slate-600 text-white";
+  else if (danger) cls += "bg-red-600 hover:bg-red-500 active:scale-95 text-white shadow-sm";
+  else if (active) cls += "bg-[#ea580c] hover:bg-[#f97316] active:scale-95 text-white shadow-sm";
+  else cls += "bg-slate-700 hover:bg-slate-600 active:scale-95 text-white";
 
   return (
-    <button type="button" onClick={onClick} title={title} className={cls} disabled={disabled}>
+    <button type="button" onClick={onClick} title={title} aria-label={title} aria-pressed={active} className={cls} disabled={disabled}>
       {children}
     </button>
   );
@@ -845,7 +855,7 @@ export default function GlobalHuddleWindow() {
           <button
             type="button"
             onClick={toggleMaximize}
-            className="p-1.5 rounded hover:bg-slate-700 transition-colors"
+            className="p-1.5 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             title={isMaximized ? "Restore" : "Maximize"}
           >
             {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
@@ -1002,17 +1012,17 @@ export default function GlobalHuddleWindow() {
           }}
           aria-label="Live captions"
         >
-          <div className="max-w-[min(760px,calc(100vw-2rem))] rounded-md bg-black/68 px-4 py-2 text-center text-white shadow-2xl backdrop-blur">
+          <div className="max-w-[min(760px,calc(100vw-2rem))] rounded-2xl bg-black/70 px-5 py-3 text-center text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-md">
             {visibleCaptionItems.length > 0 ? (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {visibleCaptionItems.map((caption) => (
                   <p
                     key={caption.key}
-                    className={`text-sm leading-5 md:text-base md:leading-6 ${
-                      caption.status === "partial" ? "text-white/82" : "text-white"
+                    className={`text-sm leading-6 md:text-base md:leading-7 motion-safe:animate-[captionRise_200ms_ease-out] ${
+                      caption.status === "partial" ? "text-white/80" : "text-white"
                     }`}
                   >
-                    <span className="font-semibold text-sky-200">{caption.speaker}: </span>
+                    <span className="font-semibold text-orange-300">{caption.speaker}: </span>
                     <span>{caption.text}</span>
                   </p>
                 ))}
@@ -1057,13 +1067,16 @@ export default function GlobalHuddleWindow() {
               <div className="text-sm font-semibold">What did I miss?</div>
               <div className="text-[11px] text-slate-400">Evidence from the live transcript</div>
             </div>
-            <button type="button" onClick={() => setShowMissedPanel(false)} className="p-1.5 text-slate-300" title="Close">
+            <button type="button" onClick={() => setShowMissedPanel(false)} className="p-1.5 rounded-md text-slate-300 hover:bg-white/10 hover:text-white transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40" title="Close">
               <X size={16} />
             </button>
           </div>
           <div className="h-full overflow-y-auto px-3 py-3 text-sm">
             {missedLoading ? (
-              <div className="py-8 text-center text-slate-400">Preparing your meeting brief...</div>
+              <div className="flex flex-col items-center justify-center gap-3 py-10 text-slate-400">
+                <span className="h-6 w-6 rounded-full border-2 border-white/20 border-t-[#f97316] animate-spin" />
+                <span className="text-xs">Preparing your meeting brief…</span>
+              </div>
             ) : (
               <>
                 <p className="whitespace-pre-wrap leading-6 text-slate-100">
@@ -1071,7 +1084,7 @@ export default function GlobalHuddleWindow() {
                 </p>
                 {(missedBrief?.decisions || []).length > 0 && (
                   <div className="mt-4">
-                    <h3 className="text-xs font-semibold uppercase text-sky-300">Decisions so far</h3>
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Decisions so far</h3>
                     <ul className="mt-2 space-y-2">
                       {missedBrief.decisions.map((item) => (
                         <li key={item.id} className="leading-5 text-slate-200">{item.decision}</li>
@@ -1081,7 +1094,7 @@ export default function GlobalHuddleWindow() {
                 )}
                 {(missedBrief?.openQuestions || []).length > 0 && (
                   <div className="mt-4">
-                    <h3 className="text-xs font-semibold uppercase text-amber-300">Open questions</h3>
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-amber-300/90">Open questions</h3>
                     <ul className="mt-2 space-y-2">
                       {missedBrief.openQuestions.map((item) => (
                         <li key={item.id} className="leading-5 text-slate-200">{item.question}</li>
@@ -1109,11 +1122,13 @@ export default function GlobalHuddleWindow() {
               key={mode}
               type="button"
               onClick={() => updateQualityMode(mode)}
-              className={`w-full rounded px-3 py-2 text-left hover:bg-white/10 ${
-                rtc.qualityMode === mode ? "bg-white/10" : ""
+              className={`w-full rounded-lg px-3 py-2 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+                rtc.qualityMode === mode
+                  ? "bg-[#ea580c]/15 ring-1 ring-[#ea580c]/45"
+                  : "hover:bg-white/10"
               }`}
             >
-              <div className="text-sm font-medium">{label}</div>
+              <div className={`text-sm font-medium ${rtc.qualityMode === mode ? "text-orange-300" : ""}`}>{label}</div>
               <div className="text-[11px] text-slate-400">{description}</div>
             </button>
           ))}

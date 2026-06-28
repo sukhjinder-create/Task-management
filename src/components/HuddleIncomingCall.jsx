@@ -20,10 +20,10 @@ export default function HuddleIncomingCall({ invite, onAccept, onDecline }) {
   const isSelfOtherDevice = Boolean(invite.isSelfOtherDevice);
 
   return (
-    <div className="fixed inset-0 z-[9999999] flex items-center justify-center bg-black/60">
-      <div className="w-80 rounded-xl bg-[var(--surface)] border border-[color:var(--border)] p-8 flex flex-col items-center gap-6 shadow-xl animate-pulse-once">
-        {/* Avatar */}
-        <div className="w-20 h-20 rounded-full bg-[color:var(--primary)] flex items-center justify-center text-3xl font-bold text-white">
+    <div className="fixed inset-0 z-[9999999] flex items-center justify-center bg-black/60 backdrop-blur-sm motion-safe:animate-[overlayFadeIn_160ms_ease-out]">
+      <div className="w-80 rounded-2xl bg-[var(--surface)] border border-[color:var(--border)] p-8 flex flex-col items-center gap-6 shadow-2xl motion-safe:animate-[dialogPopIn_220ms_cubic-bezier(0.22,1,0.36,1)]">
+        {/* Avatar with a soft ringing halo */}
+        <div className="w-20 h-20 rounded-full bg-[color:var(--primary)] flex items-center justify-center text-3xl font-bold text-white motion-safe:animate-[ringPulse_1.8s_ease-out_infinite]">
           {callerName.charAt(0).toUpperCase()}
         </div>
 
@@ -39,14 +39,15 @@ export default function HuddleIncomingCall({ invite, onAccept, onDecline }) {
               <p className="text-[color:var(--text-muted)] text-sm mt-1">Calling from {channelLabel}</p>
             </>
           )}
-          <p className="text-[color:var(--text-soft)] text-xs mt-1">Auto-decline in {seconds}s</p>
+          <p className="text-[color:var(--text-soft)] text-xs mt-1 tabular-nums">Auto-decline in {seconds}s</p>
         </div>
 
         <div className="flex gap-8">
           {/* Decline */}
           <button
             onClick={onDecline}
-            className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition"
+            aria-label="Decline call"
+            className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 active:scale-95 flex items-center justify-center shadow-sm transition-[background-color,transform] duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
           >
             <PhoneOff className="w-7 h-7 text-white" />
           </button>
@@ -54,7 +55,8 @@ export default function HuddleIncomingCall({ invite, onAccept, onDecline }) {
           {/* Accept */}
           <button
             onClick={onAccept}
-            className="w-16 h-16 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center transition"
+            aria-label="Accept call"
+            className="w-16 h-16 rounded-full bg-green-600 hover:bg-green-700 active:scale-95 flex items-center justify-center shadow-sm transition-[background-color,transform] duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
           >
             <Phone className="w-7 h-7 text-white" />
           </button>

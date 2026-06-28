@@ -94,6 +94,29 @@ optgroup,
   50%      { opacity: 0.55; }
 }
 
+/* Live caption lines rise in subtly so new speech never pops abruptly. */
+@keyframes captionRise {
+  from { transform: translateY(4px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
+/* Shared, restrained entrance motion for overlays/dialogs. */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes dialogPopIn {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Soft ringing halo for an incoming-call avatar. */
+@keyframes ringPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 36%, transparent); }
+  50%      { box-shadow: 0 0 0 10px color-mix(in srgb, var(--primary) 0%, transparent); }
+}
+
 /* ── Quill Chat Overrides ──────────────────────────────── */
 .ql-toolbar.ql-snow {
   border: none !important;

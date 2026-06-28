@@ -1086,21 +1086,21 @@ export default function HuddleMeetingIntelligence() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={shareMeetingIntelligence} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
+              <button type="button" onClick={shareMeetingIntelligence} className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]">
                 <Share2 size={15} /> Share
               </button>
-              <button type="button" onClick={() => copyText(summaryText, "Summary")} className="inline-flex items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
+              <button type="button" onClick={() => copyText(summaryText, "Summary")} className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]">
                 <ClipboardCopy size={15} /> Copy summary
               </button>
               <details className="relative">
-                <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-soft)]">
+                <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]">
                   <FileDown size={15} /> Export
                 </summary>
-                <div className="absolute right-0 z-20 mt-2 grid min-w-48 overflow-hidden rounded border border-[color:var(--border)] bg-[var(--surface)] p-1 shadow-xl">
-                  <button type="button" onClick={() => copyText(transcriptText, "Transcript")} className="rounded px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)]">Copy transcript</button>
-                  <button type="button" onClick={() => copyText(reportMarkdown(review), "Meeting report")} className="rounded px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)]">Copy full report</button>
-                  <button type="button" onClick={downloadMarkdownExport} className="rounded px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)]">Download Markdown</button>
-                  <button type="button" onClick={downloadPdfExport} className="rounded px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)]">Download PDF</button>
+                <div className="absolute right-0 z-20 mt-2 grid min-w-48 overflow-hidden rounded-lg border border-[color:var(--border)] bg-[var(--surface)] p-1 shadow-xl">
+                  <button type="button" onClick={() => copyText(transcriptText, "Transcript")} className="rounded-md px-3 py-2 text-left text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)]">Copy transcript</button>
+                  <button type="button" onClick={() => copyText(reportMarkdown(review), "Meeting report")} className="rounded-md px-3 py-2 text-left text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)]">Copy full report</button>
+                  <button type="button" onClick={downloadMarkdownExport} className="rounded-md px-3 py-2 text-left text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)]">Download Markdown</button>
+                  <button type="button" onClick={downloadPdfExport} className="rounded-md px-3 py-2 text-left text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)]">Download PDF</button>
                 </div>
               </details>
             </div>
@@ -1133,10 +1133,10 @@ export default function HuddleMeetingIntelligence() {
               key={id}
               type="button"
               onClick={() => setActiveTab(id)}
-              className={`inline-flex shrink-0 items-center gap-2 rounded px-3 py-2 text-sm font-medium ${
+              className={`inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] ${
                 activeTab === id
-                  ? "bg-[var(--surface-soft)] text-[color:var(--primary)]"
-                  : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
+                  ? "bg-[var(--primary-soft)] text-[color:var(--primary)]"
+                  : "text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)] hover:text-[color:var(--text)]"
               } ${index > 0 && TABS[index - 1].group !== group ? "ml-2 border-l border-[color:var(--border)] pl-4" : ""}`}
             >
               <TabIcon id={id} /> {label}
@@ -1157,24 +1157,24 @@ export default function HuddleMeetingIntelligence() {
             </div>
             {summary ? (
               <>
-                <div className="mb-5 grid gap-4 border-y border-[color:var(--border)] py-4 sm:grid-cols-2">
+                <div className="mb-5 grid gap-5 border-y border-[color:var(--border)] py-5 sm:grid-cols-2">
                   <div>
-                    <div className="text-xs font-semibold uppercase text-[color:var(--text-muted)]">Purpose</div>
-                    <p className="mt-1 text-sm leading-6">{review.report?.executiveSummary?.purpose}</p>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">Purpose</div>
+                    <p className="mt-1.5 text-sm leading-6">{review.report?.executiveSummary?.purpose}</p>
                   </div>
                   {review.report?.executiveSummary?.businessContext && (
                     <div>
-                      <div className="text-xs font-semibold uppercase text-[color:var(--text-muted)]">Business context</div>
-                      <p className="mt-1 text-sm leading-6">{review.report.executiveSummary.businessContext}</p>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">Business context</div>
+                      <p className="mt-1.5 text-sm leading-6">{review.report.executiveSummary.businessContext}</p>
                     </div>
                   )}
                 </div>
                 {review.report?.executiveSummary?.narrative && (
                   <>
-                    <h3 className="mb-3 mt-7 font-semibold">Summary narrative</h3>
-                    <div className="space-y-3 border-y border-[color:var(--border)] py-4">
+                    <h3 className="mb-3 mt-8 font-semibold">Summary narrative</h3>
+                    <div className="space-y-4 border-y border-[color:var(--border)] py-5">
                       {review.report.executiveSummary.narrative.split(/\n{2,}|\n/).filter((p) => p.trim()).map((para, index) => (
-                        <p key={index} className="text-sm leading-7">{para.trim()}</p>
+                        <p key={index} className="max-w-[68ch] text-[15px] leading-7 text-[color:var(--text)]">{para.trim()}</p>
                       ))}
                       <EvidenceButton ids={review.report?.executiveSummary?.evidenceSegmentIds} onOpen={showEvidence} />
                     </div>
@@ -1182,12 +1182,12 @@ export default function HuddleMeetingIntelligence() {
                 )}
                 {(review.report?.discussionThemes || []).length > 0 && (
                   <>
-                    <h3 className="mb-3 mt-7 font-semibold">Discussion themes</h3>
+                    <h3 className="mb-3 mt-8 font-semibold">Discussion themes</h3>
                     <div className="divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
                       {review.report.discussionThemes.map((item) => (
                         <div key={item.id} className="py-4">
                           <div className="text-sm font-semibold text-[color:var(--primary)]">{item.theme}</div>
-                          <p className="mt-1 text-sm leading-6">{item.detail}</p>
+                          <p className="mt-1.5 max-w-[68ch] text-sm leading-6 text-[color:var(--text)]">{item.detail}</p>
                           <div className="mt-2"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
                         </div>
                       ))}
@@ -1196,11 +1196,11 @@ export default function HuddleMeetingIntelligence() {
                 )}
                 {(review.report?.recommendations || []).length > 0 && (
                   <>
-                    <h3 className="mb-3 mt-7 font-semibold">Recommendations</h3>
-                    <ul className="space-y-2 border-y border-[color:var(--border)] py-4 text-sm leading-6">
+                    <h3 className="mb-3 mt-8 font-semibold">Recommendations</h3>
+                    <ul className="max-w-[68ch] space-y-2.5 border-y border-[color:var(--border)] py-5 text-sm leading-6">
                       {review.report.recommendations.map((item) => (
-                        <li key={item.id} className="flex gap-2">
-                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--primary)]" />
+                        <li key={item.id} className="flex gap-2.5">
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--primary)]" />
                           <span>{item.text}</span>
                         </li>
                       ))}
