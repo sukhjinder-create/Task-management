@@ -1171,7 +1171,7 @@ export default function HuddleMeetingIntelligence() {
                 </div>
                 {review.report?.executiveSummary?.narrative && (
                   <>
-                    <h3 className="mb-3 mt-7 font-semibold">Executive summary</h3>
+                    <h3 className="mb-3 mt-7 font-semibold">Summary narrative</h3>
                     <div className="space-y-3 border-y border-[color:var(--border)] py-4">
                       {review.report.executiveSummary.narrative.split(/\n{2,}|\n/).filter((p) => p.trim()).map((para, index) => (
                         <p key={index} className="text-sm leading-7">{para.trim()}</p>
