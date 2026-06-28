@@ -321,18 +321,91 @@ function Provenance({ artifact }) {
   );
 }
 
-function EvidenceButton({ ids, onOpen }) {
+function EvidenceButton({ ids, onOpen, label }) {
   if (!Array.isArray(ids) || ids.length === 0) return null;
   return (
     <button
       type="button"
       onClick={() => onOpen(ids)}
-      className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--primary)] hover:underline"
+      className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium text-[color:var(--primary)] transition-colors hover:bg-[var(--primary-soft)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+      title="View the supporting moment in the transcript"
     >
       <FileText size={13} />
-      {ids.length} source{ids.length === 1 ? "" : "s"}
+      {label || `${ids.length} source${ids.length === 1 ? "" : "s"}`}
     </button>
   );
+}
+
+// A lightweight copy affordance for individual decisions / actions so users can
+// lift a single item without re-typing it. Keeps the existing toast pattern.
+function CopyButton({ text, label = "Copied" }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text || "");
+        toast.success(label);
+      }}
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-[color:var(--text-muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[color:var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+      title="Copy"
+    >
+      <ClipboardCopy size={12} /> Copy
+    </button>
+  );
+}
+
+// Consistent, explanatory empty state. Every section answers: what is this,
+// why is it empty, and what happens next — in a calm enterprise tone.
+function EmptyState({ icon: Icon, title, children }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[color:var(--border)] bg-[var(--surface-soft)]/50 px-6 py-12 text-center">
+      {Icon ? <Icon size={22} className="text-[color:var(--text-soft)]" /> : null}
+      <p className="text-sm font-semibold text-[color:var(--text)]">{title}</p>
+      {children ? <p className="max-w-md text-sm leading-6 text-[color:var(--text-muted)]">{children}</p> : null}
+    </div>
+  );
+}
+
+// Small chips that mark a transcript segment as the evidence behind a decision,
+// action, risk or blocker — turning the transcript into an investigation tool.
+const EVIDENCE_TYPE_META = {
+  decision: { label: "Decision", className: "border-[color:var(--score-good-border)] bg-[color:var(--score-good-bg)] text-[color:var(--score-good)]" },
+  action: { label: "Action", className: "border-[color:var(--border)] bg-[var(--primary-soft)] text-[color:var(--primary)]" },
+  risk: { label: "Risk", className: "border-[color:var(--score-danger-border)] bg-[color:var(--score-danger-bg)] text-[color:var(--score-danger)]" },
+  blocker: { label: "Blocker", className: "border-[color:var(--score-warning-border)] bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)]" },
+};
+
+function EvidenceTypeChips({ types }) {
+  if (!types || types.size === 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {["decision", "action", "risk", "blocker"].filter((t) => types.has(t)).map((t) => (
+        <span key={t} className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EVIDENCE_TYPE_META[t].className}`}>
+          {EVIDENCE_TYPE_META[t].label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Choose an icon + tone for a timeline entry so a viewer can read the meeting's
+// shape at a glance: substantive topic transitions are emphasized in brand
+// colour; process/lifecycle events (start, join, token grants) are dimmed.
+function timelineEntryMeta(entry) {
+  const kind = String(entry?.eventType || entry?.entryType || "").toLowerCase();
+  if (entry?.entryType === "topic_segment") {
+    return { Icon: ScrollText, dotClass: "bg-[var(--primary)]", iconClass: "text-[color:var(--primary-contrast)]" };
+  }
+  if (/decision|decid|approv/.test(kind)) {
+    return { Icon: Gavel, dotClass: "bg-[color:var(--score-good)]", iconClass: "text-white" };
+  }
+  if (/start|begin|join|connect/.test(kind)) {
+    return { Icon: Radio, dotClass: "bg-[var(--surface-strong)]", iconClass: "text-[color:var(--text-muted)]" };
+  }
+  if (/end|stop|left|leave|disconnect/.test(kind)) {
+    return { Icon: X, dotClass: "bg-[var(--surface-strong)]", iconClass: "text-[color:var(--text-muted)]" };
+  }
+  return { Icon: Clock3, dotClass: "bg-[var(--surface-strong)]", iconClass: "text-[color:var(--text-muted)]" };
 }
 
 function ArtifactActions({ artifact, canReview, canEdit, onEdit, onDecision, busy }) {
@@ -558,6 +631,8 @@ export default function HuddleMeetingIntelligence() {
   const [quality, setQuality] = useState(null);
   const [riskBlockerItems, setRiskBlockerItems] = useState([]);
   const [supplementLoading, setSupplementLoading] = useState({});
+  const [transcriptQuery, setTranscriptQuery] = useState("");
+  const [transcriptSpeaker, setTranscriptSpeaker] = useState("");
   const transcriptRefs = useRef(new Map());
   const loadedSupplementsRef = useRef(new Set());
 
@@ -1057,6 +1132,22 @@ export default function HuddleMeetingIntelligence() {
   const actions = review.artifacts.actions;
   const decisionList = review.report?.decisions || decisions?.contentJson?.decisions || [];
   const actionList = review.report?.actionItems || actions?.contentJson?.actionItems || [];
+  // Map each transcript segment to the intelligence items it supports, so the
+  // transcript can mark exactly where decisions/actions/risks were grounded.
+  const evidenceTypeBySegment = (() => {
+    const map = new Map();
+    const add = (ids, type) =>
+      (Array.isArray(ids) ? ids : []).forEach((id) => {
+        if (!id) return;
+        const set = map.get(id) || new Set();
+        set.add(type);
+        map.set(id, set);
+      });
+    decisionList.forEach((d) => add(d.evidenceSegmentIds, "decision"));
+    actionList.forEach((a) => add(a.evidenceSegmentIds, "action"));
+    riskBlockerItems.forEach((r) => add(r.evidenceSegmentIds, r.itemType === "blocker" ? "blocker" : "risk"));
+    return map;
+  })();
   const pendingReviewCount = Number(review.status.pendingReviewCount || 0);
   const transcriptText = review.transcript
     .map((segment) => `${speakerNameFromReview(review, segment)}: ${segment.text}`)
@@ -1269,58 +1360,143 @@ export default function HuddleMeetingIntelligence() {
                 )}
                 <Provenance artifact={summary} />
               </>
-            ) : <p className="text-sm text-[color:var(--text-muted)]">No summary artifact is available for this meeting.</p>}
+            ) : (
+              <EmptyState icon={Sparkles} title="Executive summary not ready yet">
+                The summary is generated after the Huddle ends, once the transcript is finalized and the intelligence pipeline has run. Check back shortly — it usually takes under a minute.
+              </EmptyState>
+            )}
           </section>
         )}
 
         {activeTab === "timeline" && (
           <section>
             <h2 className="text-xl font-semibold">Timeline</h2>
-            <div className="mt-5 border-l border-[color:var(--border)] pl-5">
-              {review.timeline.map((entry) => (
-                <div key={`${entry.id}:${entry.occurredAt}`} className="relative pb-6">
-                  <span className="absolute -left-[25px] top-1.5 h-2.5 w-2.5 rounded-full bg-[var(--primary)]" />
-                  <div className="text-xs text-[color:var(--text-muted)]">{timeOnly(entry.occurredAt)}</div>
-                  <div className="font-medium">{entry.title || entry.entryType}</div>
-                  {entry.description && <p className="mt-1 text-sm text-[color:var(--text-muted)]">{entry.description}</p>}
-                  {entry.transcriptSegmentId && <EvidenceButton ids={[entry.transcriptSegmentId]} onOpen={showEvidence} />}
-                </div>
-              ))}
-            </div>
+            <p className="mt-1 text-sm text-[color:var(--text-muted)]">How the meeting evolved — topic transitions are emphasized; lifecycle events are dimmed.</p>
+            {review.timeline.length === 0 ? (
+              <div className="mt-5">
+                <EmptyState icon={Clock3} title="No timeline yet">
+                  The timeline is reconstructed from topic segments and meeting lifecycle events after the Huddle ends. It will appear here once intelligence has finished processing.
+                </EmptyState>
+              </div>
+            ) : (
+              <div className="mt-5 border-l border-[color:var(--border)] pl-6">
+                {review.timeline.map((entry) => {
+                  const meta = timelineEntryMeta(entry);
+                  const Icon = meta.Icon;
+                  const isTopic = entry.entryType === "topic_segment";
+                  return (
+                    <div key={`${entry.id}:${entry.occurredAt}`} className="relative pb-6">
+                      <span className={`absolute -left-[34px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-[var(--background)] ${meta.dotClass}`}>
+                        <Icon size={11} className={meta.iconClass} />
+                      </span>
+                      <div className="text-xs text-[color:var(--text-muted)]">{timeOnly(entry.occurredAt)}</div>
+                      <div className={isTopic ? "font-semibold" : "text-sm font-medium text-[color:var(--text-muted)]"}>{entry.title || entry.entryType}</div>
+                      {entry.description && <p className={`mt-1 text-sm ${isTopic ? "text-[color:var(--text)]" : "text-[color:var(--text-muted)]"}`}>{entry.description}</p>}
+                      {entry.transcriptSegmentId && <div className="mt-1.5"><EvidenceButton ids={[entry.transcriptSegmentId]} onOpen={showEvidence} label="Jump to transcript" /></div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
-        {activeTab === "transcript" && (
+        {activeTab === "transcript" && (() => {
+          const speakers = [...new Set(review.transcript.map((s) => speakerNameFromReview(review, s)).filter(Boolean))];
+          const query = transcriptQuery.trim().toLowerCase();
+          const filtered = review.transcript.filter((segment) => {
+            if (transcriptSpeaker && speakerNameFromReview(review, segment) !== transcriptSpeaker) return false;
+            if (query && !(segment.text || "").toLowerCase().includes(query)) return false;
+            return true;
+          });
+          const totalMarked = review.transcript.filter((s) => evidenceTypeBySegment.has(s.id)).length;
+          return (
           <section>
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <div><h2 className="text-xl font-semibold">Speaker-attributed transcript</h2><p className="text-sm text-[color:var(--text-muted)]">{review.transcript.length} finalized segments</p></div>
-              {evidenceIds.length > 0 && <button type="button" onClick={() => setEvidenceIds([])} className="text-xs text-[color:var(--primary)] hover:underline">Clear evidence highlight</button>}
+              <div>
+                <h2 className="text-xl font-semibold">Speaker-attributed transcript</h2>
+                <p className="text-sm text-[color:var(--text-muted)]">
+                  {review.transcript.length} finalized segments
+                  {totalMarked > 0 ? ` · ${totalMarked} cited as evidence` : ""}
+                </p>
+              </div>
+              {evidenceIds.length > 0 && <button type="button" onClick={() => setEvidenceIds([])} className="text-xs text-[color:var(--primary)] transition-colors hover:underline">Clear highlight</button>}
             </div>
-            <div className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
-              {review.transcript.map((segment) => {
-                const highlighted = evidenceIds.includes(segment.id);
-                return (
-                  <article
-                    key={segment.id}
-                    ref={(element) => element ? transcriptRefs.current.set(segment.id, element) : transcriptRefs.current.delete(segment.id)}
-                    className={`grid gap-2 py-4 sm:grid-cols-[140px_1fr] ${highlighted ? "bg-[var(--primary)]/8 px-3" : ""}`}
-                  >
-                    <div>
-                      <div className="text-sm font-semibold">{speakerNameFromReview(review, segment)}</div>
-                      <div className="text-xs text-[color:var(--text-muted)]">{timeOnly(segment.startedAt)}</div>
-                    </div>
-                    <div>
-                      <p className="text-sm leading-6">{segment.text}</p>
-                      <div className="mt-1 text-xs text-[color:var(--text-muted)]">
-                        {[segment.language, confidenceLabel(segment.confidence)].filter(Boolean).join(" · ")}
+
+            {/* Investigation toolbar: free-text search + speaker filter. */}
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="relative">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--text-soft)]" />
+                <input
+                  type="text"
+                  value={transcriptQuery}
+                  onChange={(event) => setTranscriptQuery(event.target.value)}
+                  placeholder="Search the transcript…"
+                  aria-label="Search transcript"
+                  className="w-full rounded-lg border border-[color:var(--border)] bg-transparent py-2 pl-9 pr-9 text-sm transition-colors focus:border-[color:var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+                />
+                {transcriptQuery && (
+                  <button type="button" onClick={() => setTranscriptQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-[color:var(--text-soft)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[color:var(--text)]">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {speakers.length > 1 && (
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by speaker">
+                  <button type="button" onClick={() => setTranscriptSpeaker("")} className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] ${transcriptSpeaker === "" ? "border-[color:var(--primary)] bg-[var(--primary-soft)] text-[color:var(--primary)]" : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}>
+                    All speakers
+                  </button>
+                  {speakers.map((name) => (
+                    <button key={name} type="button" onClick={() => setTranscriptSpeaker((current) => current === name ? "" : name)} className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] ${transcriptSpeaker === name ? "border-[color:var(--primary)] bg-[var(--primary-soft)] text-[color:var(--primary)]" : "border-[color:var(--border)] text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"}`}>
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {review.transcript.length === 0 ? (
+              <div className="mt-5">
+                <EmptyState icon={ScrollText} title="No transcript captured">
+                  This Huddle has no finalized transcript yet. Once captions are recorded and the meeting ends, the speaker-attributed transcript appears here.
+                </EmptyState>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="mt-5">
+                <EmptyState icon={Search} title="No matching segments">
+                  Nothing matches your current search or speaker filter. Try a different term or clear the filters.
+                </EmptyState>
+              </div>
+            ) : (
+              <div className="mt-4 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                {filtered.map((segment) => {
+                  const highlighted = evidenceIds.includes(segment.id);
+                  const types = evidenceTypeBySegment.get(segment.id);
+                  return (
+                    <article
+                      key={segment.id}
+                      ref={(element) => element ? transcriptRefs.current.set(segment.id, element) : transcriptRefs.current.delete(segment.id)}
+                      className={`grid gap-2 px-3 py-4 transition-colors sm:grid-cols-[140px_1fr] ${highlighted ? "bg-[var(--primary-soft)] ring-1 ring-inset ring-[color:var(--primary)]/30" : types ? "border-l-2 border-l-[color:var(--primary)]/30" : ""}`}
+                    >
+                      <div>
+                        <div className="text-sm font-semibold">{speakerNameFromReview(review, segment)}</div>
+                        <div className="text-xs text-[color:var(--text-muted)]">{timeOnly(segment.startedAt)}</div>
+                        <EvidenceTypeChips types={types} />
                       </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                      <div>
+                        <p className="text-sm leading-6">{segment.text}</p>
+                        <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                          {[segment.language, confidenceLabel(segment.confidence)].filter(Boolean).join(" · ")}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
-        )}
+          );
+        })()}
 
         {activeTab === "decisions" && (
           <section>
@@ -1339,13 +1515,16 @@ export default function HuddleMeetingIntelligence() {
                       Participants: {item.participants.join(", ")}
                     </p>
                   )}
-                  <div className="mt-3"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
+                    <CopyButton text={`${item.title}\n${item.decision}${item.rationale ? `\n\nRationale: ${item.rationale}` : ""}`} label="Decision copied" />
+                  </div>
                 </article>
               ))}
               {decisionList.length === 0 && (
-                <p className="py-7 text-sm text-[color:var(--text-muted)]">
-                  No explicit decision was identified in this meeting.
-                </p>
+                <EmptyState icon={Gavel} title="No decisions recorded">
+                  Asystence only records decisions the team explicitly made or strongly signalled — it never invents them. If this meeting was exploratory, that is expected. Decisions you confirm here can be promoted to workspace memory.
+                </EmptyState>
               )}
             </div>
             <Provenance artifact={decisions} />
@@ -1380,7 +1559,10 @@ export default function HuddleMeetingIntelligence() {
                     {(item.owner?.label || item.suggestedOwner?.label) && <span>Owner: {item.owner?.label || item.suggestedOwner.label}</span>}
                     {item.dueDate && <span>Due: {item.dueDate}</span>}
                   </div>
-                  <div className="mt-3"><EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} /></div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <EvidenceButton ids={item.evidenceSegmentIds} onOpen={showEvidence} />
+                    <CopyButton text={[item.title, item.description, (item.owner?.label || item.suggestedOwner?.label) ? `Owner: ${item.owner?.label || item.suggestedOwner.label}` : null, item.dueDate ? `Due: ${item.dueDate}` : null].filter(Boolean).join("\n")} label="Action copied" />
+                  </div>
                   {linkedTask ? (
                     <div className="mt-4 inline-flex items-center gap-2 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
                       <Check size={13} />
@@ -1420,9 +1602,9 @@ export default function HuddleMeetingIntelligence() {
                 );
               })}
               {actionList.length === 0 && (
-                <p className="py-7 text-sm text-[color:var(--text-muted)]">
-                  No explicit action item was identified in this meeting.
-                </p>
+                <EmptyState icon={ListChecks} title="No action items yet">
+                  No clear commitments were captured in this Huddle. When the team agrees on next steps, they appear here — and once you approve them and confirm an owner, you can turn each into a task in one click.
+                </EmptyState>
               )}
             </div>
             <Provenance artifact={actions} />
@@ -1472,9 +1654,9 @@ export default function HuddleMeetingIntelligence() {
                   );
                 })}
                 {riskBlockerItems.length === 0 && (
-                  <p className="py-7 text-sm text-[color:var(--text-muted)]">
-                    No risks or blockers were identified in this meeting.
-                  </p>
+                  <EmptyState icon={AlertTriangle} title="No risks or blockers raised">
+                    A clean risk register is a good sign. Asystence flags risks and blockers only when participants actually raise a concern, dependency, or obstacle — each one linked to the moment it was said.
+                  </EmptyState>
                 )}
               </div>
             )}
@@ -1522,8 +1704,15 @@ export default function HuddleMeetingIntelligence() {
 
         {activeTab === "memory" && (
           <section>
-            <h2 className="text-xl font-semibold">Meeting memory</h2>
-            <p className="mt-1 text-sm text-[color:var(--text-muted)]">Approved meeting artifacts become searchable workspace knowledge only after an explicit reviewer action. Every promotion remains auditable and reversible.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Meeting memory</h2>
+                <p className="mt-1 max-w-2xl text-sm text-[color:var(--text-muted)]">Approved meeting artifacts become searchable workspace knowledge only after an explicit reviewer action. Every promotion remains auditable and reversible.</p>
+              </div>
+              <button type="button" onClick={() => setActiveTab("copilot")} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]">
+                <Bot size={15} /> Explore in Copilot
+              </button>
+            </div>
             <div className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
               {(review.memoryCandidates || []).map((candidate) => (
                 <article key={candidate.id} className="py-5">
@@ -1571,7 +1760,11 @@ export default function HuddleMeetingIntelligence() {
                   )}
                 </article>
               ))}
-              {(review.memoryCandidates || []).length === 0 && <p className="py-6 text-sm text-[color:var(--text-muted)]">Approve a summary, decision set, or action list to create a memory candidate.</p>}
+              {(review.memoryCandidates || []).length === 0 && (
+                <EmptyState icon={Database} title="No workspace memory yet">
+                  Durable knowledge — customer decisions, architecture choices, recurring risks and owners — lives here once a reviewer approves it. Approve a summary, decision set, or action list to create your first memory candidate; nothing is promoted automatically.
+                </EmptyState>
+              )}
             </div>
           </section>
         )}
@@ -1589,7 +1782,7 @@ export default function HuddleMeetingIntelligence() {
                 <Check size={13} /> Evidence required
               </span>
             </div>
-            <div className="mt-5 inline-flex rounded border border-[color:var(--border)] bg-[var(--surface-soft)] p-1">
+            <div className="mt-5 inline-flex rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] p-1">
               {[
                 ["meeting", "This meeting"],
                 ["workspace", "Across meetings"],
@@ -1598,10 +1791,10 @@ export default function HuddleMeetingIntelligence() {
                   key={value}
                   type="button"
                   onClick={() => setCopilotScope(value)}
-                  className={`rounded px-3 py-1.5 text-sm font-medium ${
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] ${
                     copilotScope === value
                       ? "bg-[var(--surface)] text-[color:var(--text)] shadow-sm"
-                      : "text-[color:var(--text-muted)]"
+                      : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
                   }`}
                 >
                   {label}
@@ -1614,7 +1807,7 @@ export default function HuddleMeetingIntelligence() {
                   key={prompt}
                   type="button"
                   onClick={() => setCopilotQuestion(prompt)}
-                  className="rounded-full border border-[color:var(--border)] px-3 py-1.5 text-xs text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)] hover:text-[color:var(--text)]"
+                  className="rounded-full border border-[color:var(--border)] px-3 py-1.5 text-xs text-[color:var(--text-muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[color:var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
                 >
                   {prompt}
                 </button>
@@ -1631,13 +1824,13 @@ export default function HuddleMeetingIntelligence() {
                       ? "Ask about decisions, commitments, topics, or changes across meetings"
                       : "Ask what was decided, who owns an action, or what remains unresolved"
                   }
-                  className="w-full rounded border border-[color:var(--border)] bg-transparent py-2.5 pl-10 pr-3 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--border)] bg-transparent py-2.5 pl-10 pr-3 text-sm transition-colors focus:border-[color:var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
                 />
               </div>
               <button
                 type="submit"
                 disabled={!copilotQuestion.trim() || busyId === "copilot"}
-                className="inline-flex items-center gap-2 rounded bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[color:var(--primary-contrast)] disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[color:var(--primary-contrast)] transition-[background-color,transform] hover:bg-[color:var(--primary-hover)] active:scale-95 disabled:opacity-50 disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] focus-visible:ring-offset-2"
               >
                 {busyId === "copilot" ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />}
                 Ask
@@ -1679,11 +1872,15 @@ export default function HuddleMeetingIntelligence() {
                 </article>
               ))}
               {copilotQueries.length === 0 && (
-                <p className="py-7 text-sm text-[color:var(--text-muted)]">
-                  {supplementLoading.copilot
-                    ? "Loading Copilot history..."
-                    : "No questions have been asked about this meeting yet."}
-                </p>
+                supplementLoading.copilot ? (
+                  <div className="flex items-center gap-2 py-8 text-sm text-[color:var(--text-muted)]">
+                    <Loader2 size={15} className="animate-spin" /> Loading Copilot history…
+                  </div>
+                ) : (
+                  <EmptyState icon={Bot} title="Ask anything about this meeting">
+                    Copilot answers from the transcript and intelligence — every reply cites the exact moment it came from. Try a suggested question above, or ask who owns an action, what was decided, or what is still unresolved.
+                  </EmptyState>
+                )
               )}
             </div>
           </section>
