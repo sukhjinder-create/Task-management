@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../api";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useSuperadminAuth } from "../context/SuperadminAuthContext";
 import ThemeSwitcher from "../components/ThemeSwitcher";
@@ -75,12 +75,13 @@ export default function SuperadminLogin() {
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1.5 tracking-tight">
+            <label htmlFor="superadmin-email" className="block text-xs font-medium text-[color:var(--text-muted)] mb-1.5 tracking-tight">
               Email
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--text-soft)] pointer-events-none" />
               <input
+                id="superadmin-email"
                 type="email"
                 className="w-full h-10 bg-[var(--surface)] border border-[color:var(--border)] rounded-[8px] pl-10 pr-3 text-sm text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]"
                 value={email}
@@ -92,12 +93,21 @@ export default function SuperadminLogin() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1.5 tracking-tight">
-              Password
-            </label>
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+              <label htmlFor="superadmin-password" className="text-xs font-medium text-[color:var(--text-muted)] tracking-tight">
+                Password
+              </label>
+              <Link
+                to="/superadmin/forgot-password"
+                className="text-xs font-medium text-[color:var(--primary)] hover:text-[color:var(--primary-hover)] transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--text-soft)] pointer-events-none" />
               <input
+                id="superadmin-password"
                 type={showPassword ? "text" : "password"}
                 className="w-full h-10 bg-[var(--surface)] border border-[color:var(--border)] rounded-[8px] pl-10 pr-10 text-sm text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]"
                 value={password}
@@ -110,6 +120,7 @@ export default function SuperadminLogin() {
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-soft)] hover:text-[color:var(--text)] transition-colors"
                 tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

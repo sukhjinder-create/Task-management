@@ -1,10 +1,15 @@
 // src/pages/SuperadminSettings.jsx
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Bell, Database, Lock, ChevronRight,
-  Save, RefreshCw, Server, Globe,
+  Save, RefreshCw, Server, Globe, KeyRound,
 } from "lucide-react";
+import superadminApi from "../superadminApi";
+import { useSuperadminAuth } from "../context/SuperadminAuthContext";
+
+const STRONG_PASSWORD = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
 
 // ── Small toggle component ────────────────────────────────────────────────────
 function Toggle({ value, onChange }) {
@@ -63,12 +68,18 @@ const PLANS = [
 ];
 
 export default function SuperadminSettings() {
+  const navigate = useNavigate();
+  const { logout } = useSuperadminAuth();
   // UI-only toggles (no real backend yet — shows the intended UX)
   const [emailNotifs,   setEmailNotifs]   = useState(true);
   const [auditLog,      setAuditLog]      = useState(true);
   const [signupEnabled, setSignupEnabled] = useState(true);
   const [maintenanceMode, setMaintenance] = useState(false);
   const [saving, setSaving]               = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   async function handleSave() {
     setSaving(true);
@@ -86,6 +97,36 @@ export default function SuperadminSettings() {
 
   async function handleResetPasswords() {
     toast("Use the Workspaces page to reset individual user passwords.", { icon: "ℹ️" });
+  }
+
+  async function handleChangePassword(event) {
+    event.preventDefault();
+    if (!currentPassword) {
+      toast.error("Enter your current password");
+      return;
+    }
+    if (!STRONG_PASSWORD.test(newPassword)) {
+      toast.error("Use 12+ characters with upper, lower, number, and symbol");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await superadminApi.put("/superadmin/change-password", {
+        currentPassword,
+        newPassword,
+      });
+      toast.success("Password changed. Please sign in again.");
+      logout();
+      navigate("/superadmin/login", { replace: true });
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Password change failed");
+    } finally {
+      setChangingPassword(false);
+    }
   }
 
   return (
@@ -158,6 +199,64 @@ export default function SuperadminSettings() {
             ••••••••••••••••
           </span>
         </Row>
+        <form className="px-5 py-4" onSubmit={handleChangePassword}>
+          <div className="mb-4 flex items-start gap-3">
+            <div className="mt-0.5 rounded-lg bg-[var(--primary-soft)] p-2">
+              <KeyRound className="h-4 w-4 text-[color:var(--primary)]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[color:var(--text)]">Change Super Admin password</p>
+              <p className="mt-0.5 text-xs text-[color:var(--text-muted)]">Requires your current password and signs out every Super Admin session.</p>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <label htmlFor="current-superadmin-password" className="mb-1.5 block text-xs font-medium text-[color:var(--text-muted)]">Current password</label>
+              <input
+                id="current-superadmin-password"
+                type="password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                autoComplete="current-password"
+                className="h-10 w-full rounded-lg border border-[color:var(--border)] bg-[var(--surface)] px-3 text-sm text-[color:var(--text)] focus:border-[color:var(--primary)] focus:outline-none focus:shadow-[0_0_0_3px_var(--ring)]"
+              />
+            </div>
+            <div>
+              <label htmlFor="new-superadmin-password" className="mb-1.5 block text-xs font-medium text-[color:var(--text-muted)]">New password</label>
+              <input
+                id="new-superadmin-password"
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                autoComplete="new-password"
+                placeholder="12+ strong characters"
+                className="h-10 w-full rounded-lg border border-[color:var(--border)] bg-[var(--surface)] px-3 text-sm text-[color:var(--text)] placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] focus:outline-none focus:shadow-[0_0_0_3px_var(--ring)]"
+              />
+            </div>
+            <div>
+              <label htmlFor="confirm-superadmin-password" className="mb-1.5 block text-xs font-medium text-[color:var(--text-muted)]">Confirm new password</label>
+              <input
+                id="confirm-superadmin-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                autoComplete="new-password"
+                className="h-10 w-full rounded-lg border border-[color:var(--border)] bg-[var(--surface)] px-3 text-sm text-[color:var(--text)] focus:border-[color:var(--primary)] focus:outline-none focus:shadow-[0_0_0_3px_var(--ring)]"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[11px] text-[color:var(--text-soft)]">Uppercase, lowercase, number, and symbol required.</p>
+            <button
+              type="submit"
+              disabled={changingPassword}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[color:var(--primary)] px-3.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {changingPassword ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+              Change password
+            </button>
+          </div>
+        </form>
         <Row label="Reset User Passwords" sub="Reset passwords for workspace users">
           <button
             onClick={handleResetPasswords}

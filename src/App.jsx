@@ -42,6 +42,8 @@ import AppLayout from "./layouts/AppLayout";
 import SuperAdminLayout from "./layouts/SuperAdminLayout.jsx";
 const SuperAdminWorkspaces = lazy(() => import("./pages/SuperAdminWorkspaces.jsx"));
 const SuperadminLogin = lazy(() => import("./pages/SuperadminLogin.jsx"));
+const SuperadminForgotPassword = lazy(() => import("./pages/SuperadminForgotPassword.jsx"));
+const SuperadminResetPassword = lazy(() => import("./pages/SuperadminResetPassword.jsx"));
 const SuperadminPayments = lazy(() => import("./pages/SuperadminPayments.jsx"));
 const SuperadminSettings = lazy(() => import("./pages/SuperadminSettings.jsx"));
 const SuperadminPlans = lazy(() => import("./pages/SuperadminPlans.jsx"));
@@ -104,6 +106,8 @@ export default function App() {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/auth/magic" element={<AuthCallback />} />
         <Route path="/superadmin/login" element={<SuperadminLogin />} />
+        <Route path="/superadmin/forgot-password" element={<SuperadminForgotPassword />} />
+        <Route path="/superadmin/reset-password" element={<SuperadminResetPassword />} />
         <Route path="/sla" element={<SLA />} />
         <Route path="/gradient-demo" element={<GradientDemo />} />
 
