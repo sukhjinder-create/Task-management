@@ -487,19 +487,35 @@ if (isAdmin) {
     socket.once("connect", subscribe);
   }
 
-  const onPulse = (data) => {
-    const healthValue = Number(data?.health);
-    if (Number.isNaN(healthValue)) return;
-    setHealthScore(Math.max(0, Math.min(100, healthValue)));
+  let active = true;
+  let refreshInFlight = false;
+  const onPulse = async () => {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
+    try {
+      const [healthRes, overviewRes] = await Promise.all([
+        api.get("/intelligence/workspace/health"),
+        api.get("/dashboard/overview", { params: { range: dashboardRange } }),
+      ]);
+      if (!active) return;
+      setWorkspaceHealth(healthRes.data || null);
+      setDashboardOverview(overviewRes.data || null);
+      setHealthScore(healthRes.data?.healthScore ?? overviewRes.data?.healthScore ?? null);
+    } catch (err) {
+      console.warn("Workspace health pulse refresh failed");
+    } finally {
+      refreshInFlight = false;
+    }
   };
 
   socket.on("workspace:health-pulse", onPulse);
 
   return () => {
+    active = false;
     socket.off("workspace:health-pulse", onPulse);
     socket.off("connect", subscribe);
   };
-}, [isAdmin]);
+}, [api, dashboardRange, isAdmin]);
 
   /* ======================================
    LIVE INTELLIGENCE UPDATES
@@ -1783,6 +1799,11 @@ const autonomousInsight = useMemo(() => {
                       </span>
                     )}
                   </div>
+                  {driver.finalContributionLabel && (
+                    <div className="mb-2 rounded-md bg-[color:var(--surface-soft)] px-2 py-1 text-[10px] theme-text-muted">
+                      {driver.label} -&gt; {driver.domain || driver.parentDomain} -&gt; {driver.finalContributionLabel}
+                    </div>
+                  )}
                   <div className="w-full bg-[var(--surface-soft)] rounded-full h-1">
                     <div className={`${barColor} h-1 rounded-full transition-all duration-700`} style={{ width: `${Math.min(value, 100)}%` }} />
                   </div>
@@ -2203,7 +2224,7 @@ const autonomousInsight = useMemo(() => {
     {outlookText && (
       <div className="border-t pt-4">
         <div className="text-xs font-semibold theme-text-muted mb-2">
-          AI PERFORMANCE INTERPRETATION
+          EXECUTIVE OUTLOOK INTERPRETATION
         </div>
 
         <p className="text-sm theme-text leading-relaxed">
@@ -2230,7 +2251,7 @@ const autonomousInsight = useMemo(() => {
       onClick={() => setForecastReasoningOpen(true)}
       className="text-xs font-semibold text-[color:var(--primary)] hover:opacity-80"
     >
-      View AI forecast reasoning
+      View forecast evidence
     </button>
   </div>
 )}
@@ -2324,7 +2345,7 @@ const autonomousInsight = useMemo(() => {
   </div>
 
   <p className="text-[11px] theme-text-muted mt-2">
-    Live organizational health reacting to task execution in real time.
+    Live organizational health refreshed through canonical enterprise intelligence.
   </p>
 </section>
 )}

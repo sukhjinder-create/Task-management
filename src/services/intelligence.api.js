@@ -3,7 +3,7 @@ import { useApi } from "../api";
  * ===============================
  * USER INTELLIGENCE (READ-ONLY)
  * ===============================
- * - Monthly score
+ * - Enterprise score
  * - Explanation
  * - Coaching nudges
  */
@@ -34,7 +34,7 @@ export const getAdminInsights = (month, range = "30d") => {
  * ===============================
  * EXECUTIVE SUMMARY (ADMINS ONLY)
  * ===============================
- * - Aggregated monthly summary
+ * - Selected-period executive summary
  * - No user-level data
  */
 export const getExecutiveSummary = (month, range = "30d") => {

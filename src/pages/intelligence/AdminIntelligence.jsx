@@ -31,7 +31,7 @@ export default function AdminIntelligence() {
     setRunning(true);
     try {
       await api.post("/intelligence/admin/run-monthly-scoring", { month });
-      toast.success(`Scores recalculated for ${month}`);
+      toast.success(`Enterprise intelligence refreshed for ${month}`);
       loadData();
     } catch (err) {
       toast.error(err.response?.data?.error || "Recalculation failed");
@@ -52,7 +52,7 @@ export default function AdminIntelligence() {
             Organization Intelligence
           </h1>
           <p className="text-[13px] text-[color:var(--text-muted)] mt-1">
-            {month} · Workspace scoring overview
+            {month} · Workspace intelligence overview
           </p>
         </div>
         <button
@@ -61,7 +61,7 @@ export default function AdminIntelligence() {
           className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-[color:var(--primary-contrast)] rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors"
         >
           <RefreshCw className={`w-4 h-4 ${running ? "animate-spin" : ""}`} />
-          {running ? "Recalculating…" : "Recalculate Scores"}
+          {running ? "Refreshing…" : "Refresh Intelligence"}
         </button>
       </header>
 
@@ -84,7 +84,7 @@ export default function AdminIntelligence() {
           <BarChart2 className="w-10 h-10 mx-auto mb-3 text-[color:var(--text-soft)]" />
           <p className="text-[color:var(--text)] font-medium">No intelligence data yet</p>
           <p className="text-sm text-[color:var(--text-muted)] mt-1">
-            Click "Recalculate Scores" to run the monthly evaluation.
+            Click "Refresh Intelligence" to run a canonical enterprise intelligence refresh.
           </p>
         </div>
       )}
@@ -116,7 +116,7 @@ export default function AdminIntelligence() {
                     label: "High Performers",
                     value: data.orgScore.highPerformers,
                     icon: <CheckCircle className="w-4 h-4" />,
-                    colorClass: "text-[color:var(--score-good)]",
+                    colorClass: "text-[color:var(--primary)]",
                   },
                   {
                     label: "At Risk",
@@ -124,7 +124,7 @@ export default function AdminIntelligence() {
                     icon: <AlertTriangle className="w-4 h-4" />,
                     colorClass: data.orgScore.atRiskUsers > 0
                       ? "text-[color:var(--score-danger)]"
-                      : "text-[color:var(--score-good)]",
+                      : "text-[color:var(--text-muted)]",
                   },
                 ].map((tile) => (
                   <div key={tile.label} className="border border-[color:var(--border)] rounded-lg p-4">
@@ -152,7 +152,7 @@ export default function AdminIntelligence() {
                   {
                     label: "Low Risk",
                     value: data.riskDistribution.low_risk ?? data.riskDistribution.lowRisk,
-                    colorClass: "text-[color:var(--score-good)]",
+                    colorClass: "text-[color:var(--primary)]",
                   },
                   {
                     label: "Medium Risk",

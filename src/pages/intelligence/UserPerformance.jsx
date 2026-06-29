@@ -38,29 +38,36 @@ export default function UserPerformance() {
   }
 
   const score = data.score || 0;
-  const previousScore = data.previousScore || 0;
-  const delta = score - previousScore;
+  const previousScore = Number.isFinite(Number(data.previousScore)) ? Number(data.previousScore) : null;
+  const delta = previousScore == null ? null : score - previousScore;
 
   const breakdown = data.breakdown || {};
+  const scoreExplanation = data.scoreExplanation || {};
+  const scoreTooltip = data.scoreTooltip || scoreExplanation.scoreTooltip || {};
+  const scoreTrace = data.scoreTrace || scoreExplanation.scoreTrace || scoreTooltip.scoreTrace || {};
+  const coverage = scoreTooltip.coveragePeriod || {};
+  const weightedContribution = Array.isArray(scoreTooltip.weightedContribution)
+    ? scoreTooltip.weightedContribution
+    : [];
 
   const circumference = 2 * Math.PI * 70;
   const offset = circumference - (score / 100) * circumference;
 
   const scoreColorClass =
     score >= 75
-      ? "text-[color:var(--score-good)]"
+      ? "text-[color:var(--primary)]"
       : score >= 50
       ? "text-[color:var(--score-warning)]"
       : "text-[color:var(--score-danger)]";
 
   const scoreStroke =
-    score >= 75 ? "var(--score-good)" : score >= 50 ? "var(--score-warning)" : "var(--score-danger)";
+    score >= 75 ? "var(--primary)" : score >= 50 ? "var(--score-warning)" : "var(--score-danger)";
 
   const deltaColorClass =
-    delta > 0 ? "text-[color:var(--score-good)]" : "text-[color:var(--score-danger)]";
+    delta > 0 ? "text-[color:var(--primary)]" : "text-[color:var(--score-danger)]";
 
   function barColorClass(value) {
-    if (value >= 75) return "bg-[var(--score-good)]";
+    if (value >= 75) return "bg-[var(--primary)]";
     if (value >= 50) return "bg-[var(--score-warning)]";
     return "bg-[var(--score-danger)]";
   }
@@ -78,7 +85,7 @@ export default function UserPerformance() {
             My Performance
           </h1>
           <p className="text-[13px] text-[color:var(--text-muted)] mt-1">
-            Monthly score breakdown — {month}
+            Enterprise intelligence breakdown — {month}
           </p>
         </div>
       </header>
@@ -87,11 +94,16 @@ export default function UserPerformance() {
       <div className="border border-[color:var(--border)] rounded-lg p-5 flex items-center justify-between gap-6 flex-wrap">
         <div>
           <p className="text-sm text-[color:var(--text-muted)] mb-1">
-            Monthly Performance
+            Enterprise Performance
           </p>
-          {delta !== 0 && (
+          {delta !== null && delta !== 0 && (
             <span className={`text-sm font-medium ${deltaColorClass}`}>
-              {delta > 0 ? "↑" : "↓"} {Math.abs(delta)} from last month
+              {delta > 0 ? "↑" : "↓"} {Math.abs(delta)} from previous intelligence point
+            </span>
+          )}
+          {delta === null && (
+            <span className="text-sm font-medium text-[color:var(--text-muted)]">
+              Previous intelligence point unavailable
             </span>
           )}
         </div>
@@ -127,6 +139,54 @@ export default function UserPerformance() {
         </div>
       </div>
 
+      {(scoreTooltip.authority || scoreTrace.finalScore != null) && (
+        <div className="border border-[color:var(--border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold text-[color:var(--text)] mb-3">
+            Score Explainability
+          </h3>
+          <div className="grid md:grid-cols-3 gap-3 text-xs">
+            <div className="rounded-lg border border-[color:var(--border)] p-3">
+              <p className="text-[color:var(--text-muted)]">Authority</p>
+              <p className="font-semibold text-[color:var(--text)] mt-1">
+                {scoreTooltip.authority || scoreTrace.scoreAuthority}
+              </p>
+            </div>
+            <div className="rounded-lg border border-[color:var(--border)] p-3">
+              <p className="text-[color:var(--text-muted)]">Confidence</p>
+              <p className="font-semibold text-[color:var(--text)] mt-1">
+                {scoreTooltip.confidence ?? scoreTrace.confidence ?? "—"}%
+              </p>
+            </div>
+            <div className="rounded-lg border border-[color:var(--border)] p-3">
+              <p className="text-[color:var(--text-muted)]">Coverage</p>
+              <p className="font-semibold text-[color:var(--text)] mt-1">
+                {coverage.coverageStart || data.coverageStart || "—"} to {coverage.coverageEnd || data.coverageEnd || "—"}
+              </p>
+            </div>
+          </div>
+          {scoreTooltip.formula && (
+            <p className="text-sm text-[color:var(--text-muted)] leading-relaxed mt-4">
+              {scoreTooltip.formula}
+            </p>
+          )}
+          {weightedContribution.length > 0 && (
+            <div className="grid md:grid-cols-2 gap-3 mt-4">
+              {weightedContribution.slice(0, 6).map((item) => (
+                <div key={item.key} className="rounded-lg border border-[color:var(--border)] p-3">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-[color:var(--text)]">{item.label}</span>
+                    <span className="text-[color:var(--primary)] font-semibold">{item.score ?? "—"}</span>
+                  </div>
+                  <p className="text-xs text-[color:var(--text-muted)] mt-1">
+                    Contribution: {item.weightedContributionPoints ?? item.finalScoreImpactVsNeutral ?? "backend-owned"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Breakdown section */}
       <div className="border border-[color:var(--border)] rounded-lg p-5">
         <h3 className="text-sm font-semibold text-[color:var(--text)] mb-5">
@@ -142,7 +202,7 @@ export default function UserPerformance() {
                 </span>
                 <span className={`font-medium ${
                   value >= 75
-                    ? "text-[color:var(--score-good)]"
+                    ? "text-[color:var(--primary)]"
                     : value >= 50
                     ? "text-[color:var(--score-warning)]"
                     : "text-[color:var(--score-danger)]"
@@ -199,7 +259,7 @@ export default function UserPerformance() {
                     </span>
                     <span className={`font-semibold ${
                       ps >= 75
-                        ? "text-[color:var(--score-good)]"
+                        ? "text-[color:var(--primary)]"
                         : ps >= 50
                         ? "text-[color:var(--score-warning)]"
                         : "text-[color:var(--score-danger)]"
