@@ -1,22 +1,12 @@
 // src/pages/SuperAdminWorkspaces.jsx
 import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
-import { API_BASE_URL } from "../api";
+import superadminApi from "../superadminApi";
 import toast from "react-hot-toast";
 import {
   Building2, Users, ShieldCheck, ShieldOff, Plus,
   MoreVertical, Pencil, Trash2, CheckCircle, XCircle,
   Crown, Calendar, X, KeyRound, UserCog, CreditCard
 } from "lucide-react";
-
-function getSuperadminAxios() {
-  const token = window.__SUPERADMIN_TOKEN__ ||
-    (() => { try { return JSON.parse(localStorage.getItem("superadmin_auth"))?.token; } catch { return null; } })();
-  return axios.create({
-    baseURL: API_BASE_URL,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-}
 
 const PLAN_COLOR = {
   basic:      "border border-[color:var(--border)] text-[color:var(--text-muted)]",
@@ -50,7 +40,7 @@ export default function SuperAdminWorkspaces() {
   const [assignPlanWs, setAssignPlanWs] = useState(null);
   const [menuId, setMenuId]             = useState(null);
 
-  const axiosSuper = getSuperadminAxios();
+  const axiosSuper = superadminApi;
 
   const load = useCallback(async () => {
     setLoading(true);

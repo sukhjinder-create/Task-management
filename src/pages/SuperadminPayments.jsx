@@ -1,21 +1,11 @@
 // src/pages/SuperadminPayments.jsx
 import { useEffect, useState } from "react";
-import axios from "axios";
 import toast from "react-hot-toast";
-import { API_BASE_URL } from "../api";
+import superadminApi from "../superadminApi";
 import {
   CreditCard, TrendingUp, DollarSign, Building2,
   CheckCircle, Clock, XCircle, RefreshCw,
 } from "lucide-react";
-
-function getSuperadminAxios() {
-  const token = window.__SUPERADMIN_TOKEN__ ||
-    (() => { try { return JSON.parse(localStorage.getItem("superadmin_auth"))?.token; } catch { return null; } })();
-  return axios.create({
-    baseURL: API_BASE_URL,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-}
 
 const PLAN_PRICING = {
   basic:      { price: "$0",   label: "Basic",      color: "border border-[color:var(--border)] text-[color:var(--text-muted)]" },
@@ -41,8 +31,7 @@ export default function SuperadminPayments() {
   async function load() {
     setLoading(true);
     try {
-      const api = getSuperadminAxios();
-      const res = await api.get("/superadmin/workspaces");
+      const res = await superadminApi.get("/superadmin/workspaces");
       setWorkspaces(res.data || []);
     } catch (err) {
       toast.error(err?.response?.data?.error || "Failed to load billing data");
@@ -51,7 +40,7 @@ export default function SuperadminPayments() {
     }
   }
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []);
 
   // Derive stats from workspace data
   const proCount        = workspaces.filter(w => w.plan === "pro" || w.billing_plan === "pro").length;

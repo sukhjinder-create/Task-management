@@ -1,15 +1,23 @@
 // src/context/AuthContext.jsx
+/* eslint-disable react-refresh/only-export-components, react-hooks/set-state-in-effect -- mount hydration synchronizes browser auth storage */
 import { createContext, useContext, useEffect, useState } from "react";
 import { initPush, teardownPush } from "../utils/pushNotifications";
 
 const AuthContext = createContext(null);
 
+function isSuperadminPath() {
+  return (
+    window.location.pathname === "/superadmin" ||
+    window.location.pathname.startsWith("/superadmin/")
+  );
+}
+
 export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState({
+  const [auth, setAuth] = useState(() => ({
     user: null,
     token: null,
-    isReady: false,
-  });
+    isReady: isSuperadminPath(),
+  }));
 
   /* ---------------------------------------------
      1. Restore from localStorage on page load
@@ -17,11 +25,29 @@ export function AuthProvider({ children }) {
   --------------------------------------------- */
   useEffect(() => {
     try {
+      const isSuperadminSurface = isSuperadminPath();
+
+      // The platform console owns a dedicated auth/session boundary. A stored
+      // workspace-user session must never redirect, hydrate, or open user
+      // realtime/push services while this surface is loading.
+      if (isSuperadminSurface) {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("_t") || params.has("_r") || params.has("_u")) {
+          params.delete("_t");
+          params.delete("_r");
+          params.delete("_u");
+          const search = params.toString();
+          window.history.replaceState({}, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+        }
+        window.__AUTH_TOKEN__ = null;
+        window.__WORKSPACE_ID__ = null;
+        return;
+      }
+
       // Check for token passed via URL (cross-subdomain redirect)
       const params = new URLSearchParams(window.location.search);
       const urlToken = params.get("_t");
       const urlRefreshToken = params.get("_r");
-      const urlUser = params.get("_u");
 
       if (urlToken) {
         window.__AUTH_TOKEN__ = urlToken;
@@ -138,7 +164,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     // Send refresh token to backend to revoke the session
     let stored = null;
-    try { stored = JSON.parse(localStorage.getItem("auth")); } catch {}
+    try { stored = JSON.parse(localStorage.getItem("auth")); } catch { /* storage can be unavailable */ }
 
     if (stored?.token) {
       teardownPush(stored.token).catch(() => {});
@@ -176,7 +202,7 @@ export function AuthProvider({ children }) {
       try {
         const current = JSON.parse(localStorage.getItem("auth"));
         refreshToken = current?.refreshToken || null;
-      } catch {}
+      } catch { /* storage can be unavailable */ }
       localStorage.setItem(
         "auth",
         JSON.stringify({ user: updated.user, token: updated.token, refreshToken })

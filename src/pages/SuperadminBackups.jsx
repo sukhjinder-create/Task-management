@@ -1,38 +1,20 @@
 // src/pages/SuperadminBackups.jsx
 import { useState, useEffect, useCallback } from "react";
 import { Database, RefreshCw, Play, CheckCircle, XCircle, Clock, HardDrive, Cloud } from "lucide-react";
-
-function getSuperadminToken() {
-  try {
-    const raw = localStorage.getItem("superadmin_auth");
-    return raw ? JSON.parse(raw)?.token : null;
-  } catch { return null; }
-}
+import superadminApi from "../superadminApi";
 
 async function apiFetch(path, opts = {}) {
-  const token = window.__SUPERADMIN_TOKEN__ || getSuperadminToken();
-  const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}${path}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(opts.headers || {}),
-    },
+  let data = opts.body;
+  if (typeof data === "string") {
+    try { data = JSON.parse(data); } catch { /* preserve non-JSON bodies */ }
+  }
+  const response = await superadminApi.request({
+    url: path,
+    method: opts.method || "GET",
+    data,
+    headers: opts.headers,
   });
-  let payload = null;
-  try {
-    payload = await res.json();
-  } catch {
-    payload = null;
-  }
-  if (!res.ok) {
-    const msg = payload?.error || payload?.message || `${res.status} ${res.statusText}`;
-    const err = new Error(msg);
-    err.status = res.status;
-    err.payload = payload;
-    throw err;
-  }
-  return payload;
+  return response.data;
 }
 
 function fmtBytes(bytes) {

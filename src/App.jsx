@@ -46,8 +46,10 @@ const SuperadminPayments = lazy(() => import("./pages/SuperadminPayments.jsx"));
 const SuperadminSettings = lazy(() => import("./pages/SuperadminSettings.jsx"));
 const SuperadminPlans = lazy(() => import("./pages/SuperadminPlans.jsx"));
 const SuperadminBackups = lazy(() => import("./pages/SuperadminBackups.jsx"));
+const SuperadminGrowthIntelligence = lazy(() => import("./pages/SuperadminGrowthIntelligence.jsx"));
 import ProtectedSuperadmin from "./components/ProtectedSuperadmin";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext";
+import GrowthTelemetry from "./components/GrowthTelemetry";
 
 // ---- Extra legacy / preserved ----
 const CreateWorkspace = lazy(() => import("./pages/CreateWorkspace"));
@@ -90,6 +92,7 @@ function RouteLoading() {
 export default function App() {
   return (
     <Suspense fallback={<RouteLoading />}>
+      <GrowthTelemetry />
       <Routes>
         {/* ============================
             PUBLIC
@@ -309,10 +312,12 @@ export default function App() {
         >
           <Route index element={<Navigate to="workspaces" replace />} />
           <Route path="workspaces" element={<SuperAdminWorkspaces />} />
+          <Route path="growth"     element={<SuperadminGrowthIntelligence />} />
           <Route path="plans"      element={<SuperadminPlans />} />
           <Route path="payments"   element={<SuperadminPayments />} />
           <Route path="settings"   element={<SuperadminSettings />} />
           <Route path="backups"    element={<SuperadminBackups />} />
+          <Route path="*"          element={<Navigate to="/superadmin/workspaces" replace />} />
         </Route>
 
         {/* ============================

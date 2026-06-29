@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../api";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useSuperadminAuth } from "../context/SuperadminAuthContext";
 import ThemeSwitcher from "../components/ThemeSwitcher";
@@ -13,6 +13,7 @@ export default function SuperadminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { login } = useSuperadminAuth();
 
@@ -31,17 +32,18 @@ export default function SuperadminLogin() {
         password,
       });
 
-      const { token, superadmin } = res.data || {};
-      if (!token || !superadmin) {
+      const { token, refreshToken, superadmin } = res.data || {};
+      if (!token || !refreshToken || !superadmin) {
         toast.error("Login failed");
         return;
       }
 
       // SINGLE SOURCE OF TRUTH
-      login(superadmin, token);
+      login(superadmin, token, refreshToken);
 
       toast.success("Welcome, superadmin");
-      navigate("/superadmin/workspaces", { replace: true });
+      const destination = String(location.state?.from || "/superadmin/workspaces");
+      navigate(destination.startsWith("/superadmin") ? destination : "/superadmin/workspaces", { replace: true });
     } catch (err) {
       console.error("Superadmin login error:", err);
       const msg = err.response?.data?.error || "Login failed";

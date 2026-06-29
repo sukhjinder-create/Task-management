@@ -1,22 +1,13 @@
 // src/layouts/SuperAdminLayout.jsx
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
 import ThemeSwitcher from "../components/ThemeSwitcher";
-import { Building2, CreditCard, Settings, LogOut, LayoutList, Database } from "lucide-react";
+import { Building2, CreditCard, Settings, LogOut, LayoutList, Database, TrendingUp } from "lucide-react";
 import AppBrand from "../components/AppBrand";
-
-function getSuperadminToken() {
-  try {
-    const raw = localStorage.getItem("superadmin_auth");
-    if (!raw) return null;
-    return JSON.parse(raw)?.token || null;
-  } catch {
-    return null;
-  }
-}
+import { useSuperadminAuth } from "../context/SuperadminAuthContext";
 
 const NAV_ITEMS = [
   { to: "/superadmin/workspaces", label: "Workspaces", icon: <Building2  className="w-4 h-4" /> },
+  { to: "/superadmin/growth",     label: "Growth Intelligence", icon: <TrendingUp className="w-4 h-4" /> },
   { to: "/superadmin/plans",      label: "Plans",      icon: <LayoutList className="w-4 h-4" /> },
   { to: "/superadmin/payments",   label: "Payments",   icon: <CreditCard className="w-4 h-4" /> },
   { to: "/superadmin/backups",    label: "Backups",    icon: <Database   className="w-4 h-4" /> },
@@ -25,21 +16,12 @@ const NAV_ITEMS = [
 
 export default function SuperAdminLayout() {
   const navigate = useNavigate();
-  const [checked, setChecked] = useState(false);
+  const { logout } = useSuperadminAuth();
 
-  useEffect(() => {
-    const token = window.__SUPERADMIN_TOKEN__ || getSuperadminToken();
-    if (!token) { navigate("/superadmin/login", { replace: true }); return; }
-    setChecked(true);
-  }, [navigate]);
-
-  function logout() {
-    try { localStorage.removeItem("superadmin_auth"); } catch {}
-    delete window.__SUPERADMIN_TOKEN__;
+  function handleLogout() {
+    logout();
     navigate("/superadmin/login", { replace: true });
   }
-
-  if (!checked) return null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#0a0a0b] text-[color:var(--text)]">
@@ -75,7 +57,7 @@ export default function SuperAdminLayout() {
         {/* Logout */}
         <div className="px-3 py-4 border-t border-[color:var(--sidebar-border)] shrink-0">
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-red-500 hover:bg-red-500/10 transition-colors"
           >
             <LogOut className="w-4 h-4" />

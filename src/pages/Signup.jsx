@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "../api";
 import ThemeSwitcher from "../components/ThemeSwitcher";
+import { getGrowthContextHeaders } from "../services/growthTelemetry";
 import {
   ArrowRight,
   Building2,
@@ -74,7 +75,7 @@ export default function Signup() {
       try {
         window.__AUTH_TOKEN__ = token;
         window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || "GLOBAL";
-      } catch {}
+      } catch { /* runtime globals are an optional compatibility bridge */ }
       window.dispatchEvent(new Event("auth:updated"));
     } catch (err) {
       console.warn("Failed to persist auth to localStorage:", err);
@@ -130,7 +131,7 @@ export default function Signup() {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_signature: response.razorpay_signature,
               pendingSignupId,
-            });
+            }, { headers: getGrowthContextHeaders() });
             completeSignup(data);
             resolve();
           } catch (err) {
@@ -191,7 +192,7 @@ export default function Signup() {
         password,
         interval,
         consentAccepted,
-      });
+      }, { headers: getGrowthContextHeaders() });
       if (res.data?.provider === "razorpay") {
         await openRazorpaySignupCheckout(res.data);
         return;

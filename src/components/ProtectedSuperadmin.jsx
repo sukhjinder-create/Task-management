@@ -1,6 +1,6 @@
 // src/components/ProtectedSuperadmin.jsx
 import React from "react";
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useSuperadminAuth } from "../context/SuperadminAuthContext";
 
 /**
@@ -12,7 +12,8 @@ import { useSuperadminAuth } from "../context/SuperadminAuthContext";
  */
 
 export default function ProtectedSuperadmin({ children }) {
-  const { superadmin, ready } = useSuperadminAuth();
+  const { superadmin, token, ready } = useSuperadminAuth();
+  const location = useLocation();
 
   // 1️⃣ Wait until auth context is hydrated
   if (!ready) {
@@ -21,9 +22,8 @@ export default function ProtectedSuperadmin({ children }) {
   }
 
   // 2️⃣ Not logged in as superadmin
-  if (!superadmin) {
-    console.debug("[ProtectedSuperadmin] blocked - no superadmin");
-    return <Navigate to="/superadmin/login" replace />;
+  if (!token || superadmin?.role !== "superadmin") {
+    return <Navigate to="/superadmin/login" replace state={{ from: location.pathname }} />;
   }
 
   /**

@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import ThemeSwitcher from "../components/ThemeSwitcher";
+import { getGrowthContextHeaders } from "../services/growthTelemetry";
 import {
   ArrowRight,
   Check,
@@ -80,7 +81,7 @@ export default function Login() {
     if (!email || !password) { toast.error("Email and password are required"); return; }
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password });
+      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password }, { headers: getGrowthContextHeaders() });
       if (res.data.mfa_required) {
         setMfaToken(res.data.mfa_session_token);
         setMfaRequired(true);
@@ -102,7 +103,7 @@ export default function Login() {
       const res = await axios.post(`${API_BASE_URL}/auth/mfa/verify`, {
         mfa_session_token: mfaToken,
         code: mfaCode,
-      });
+      }, { headers: getGrowthContextHeaders() });
       completeLogin(res.data.token, res.data.user, res.data.refreshToken || null);
     } catch (err) {
       const msg = err.response?.data?.error || "Invalid code";

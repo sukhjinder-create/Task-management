@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getGrowthContextHeaders } from "./services/growthTelemetry";
 
 // VITE_API_URL can be set per-build via .env files:
 //   Web/Electron: defaults to localhost:3000
@@ -61,6 +62,7 @@ const api = axios.create({
 --------------------------------------------- */
 api.interceptors.request.use(
   (config) => {
+    Object.assign(config.headers, getGrowthContextHeaders());
     try {
       const stored = localStorage.getItem("auth");
       const parsed = stored ? JSON.parse(stored) : null;
@@ -73,7 +75,7 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
         try {
           window.__AUTH_TOKEN__ = token;
-        } catch {}
+        } catch { /* browser global is an optional compatibility bridge */ }
       }
 
       /* ---------- WORKSPACE ID ---------- */
@@ -94,13 +96,13 @@ api.interceptors.request.use(
 
         try {
           window.__WORKSPACE_ID__ = wid;
-        } catch {}
+        } catch { /* browser global is an optional compatibility bridge */ }
       } else {
         // ensure we don't leak old values
         delete config.headers["x-workspace-id"];
         try {
           delete window.__WORKSPACE_ID__;
-        } catch {}
+        } catch { /* browser global is an optional compatibility bridge */ }
       }
     } catch (e) {
       console.warn("Auth token parse failed:", e);
@@ -134,7 +136,7 @@ api.interceptors.response.use(
 
         try {
           localStorage.removeItem("auth");
-        } catch {}
+        } catch { /* storage can be unavailable in privacy mode */ }
 
         window.dispatchEvent(
           new CustomEvent("workspace:blocked", {
@@ -178,7 +180,7 @@ api.interceptors.response.use(
       if (originalRequest._refreshRetry) {
         _drainQueue(err, null);
         _isRefreshing = false;
-        try { localStorage.removeItem("auth"); } catch {}
+        try { localStorage.removeItem("auth"); } catch { /* storage can be unavailable */ }
         window.dispatchEvent(new CustomEvent("auth:unauthorized", { detail: { expired: true } }));
         window.dispatchEvent(new Event("auth:logout"));
         return Promise.reject(err);
@@ -201,7 +203,7 @@ api.interceptors.response.use(
 
       if (!refreshToken) {
         // No refresh token — just log out
-        try { localStorage.removeItem("auth"); } catch {}
+        try { localStorage.removeItem("auth"); } catch { /* storage can be unavailable */ }
         window.dispatchEvent(new CustomEvent("auth:unauthorized", { detail: { expired: true } }));
         window.dispatchEvent(new Event("auth:logout"));
         return Promise.reject(err);
@@ -222,7 +224,7 @@ api.interceptors.response.use(
           refreshToken: newRefreshToken,
         };
         localStorage.setItem("auth", JSON.stringify(updatedAuth));
-        try { window.__AUTH_TOKEN__ = newToken; } catch {}
+        try { window.__AUTH_TOKEN__ = newToken; } catch { /* optional compatibility bridge */ }
 
         // Notify React context (AuthContext listens for this)
         window.dispatchEvent(new CustomEvent("auth:token-refreshed", { detail: updatedAuth }));
@@ -234,8 +236,8 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshErr) {
         _drainQueue(refreshErr, null);
-        try { localStorage.removeItem("auth"); } catch {}
-        try { window.__AUTH_TOKEN__ = null; } catch {}
+        try { localStorage.removeItem("auth"); } catch { /* storage can be unavailable */ }
+        try { window.__AUTH_TOKEN__ = null; } catch { /* optional compatibility bridge */ }
         window.dispatchEvent(new Event("auth:logout"));
         return Promise.reject(refreshErr);
       } finally {

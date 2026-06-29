@@ -1,22 +1,12 @@
 // src/pages/SuperadminPlans.jsx
 import { useEffect, useState, useCallback, useRef } from "react";
-import axios from "axios";
 import toast from "react-hot-toast";
-import { API_BASE_URL } from "../api";
+import superadminApi from "../superadminApi";
 import {
   Plus, Pencil, Trash2, RefreshCw, CheckCircle,
   Zap, Crown, Users, Star, X, ChevronDown, ChevronUp,
   BadgeCheck, AlertCircle, Search, KeyRound, UserCog,
 } from "lucide-react";
-
-function getSuperadminAxios() {
-  const token = window.__SUPERADMIN_TOKEN__ ||
-    (() => { try { return JSON.parse(localStorage.getItem("superadmin_auth"))?.token; } catch { return null; } })();
-  return axios.create({
-    baseURL: API_BASE_URL,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-}
 
 const SUPPORT_LABELS = {
   community: "Community",
@@ -256,7 +246,7 @@ function PlanModal({ plan, onClose, onSaved }) {
     if (!form.name || !form.slug) return toast.error("Name and slug are required");
     setSaving(true);
     try {
-      const api = getSuperadminAxios();
+      const api = superadminApi;
       const payload = {
         ...form,
         // Always read prices from priceRef — guaranteed to be the latest typed value
@@ -429,7 +419,7 @@ function PlanModal({ plan, onClose, onSaved }) {
 
 // ── User management modal (reused from Plans page) ────────────────────────────
 function UserManageModal({ ws, onClose }) {
-  const api = getSuperadminAxios();
+  const api = superadminApi;
   const [users, setUsers]             = useState([]);
   const [loading, setLoading]         = useState(true);
   const [action, setAction]           = useState(null); // { type: "edit"|"reset", user }
@@ -773,7 +763,7 @@ export default function SuperadminPlans() {
   const [showCreate, setCreate]     = useState(false);
   const [editPlan, setEdit]         = useState(null);
   const [manageWs, setManageWs]     = useState(null); // workspace whose users to manage
-  const api = getSuperadminAxios();
+  const api = superadminApi;
 
   const load = useCallback(async () => {
     setLoading(true);
