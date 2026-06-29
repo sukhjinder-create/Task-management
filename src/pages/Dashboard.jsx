@@ -354,6 +354,7 @@ if (overview?.executiveSummary) {
     text: overview.executiveSummary.narrative || "",
     reasoning: overview.executiveSummary.drivers || null,
     outlook: overview.executiveSummary.outlook || overview.forecast?.reasoning || null,
+    sections: overview.executiveSummary.sections || [],
     range: overview.executiveSummary.period || overview.dashboardRange || null,
   });
 }
@@ -1188,7 +1189,7 @@ const autonomousInsight = useMemo(() => {
                 Live
               </span>
             </div>
-            <p className="text-[10px] theme-text-muted">AI-generated org analysis</p>
+            <p className="text-[10px] theme-text-muted">Executive operational briefing</p>
           </div>
         </div>
         {dashboardOverview.executiveSummary.headline && (
@@ -1216,7 +1217,7 @@ const autonomousInsight = useMemo(() => {
             onClick={() => openExecutiveDetail("reasoning")}
             className="text-xs font-semibold theme-text-muted hover:theme-text transition-colors"
           >
-            View reasoning
+              View evidence
           </button>
         </div>
       </div>
@@ -2612,7 +2613,7 @@ const autonomousInsight = useMemo(() => {
           variant={executiveModalView === "reasoning" ? "primary" : "outline"}
           onClick={() => setExecutiveModalView("reasoning")}
         >
-          Reasoning
+          Evidence
         </Button>
       </div>
 
@@ -2634,18 +2635,33 @@ const autonomousInsight = useMemo(() => {
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs font-semibold theme-text-muted mb-2">FULL EXECUTIVE SUMMARY</div>
-                <div className="text-sm theme-text whitespace-pre-line leading-relaxed">
-                  {executiveDetail.fullSummary}
+              {Array.isArray(executiveDetail.sections) && executiveDetail.sections.length > 0 ? (
+                <div className="grid gap-3">
+                  {executiveDetail.sections.map((section) => (
+                    <div key={section.key || section.title} className="rounded-lg border border-[color:var(--border)] p-3">
+                      <div className="text-xs font-semibold theme-text-muted mb-1">{section.title}</div>
+                      <div className="text-sm theme-text leading-relaxed">{section.body}</div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <div className="text-xs font-semibold theme-text-muted mb-2">FULL EXECUTIVE SUMMARY</div>
+                  <div className="text-sm theme-text whitespace-pre-line leading-relaxed">
+                    {executiveDetail.fullSummary}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="text-xs font-semibold theme-text-muted mb-2">RECOMMENDATIONS</div>
                 <ul className="space-y-2 text-sm theme-text list-disc list-inside">
                   {(executiveDetail.recommendations || executiveDetail.priorities || []).map((line, idx) => (
-                    <li key={idx}>{line}</li>
+                    <li key={idx}>
+                      {typeof line === "string"
+                        ? line
+                        : [line.priority, line.action, line.rationale].filter(Boolean).join(": ")}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -2654,7 +2670,7 @@ const autonomousInsight = useMemo(() => {
 
           {executiveModalView === "reasoning" && (
             <div>
-              <div className="text-xs font-semibold theme-text-muted mb-2">REASONING</div>
+              <div className="text-xs font-semibold theme-text-muted mb-2">EVIDENCE AND REUSE POLICY</div>
               <ul className="space-y-2 text-sm theme-text list-disc list-inside">
                 {(executiveDetail.reasoning || []).map((line, idx) => (
                   <li key={idx}>{line}</li>

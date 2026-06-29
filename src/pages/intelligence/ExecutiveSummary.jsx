@@ -83,9 +83,24 @@ export default function ExecutiveSummary() {
       </header>
 
       <div className="border border-[color:var(--border)] rounded-lg p-5">
-        <p className="text-sm text-[color:var(--text)] leading-relaxed whitespace-pre-line">
-          {summary.text || summary.summary || summary}
-        </p>
+        {Array.isArray(summary.sections) && summary.sections.length > 0 ? (
+          <div className="space-y-4">
+            {summary.sections.map((section) => (
+              <section key={section.key || section.title}>
+                <h2 className="text-sm font-semibold text-[color:var(--text)] mb-1">
+                  {section.title}
+                </h2>
+                <p className="text-sm text-[color:var(--text-muted)] leading-relaxed">
+                  {section.body}
+                </p>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-[color:var(--text)] leading-relaxed whitespace-pre-line">
+            {summary.text || summary.summary || summary}
+          </p>
+        )}
       </div>
     </div>
   );
