@@ -561,8 +561,57 @@ function liveKitParticipantScreenSharing(participant = {}) {
   );
 }
 
+// Activity score for picking a survivor if two connections for the same logical
+// identity ever coexist (e.g. the brief window of a reconnect, or a mixed-version
+// deploy). A connection with live/subscribed tracks outranks an idle one.
+function participantActivityScore(participant = {}) {
+  let score = 0;
+  for (const publication of uniqueTrackPublications(participant)) {
+    if (publication?.track) score += 2;
+    else if (publication?.isSubscribed) score += 1;
+  }
+  return score;
+}
+
+function participantJoinedAtMs(participant = {}) {
+  const joinedAt = participant?.joinedAt;
+  if (joinedAt instanceof Date) return joinedAt.getTime();
+  const numeric = Number(joinedAt);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function shouldReplaceParticipant(candidate, existing) {
+  const a = participantActivityScore(candidate);
+  const b = participantActivityScore(existing);
+  if (a !== b) return a > b;
+  // Tie: keep the most recently joined connection — it is the one LiveKit's
+  // identity-uniqueness will keep alive; the older one is being evicted.
+  return participantJoinedAtMs(candidate) >= participantJoinedAtMs(existing);
+}
+
+// Collapse the remote participants to exactly ONE representation per LOGICAL
+// participant (authoritative identity = participantIdentity, i.e. the userId).
+// The LiveKit identity is now deterministic per (session, user), so the room
+// normally already holds one connection per user — but keying the participant
+// COLLECTION by the authoritative identity makes the state idempotent: two
+// connections of the same logical user collapse to one entry, the surviving one.
+// This is participant-state idempotency, not a visual filter: two connections of
+// the same user ARE one participant, and a stale late connection cannot add a
+// second entry.
+function dedupeRemoteParticipants(remoteParticipants = []) {
+  const byIdentity = new Map();
+  for (const participant of remoteParticipants || []) {
+    const key = participantIdentity(participant);
+    const existing = byIdentity.get(key);
+    if (!existing || shouldReplaceParticipant(participant, existing)) {
+      byIdentity.set(key, participant);
+    }
+  }
+  return Array.from(byIdentity.values());
+}
+
 export function createLiveKitRemotePeers(remoteParticipants = [], streamCache = null) {
-  return (remoteParticipants || []).map((participant) => {
+  return dedupeRemoteParticipants(remoteParticipants).map((participant) => {
     const videoPublication = displayVideoPublication(participant);
     const audioPublication = displayAudioPublication(participant);
     return createRemotePeerState({
@@ -2439,12 +2488,20 @@ export function useLiveKitMediaProvider({
   const remotePeers = useMemo(
     () => {
       void revision;
-      return createLiveKitRemotePeers(
+      const peers = createLiveKitRemotePeers(
         remoteParticipantsFromRoom(connectedRoom),
         streamCacheRef.current
       );
+      // Never render the local user as a remote tile. The backend now keys the
+      // LiveKit identity on the logical user, so a second connection of yourself
+      // is evicted by the SFU and cannot appear as a remote peer — but exclude
+      // the local userId defensively, matching the Flutter provider, so a stale
+      // self-connection during a cross-version window can never duplicate "you".
+      const localUserId = safeString(currentUser?.id);
+      if (!localUserId) return peers;
+      return peers.filter((peer) => safeString(peer.userId) !== localUserId);
     },
-    [connectedRoom, revision]
+    [connectedRoom, revision, currentUser?.id]
   );
   const micEnabled = connectedRoom?.localParticipant?.isMicrophoneEnabled ?? true;
   const camEnabled = connectedRoom?.localParticipant?.isCameraEnabled ?? true;
