@@ -30,6 +30,8 @@ import {
   withDashboardChartDateLabels,
 } from "../utils/dashboardChartDates";
 import { getUserProfilePath } from "../utils/userProfiles";
+import AdaptiveRecommendations from "../components/AdaptiveRecommendations";
+import AdaptiveControlPanel from "../components/AdaptiveControlPanel";
 
 function isTaskOverdue(task) {
   if (!task.due_date) return false;
@@ -983,6 +985,8 @@ const autonomousInsight = useMemo(() => {
     </header>
 
     {liveAttendancePanel}
+    <AdaptiveRecommendations limit={3} />
+    <AdaptiveControlPanel />
 
     <section className="border border-[color:var(--border)] rounded-lg p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">

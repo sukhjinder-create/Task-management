@@ -16,6 +16,7 @@ import TimeTrackingPanel from "../components/TimeTrackingPanel.jsx";
 import WatchersVotesBar from "../components/WatchersVotesBar.jsx";
 import BurndownModal from "../components/BurndownModal.jsx";
 import SavedFiltersPanel from "../components/SavedFiltersPanel.jsx";
+import AdaptiveRecommendations from "../components/AdaptiveRecommendations.jsx";
 
 function statusLabel(status) {
   if (status === "backlog") return "Backlog";
@@ -1660,6 +1661,13 @@ const [loadingLogs, setLoadingLogs] = useState(false);
           )}
         </div>
       )}
+
+      <AdaptiveRecommendations
+        projectId={projectId}
+        limit={4}
+        title="Recommended project actions"
+        subtitle="Context-aware suggestions for this project. They reuse task, sprint and intelligence data."
+      />
 
       {canEdit && (
         <section className="rounded-[10px] border border-[color:var(--border)] p-4">
