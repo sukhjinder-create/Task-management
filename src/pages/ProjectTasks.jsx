@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
 import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, TrendingDown, Keyboard, Filter, EyeOff, Target } from "lucide-react";
-import { useApi } from "../api";
+import { useApi, API_BASE_URL } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import CommentsSection from "../components/CommentsSection.jsx";
@@ -3141,7 +3141,7 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                     {attachments.map((att) => {
                       const fullUrl = att.url?.startsWith("http")
                         ? att.url
-                        : `http://localhost:3000${att.url}`;
+                        : `${API_BASE_URL}${att.url}`;
                       const isImage = att.mime_type?.startsWith("image/");
                       return (
                         <div key={att.id} className="flex items-center gap-2 text-[11px]">

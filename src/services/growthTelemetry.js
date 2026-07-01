@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+import { API_BASE_URL } from "../config/runtime";
+
 const ANONYMOUS_KEY = "growth_anonymous_id";
 const SESSION_KEY = "growth_session_id";
 const SESSION_SENT_KEY = "growth_session_started";
@@ -113,4 +114,3 @@ export function trackPageView(path, search = "") {
   events.push({ id: createId(), eventName: "website.page_view", pagePath: path, ...shared });
   send(events);
 }
-

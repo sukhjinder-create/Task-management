@@ -1,6 +1,11 @@
 // src/context/AuthContext.jsx
 /* eslint-disable react-refresh/only-export-components, react-hooks/set-state-in-effect -- mount hydration synchronizes browser auth storage */
 import { createContext, useContext, useEffect, useState } from "react";
+import {
+  API_BASE_URL,
+  buildWorkspaceRedirectUrl,
+  isConfiguredPrimaryAppHost,
+} from "../config/runtime";
 import { initPush, teardownPush } from "../utils/pushNotifications";
 
 const AuthContext = createContext(null);
@@ -60,7 +65,7 @@ export function AuthProvider({ children }) {
         window.history.replaceState({}, "", newUrl);
 
         // Fetch user from API using the token
-        fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/users/me`, {
+        fetch(`${API_BASE_URL}/users/me`, {
           headers: { Authorization: `Bearer ${urlToken}` },
         })
           .then((r) => r.json())
@@ -82,13 +87,18 @@ export function AuthProvider({ children }) {
         // 🔥 Global token so axios & socket use it automatically
         window.__AUTH_TOKEN__ = parsed?.token || null;
 
-        // Redirect to workspace subdomain if on app.asystence.com
+        // Redirect to a configured workspace subdomain on the primary production host.
         const user = parsed?.user;
         const slug = user?.workspace_slug;
         const hostname = window.location.hostname;
-        if (slug && hostname === "app.asystence.com") {
-          window.location.href = `https://${slug}.asystence.com${window.location.pathname}?_t=${parsed.token}`;
-          return;
+        if (slug && isConfiguredPrimaryAppHost(hostname)) {
+          const targetUrl = buildWorkspaceRedirectUrl(slug, window.location.pathname, {
+            _t: parsed.token,
+          });
+          if (targetUrl) {
+            window.location.href = targetUrl;
+            return;
+          }
         }
 
         // Initialize socket immediately so huddle/chat works on any page (not just Chat)
@@ -168,7 +178,7 @@ export function AuthProvider({ children }) {
 
     if (stored?.token) {
       teardownPush(stored.token).catch(() => {});
-      fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"}/auth/logout`, {
+      fetch(`${API_BASE_URL}/auth/logout`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${stored.token}`,

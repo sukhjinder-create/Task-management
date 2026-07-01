@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useApi } from "../api";
+import { useApi, API_BASE_URL } from "../api";
 import {
   Brain,
   TrendingUp,
@@ -157,7 +157,7 @@ function AIInsightCard({ insights, emptyMsg = "No AI insights available." }) {
 function CollapsibleUser({ user, badge, detail }) {
   const [open, setOpen] = useState(false);
   const avatarUrl = user.avatarUrl
-    ? user.avatarUrl.startsWith("http") ? user.avatarUrl : `http://localhost:3000${user.avatarUrl}`
+    ? user.avatarUrl.startsWith("http") ? user.avatarUrl : `${API_BASE_URL}${user.avatarUrl}`
     : null;
 
   return (

@@ -3,6 +3,10 @@ import axios from "axios";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "../api";
+import {
+  buildWorkspaceRedirectUrl,
+  isConfiguredWorkspaceDomainHost,
+} from "../config/runtime";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
 import {
@@ -90,11 +94,15 @@ export default function Signup() {
     safePersistAuth(user, token, data.refreshToken || null);
     toast.success("Workspace created. Your verification charge refund has been started.");
     const slug = user?.workspace_slug;
-    const isProduction = window.location.hostname.endsWith("asystence.com");
-    if (slug && isProduction) {
-      const refreshParam = data.refreshToken ? `&_r=${encodeURIComponent(data.refreshToken)}` : "";
-      window.location.href = `https://${slug}.asystence.com/projects?_t=${encodeURIComponent(token)}${refreshParam}`;
-      return;
+    if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
+      const targetUrl = buildWorkspaceRedirectUrl(slug, "/projects", {
+        _t: token,
+        ...(data.refreshToken ? { _r: data.refreshToken } : {}),
+      });
+      if (targetUrl) {
+        window.location.href = targetUrl;
+        return;
+      }
     }
     navigate("/projects", { replace: true });
   };

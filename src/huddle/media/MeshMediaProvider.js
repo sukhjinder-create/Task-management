@@ -1,6 +1,7 @@
 // src/huddle/media/MeshMediaProvider.js
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { getSocket } from "../../socket";
+import { API_BASE_URL } from "../../config/runtime";
 import { buildMeshMediaStateV2 } from "./mediaState";
 import {
   createProviderMetricsSnapshot,
@@ -8,7 +9,7 @@ import {
   metricNow,
 } from "./providerDiagnostics";
 
-const API_URL = import.meta.env.VITE_API_URL || "";
+const API_URL = API_BASE_URL || "";
 const PEER_RECONNECT_GRACE_MS = 20000;
 
 function browserSupportsScreenShare() {

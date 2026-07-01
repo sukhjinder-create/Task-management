@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { SOCKET_BASE_URL } from "./config/runtime";
 import { resolveLiveKitCanaryConfig } from "./huddle/media/LiveKitCanary";
 import { createWebHuddleClientCapabilities } from "./huddle/media/clientCapabilities";
 import {
@@ -8,10 +9,7 @@ import {
 
 let socket = null;
 
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL ||
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:3000";
+const BACKEND_URL = SOCKET_BASE_URL || "http://localhost:5000";
 
 // Identifies this specific browser tab/session, not the user. Two tabs of the
 // same logged-in user must look like two different devices to the huddle

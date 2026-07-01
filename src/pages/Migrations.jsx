@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useApi } from "../api";
+import { useApi, API_BASE_URL } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
 import {
@@ -662,7 +662,7 @@ function AsanaPanel({ onImportDone, autoConnect }) {
   function connectOAuth() {
     const token = auth?.token || window.__AUTH_TOKEN__;
     if (!token) { alert("Not authenticated"); return; }
-    window.location.href = `${import.meta.env.VITE_BACKEND_URL || "http://localhost:3000"}/oauth/asana/connect?token=${token}`;
+    window.location.href = `${API_BASE_URL}/oauth/asana/connect?token=${token}`;
   }
 
   async function loadTasks(project, pg = 1, q = "") {

@@ -9,6 +9,10 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { API_BASE_URL } from "../api";
+import {
+  buildWorkspaceRedirectUrl,
+  isConfiguredWorkspaceDomainHost,
+} from "../config/runtime";
 
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -27,13 +31,17 @@ export default function AuthCallback() {
 
   const redirectToWorkspace = (user, token, refreshToken = null) => {
     const slug = user?.workspace_slug;
-    const isProduction = window.location.hostname.endsWith("asystence.com");
-    if (slug && isProduction) {
-      const refreshParam = refreshToken ? `&_r=${encodeURIComponent(refreshToken)}` : "";
-      window.location.href = `https://${slug}.asystence.com/projects?_t=${encodeURIComponent(token)}${refreshParam}`;
-    } else {
-      navigate("/projects", { replace: true });
+    if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
+      const targetUrl = buildWorkspaceRedirectUrl(slug, "/projects", {
+        _t: token,
+        ...(refreshToken ? { _r: refreshToken } : {}),
+      });
+      if (targetUrl) {
+        window.location.href = targetUrl;
+        return;
+      }
     }
+    navigate("/projects", { replace: true });
   };
 
   useEffect(() => {

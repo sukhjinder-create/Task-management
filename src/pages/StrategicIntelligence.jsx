@@ -11,7 +11,7 @@ import { useApi, API_BASE_URL } from '../api';
 import toast from 'react-hot-toast';
 import { Card, Button, Badge } from '../components/ui';
 
-const BACKEND_URL = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = API_BASE_URL || 'http://localhost:5000';
 
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
 function avatarSrc(url) {

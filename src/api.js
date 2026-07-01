@@ -1,11 +1,8 @@
 import axios from "axios";
 import { getGrowthContextHeaders } from "./services/growthTelemetry";
+import { API_BASE_URL } from "./config/runtime";
 
-// VITE_API_URL can be set per-build via .env files:
-//   Web/Electron: defaults to localhost:3000
-//   Mobile (Android emulator): set to http://10.0.2.2:3000
-//   Mobile (real device): set to your PC's local network IP e.g. http://192.168.x.x:3000
-export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+export { API_BASE_URL };
 
 function preconnectOrigin(url, marker) {
   if (typeof document === "undefined") return false;
@@ -53,7 +50,7 @@ function _drainQueue(err, token) {
 }
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL || undefined,
   withCredentials: true, // important
 });
 

@@ -2,7 +2,7 @@ import { cn } from '../../utils/cn';
 import { API_BASE_URL } from '../../api';
 import { useState, useEffect } from 'react';
 
-const BACKEND_URL = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = API_BASE_URL || 'http://localhost:5000';
 
 function resolveAvatarUrl(src) {
   if (!src) return null;

@@ -42,7 +42,7 @@ import ReportsModal from "../components/ReportsModal";
 // ----- URL RESOLVER -----
 // Remaps localhost/127.0.0.1 absolute URLs to the configured backend.
 // Critical on mobile where "localhost" means the device, not the PC.
-const _BACKEND = API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+const _BACKEND = API_BASE_URL || "http://localhost:5000";
 function resolveUrl(src) {
   if (!src) return null;
   if (src.startsWith("http://localhost") || src.startsWith("http://127.0.0.1")) {

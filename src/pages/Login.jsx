@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../api";
+import {
+  AUTH_DEV_MODE_ENABLED,
+  buildWorkspaceRedirectUrl,
+  isConfiguredWorkspaceDomainHost,
+} from "../config/runtime";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -67,13 +72,17 @@ export default function Login() {
     try { login(user, token, refreshToken); } catch (err) { console.warn("AuthContext.login threw:", err); }
     toast.success(`Logged in as ${user.username}`);
     const slug = user?.workspace_slug;
-    const isProduction = window.location.hostname.endsWith("asystence.com");
-    if (slug && isProduction) {
-      const refreshParam = refreshToken ? `&_r=${encodeURIComponent(refreshToken)}` : "";
-      window.location.href = `https://${slug}.asystence.com/projects?_t=${encodeURIComponent(token)}${refreshParam}`;
-    } else {
-      navigate("/projects", { replace: true });
+    if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
+      const targetUrl = buildWorkspaceRedirectUrl(slug, "/projects", {
+        _t: token,
+        ...(refreshToken ? { _r: refreshToken } : {}),
+      });
+      if (targetUrl) {
+        window.location.href = targetUrl;
+        return;
+      }
     }
+    navigate("/projects", { replace: true });
   };
 
   const handleSubmit = async (e) => {
@@ -113,6 +122,18 @@ export default function Login() {
         setMfaToken("");
         setMfaCode("");
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/auth/dev-login`, {}, { headers: getGrowthContextHeaders() });
+      completeLogin(res.data.token, res.data.user, res.data.refreshToken || null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Developer login is not available");
     } finally {
       setLoading(false);
     }
@@ -247,6 +268,17 @@ export default function Login() {
                       </svg>
                       Continue with Google
                     </a>
+
+                    {AUTH_DEV_MODE_ENABLED && (
+                      <button
+                        type="button"
+                        onClick={handleDevLogin}
+                        disabled={loading}
+                        className="mt-3 flex h-13 min-h-[52px] w-full items-center justify-center gap-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-4 text-sm font-semibold text-[color:var(--text)] transition hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface)] disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        Developer sign in
+                      </button>
+                    )}
 
                     <div className="my-6 flex items-center gap-3">
                       <div className="h-px flex-1 bg-[color:var(--border)]" />
