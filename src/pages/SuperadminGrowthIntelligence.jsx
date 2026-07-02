@@ -4,7 +4,7 @@ import {
   BarChart, Bar,
 } from "recharts";
 import {
-  Activity, ArrowDown, BrainCircuit, Building2, Globe2,
+  Activity, AlertTriangle, ArrowDown, BrainCircuit, Building2, Compass, Globe2, Info,
   MousePointerClick, RefreshCw, Repeat2, Route, UserPlus, Users,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -14,6 +14,7 @@ const TABS = [
   ["overview", "Growth Overview"], ["acquisition", "Acquisition"],
   ["activation", "Activation"], ["engagement", "Engagement"],
   ["retention", "Retention"], ["journeys", "User Journey"],
+  ["product-discovery", "Product Discovery"],
 ];
 
 function isoDate(date) {
@@ -146,6 +147,40 @@ function Insights({ rows = [] }) {
   );
 }
 
+function ProductDiscoveryInsights({ rows = [] }) {
+  if (!rows.length) return <p className="text-xs text-[color:var(--text-muted)]">Weekly product insights appear as pilot telemetry accumulates.</p>;
+  const priorityClass = {
+    critical: "text-red-500",
+    high: "text-amber-500",
+    medium: "text-[color:var(--primary)]",
+    low: "text-[color:var(--text-soft)]",
+  };
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      {rows.map((item) => (
+        <div key={item.id} className="rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] p-3.5">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${priorityClass[item.priority] || priorityClass.medium}`} />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold text-[color:var(--text)]">{item.title}</p>
+                <span className="rounded-full border border-[color:var(--border)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[color:var(--text-soft)]">{item.priority}</span>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-[color:var(--text-muted)]">{item.summary}</p>
+              {!!item.evidence?.length && (
+                <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-4 text-[color:var(--text-soft)]">
+                  {item.evidence.slice(0, 3).map((evidence, index) => <li key={`${item.id}-evidence-${index}`}>{evidence}</li>)}
+                </ul>
+              )}
+              {item.recommendation && <p className="mt-2 text-[11px] leading-4 text-[color:var(--text-muted)]">Recommendation: {item.recommendation}</p>}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function SuperadminGrowthIntelligence() {
   const [tab, setTab] = useState("overview");
   const [range, setRange] = useState(defaultRange);
@@ -155,8 +190,11 @@ export default function SuperadminGrowthIntelligence() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await superadminApi.get("/superadmin/growth/dashboard", { params: range });
-      setData(response.data);
+      const [dashboardResponse, discoveryResponse] = await Promise.all([
+        superadminApi.get("/superadmin/growth/dashboard", { params: range }),
+        superadminApi.get("/superadmin/growth/product-discovery", { params: range }),
+      ]);
+      setData({ ...dashboardResponse.data, product_discovery: discoveryResponse.data });
     } catch (error) {
       toast.error(error.response?.data?.error || "Failed to load Growth Intelligence");
     } finally {
@@ -168,6 +206,7 @@ export default function SuperadminGrowthIntelligence() {
   const overview = data?.overview || {};
   const adoption = data?.engagement?.feature_adoption || [];
   const retentionChart = useMemo(() => data?.retention?.weekly_active_users || [], [data]);
+  const discovery = data?.product_discovery || {};
 
   return (
     <div className="space-y-5">
@@ -257,6 +296,76 @@ export default function SuperadminGrowthIntelligence() {
               {!data?.journeys?.length && <p className="py-10 text-center text-xs text-[color:var(--text-muted)]">No journey signals in this period.</p>}
             </div>
           </Panel>}
+
+          {tab === "product-discovery" && <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
+              <MetricCard icon={<Compass className="h-4 w-4" />} label="Product events" value={discovery.overview?.product_events} />
+              <MetricCard icon={<Users className="h-4 w-4" />} label="Active users" value={discovery.overview?.active_users} />
+              <MetricCard icon={<MousePointerClick className="h-4 w-4" />} label="Tracked clicks" value={discovery.overview?.clicks} />
+              <MetricCard icon={<Route className="h-4 w-4" />} label="Feature views" value={discovery.overview?.feature_views} />
+              <MetricCard icon={<AlertTriangle className="h-4 w-4" />} label="Friction signals" value={discovery.overview?.friction_events} />
+              <MetricCard icon={<Repeat2 className="h-4 w-4" />} label="Abandonment" value={discovery.overview?.abandonment_events} />
+            </div>
+
+            <Panel
+              title="Weekly product discovery insights"
+              subtitle="Generated from observed adoption, hesitation, abandonment, recommendation, workflow, dashboard, search, and click telemetry"
+            >
+              <ProductDiscoveryInsights rows={discovery.insights} />
+            </Panel>
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+              <Panel title="Feature discovery signals" subtitle="Views, actions, friction, and abandonment by surface">
+                <div className="divide-y divide-[color:var(--border)]">
+                  {(discovery.adoption?.feature_adoption || []).slice(0, 12).map((row) => (
+                    <div key={row.feature_name} className="grid gap-2 py-3 text-xs sm:grid-cols-[minmax(120px,1fr)_repeat(5,minmax(60px,auto))] sm:items-center">
+                      <span className="font-medium text-[color:var(--text)]">{row.feature_name}</span>
+                      <span className="text-[color:var(--text-muted)]">events {formatNumber(row.total_events)}</span>
+                      <span className="text-[color:var(--text-muted)]">views {formatNumber(row.views)}</span>
+                      <span className="text-[color:var(--text-muted)]">uses {formatNumber(row.uses)}</span>
+                      <span className="text-[color:var(--text-muted)]">friction {formatNumber(row.friction_events)}</span>
+                      <span className="text-[color:var(--text-muted)]">users {formatNumber(row.unique_users)}</span>
+                    </div>
+                  ))}
+                  {!discovery.adoption?.feature_adoption?.length && <p className="py-10 text-center text-xs text-[color:var(--text-muted)]">No product discovery events in this range.</p>}
+                </div>
+              </Panel>
+
+              <div className="space-y-4">
+                <Panel title="AI and recommendations" subtitle="Adoption and trust signals">
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricCard icon={<BrainCircuit className="h-4 w-4" />} label="AI uses" value={discovery.adoption?.ai_adoption?.uses} />
+                    <MetricCard icon={<BrainCircuit className="h-4 w-4" />} label="Recommendation views" value={discovery.adoption?.recommendation_usage?.views} />
+                    <MetricCard icon={<Activity className="h-4 w-4" />} label="Recommendation actions" value={discovery.adoption?.recommendation_usage?.actions} />
+                    <MetricCard icon={<Info className="h-4 w-4" />} label="Explainability opens" value={discovery.adoption?.explainability_usage?.opens} />
+                  </div>
+                </Panel>
+                <Panel title="Search and workflows" subtitle="Findability and workflow usage">
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricCard icon={<Route className="h-4 w-4" />} label="Searches" value={discovery.adoption?.search_analytics?.searches} />
+                    <MetricCard icon={<MousePointerClick className="h-4 w-4" />} label="Search clicks" value={discovery.adoption?.search_analytics?.result_clicks} />
+                    <MetricCard icon={<Route className="h-4 w-4" />} label="Workflow views" value={discovery.adoption?.workflow_usage?.views} />
+                    <MetricCard icon={<Activity className="h-4 w-4" />} label="Workflow actions" value={discovery.adoption?.workflow_usage?.actions} />
+                  </div>
+                </Panel>
+              </div>
+            </div>
+
+            <Panel title="Longest observed session flows" subtitle="Aggregate paths only; no task titles, message text, prompts, or raw search queries">
+              <div className="divide-y divide-[color:var(--border)]">
+                {(discovery.friction?.session_flows || []).slice(0, 10).map((flow) => (
+                  <div key={flow.session_id} className="grid gap-2 py-3 text-xs md:grid-cols-[minmax(140px,0.5fr)_minmax(220px,1fr)_repeat(3,auto)] md:items-center">
+                    <span className="truncate font-medium text-[color:var(--text)]">{String(flow.session_id).slice(0, 12)}?</span>
+                    <span className="truncate text-[color:var(--text-muted)]">{flow.path_sample?.join(" ? ") || "No path sample"}</span>
+                    <span className="text-[color:var(--text-soft)]">steps {formatNumber(flow.step_count)}</span>
+                    <span className="text-[color:var(--text-soft)]">clicks {formatNumber(flow.click_count)}</span>
+                    <span className="text-[color:var(--text-soft)]">friction {formatNumber(flow.friction_count)}</span>
+                  </div>
+                ))}
+                {!discovery.friction?.session_flows?.length && <p className="py-10 text-center text-xs text-[color:var(--text-muted)]">No session flow telemetry in this range.</p>}
+              </div>
+            </Panel>
+          </div>}
         </>
       )}
     </div>
