@@ -125,6 +125,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   /** Admin controls */
   const adminItems = [
     { to: "/admin/workspace-search", label: "Workspace Search", icon: Search,    show: isAdmin, locked: !hasWorkspaceSearch },
+    { to: "/admin/adaptive-intelligence", label: "AI Impact",   icon: Brain,     show: isAdmin, locked: !hasWsIntel },
     { to: "/admin/attendance",       label: "Attendance",       icon: Clock,     show: isAdmin, locked: !hasAttendance },
     { to: "/admin/users",            label: "Admin Panel",      icon: Users,     show: isAdmin },
     { to: "/admin/billing",          label: "Billing",          icon: CreditCard,show: isAdmin },
