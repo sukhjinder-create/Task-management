@@ -1177,7 +1177,6 @@ useEffect(() => {
         });
 
         setUserKeysById(map);
-        console.log("[E2E] Loaded public keys for users:", Object.keys(map));
       } catch (err) {
         console.error("Failed to load user public keys:", err);
       }
@@ -1226,8 +1225,6 @@ useEffect(() => {
         await api.post("/crypto/public-key", {
           publicKey: publicKeyJwk,
         });
-
-        console.log("[E2E] Public key uploaded for user", user.id);
       } catch (err) {
         console.error("Failed to ensure E2E key pair:", err);
       }
@@ -1274,7 +1271,6 @@ useEffect(() => {
   if (!payload || !payload.channelId) return;
   const channelId = payload.channelId;
   const rawMessages = payload.messages || [];
-  console.log("[chat:history] payload", payload);
 
   const history = await Promise.all(
     rawMessages.map(async (m) => {
