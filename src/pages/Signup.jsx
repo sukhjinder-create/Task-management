@@ -39,15 +39,50 @@ function loadRazorpayCheckout() {
 export default function Signup() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const selectedPlanSlug = String(searchParams.get("plan") || "").trim().toLowerCase();
 
   const [workspaceName, setWorkspaceName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [interval, setBillingInterval] = useState("monthly");
+  const [interval, setBillingInterval] = useState(() =>
+    searchParams.get("interval") === "yearly" ? "yearly" : "monthly"
+  );
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [planLoading, setPlanLoading] = useState(!!selectedPlanSlug);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+
+  const isFreePlan = !!selectedPlan &&
+    (Number(selectedPlan.price_monthly) || 0) === 0 &&
+    (Number(selectedPlan.price_yearly) || 0) === 0;
+  const selectedPlanName = selectedPlan?.name || "Pro";
+  const selectedTrialDays = Number(selectedPlan?.trial_days) || 7;
+
+  useEffect(() => {
+    if (!selectedPlanSlug) {
+      setPlanLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPlanLoading(true);
+    axios.get(`${API_BASE_URL}/public/billing/plans`)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const match = (Array.isArray(data) ? data : []).find((plan) => plan.slug === selectedPlanSlug);
+        setSelectedPlan(match || null);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedPlan(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPlanLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedPlanSlug]);
 
   useEffect(() => {
     const err = searchParams.get("error");
@@ -68,9 +103,10 @@ export default function Signup() {
       mode: "signup",
       workspaceName: workspaceName.trim(),
       trialBillingConsent: consentAccepted ? "1" : "0",
+      ...(selectedPlanSlug ? { plan: selectedPlanSlug } : {}),
     });
     return `${BACKEND_URL}/auth/google?${params.toString()}`;
-  }, [workspaceName, consentAccepted]);
+  }, [workspaceName, consentAccepted, selectedPlanSlug]);
 
   const safePersistAuth = (user, token, refreshToken = null) => {
     try {
@@ -92,7 +128,11 @@ export default function Signup() {
     if (!token || !user) throw new Error("Signup completed but the login token was missing.");
 
     safePersistAuth(user, token, data.refreshToken || null);
-    toast.success("Workspace created. Your verification charge refund has been started.");
+    toast.success(
+      isFreePlan
+        ? "Workspace created. Welcome to Asystence."
+        : "Workspace created. Your verification charge refund has been started."
+    );
     const slug = user?.workspace_slug;
     if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
       const targetUrl = buildWorkspaceRedirectUrl(slug, "/projects", {
@@ -119,12 +159,12 @@ export default function Signup() {
       const options = {
         key: checkout.keyId,
         name: "Asystence",
-        description: `${checkout.trialDays || 7}-day Pro trial with refundable card verification`,
+        description: `${checkout.trialDays || selectedTrialDays}-day ${checkout.planName || selectedPlanName} trial with refundable card verification`,
         image: "/asystence-logo.png",
         prefill: checkout.prefill || { name, email },
         notes: {
           pending_signup_id: pendingSignupId || "",
-          billing_plan: checkout.plan || "pro",
+          billing_plan: checkout.plan || selectedPlanSlug || "pro",
           billing_interval: checkout.interval || interval,
         },
         theme: { color: "#f97316" },
@@ -180,7 +220,7 @@ export default function Signup() {
       toast.error("Password must be at least 8 characters");
       return false;
     }
-    if (!consentAccepted) {
+    if (!isFreePlan && !consentAccepted) {
       toast.error("Please accept the trial billing consent to continue.");
       return false;
     }
@@ -200,7 +240,12 @@ export default function Signup() {
         password,
         interval,
         consentAccepted,
+        ...(selectedPlanSlug ? { plan: selectedPlanSlug } : {}),
       }, { headers: getGrowthContextHeaders() });
+      if (res.data?.token && res.data?.user) {
+        completeSignup(res.data);
+        return;
+      }
       if (res.data?.provider === "razorpay") {
         await openRazorpaySignupCheckout(res.data);
         return;
@@ -226,7 +271,7 @@ export default function Signup() {
       toast.error("Workspace name is required before Google signup");
       return;
     }
-    if (!consentAccepted) {
+    if (!isFreePlan && !consentAccepted) {
       toast.error("Please accept the trial billing consent to continue.");
       return;
     }
@@ -258,22 +303,30 @@ export default function Signup() {
               </div>
 
               <p className="text-[10px] uppercase tracking-[0.18em] brand-orange-text font-semibold mb-3">
-                Card-required trial workspace
+                {isFreePlan ? `${selectedPlanName} workspace` : "Card-required trial workspace"}
               </p>
               <h1 className="max-w-3xl text-[34px] sm:text-[44px] xl:text-[54px] font-semibold tracking-tight leading-[1.05] text-[color:var(--text)]">
-                Create your workspace after Razorpay verifies the card.
+                {isFreePlan
+                  ? `Create your ${selectedPlanName} workspace.`
+                  : "Create your workspace after Razorpay verifies the card."}
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-[color:var(--text-muted)]">
-                Start with one admin account, a 7-day Pro trial, and clear consent for automatic billing after the trial unless cancelled first.
+                {isFreePlan
+                  ? `Start with one admin account on the ${selectedPlanName} plan. No card or payment setup is required.`
+                  : `Start with one admin account, a ${selectedTrialDays}-day ${selectedPlanName} trial, and clear consent for automatic billing after the trial unless cancelled first.`}
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-              {[
-                ["7 days", "Full feature trial"],
+              {(isFreePlan ? [
+                [selectedPlan?.member_limit ? `${selectedPlan.member_limit} members` : "Flexible", "Plan capacity"],
+                ["Free", "No recurring charge"],
+                ["No card", "Create directly"],
+              ] : [
+                [`${selectedTrialDays} days`, "Full feature trial"],
                 ["INR 1", "Refunded verification"],
                 ["Razorpay", "Card billing consent"],
-              ].map(([value, label]) => (
+              ]).map(([value, label]) => (
                 <div key={label} className="border border-[color:var(--border)] rounded-lg p-4">
                   <p className="text-lg font-semibold brand-orange-text">{value}</p>
                   <p className="mt-1 text-xs text-[color:var(--text-muted)]">{label}</p>
@@ -287,9 +340,13 @@ export default function Signup() {
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[color:var(--text)]">Razorpay-secured checkout</p>
+                  <p className="text-sm font-semibold text-[color:var(--text)]">
+                    {isFreePlan ? "No payment required" : "Razorpay-secured checkout"}
+                  </p>
                   <p className="text-xs text-[color:var(--text-muted)]">
-                    The card verification charge is refunded automatically after confirmation, and billing can be cancelled before renewal.
+                    {isFreePlan
+                      ? "Your workspace is created directly on the selected free plan."
+                      : "The card verification charge is refunded automatically after confirmation, and billing can be cancelled before renewal."}
                   </p>
                 </div>
                 <CheckCircle2 className="ml-auto hidden sm:block h-5 w-5 brand-orange-text" />
@@ -303,9 +360,11 @@ export default function Signup() {
             <div className="mb-7 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-soft)] font-semibold">
-                  Start card trial
+                  {isFreePlan ? `Start ${selectedPlanName}` : "Start card trial"}
                 </p>
-                <p className="mt-1 text-sm text-[color:var(--text-muted)]">Razorpay checkout</p>
+                <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+                  {isFreePlan ? "No checkout required" : "Razorpay checkout"}
+                </p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-lg border brand-orange-border">
                 <CreditCard className="h-4 w-4 brand-orange-text" />
@@ -387,7 +446,7 @@ export default function Signup() {
                 </div>
               </div>
 
-              <div>
+              {!isFreePlan && <div>
                 <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2 tracking-tight">
                   Billing interval
                 </label>
@@ -407,9 +466,9 @@ export default function Signup() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </div>}
 
-              <label className="flex items-start gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] p-4">
+              {!isFreePlan && <label className="flex items-start gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] p-4">
                 <input
                   type="checkbox"
                   checked={consentAccepted}
@@ -419,14 +478,18 @@ export default function Signup() {
                 <span className="text-sm leading-6 text-[color:var(--text-muted)]">
                   I authorize automatic billing after the free trial unless I cancel before it ends. I agree that Razorpay may charge INR 1.00 now to verify my card and refund it automatically after confirmation.
                 </span>
-              </label>
+              </label>}
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || planLoading}
                 className="w-full h-16 inline-flex items-center justify-center gap-2 bg-[var(--primary)] text-[color:var(--primary-contrast)] rounded-lg text-[17px] font-semibold hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors"
               >
-                {loading ? "Opening Razorpay..." : (<>Continue to Razorpay <ArrowRight className="w-4 h-4" /></>)}
+                {planLoading
+                  ? "Loading plan..."
+                  : loading
+                    ? (isFreePlan ? "Creating workspace..." : "Opening Razorpay...")
+                    : (<>{isFreePlan ? "Create workspace" : "Continue to Razorpay"} <ArrowRight className="w-4 h-4" /></>)}
               </button>
             </form>
 

@@ -5,7 +5,7 @@ import superadminApi from "../superadminApi";
 import {
   Plus, Pencil, Trash2, RefreshCw, CheckCircle,
   Zap, Crown, Users, Star, X, ChevronDown, ChevronUp,
-  BadgeCheck, AlertCircle, Search, KeyRound, UserCog,
+  Search, KeyRound, UserCog,
 } from "lucide-react";
 
 const SUPPORT_LABELS = {
@@ -181,7 +181,7 @@ const EMPTY_FORM = {
   member_limit: 10, max_projects: "", max_integrations: "", storage_limit_gb: "",
   features: [], support_level: "email",
   trial_days: 7, grace_period_days: 3,
-  is_popular: false, display_order: 0,
+  is_active: true, is_popular: false, is_custom: false, display_order: 0,
 };
 
 function PlanModal({ plan, onClose, onSaved }) {
@@ -205,7 +205,9 @@ function PlanModal({ plan, onClose, onSaved }) {
       support_level:      plan.support_level || "email",
       trial_days:         plan.trial_days ?? 7,
       grace_period_days:  plan.grace_period_days ?? 3,
+      is_active:          plan.is_active !== false,
       is_popular:         plan.is_popular || false,
+      is_custom:          plan.is_custom || false,
       display_order:      plan.display_order || 0,
     } : { ...EMPTY_FORM }
   );
@@ -394,11 +396,29 @@ function PlanModal({ plan, onClose, onSaved }) {
           </div>
 
           {/* Toggles */}
-          <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" checked={form.is_popular} onChange={e => set("is_popular", e.target.checked)}
-              className="w-4 h-4 rounded accent-[var(--primary)]" />
-            <span className="text-sm text-[color:var(--text)]">Show "Most Popular" badge on this plan</span>
-          </label>
+          <div className="space-y-3">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={form.is_active} onChange={e => set("is_active", e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded accent-[var(--primary)]" />
+              <span>
+                <span className="block text-sm text-[color:var(--text)]">Publish this plan</span>
+                <span className="block text-xs text-[color:var(--text-muted)]">Published plans appear on the landing page and can be selected during signup.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={form.is_custom} onChange={e => set("is_custom", e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded accent-[var(--primary)]" />
+              <span>
+                <span className="block text-sm text-[color:var(--text)]">Sales-assisted plan</span>
+                <span className="block text-xs text-[color:var(--text-muted)]">The landing-page button will contact sales instead of starting self-service signup.</span>
+              </span>
+            </label>
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={form.is_popular} onChange={e => set("is_popular", e.target.checked)}
+                className="w-4 h-4 rounded accent-[var(--primary)]" />
+              <span className="text-sm text-[color:var(--text)]">Show "Most Popular" badge on this plan</span>
+            </label>
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose}
@@ -564,27 +584,12 @@ function UserManageModal({ ws, onClose }) {
 }
 
 // ── Plan card ─────────────────────────────────────────────────────────────────
-function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUsers }) {
-  const [syncing, setSyncing]       = useState(false);
+function PlanCard({ plan, workspaces = [], onEdit, onDelete, onManageUsers }) {
   const [expanded, setExpanded]     = useState(false);
   const [wsExpanded, setWsExpanded] = useState(false);
 
-  const razorpaySynced = !!(plan.razorpay_monthly_plan_id || plan.razorpay_yearly_plan_id);
   const isFree = !plan.price_monthly_paise && !plan.price_yearly_paise;
   const features = Array.isArray(plan.features) ? plan.features : [];
-
-  async function handleSync() {
-    if (isFree) return toast("Free plans don't need Razorpay sync.", { icon: "ℹ️" });
-    setSyncing(true);
-    try {
-      await onSync(plan.id);
-      toast.success("Synced to Razorpay");
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Sync failed");
-    } finally {
-      setSyncing(false);
-    }
-  }
 
   return (
     <div className={`bg-[var(--surface)] border rounded-xl overflow-hidden ${plan.is_active ? "border-[color:var(--border)]" : "border-dashed border-[color:var(--border)] opacity-60"}`}>
@@ -657,29 +662,6 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onSync, onManageUse
           </span>
         </div>
       </div>
-
-      {/* Razorpay sync bar */}
-      {!isFree && (
-        <div className="px-5 py-2.5 border-t border-[color:var(--border)] flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            {razorpaySynced
-              ? <BadgeCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
-              : <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-            <span className={`text-xs font-medium truncate ${razorpaySynced ? "text-green-500" : "text-amber-500"}`}>
-              {razorpaySynced ? `Synced · ${plan.razorpay_monthly_plan_id}` : "Not synced to Razorpay yet"}
-            </span>
-          </div>
-          <button onClick={handleSync} disabled={syncing}
-            className={`shrink-0 px-3 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60 flex items-center gap-1.5 ${
-              razorpaySynced
-                ? "text-[color:var(--text-muted)] hover:text-[color:var(--text)] bg-[var(--surface)] border border-[color:var(--border)]"
-                : "bg-amber-500 text-white hover:bg-amber-600"
-            }`}>
-            <RefreshCw className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`} />
-            {razorpaySynced ? "Re-sync" : "Sync now"}
-          </button>
-        </div>
-      )}
 
       {/* Features (expandable) */}
       {features.length > 0 && (
@@ -791,11 +773,6 @@ export default function SuperadminPlans() {
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleSync(planId) {
-    await api.post(`/superadmin/plans/${planId}/sync-razorpay`);
-    await load();
-  }
-
   async function handleDelete(plan) {
     if (!window.confirm(`Permanently delete "${plan.name}"? This cannot be undone.`)) return;
     try {
@@ -847,18 +824,6 @@ export default function SuperadminPlans() {
         ))}
       </div>
 
-      {/* Razorpay notice */}
-      <div className="border border-[color:var(--border)] rounded-xl px-5 py-3 flex items-start gap-3">
-        <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-        <p className="text-xs text-[color:var(--text-muted)] leading-relaxed">
-          <span className="font-semibold text-[color:var(--text)]">Razorpay setup — </span>
-          Set <code className="px-1 py-0.5 rounded bg-[var(--surface-soft)]">RAZORPAY_KEY_ID</code>,{" "}
-          <code className="px-1 py-0.5 rounded bg-[var(--surface-soft)]">RAZORPAY_KEY_SECRET</code>, and{" "}
-          <code className="px-1 py-0.5 rounded bg-[var(--surface-soft)]">RAZORPAY_WEBHOOK_SECRET</code> in <code className="px-1 py-0.5 rounded bg-[var(--surface-soft)]">.env</code>.
-          After creating a paid plan, click <strong>Sync now</strong> to push it to Razorpay before workspaces can subscribe.
-        </p>
-      </div>
-
       {/* Plans grid */}
       {loading ? (
         <div className="flex justify-center py-16"><RefreshCw className="w-5 h-5 animate-spin text-[color:var(--text-muted)]" /></div>
@@ -871,7 +836,6 @@ export default function SuperadminPlans() {
               workspaces={workspacesByPlan[plan.slug] || []}
               onEdit={setEdit}
               onDelete={handleDelete}
-              onSync={handleSync}
               onManageUsers={setManageWs}
             />
           ))}
