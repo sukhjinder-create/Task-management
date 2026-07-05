@@ -25,6 +25,7 @@ const WorkspaceBilling = lazy(() => import("./pages/WorkspaceBilling.jsx"));
 const WorkspaceSearchMemory = lazy(() => import("./pages/WorkspaceSearchMemory.jsx"));
 const UserProfile = lazy(() => import("./pages/UserProfile.jsx"));
 const HuddleMeetingIntelligence = lazy(() => import("./pages/HuddleMeetingIntelligence.jsx"));
+const AdaptiveIntelligenceEvaluation = lazy(() => import("./pages/AdaptiveIntelligenceEvaluation.jsx"));
 
 // ---- Gradient Demo (Development) ----
 import { GradientDemo } from "./components/ui/GradientDemo";
@@ -49,6 +50,8 @@ const SuperadminSettings = lazy(() => import("./pages/SuperadminSettings.jsx"));
 const SuperadminPlans = lazy(() => import("./pages/SuperadminPlans.jsx"));
 const SuperadminBackups = lazy(() => import("./pages/SuperadminBackups.jsx"));
 const SuperadminGrowthIntelligence = lazy(() => import("./pages/SuperadminGrowthIntelligence.jsx"));
+const SuperadminAdaptiveIntelligence = lazy(() => import("./pages/SuperadminAdaptiveIntelligence.jsx"));
+const SuperadminAiStudio = lazy(() => import("./pages/SuperadminAiStudio.jsx"));
 import ProtectedSuperadmin from "./components/ProtectedSuperadmin";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext";
 import GrowthTelemetry from "./components/GrowthTelemetry";
@@ -64,6 +67,7 @@ const Leave = lazy(() => import("./pages/Leave.jsx"));
 const OKR = lazy(() => import("./pages/OKR.jsx"));
 const Reviews = lazy(() => import("./pages/Reviews.jsx"));
 const AIFeatures = lazy(() => import("./pages/AIFeatures.jsx"));
+const WorkspaceAiSettings = lazy(() => import("./pages/WorkspaceAiSettings.jsx"));
 const AIHub = lazy(() => import("./pages/AIHub.jsx"));
 
 // ---- Auth flow pages ----
@@ -176,6 +180,7 @@ export default function App() {
           />
           <Route path="reviews"     element={<ProtectedRoute requiredFeature="performance_reviews"><Reviews /></ProtectedRoute>} />
           <Route path="ai-features" element={<ProtectedRoute requiredFeature="ai_hub"><AIFeatures /></ProtectedRoute>} />
+          <Route path="ai-settings" element={<WorkspaceAiSettings />} />
           <Route
             path="ai"
             element={
@@ -281,6 +286,15 @@ export default function App() {
             }
           />
 
+          <Route
+            path="admin/adaptive-intelligence"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]} requiredFeature="workspace_intelligence">
+                <AdaptiveIntelligenceEvaluation />
+              </ProtectedRoute>
+            }
+          />
+
           {/* ---- NEW: Admin Intelligence ---- */}
           <Route
             path="admin/intelligence"
@@ -317,10 +331,12 @@ export default function App() {
           <Route index element={<Navigate to="workspaces" replace />} />
           <Route path="workspaces" element={<SuperAdminWorkspaces />} />
           <Route path="growth"     element={<SuperadminGrowthIntelligence />} />
+          <Route path="adaptive-intelligence" element={<SuperadminAdaptiveIntelligence />} />
           <Route path="plans"      element={<SuperadminPlans />} />
           <Route path="payments"   element={<SuperadminPayments />} />
           <Route path="settings"   element={<SuperadminSettings />} />
           <Route path="backups"    element={<SuperadminBackups />} />
+          <Route path="ai-studio"  element={<SuperadminAiStudio />} />
           <Route path="*"          element={<Navigate to="/superadmin/workspaces" replace />} />
         </Route>
 
