@@ -68,6 +68,18 @@ const OKR = lazy(() => import("./pages/OKR.jsx"));
 const Reviews = lazy(() => import("./pages/Reviews.jsx"));
 const AIFeatures = lazy(() => import("./pages/AIFeatures.jsx"));
 const WorkspaceAiSettings = lazy(() => import("./pages/WorkspaceAiSettings.jsx"));
+
+// ---- Enterprise Work Intelligence Platform V3 (execution) ----
+const EnterpriseControlCenter = lazy(() => import("./pages/execution/EnterpriseControlCenter.jsx"));
+const ExecDecisions = lazy(() => import("./pages/execution/Decisions.jsx"));
+const ExecApprovals = lazy(() => import("./pages/execution/Approvals.jsx"));
+const ExecutionDashboard = lazy(() => import("./pages/execution/ExecutionDashboard.jsx"));
+const CapabilityStudio = lazy(() => import("./pages/execution/CapabilityStudio.jsx"));
+const PolicyStudio = lazy(() => import("./pages/execution/PolicyStudio.jsx"));
+const AutomationStudio = lazy(() => import("./pages/execution/AutomationStudio.jsx"));
+const WorkflowBuilder = lazy(() => import("./pages/execution/WorkflowBuilder.jsx"));
+const EnterpriseGraph = lazy(() => import("./pages/execution/EnterpriseGraph.jsx"));
+const ExecExecutiveDashboard = lazy(() => import("./pages/execution/ExecutiveDashboard.jsx"));
 const AIHub = lazy(() => import("./pages/AIHub.jsx"));
 
 // ---- Auth flow pages ----
@@ -181,6 +193,18 @@ export default function App() {
           <Route path="reviews"     element={<ProtectedRoute requiredFeature="performance_reviews"><Reviews /></ProtectedRoute>} />
           <Route path="ai-features" element={<ProtectedRoute requiredFeature="ai_hub"><AIFeatures /></ProtectedRoute>} />
           <Route path="ai-settings" element={<WorkspaceAiSettings />} />
+
+          {/* ---- Enterprise Work Intelligence Platform V3 (execution) — admin ---- */}
+          <Route path="execution"            element={<ProtectedRoute allowedRoles={["admin"]}><EnterpriseControlCenter /></ProtectedRoute>} />
+          <Route path="execution/decisions"  element={<ProtectedRoute allowedRoles={["admin"]}><ExecDecisions /></ProtectedRoute>} />
+          <Route path="execution/approvals"  element={<ProtectedRoute allowedRoles={["admin", "manager"]}><ExecApprovals /></ProtectedRoute>} />
+          <Route path="execution/dashboard"  element={<ProtectedRoute allowedRoles={["admin"]}><ExecutionDashboard /></ProtectedRoute>} />
+          <Route path="execution/capabilities" element={<ProtectedRoute allowedRoles={["admin"]}><CapabilityStudio /></ProtectedRoute>} />
+          <Route path="execution/policies"   element={<ProtectedRoute allowedRoles={["admin"]}><PolicyStudio /></ProtectedRoute>} />
+          <Route path="execution/automations" element={<ProtectedRoute allowedRoles={["admin"]}><AutomationStudio /></ProtectedRoute>} />
+          <Route path="execution/workflows"  element={<ProtectedRoute allowedRoles={["admin"]}><WorkflowBuilder /></ProtectedRoute>} />
+          <Route path="execution/graph"      element={<ProtectedRoute allowedRoles={["admin"]}><EnterpriseGraph /></ProtectedRoute>} />
+          <Route path="execution/executive"  element={<ProtectedRoute allowedRoles={["admin"]}><ExecExecutiveDashboard /></ProtectedRoute>} />
           <Route
             path="ai"
             element={
