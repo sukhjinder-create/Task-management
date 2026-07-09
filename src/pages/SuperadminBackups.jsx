@@ -1,6 +1,6 @@
 // src/pages/SuperadminBackups.jsx
 import { useState, useEffect, useCallback } from "react";
-import { Database, RefreshCw, Play, CheckCircle, XCircle, Clock, HardDrive, Cloud } from "lucide-react";
+import { Database, RefreshCw, Play, CheckCircle, XCircle, Clock, HardDrive, Cloud, AlertTriangle } from "lucide-react";
 import superadminApi from "../superadminApi";
 
 async function apiFetch(path, opts = {}) {
@@ -8,13 +8,17 @@ async function apiFetch(path, opts = {}) {
   if (typeof data === "string") {
     try { data = JSON.parse(data); } catch { /* preserve non-JSON bodies */ }
   }
-  const response = await superadminApi.request({
-    url: path,
-    method: opts.method || "GET",
-    data,
-    headers: opts.headers,
-  });
-  return response.data;
+  try {
+    const response = await superadminApi.request({
+      url: path,
+      method: opts.method || "GET",
+      data,
+      headers: opts.headers,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(error?.response?.data?.error || error.message || "Request failed");
+  }
 }
 
 function fmtBytes(bytes) {
@@ -33,6 +37,7 @@ function StatusBadge({ status }) {
     success: { icon: <CheckCircle className="w-3.5 h-3.5" />, cls: "text-emerald-400 border border-emerald-400/40" },
     failed:  { icon: <XCircle    className="w-3.5 h-3.5" />, cls: "text-red-500 border border-red-500/40"   },
     running: { icon: <Clock      className="w-3.5 h-3.5 animate-spin" />, cls: "text-[color:var(--primary)] border border-[color:var(--primary)]/40" },
+    pending: { icon: <Clock      className="w-3.5 h-3.5" />, cls: "text-amber-400 border border-amber-400/40" },
   };
   const { icon, cls } = map[status] || { icon: null, cls: "text-[color:var(--text-muted)] border border-[color:var(--border)]" };
   return (
@@ -66,15 +71,20 @@ export default function SuperadminBackups() {
   const [triggering, setTriggering] = useState(false);
   const [triggerMsg, setTriggerMsg] = useState(null);
   const [workspaceIdInput, setWorkspaceIdInput] = useState("");
+  const [manualWorkspaceIdInput, setManualWorkspaceIdInput] = useState("");
   const [sourceUrlInput, setSourceUrlInput] = useState("");
-  const [recoveryConfig, setRecoveryConfig] = useState({ serverDefaultSourceConfigured: false });
+  const [recoveryConfig, setRecoveryConfig] = useState({
+    serverDefaultSourceConfigured: false,
+    missingWorkspaceRecoverySupported: false,
+    applyRequiresConfirmation: true,
+  });
   const [recoveryDryRun, setRecoveryDryRun] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [recoveryMsg, setRecoveryMsg] = useState(null);
   const [error, setError]     = useState(null);
 
   const hasRunningBackup = logs.some((log) => log.status === "running");
-  const hasRunningRecovery = recoveryJobs.some((job) => job.status === "running");
+  const hasRunningRecovery = recoveryJobs.some((job) => job.status === "running" || job.status === "pending");
   const shouldAutoRefresh = hasRunningBackup || hasRunningRecovery || triggering || recovering;
   const activeRecoveryJob =
     recoveryJobs.find((job) => job.status === "running" || job.status === "pending") || null;
@@ -82,10 +92,14 @@ export default function SuperadminBackups() {
     .filter((ws) => ws?.id && ws?.name)
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));
   const workspaceNameMap = new Map(workspaceOptions.map((ws) => [ws.id, ws.name]));
+  const selectedWorkspaceId = workspaceIdInput.trim();
+  const manualWorkspaceId = manualWorkspaceIdInput.trim();
+  const effectiveWorkspaceId = selectedWorkspaceId || manualWorkspaceId;
+  const workspaceIdIsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(effectiveWorkspaceId);
   const liveEvents = Array.isArray(activeRecoveryJob?.event_log)
     ? activeRecoveryJob.event_log.slice(-8).reverse()
     : [];
-  const canRecover = !!workspaceIdInput && !recovering;
+  const canRecover = workspaceIdIsUuid && !recovering && !hasRunningRecovery;
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) {
@@ -104,6 +118,8 @@ export default function SuperadminBackups() {
       setRecoveryJobs(recoveryRes.jobs || []);
       setRecoveryConfig({
         serverDefaultSourceConfigured: !!recoveryConfigRes?.serverDefaultSourceConfigured,
+        missingWorkspaceRecoverySupported: !!recoveryConfigRes?.missingWorkspaceRecoverySupported,
+        applyRequiresConfirmation: recoveryConfigRes?.applyRequiresConfirmation !== false,
       });
     } catch (e) {
       setError(e.message);
@@ -147,10 +163,18 @@ export default function SuperadminBackups() {
   }
 
   async function triggerWorkspaceRecovery() {
-    const workspaceId = workspaceIdInput.trim();
+    const workspaceId = effectiveWorkspaceId;
     if (!workspaceId) {
       setRecoveryMsg("Please select a workspace.");
       return;
+    }
+    if (!workspaceIdIsUuid) {
+      setRecoveryMsg("Workspace ID must be a valid UUID.");
+      return;
+    }
+    if (!recoveryDryRun && recoveryConfig.applyRequiresConfirmation) {
+      const ok = window.confirm(`Apply workspace recovery for ${workspaceId}?`);
+      if (!ok) return;
     }
 
     setRecovering(true);
@@ -159,6 +183,7 @@ export default function SuperadminBackups() {
       const payload = {
         workspaceId,
         dryRun: recoveryDryRun,
+        confirmApply: !recoveryDryRun,
       };
       if (sourceUrlInput.trim()) payload.sourceDatabaseUrl = sourceUrlInput.trim();
 
@@ -233,7 +258,10 @@ export default function SuperadminBackups() {
             <label className="block text-xs font-medium text-[color:var(--text-muted)] mb-1">Workspace</label>
             <select
               value={workspaceIdInput}
-              onChange={(e) => setWorkspaceIdInput(e.target.value)}
+              onChange={(e) => {
+                setWorkspaceIdInput(e.target.value);
+                if (e.target.value) setManualWorkspaceIdInput("");
+              }}
               disabled={workspacesLoading || recovering}
               className="bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm"
             >
@@ -246,9 +274,19 @@ export default function SuperadminBackups() {
                 </option>
               ))}
             </select>
-            {workspaceIdInput && (
+            <input
+              value={manualWorkspaceIdInput}
+              onChange={(e) => {
+                setManualWorkspaceIdInput(e.target.value);
+                if (e.target.value) setWorkspaceIdInput("");
+              }}
+              disabled={recovering || !!workspaceIdInput}
+              placeholder="Workspace UUID"
+              className="mt-2 bg-[var(--surface)] border border-[color:var(--border)] text-[color:var(--text)] rounded-lg px-3 py-2 w-full focus:outline-none focus:border-[color:var(--primary)] transition-colors text-sm font-mono"
+            />
+            {effectiveWorkspaceId && (
               <p className="text-[11px] text-[color:var(--text-muted)] mt-1 font-mono">
-                {workspaceIdInput}
+                {effectiveWorkspaceId}
               </p>
             )}
           </div>
@@ -295,6 +333,12 @@ export default function SuperadminBackups() {
             </button>
           </div>
         </div>
+        {hasRunningRecovery && (
+          <div className="mt-3 px-3 py-2 rounded-lg border border-amber-400/30 text-xs text-amber-300 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-none" />
+            <span>Another workspace recovery job is already active.</span>
+          </div>
+        )}
         {recoveryMsg && (
           <div className="mt-3 px-3 py-2 rounded-lg border border-emerald-500/30 text-xs text-emerald-400">
             {recoveryMsg}
@@ -392,7 +436,7 @@ export default function SuperadminBackups() {
           </div>
 
           <div className="mt-2 flex flex-wrap gap-3 text-xs text-[color:var(--text-muted)]">
-            <span>Workspace: <span className="text-[color:var(--text)] font-medium">{workspaceNameMap.get(activeRecoveryJob.workspace_id) || activeRecoveryJob.workspace_id}</span></span>
+            <span>Workspace: <span className="text-[color:var(--text)] font-medium">{workspaceNameMap.get(activeRecoveryJob.workspace_id) || activeRecoveryJob.workspace_name_snapshot || activeRecoveryJob.workspace_id}</span></span>
             <span>Progress: <span className="text-[color:var(--text)] font-medium">{Number(activeRecoveryJob.progress_pct || 0).toFixed(1)}%</span></span>
             <span>Scanned: <span className="text-[color:var(--text)] font-medium">{activeRecoveryJob.rows_scanned ?? 0}</span></span>
             <span>Written: <span className="text-[color:var(--text)] font-medium">{activeRecoveryJob.rows_written ?? 0}</span></span>
@@ -453,7 +497,7 @@ export default function SuperadminBackups() {
                   <tr key={job.id} className="hover:bg-[var(--surface-soft)] transition-colors">
                     <td className="px-4 py-3"><StatusBadge status={job.status} /></td>
                     <td className="px-4 py-3 text-[color:var(--text)] text-xs">
-                      <p className="font-medium">{workspaceNameMap.get(job.workspace_id) || "Unknown workspace"}</p>
+                      <p className="font-medium">{workspaceNameMap.get(job.workspace_id) || job.workspace_name_snapshot || "Unknown workspace"}</p>
                       <p className="font-mono text-[color:var(--text-muted)]">{job.workspace_id}</p>
                     </td>
                     <td className="px-4 py-3 text-[color:var(--text)]">{job.dry_run ? "Dry run" : "Apply"}</td>
