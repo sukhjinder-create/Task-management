@@ -103,7 +103,7 @@ export default function SuperadminAiStudio() {
       audit: () => api.overview(), // audit list fetched in view
       traces: () => api.overview(),
     };
-    if (tab === "playground" || tab === "prompts" || tab === "health" || tab === "audit" || tab === "traces") { setData({}); return; }
+    if (tab === "capabilities" || tab === "playground" || tab === "prompts" || tab === "health" || tab === "audit" || tab === "traces") { setData({}); return; }
     setLoading(true);
     (loaders[tab] || (() => Promise.resolve(null)))()
       .then((d) => alive && setData(d))
@@ -162,13 +162,7 @@ export default function SuperadminAiStudio() {
               render={(m) => [m.providerKey, <b>{m.key}</b>, `${(m.contextWindowTokens / 1000) | 0}k`, m.supports?.vision ? "yes" : "no", m.supports?.tools ? "yes" : "no", m.costClass]} />
           )}
 
-          {tab === "capabilities" && (
-            <div className="space-y-2">
-              <Help>Every AI feature is registered here with its requirements. Provider/model choices are validated against these requirements automatically.</Help>
-              <Table columns={["Capability", "Category", "Execution", "Requires", "Lock"]} rows={data || []}
-                render={(c) => [<b>{c.name}</b>, c.category, c.executionClass, Object.keys(c.requires || {}).join(", ") || "—", <LockBadge level={c.lock} />]} />
-            </div>
-          )}
+          {tab === "capabilities" && <CapabilityConfig />}
 
           {tab === "profiles" && (
             <Table columns={["Profile", "Temperature", "Max tokens", "Top-p"]} rows={data || []}
@@ -195,6 +189,137 @@ export default function SuperadminAiStudio() {
           {tab === "traces" && <Traces />}
         </>
       )}
+    </div>
+  );
+}
+
+// ── Capability configuration (per-feature provider / model / prompt + lock) ────
+const inputCls = "w-full mt-1 bg-[var(--app-bg)] border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm text-[color:var(--text)]";
+const LOCKS = [
+  { v: "workspace_customizable", l: "Customizable — workspaces may override" },
+  { v: "global_locked", l: "Locked — no workspace may override" },
+];
+
+function Field({ label, value, onChange, options, allowEmpty = "Use default", disabled }) {
+  return (
+    <div>
+      <label className={`text-xs ${mutedText} capitalize`}>{label}</label>
+      <select value={value ?? ""} onChange={(e) => onChange(e.target.value)} disabled={disabled} className={`${inputCls} disabled:opacity-50`}>
+        {allowEmpty != null && <option value="">{allowEmpty}</option>}
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function CapabilityConfig() {
+  const [caps, setCaps] = useState(null);
+  const [providers, setProviders] = useState([]);
+  const [models, setModels] = useState([]);
+  const [profiles, setProfiles] = useState([]);
+  const [prompts, setPrompts] = useState([]);
+  const [saved, setSaved] = useState({});
+  const [sel, setSel] = useState(null);
+  const [form, setForm] = useState({ provider: "", model: "", promptKey: "", runtimeProfile: "", lockLevel: "workspace_customizable" });
+  const [busy, setBusy] = useState(false);
+  const [bulk, setBulk] = useState({ provider: "", model: "" });
+
+  const reloadSaved = async () => {
+    try { const rows = await api.savedConfigs(); setSaved(Object.fromEntries((rows || []).map((r) => [r.capabilityKey, r]))); } catch { setSaved({}); }
+  };
+  useEffect(() => {
+    (async () => {
+      try {
+        const [c, p, m, pf, pr] = await Promise.all([api.capabilities(), api.providers(), api.models(), api.profiles(), api.prompts().catch(() => [])]);
+        setCaps(c); setProviders(p || []); setModels(m || []); setProfiles(pf || []); setPrompts(pr || []);
+      } catch { setCaps([]); }
+      reloadSaved();
+    })();
+  }, []);
+
+  const open = (key) => {
+    setSel(key);
+    const s = saved[key] || {};
+    setForm({ provider: s.provider || "", model: s.model || "", promptKey: s.promptKey || "", runtimeProfile: s.runtimeProfile || "", lockLevel: s.lockLevel || "workspace_customizable" });
+  };
+
+  const providerOpts = providers.map((p) => ({ value: p.key, label: p.displayName || p.key }));
+  const modelOpts = (prov) => models.filter((m) => !prov || m.providerKey === prov).map((m) => ({ value: m.key, label: `${m.key}${m.providerKey ? ` (${m.providerKey})` : ""}` }));
+  const promptOpts = prompts.map((p) => ({ value: p.key, label: p.key }));
+  const profileOpts = profiles.map((p) => ({ value: p.key, label: p.key }));
+
+  const save = async () => {
+    if (!sel) return;
+    setBusy(true);
+    try {
+      const r = await api.saveCapabilityConfig({ capabilityKey: sel, provider: form.provider || null, model: form.model || null, promptKey: form.promptKey || null, runtimeProfile: form.runtimeProfile || null });
+      if (r?.ok === false) { toast.error(r.reason === "incompatible_provider" ? "Provider/model doesn't meet this feature's requirements" : (r.reason || "Save failed")); return; }
+      await api.setLock(sel, form.lockLevel);
+      toast.success("Saved — this now overrides the hardcoded default for this feature");
+      reloadSaved();
+    } catch (e) { toast.error(e?.response?.data?.error || "Save failed"); }
+    finally { setBusy(false); }
+  };
+
+  const applyToAll = async () => {
+    if (!bulk.provider) { toast.error("Pick a provider first"); return; }
+    setBusy(true);
+    try {
+      for (const c of caps || []) await api.saveCapabilityConfig({ capabilityKey: c.key, provider: bulk.provider, model: bulk.model || null });
+      toast.success(`Applied ${bulk.provider}${bulk.model ? ` / ${bulk.model}` : ""} to every feature`);
+      reloadSaved();
+    } catch (e) { toast.error(e?.response?.data?.error || "Bulk apply failed"); }
+    finally { setBusy(false); }
+  };
+
+  if (caps === null) return <Loading />;
+  return (
+    <div className="space-y-4">
+      {/* Platform default (whole platform) */}
+      <div className={`${card} p-4`}>
+        <p className="text-sm font-medium text-[color:var(--text)]">Platform default provider</p>
+        <Help>Set one AI provider for <b>every</b> feature at once. Individual features below can still override it.</Help>
+        <div className="grid md:grid-cols-3 gap-3 mt-2 items-end">
+          <Field label="Provider" value={bulk.provider} onChange={(v) => setBulk({ provider: v, model: "" })} options={providerOpts} allowEmpty="Select provider" />
+          <Field label="Model" value={bulk.model} onChange={(v) => setBulk((b) => ({ ...b, model: v }))} options={modelOpts(bulk.provider)} allowEmpty="Provider default" />
+          <button onClick={applyToAll} disabled={busy} className="h-[38px] px-3 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">Apply to all features</button>
+        </div>
+      </div>
+
+      {/* Per-feature editor */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className={`${card} p-3 space-y-1`}>
+          <p className="text-sm font-medium text-[color:var(--text)] px-1 pb-1">Features</p>
+          {(caps || []).map((c) => {
+            const s = saved[c.key];
+            return (
+              <button key={c.key} onClick={() => open(c.key)} className={`block w-full text-left px-2 py-1.5 rounded text-sm ${sel === c.key ? "bg-[var(--surface-soft)] text-[color:var(--text)]" : mutedText}`}>
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate">{c.name}</span>
+                  {s?.provider && <span className="text-[10px] text-emerald-400 shrink-0">{s.provider}</span>}
+                </span>
+                {s?.lockLevel && <span className="block"><LockBadge level={s.lockLevel} /></span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="md:col-span-2">
+          {!sel ? <Help>Select a feature to choose its AI provider, model, prompt and runtime — and whether workspaces may override it.</Help> : (
+            <div className={`${card} p-4 space-y-3`}>
+              <p className="text-sm font-medium text-[color:var(--text)]">{caps.find((c) => c.key === sel)?.name || sel}</p>
+              <Field label="Provider" value={form.provider} onChange={(v) => setForm((f) => ({ ...f, provider: v, model: "" }))} options={providerOpts} allowEmpty="Use platform/hardcoded default" />
+              <Field label="Model" value={form.model} onChange={(v) => setForm((f) => ({ ...f, model: v }))} options={modelOpts(form.provider)} allowEmpty="Provider default" disabled={!form.provider} />
+              <Field label="Prompt" value={form.promptKey} onChange={(v) => setForm((f) => ({ ...f, promptKey: v }))} options={promptOpts} allowEmpty="Use hardcoded prompt" />
+              <Field label="Runtime profile" value={form.runtimeProfile} onChange={(v) => setForm((f) => ({ ...f, runtimeProfile: v }))} options={profileOpts} allowEmpty="Capability default" />
+              <Field label="Workspace override policy" value={form.lockLevel} onChange={(v) => setForm((f) => ({ ...f, lockLevel: v }))} options={LOCKS.map((l) => ({ value: l.v, label: l.l }))} allowEmpty={null} />
+              <div className="flex items-center gap-2">
+                <button onClick={save} disabled={busy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{busy ? "Saving…" : "Save feature config"}</button>
+                <Help>Saved values override the hardcoded codebase defaults. Lock to stop workspaces overriding.</Help>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

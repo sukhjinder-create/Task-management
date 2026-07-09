@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "../../components/ui";
 import { eiApi } from "../../services/ei.api";
+import StudioWorkspacePicker from "../../components/StudioWorkspacePicker";
 import { PageHeader, Panel, StatCard, Metric, AsyncState, useAsync } from "./_shared";
 import { PipelineFlow } from "./charts";
 
@@ -18,6 +19,7 @@ export default function IntelligenceHome() {
   return (
     <div>
       <PageHeader title="Enterprise Intelligence" subtitle="Everything the platform knows — evidence, reasoning, predictions, learning and memory — inspectable and explainable end to end." actions={<Button size="sm" variant="secondary" onClick={query.reload}>Refresh</Button>} />
+      <StudioWorkspacePicker onChange={() => query.reload()} />
       <AsyncState query={query} empty="No intelligence recorded yet for this workspace.">
         {(d) => {
           const c = d.counts || {};

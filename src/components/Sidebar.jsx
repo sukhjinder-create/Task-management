@@ -288,8 +288,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         {renderSection("Workspace", workspaceItems)}
         {renderSection("Organization", orgItems)}
         {renderSection("Intelligence", intelligenceItems)}
-        {renderSection("Execution Platform", executionItems)}
-        {renderSection("Intelligence Studio", intelligenceStudioItems)}
+        {/* Execution Platform + Intelligence Studio are SUPER-ADMIN owned — not shown to workspace admins. */}
         {renderSection("Administration", adminItems)}
       </nav>
 

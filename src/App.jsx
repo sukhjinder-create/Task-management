@@ -212,38 +212,8 @@ export default function App() {
           <Route path="ai-features" element={<ProtectedRoute requiredFeature="ai_hub"><AIFeatures /></ProtectedRoute>} />
           <Route path="ai-settings" element={<WorkspaceAiSettings />} />
 
-          {/* ---- Enterprise Work Intelligence Platform V3 (execution) — admin ---- */}
-          <Route path="execution"            element={<ProtectedRoute allowedRoles={["admin"]}><EnterpriseControlCenter /></ProtectedRoute>} />
-          <Route path="execution/decisions"  element={<ProtectedRoute allowedRoles={["admin"]}><ExecDecisions /></ProtectedRoute>} />
-          <Route path="execution/approvals"  element={<ProtectedRoute allowedRoles={["admin", "manager"]}><ExecApprovals /></ProtectedRoute>} />
-          <Route path="execution/dashboard"  element={<ProtectedRoute allowedRoles={["admin"]}><ExecutionDashboard /></ProtectedRoute>} />
-          <Route path="execution/capabilities" element={<ProtectedRoute allowedRoles={["admin"]}><CapabilityStudio /></ProtectedRoute>} />
-          <Route path="execution/policies"   element={<ProtectedRoute allowedRoles={["admin"]}><PolicyStudio /></ProtectedRoute>} />
-          <Route path="execution/automations" element={<ProtectedRoute allowedRoles={["admin"]}><AutomationStudio /></ProtectedRoute>} />
-          <Route path="execution/workflows"  element={<ProtectedRoute allowedRoles={["admin"]}><WorkflowBuilder /></ProtectedRoute>} />
-          <Route path="execution/graph"      element={<ProtectedRoute allowedRoles={["admin"]}><EnterpriseGraph /></ProtectedRoute>} />
-          <Route path="execution/executive"  element={<ProtectedRoute allowedRoles={["admin"]}><ExecExecutiveDashboard /></ProtectedRoute>} />
-
-          {/* ---- Enterprise Intelligence Studio — admin (read-only) ---- */}
-          <Route path="intelligence-studio"                 element={<ProtectedRoute allowedRoles={["admin"]}><IntelligenceHome /></ProtectedRoute>} />
-          <Route path="intelligence-studio/evidence"        element={<ProtectedRoute allowedRoles={["admin"]}><EvidenceExplorer /></ProtectedRoute>} />
-          <Route path="intelligence-studio/attributions"    element={<ProtectedRoute allowedRoles={["admin"]}><AttributionExplorer /></ProtectedRoute>} />
-          <Route path="intelligence-studio/traces"          element={<ProtectedRoute allowedRoles={["admin"]}><ReasoningTraceExplorer /></ProtectedRoute>} />
-          <Route path="intelligence-studio/traces/:id"      element={<ProtectedRoute allowedRoles={["admin"]}><ReasoningTraceExplorer /></ProtectedRoute>} />
-          <Route path="intelligence-studio/predictions"     element={<ProtectedRoute allowedRoles={["admin"]}><PredictionCenter /></ProtectedRoute>} />
-          <Route path="intelligence-studio/predictions/:id" element={<ProtectedRoute allowedRoles={["admin"]}><PredictionCenter /></ProtectedRoute>} />
-          <Route path="intelligence-studio/recommendations"     element={<ProtectedRoute allowedRoles={["admin"]}><RecommendationCenter /></ProtectedRoute>} />
-          <Route path="intelligence-studio/recommendations/:id" element={<ProtectedRoute allowedRoles={["admin"]}><RecommendationCenter /></ProtectedRoute>} />
-          <Route path="intelligence-studio/executive"       element={<ProtectedRoute allowedRoles={["admin"]}><ExecutiveIntelligence /></ProtectedRoute>} />
-          <Route path="intelligence-studio/outcomes"        element={<ProtectedRoute allowedRoles={["admin"]}><OutcomeCenter /></ProtectedRoute>} />
-          <Route path="intelligence-studio/validation"      element={<ProtectedRoute allowedRoles={["admin"]}><ValidationCenter /></ProtectedRoute>} />
-          <Route path="intelligence-studio/calibration"     element={<ProtectedRoute allowedRoles={["admin"]}><CalibrationStudio /></ProtectedRoute>} />
-          <Route path="intelligence-studio/learning"        element={<ProtectedRoute allowedRoles={["admin"]}><LearningStudio /></ProtectedRoute>} />
-          <Route path="intelligence-studio/experiments"     element={<ProtectedRoute allowedRoles={["admin"]}><ExperimentCenter /></ProtectedRoute>} />
-          <Route path="intelligence-studio/memory"          element={<ProtectedRoute allowedRoles={["admin"]}><OrganizationalMemory /></ProtectedRoute>} />
-          <Route path="intelligence-studio/health"          element={<ProtectedRoute allowedRoles={["admin"]}><PlatformHealth /></ProtectedRoute>} />
-          <Route path="intelligence-studio/graph"           element={<ProtectedRoute allowedRoles={["admin"]}><IntelligenceGraph /></ProtectedRoute>} />
-          <Route path="intelligence-studio/search"          element={<ProtectedRoute allowedRoles={["admin"]}><IntelligenceSearch /></ProtectedRoute>} />
+          {/* Execution Platform + Enterprise Intelligence Studio are SUPER-ADMIN owned —
+              relocated to /execution and /intelligence-studio under superadmin protection. */}
           <Route
             path="ai"
             element={
@@ -401,6 +371,43 @@ export default function App() {
           <Route path="backups"    element={<SuperadminBackups />} />
           <Route path="ai-studio"  element={<SuperadminAiStudio />} />
           <Route path="*"          element={<Navigate to="/superadmin/workspaces" replace />} />
+        </Route>
+
+        {/* Execution Platform — SUPER-ADMIN owned (same paths, superadmin-protected) */}
+        <Route path="/execution" element={<ProtectedSuperadmin><SuperAdminLayout><Outlet /></SuperAdminLayout></ProtectedSuperadmin>}>
+          <Route index element={<EnterpriseControlCenter />} />
+          <Route path="decisions" element={<ExecDecisions />} />
+          <Route path="approvals" element={<ExecApprovals />} />
+          <Route path="dashboard" element={<ExecutionDashboard />} />
+          <Route path="capabilities" element={<CapabilityStudio />} />
+          <Route path="policies" element={<PolicyStudio />} />
+          <Route path="automations" element={<AutomationStudio />} />
+          <Route path="workflows" element={<WorkflowBuilder />} />
+          <Route path="graph" element={<EnterpriseGraph />} />
+          <Route path="executive" element={<ExecExecutiveDashboard />} />
+        </Route>
+
+        {/* Enterprise Intelligence Studio — SUPER-ADMIN owned */}
+        <Route path="/intelligence-studio" element={<ProtectedSuperadmin><SuperAdminLayout><Outlet /></SuperAdminLayout></ProtectedSuperadmin>}>
+          <Route index element={<IntelligenceHome />} />
+          <Route path="evidence" element={<EvidenceExplorer />} />
+          <Route path="attributions" element={<AttributionExplorer />} />
+          <Route path="traces" element={<ReasoningTraceExplorer />} />
+          <Route path="traces/:id" element={<ReasoningTraceExplorer />} />
+          <Route path="predictions" element={<PredictionCenter />} />
+          <Route path="predictions/:id" element={<PredictionCenter />} />
+          <Route path="recommendations" element={<RecommendationCenter />} />
+          <Route path="recommendations/:id" element={<RecommendationCenter />} />
+          <Route path="executive" element={<ExecutiveIntelligence />} />
+          <Route path="outcomes" element={<OutcomeCenter />} />
+          <Route path="validation" element={<ValidationCenter />} />
+          <Route path="calibration" element={<CalibrationStudio />} />
+          <Route path="learning" element={<LearningStudio />} />
+          <Route path="experiments" element={<ExperimentCenter />} />
+          <Route path="memory" element={<OrganizationalMemory />} />
+          <Route path="health" element={<PlatformHealth />} />
+          <Route path="graph" element={<IntelligenceGraph />} />
+          <Route path="search" element={<IntelligenceSearch />} />
         </Route>
 
         {/* ============================

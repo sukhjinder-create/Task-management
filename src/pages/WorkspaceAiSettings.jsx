@@ -21,21 +21,36 @@ function LockState({ editable, badge, help }) {
   );
 }
 
+const OPTS = { provider: "providers", model: "models", profile: "profiles", promptKey: "prompts" };
+
 export default function WorkspaceAiSettings() {
   const [tab, setTab] = useState("settings");
   const [caps, setCaps] = useState(null);
   const [sel, setSel] = useState(null);
   const [controls, setControls] = useState(null);
   const [override, setOverride] = useState({});
+  const [lists, setLists] = useState({ providers: [], models: [], profiles: [], prompts: [] });
 
   useEffect(() => { api.capabilities().then(setCaps).catch(() => setCaps([])); }, []);
+  useEffect(() => {
+    Promise.all([api.providers().catch(() => []), api.models().catch(() => []), api.profiles().catch(() => []), api.prompts().catch(() => [])])
+      .then(([providers, models, profiles, prompts]) => setLists({ providers, models, profiles, prompts }));
+  }, []);
+
+  const optionsFor = (field, providerVal) => {
+    if (field === "provider") return lists.providers.map((p) => ({ v: p.key, l: p.displayName || p.key }));
+    if (field === "model") return lists.models.filter((m) => !providerVal || m.providerKey === providerVal).map((m) => ({ v: m.key, l: m.key }));
+    if (field === "profile") return lists.profiles.map((p) => ({ v: p.key, l: p.key }));
+    if (field === "promptKey") return lists.prompts.map((p) => ({ v: p.key, l: p.key }));
+    return [];
+  };
 
   const open = async (key) => {
     setSel(key); setControls(null); setOverride({});
     try { setControls(await api.controls(key)); } catch { setControls({ error: true }); }
   };
   const save = async () => {
-    try { await api.previewOverride(sel, { override }); await apiPut(sel, override); toast.success("Override saved"); open(sel); }
+    try { await api.previewOverride(sel, { override }); await api.saveOverride(sel, override); toast.success("Override saved — active for this workspace"); open(sel); }
     catch (e) { toast.error(e?.response?.data?.reason || e?.response?.data?.error || "Not permitted"); }
   };
 
@@ -73,19 +88,32 @@ export default function WorkspaceAiSettings() {
                     <p className="text-sm font-medium text-[color:var(--text)]">{controls.capability?.name}</p>
                     <LockState {...(Object.values(controls.controls)[0] || {})} />
                   </div>
-                  {Object.entries(controls.controls).map(([field, c]) => (
-                    <div key={field}>
-                      <label className={`text-xs ${mutedText} capitalize`}>{field}</label>
-                      <input
-                        defaultValue={c.value ?? ""}
-                        disabled={!c.editable}
-                        onChange={(e) => setOverride((o) => ({ ...o, [field]: e.target.value }))}
-                        placeholder={c.platformDefault ?? "platform default"}
-                        className="w-full mt-1 bg-[var(--app-bg)] border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm text-[color:var(--text)] disabled:opacity-50"
-                      />
-                      <p className={`text-[11px] ${mutedText} mt-0.5`}>Platform default: {c.platformDefault ?? "—"} · {c.help}</p>
-                    </div>
-                  ))}
+                  {Object.entries(controls.controls).map(([field, c]) => {
+                    const providerVal = override.provider ?? controls.controls.provider?.value;
+                    const opts = optionsFor(field, providerVal);
+                    return (
+                      <div key={field}>
+                        <label className={`text-xs ${mutedText} capitalize`}>{field}</label>
+                        {opts.length > 0 ? (
+                          <select
+                            value={override[field] ?? c.value ?? ""}
+                            disabled={!c.editable}
+                            onChange={(e) => setOverride((o) => ({ ...o, [field]: e.target.value }))}
+                            className="w-full mt-1 bg-[var(--app-bg)] border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm text-[color:var(--text)] disabled:opacity-50">
+                            <option value="">Use platform default ({c.platformDefault ?? "—"})</option>
+                            {opts.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+                          </select>
+                        ) : (
+                          <input
+                            defaultValue={c.value ?? ""} disabled={!c.editable}
+                            onChange={(e) => setOverride((o) => ({ ...o, [field]: e.target.value }))}
+                            placeholder={c.platformDefault ?? "platform default"}
+                            className="w-full mt-1 bg-[var(--app-bg)] border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm text-[color:var(--text)] disabled:opacity-50" />
+                        )}
+                        <p className={`text-[11px] ${mutedText} mt-0.5`}>Platform default: {c.platformDefault ?? "—"} · {c.help}</p>
+                      </div>
+                    );
+                  })}
                   {Object.values(controls.controls)[0]?.editable && (
                     <button onClick={save} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white">Save override</button>
                   )}

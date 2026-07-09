@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "../../components/ui";
 import { executionApi } from "../../services/execution.api";
+import StudioWorkspacePicker from "../../components/StudioWorkspacePicker";
 import { PageHeader, StatCard, Panel, Metric, AsyncState, useAsync } from "./_shared";
 
 const LINKS = [
@@ -24,6 +25,7 @@ export default function EnterpriseControlCenter() {
         subtitle="Live health of decisions, execution, approvals and automation across the workspace."
         actions={<Button size="sm" variant="secondary" onClick={query.reload}>Refresh</Button>}
       />
+      <StudioWorkspacePicker onChange={() => query.reload()} />
       <AsyncState query={query} empty="No activity recorded yet.">
         {(data) => (
           <div className="space-y-5">
