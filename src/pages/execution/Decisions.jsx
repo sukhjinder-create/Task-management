@@ -1,14 +1,20 @@
 // src/pages/execution/Decisions.jsx
 import { useState } from "react";
-import { Button, Badge } from "../../components/ui";
+import { Button, Badge, Input, Select, Textarea } from "../../components/ui";
 import { executionApi, execError } from "../../services/execution.api";
 import { PageHeader, Panel, AsyncState, JsonView, useAsync, statusTone } from "./_shared";
 
+const EMPTY = { recommendationId: "", reasoningTraceId: "", entityType: "Task", entityId: "", capabilityKey: "", inputText: "{\n  \n}" };
+
 export default function Decisions() {
   const query = useAsync(() => executionApi.decisions(), []);
+  const caps = useAsync(() => executionApi.capabilities(), []);
   const [detail, setDetail] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState(EMPTY);
+  const [createMsg, setCreateMsg] = useState(null);
 
   const open = async (id) => {
     setErr(null);
@@ -19,13 +25,63 @@ export default function Decisions() {
     try { await executionApi.runDecision(id, { mode: "manager" }); await open(id); query.reload(); }
     catch (e) { setErr(execError(e)); } finally { setBusy(false); }
   };
+  const create = async () => {
+    setBusy(true); setCreateMsg(null);
+    try {
+      const input = JSON.parse(form.inputText || "{}");
+      const recommendation = {
+        recommendationId: form.recommendationId,
+        entity: { type: form.entityType, id: form.entityId },
+        status: "recommended", requiresApproval: true, manualOnly: false,
+        rationaleRefs: { reasoningTraceId: form.reasoningTraceId, predictionId: null, evidenceIds: [], attributionIds: [] },
+      };
+      const proposedAction = form.capabilityKey ? { capabilityKey: form.capabilityKey, input } : null;
+      const { decision } = await executionApi.createDecision(recommendation, proposedAction);
+      setCreateMsg({ ok: true, text: `Created ${decision.decisionId}.` });
+      setForm(EMPTY); setShowCreate(false); query.reload(); open(decision.decisionId);
+    } catch (e) {
+      setCreateMsg({ ok: false, text: e instanceof SyntaxError ? "Action input is not valid JSON." : execError(e).message });
+    } finally { setBusy(false); }
+  };
 
   return (
     <div>
-      <PageHeader title="Decisions" subtitle="Every recommendation that becomes an action is a first-class Decision, carried through approval → execution → verification with full history." actions={<Button size="sm" variant="secondary" onClick={query.reload}>Refresh</Button>} />
+      <PageHeader
+        title="Decisions"
+        subtitle="Every recommendation that becomes an action is a first-class Decision, carried through approval → execution → verification with full history."
+        actions={<>
+          <Button size="sm" onClick={() => setShowCreate((s) => !s)}>{showCreate ? "Close" : "New decision"}</Button>
+          <Button size="sm" variant="secondary" onClick={query.reload}>Refresh</Button>
+        </>}
+      />
+
+      {showCreate && (
+        <Panel title="Create decision" className="mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Input placeholder="Recommendation ID" value={form.recommendationId} onChange={(e) => setForm({ ...form, recommendationId: e.target.value })} />
+            <Input placeholder="Reasoning trace ID (required)" value={form.reasoningTraceId} onChange={(e) => setForm({ ...form, reasoningTraceId: e.target.value })} />
+            <Input placeholder="Entity type (e.g. Task)" value={form.entityType} onChange={(e) => setForm({ ...form, entityType: e.target.value })} />
+            <Input placeholder="Entity ID" value={form.entityId} onChange={(e) => setForm({ ...form, entityId: e.target.value })} />
+            <Select value={form.capabilityKey} onChange={(e) => setForm({ ...form, capabilityKey: e.target.value })}>
+              <option value="">No action (decision only)</option>
+              {(caps.data?.capabilities || []).map((c) => <option key={c.key} value={c.key}>{c.title}</option>)}
+            </Select>
+            <div className="md:col-span-1" />
+            <div className="md:col-span-2">
+              <label className="text-[11px] text-[color:var(--text-soft)]">Action input (JSON)</label>
+              <Textarea rows={4} value={form.inputText} onChange={(e) => setForm({ ...form, inputText: e.target.value })} className="font-mono text-[12px]" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-3">
+            <Button size="sm" onClick={create} loading={busy} disabled={!form.recommendationId || !form.reasoningTraceId}>Create decision</Button>
+            {createMsg && <span className={`text-[12px] ${createMsg.ok ? "text-[color:var(--score-good)]" : "text-[color:var(--score-danger)]"}`}>{createMsg.text}</span>}
+          </div>
+        </Panel>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="Decisions">
-          <AsyncState query={query} empty="No decisions yet. They are created from Enterprise Intelligence recommendations.">
+          <AsyncState query={query} empty="No decisions yet. Create one above, or they arrive from Enterprise Intelligence recommendations.">
             {(data) => (
               <div className="space-y-1.5">
                 {(data.decisions || []).map((d) => (
