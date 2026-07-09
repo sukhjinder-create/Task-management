@@ -103,7 +103,7 @@ export default function SuperadminAiStudio() {
       audit: () => api.overview(), // audit list fetched in view
       traces: () => api.overview(),
     };
-    if (tab === "capabilities" || tab === "playground" || tab === "prompts" || tab === "health" || tab === "audit" || tab === "traces") { setData({}); return; }
+    if (["capabilities", "providers", "models", "profiles", "playground", "prompts", "health", "audit", "traces"].includes(tab)) { setData({}); return; }
     setLoading(true);
     (loaders[tab] || (() => Promise.resolve(null)))()
       .then((d) => alive && setData(d))
@@ -148,26 +148,11 @@ export default function SuperadminAiStudio() {
             </div>
           )}
 
-          {tab === "providers" && (
-            <Table columns={["Provider", "Protocol", "Auth", "Key", "Availability"]} rows={data || []}
-              render={(p) => [
-                <b>{p.displayName}</b>, p.adapterProtocol, p.authStyle,
-                p.keyOwnership?.configured ? <span className="text-emerald-400">configured · {p.keyOwnership.keyRef?.ref}</span> : <span className={mutedText}>not set · {p.keyOwnership?.keyRef?.ref || "—"}</span>,
-                p.availability,
-              ]} />
-          )}
-
-          {tab === "models" && (
-            <Table columns={["Provider", "Model", "Context", "Vision", "Tools", "Cost class"]} rows={data || []}
-              render={(m) => [m.providerKey, <b>{m.key}</b>, `${(m.contextWindowTokens / 1000) | 0}k`, m.supports?.vision ? "yes" : "no", m.supports?.tools ? "yes" : "no", m.costClass]} />
-          )}
-
+          {tab === "providers" && <ProviderEditor />}
+          {tab === "models" && <ModelEditor />}
           {tab === "capabilities" && <CapabilityConfig />}
 
-          {tab === "profiles" && (
-            <Table columns={["Profile", "Temperature", "Max tokens", "Top-p"]} rows={data || []}
-              render={(p) => [<b>{p.key}</b>, p.params?.temperature ?? "—", p.params?.maxTokens ?? "—", p.params?.topP ?? "—"]} />
-          )}
+          {tab === "profiles" && <ProfileEditor />}
 
           {tab === "usage" && (
             <Table columns={["Capability", "Provider", "Requests", "In tokens", "Out tokens", "Failures"]} rows={data?.rows || []}
@@ -189,6 +174,139 @@ export default function SuperadminAiStudio() {
           {tab === "traces" && <Traces />}
         </>
       )}
+    </div>
+  );
+}
+
+// ── Provider editor (configure any provider + its API key from the UI) ─────────
+const ADAPTERS = ["openai_compatible", "anthropic", "gemini", "ollama", "huggingface", "bedrock"];
+const Text = ({ label, value, onChange, type = "text", placeholder }) => (
+  <div><label className={`text-xs ${mutedText}`}>{label}</label>
+    <input type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputCls} /></div>
+);
+
+function ProviderEditor() {
+  const [rows, setRows] = useState(null);
+  const [form, setForm] = useState({ key: "", displayName: "", adapter: "openai_compatible", baseUrl: "", defaultModel: "", apiKey: "", enabled: true });
+  const [busy, setBusy] = useState(false);
+  const load = () => api.providers().then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
+  const edit = (p) => setForm({ key: p.key, displayName: p.displayName || "", adapter: p.adapter || "openai_compatible", baseUrl: p.baseUrl || "", defaultModel: p.defaultModel || "", apiKey: "", enabled: p.enabled !== false });
+  const save = async () => {
+    if (!form.key) return toast.error("Provider key is required");
+    setBusy(true);
+    try { const r = await api.upsertProvider(form); if (r?.ok === false) return toast.error(r.reason || "Failed"); toast.success("Provider saved — its models are now selectable"); load(); }
+    catch (e) { toast.error(e?.response?.data?.error || "Failed"); } finally { setBusy(false); }
+  };
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      <div className={`${card} p-3`}>
+        <p className="text-sm font-medium text-[color:var(--text)] px-1 pb-2">Providers</p>
+        {rows === null ? <Loading /> : (rows || []).map((p) => (
+          <button key={p.key} onClick={() => edit(p)} className={`w-full text-left px-2 py-2 rounded flex items-center justify-between ${form.key === p.key ? "bg-[var(--surface-soft)]" : ""}`}>
+            <span className="text-[13px] text-[color:var(--text)]">{p.displayName} <span className={mutedText}>({p.key})</span></span>
+            <span className={`text-[11px] px-2 py-0.5 rounded ${p.configured ? "text-emerald-400 bg-emerald-500/10" : "text-amber-400 bg-amber-500/10"}`}>{p.configured ? "configured" : "no key"}</span>
+          </button>
+        ))}
+      </div>
+      <div className={`${card} p-4 space-y-3`}>
+        <p className="text-sm font-medium text-[color:var(--text)]">{form.key ? `Edit ${form.key}` : "Add provider"}</p>
+        <Text label="Key (e.g. openai, anthropic, groq)" value={form.key} onChange={(v) => setForm((f) => ({ ...f, key: v }))} placeholder="openai" />
+        <Text label="Display name" value={form.displayName} onChange={(v) => setForm((f) => ({ ...f, displayName: v }))} placeholder="OpenAI" />
+        <Field label="Adapter" value={form.adapter} onChange={(v) => setForm((f) => ({ ...f, adapter: v }))} options={ADAPTERS.map((a) => ({ value: a, label: a }))} allowEmpty={null} />
+        <Text label="Base URL (optional)" value={form.baseUrl} onChange={(v) => setForm((f) => ({ ...f, baseUrl: v }))} placeholder="https://api.openai.com/v1" />
+        <Text label="Default model (optional)" value={form.defaultModel} onChange={(v) => setForm((f) => ({ ...f, defaultModel: v }))} placeholder="gpt-4o" />
+        <Text label="API key" type="password" value={form.apiKey} onChange={(v) => setForm((f) => ({ ...f, apiKey: v }))} placeholder="paste key (leave blank to keep existing)" />
+        <Field label="Enabled" value={String(form.enabled)} onChange={(v) => setForm((f) => ({ ...f, enabled: v === "true" }))} options={[{ value: "true", label: "Enabled" }, { value: "false", label: "Disabled" }]} allowEmpty={null} />
+        <button onClick={save} disabled={busy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{busy ? "Saving…" : "Save provider"}</button>
+        <Help>The key is stored securely and used by the gateway; it never appears in any list. Only configured + enabled providers are offered to workspace admins.</Help>
+      </div>
+    </div>
+  );
+}
+
+function ModelEditor() {
+  const [rows, setRows] = useState(null);
+  const [providers, setProviders] = useState([]);
+  const [form, setForm] = useState({ providerKey: "", modelKey: "", displayName: "", contextWindow: "", inputCostPer1k: "", outputCostPer1k: "", enabled: true });
+  const [busy, setBusy] = useState(false);
+  const load = () => api.models().then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); api.providers().then(setProviders).catch(() => setProviders([])); }, []);
+  const save = async () => {
+    if (!form.providerKey || !form.modelKey) return toast.error("Provider + model key required");
+    setBusy(true);
+    try { const r = await api.upsertModel({ ...form, contextWindow: Number(form.contextWindow) || null, inputCostPer1k: Number(form.inputCostPer1k) || null, outputCostPer1k: Number(form.outputCostPer1k) || null }); if (r?.ok === false) return toast.error(r.reason || "Failed"); toast.success("Model saved"); load(); }
+    catch (e) { toast.error(e?.response?.data?.error || "Failed"); } finally { setBusy(false); }
+  };
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      <div className={`${card} p-3`}>
+        <p className="text-sm font-medium text-[color:var(--text)] px-1 pb-2">Models</p>
+        {rows === null ? <Loading /> : (rows || []).map((m) => (
+          <button key={`${m.providerKey}/${m.key}`} onClick={() => setForm({ providerKey: m.providerKey, modelKey: m.key, displayName: m.displayName || "", contextWindow: m.contextWindow || "", inputCostPer1k: "", outputCostPer1k: "", enabled: m.enabled !== false })} className="w-full text-left px-2 py-1.5 rounded flex items-center justify-between hover:bg-[var(--surface-soft)]">
+            <span className="text-[12.5px] text-[color:var(--text)]">{m.key} <span className={mutedText}>({m.providerKey})</span></span>
+            {m.enabled === false && <span className="text-[11px] text-amber-400">disabled</span>}
+          </button>
+        ))}
+      </div>
+      <div className={`${card} p-4 space-y-3`}>
+        <p className="text-sm font-medium text-[color:var(--text)]">Add / edit model</p>
+        <Field label="Provider" value={form.providerKey} onChange={(v) => setForm((f) => ({ ...f, providerKey: v }))} options={providers.map((p) => ({ value: p.key, label: p.displayName || p.key }))} allowEmpty="Select provider" />
+        <Text label="Model key" value={form.modelKey} onChange={(v) => setForm((f) => ({ ...f, modelKey: v }))} placeholder="gpt-4o" />
+        <Text label="Display name" value={form.displayName} onChange={(v) => setForm((f) => ({ ...f, displayName: v }))} />
+        <Text label="Context window (tokens)" type="number" value={form.contextWindow} onChange={(v) => setForm((f) => ({ ...f, contextWindow: v }))} placeholder="128000" />
+        <div className="grid grid-cols-2 gap-2">
+          <Text label="Input $ / 1k" type="number" value={form.inputCostPer1k} onChange={(v) => setForm((f) => ({ ...f, inputCostPer1k: v }))} />
+          <Text label="Output $ / 1k" type="number" value={form.outputCostPer1k} onChange={(v) => setForm((f) => ({ ...f, outputCostPer1k: v }))} />
+        </div>
+        <Field label="Enabled" value={String(form.enabled)} onChange={(v) => setForm((f) => ({ ...f, enabled: v === "true" }))} options={[{ value: "true", label: "Enabled" }, { value: "false", label: "Disabled" }]} allowEmpty={null} />
+        <button onClick={save} disabled={busy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{busy ? "Saving…" : "Save model"}</button>
+      </div>
+    </div>
+  );
+}
+
+function ProfileEditor() {
+  const [rows, setRows] = useState(null);
+  const [form, setForm] = useState({ key: "", displayName: "", temperature: "0.4", topP: "0.9", topK: "20", maxTokens: "900" });
+  const [busy, setBusy] = useState(false);
+  const load = () => api.profiles().then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
+  const edit = (p) => setForm({ key: p.key, displayName: p.displayName || p.key, temperature: String(p.params?.temperature ?? ""), topP: String(p.params?.topP ?? ""), topK: String(p.params?.topK ?? ""), maxTokens: String(p.params?.maxTokens ?? "") });
+  const save = async () => {
+    if (!form.key) return toast.error("Profile key required");
+    setBusy(true);
+    try {
+      const params = { temperature: Number(form.temperature), topP: Number(form.topP), topK: Number(form.topK), maxTokens: Number(form.maxTokens) };
+      const r = await api.upsertProfile({ key: form.key, displayName: form.displayName || form.key, params });
+      if (r?.ok === false) return toast.error(r.reason || "Failed");
+      toast.success("Runtime profile saved"); load();
+    } catch (e) { toast.error(e?.response?.data?.error || "Failed"); } finally { setBusy(false); }
+  };
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      <div className={`${card} p-3`}>
+        <p className="text-sm font-medium text-[color:var(--text)] px-1 pb-2">Runtime profiles (temperature / top-p / max tokens)</p>
+        {rows === null ? <Loading /> : (rows || []).map((p) => (
+          <button key={p.key} onClick={() => edit(p)} className={`w-full text-left px-2 py-2 rounded ${form.key === p.key ? "bg-[var(--surface-soft)]" : "hover:bg-[var(--surface-soft)]"}`}>
+            <span className="text-[13px] text-[color:var(--text)]">{p.key}</span>
+            <span className={`block text-[11px] ${mutedText}`}>temp {p.params?.temperature ?? "—"} · top-p {p.params?.topP ?? "—"} · max {p.params?.maxTokens ?? "—"}{p.isSystem ? " · system" : ""}</span>
+          </button>
+        ))}
+      </div>
+      <div className={`${card} p-4 space-y-3`}>
+        <p className="text-sm font-medium text-[color:var(--text)]">Add / edit profile</p>
+        <Text label="Key (e.g. custom_precise)" value={form.key} onChange={(v) => setForm((f) => ({ ...f, key: v }))} placeholder="custom_precise" />
+        <Text label="Display name" value={form.displayName} onChange={(v) => setForm((f) => ({ ...f, displayName: v }))} />
+        <div className="grid grid-cols-2 gap-2">
+          <Text label="Temperature" type="number" value={form.temperature} onChange={(v) => setForm((f) => ({ ...f, temperature: v }))} />
+          <Text label="Top-p" type="number" value={form.topP} onChange={(v) => setForm((f) => ({ ...f, topP: v }))} />
+          <Text label="Top-k" type="number" value={form.topK} onChange={(v) => setForm((f) => ({ ...f, topK: v }))} />
+          <Text label="Max tokens" type="number" value={form.maxTokens} onChange={(v) => setForm((f) => ({ ...f, maxTokens: v }))} />
+        </div>
+        <button onClick={save} disabled={busy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{busy ? "Saving…" : "Save profile"}</button>
+        <Help>Assign a profile to a feature in the Capabilities tab to control its tokens/temperature/top-p.</Help>
+      </div>
     </div>
   );
 }
@@ -331,9 +449,14 @@ function PromptRegistry() {
   const [versions, setVersions] = useState([]);
   const [body, setBody] = useState("");
 
-  const load = () => api.overview().then(() => fetch2());
+  const [newKey, setNewKey] = useState("");
   const fetch2 = async () => { try { const p = await promptsApi.list(); setPrompts(p); } catch { setPrompts([]); } };
   useEffect(() => { fetch2(); }, []);
+  const createPrompt = async () => {
+    if (!newKey.trim()) return;
+    try { await promptsApi.create(newKey.trim()); toast.success("Prompt created — add a version below"); setNewKey(""); fetch2(); openPrompt(newKey.trim()); }
+    catch (e) { toast.error(e?.response?.data?.error || "Failed"); }
+  };
   const openPrompt = async (key) => { setSel(key); try { setVersions(await promptsApi.versions(key)); } catch { setVersions([]); } };
   const createVersion = async () => {
     if (!sel || !body.trim()) return;
@@ -349,6 +472,10 @@ function PromptRegistry() {
     <div className="grid md:grid-cols-3 gap-4">
       <div className={`${card} p-3 space-y-1`}>
         <p className="text-sm font-medium text-[color:var(--text)] px-1 pb-1">Prompts</p>
+        <div className="flex gap-1 px-1 pb-2">
+          <input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="new prompt key" className="flex-1 bg-[var(--app-bg)] border border-[color:var(--border)] rounded-lg px-2 py-1 text-xs text-[color:var(--text)]" />
+          <button onClick={createPrompt} className="px-2 py-1 rounded-lg text-xs bg-[color:var(--primary)] text-white">New</button>
+        </div>
         {prompts === null ? <Loading /> : prompts.length === 0 ? <Empty label="No prompts yet." /> :
           prompts.map((p) => (
             <button key={p.key} onClick={() => openPrompt(p.key)} className={`block w-full text-left px-2 py-1.5 rounded text-sm ${sel === p.key ? "bg-[var(--surface-soft)] text-[color:var(--text)]" : mutedText}`}>{p.key}</button>
@@ -469,6 +596,7 @@ function Traces() {
 // Thin wrappers so the components above read cleanly (all hit the same client).
 const promptsApi = {
   list: () => superadminGet("/prompts"),
+  create: (key, feature) => superadminPost("/prompts", { key, feature }),
   versions: (k) => superadminGet(`/prompts/${encodeURIComponent(k)}/versions`),
   createVersion: (k, body) => superadminPost(`/prompts/${encodeURIComponent(k)}/versions`, { body }),
   transition: (k, v, to) => superadminPost(`/prompts/${encodeURIComponent(k)}/versions/${v}/transition`, { to }),

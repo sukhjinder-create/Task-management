@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Check, Info, RefreshCw, Sparkles, X } from "lucide-react";
+import { Check, HelpCircle, Info, RefreshCw, Sparkles, X } from "lucide-react";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { trackExplainabilityOpened, trackRecommendationUsage } from "../services/growthTelemetry";
 import { Badge, Button, Card, Skeleton } from "./ui";
 
 const DECISION_ROLES = new Set(["admin", "owner", "manager"]);
@@ -40,6 +41,8 @@ export default function AdaptiveRecommendations({
   const [loading, setLoading] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [explanation, setExplanation] = useState(null);
+  const [explainLoadingId, setExplainLoadingId] = useState(null);
 
   const params = useMemo(() => ({
     status: "pending",
@@ -52,7 +55,14 @@ export default function AdaptiveRecommendations({
     if (!silent) setLoading(true);
     try {
       const res = await api.get("/adaptive/recommendations", { params });
-      setItems(res.data?.recommendations || []);
+      const recommendations = res.data?.recommendations || [];
+      setItems(recommendations);
+      if (recommendations.length) {
+        trackRecommendationUsage({
+          action: "viewed",
+          surface: compact ? "Compact Adaptive Recommendations" : "Adaptive Recommendations",
+        });
+      }
       setUnavailable(false);
     } catch (error) {
       const status = error?.response?.status;
@@ -83,11 +93,28 @@ export default function AdaptiveRecommendations({
         await api.post(`/adaptive/recommendations/${id}/${action}`, {});
         toast.success(action === "reject" ? "Recommendation rejected" : "Recommendation updated");
       }
+      trackRecommendationUsage({
+        action,
+        surface: compact ? "Compact Adaptive Recommendations" : "Adaptive Recommendations",
+      });
       await load({ silent: true });
     } catch (error) {
       toast.error(error?.response?.data?.error || "Could not update recommendation");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const explainRecommendation = async (id) => {
+    setExplainLoadingId(id);
+    try {
+      const response = await api.get(`/adaptive/explain/recommendation/${id}`);
+      setExplanation(response.data);
+      trackExplainabilityOpened({ subject: "recommendation" });
+    } catch (error) {
+      toast.error(error?.response?.data?.error || "Could not explain recommendation");
+    } finally {
+      setExplainLoadingId(null);
     }
   };
 
@@ -114,6 +141,7 @@ export default function AdaptiveRecommendations({
           onClick={() => load()}
           disabled={loading}
           leftIcon={<RefreshCw className="h-3 w-3" />}
+          data-analytics-action="adaptive_recommendations.refresh"
         >
           Refresh
         </Button>
@@ -168,6 +196,7 @@ export default function AdaptiveRecommendations({
                         onClick={() => handleAction(item.id, "approve_execute")}
                         loading={busyId === `${item.id}:approve_execute`}
                         leftIcon={<Check className="h-3 w-3" />}
+                        data-analytics-action="adaptive_recommendations.approve_execute"
                       >
                         Approve &amp; run
                       </Button>
@@ -177,6 +206,7 @@ export default function AdaptiveRecommendations({
                         onClick={() => handleAction(item.id, "reject")}
                         loading={busyId === `${item.id}:reject`}
                         leftIcon={<X className="h-3 w-3" />}
+                        data-analytics-action="adaptive_recommendations.reject"
                       >
                         Reject
                       </Button>
@@ -185,8 +215,19 @@ export default function AdaptiveRecommendations({
                   <Button
                     size="xs"
                     variant="ghost"
+                    onClick={() => explainRecommendation(item.id)}
+                    loading={explainLoadingId === item.id}
+                    leftIcon={<HelpCircle className="h-3 w-3" />}
+                    data-analytics-action="adaptive_recommendations.explain"
+                  >
+                    Explain
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="ghost"
                     onClick={() => handleAction(item.id, "ignore")}
                     loading={busyId === `${item.id}:ignore`}
+                    data-analytics-action="adaptive_recommendations.ignore"
                   >
                     Ignore
                   </Button>
@@ -196,6 +237,71 @@ export default function AdaptiveRecommendations({
           );
         })}
       </div>
+
+      {explanation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-[color:var(--border)] px-4 py-3.5">
+              <div>
+                <p className="text-sm font-semibold text-[color:var(--text)]">Why Asystence recommended this</p>
+                <p className="mt-0.5 text-xs text-[color:var(--text-muted)]">{explanation.subject}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExplanation(null)}
+                className="rounded-lg p-1.5 text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)] hover:text-[color:var(--text)]"
+                aria-label="Close explanation"
+                data-analytics-action="adaptive_recommendations.close_explanation"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 p-4 text-xs leading-5 text-[color:var(--text-muted)]">
+              <section>
+                <p className="mb-1 font-semibold text-[color:var(--text)]">Reason</p>
+                <p>{explanation.whyRecommended}</p>
+              </section>
+              <section>
+                <p className="mb-1 font-semibold text-[color:var(--text)]">Context that influenced it</p>
+                <div className="flex flex-wrap gap-2">
+                  {(explanation.contextInfluences || []).map((item) => (
+                    <span key={item} className="rounded-full bg-[var(--surface-soft)] px-2 py-1 text-[11px] text-[color:var(--text-muted)]">{item}</span>
+                  ))}
+                </div>
+              </section>
+              <section>
+                <p className="mb-1 font-semibold text-[color:var(--text)]">Historical behaviour</p>
+                <div className="space-y-2">
+                  {(explanation.historicalBehaviour || []).map((item, index) => (
+                    <div key={`${item.pattern}-${index}`} className="rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] p-2.5">
+                      <p>{item.pattern}</p>
+                      {item.use && <p className="mt-1 text-[11px] text-[color:var(--text-soft)]">{item.use}</p>}
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] p-3">
+                  <p className="font-semibold text-[color:var(--text)]">Confidence</p>
+                  <p className="mt-1">{explanation.confidence}</p>
+                </div>
+                <div className="rounded-lg border border-[color:var(--border)] bg-[var(--surface-soft)] p-3">
+                  <p className="font-semibold text-[color:var(--text)]">Would it change today?</p>
+                  <p className="mt-1">{explanation.wouldRecommendationChangeToday}</p>
+                </div>
+              </section>
+              <section>
+                <p className="mb-1 font-semibold text-[color:var(--text)]">Expected business outcome</p>
+                <p>{explanation.expectedBusinessOutcome}</p>
+              </section>
+              <section>
+                <p className="mb-1 font-semibold text-[color:var(--text)]">What changed after feedback</p>
+                <p>{explanation.previousFeedbackChanges}</p>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

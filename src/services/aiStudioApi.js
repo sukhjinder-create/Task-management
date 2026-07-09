@@ -31,6 +31,23 @@ export const superadminAiStudio = {
   // Manage a SPECIFIC workspace's config + lock from the superadmin side.
   saveWorkspaceConfig: (wsId, body) => sp(`/workspaces/${encodeURIComponent(wsId)}/capability-config`, body),
   setWorkspaceLock: (wsId, key, lockLevel) => sp(`/workspaces/${encodeURIComponent(wsId)}/capability-config/${encodeURIComponent(key)}/lock`, { lockLevel }),
+  // Telemetry
+  usage: (params) => sg("/usage", params),
+  cost: (params) => sg("/cost", params),
+  capabilityHealth: (params) => sg("/health/capabilities", params),
+  providerHealth: (params) => sg("/health/providers", params),
+  audit: (params) => sg("/audit", params),
+  traces: (params) => sg("/traces", params),
+  playground: (capability, prompt) => sp("/playground", { capability, prompt }),
+  // Prompts (create + version + transition)
+  createPrompt: (body) => sp("/prompts", body),
+  promptVersions: (key) => sg(`/prompts/${encodeURIComponent(key)}/versions`),
+  createPromptVersion: (key, body) => sp(`/prompts/${encodeURIComponent(key)}/versions`, body),
+  transitionPrompt: (key, v, to) => sp(`/prompts/${encodeURIComponent(key)}/versions/${v}/transition`, { to }),
+  // Providers / models / runtime profiles (configure from UI)
+  upsertProvider: (body) => sp("/providers", body),
+  upsertModel: (body) => sp("/models", body),
+  upsertProfile: (body) => sp("/profiles", body),
 };
 
 // ── Workspace AI Studio ───────────────────────────────────────────────────────

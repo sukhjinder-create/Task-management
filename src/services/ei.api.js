@@ -9,7 +9,8 @@ import superadminApi from "../superadminApi";
 import { getStudioWorkspaceId } from "./studioWorkspace";
 
 const B = "/superadmin/intelligence-studio";
-const wsParams = (extra) => ({ params: { workspaceId: getStudioWorkspaceId(), ...(extra || {}) } });
+function ws() { const w = getStudioWorkspaceId(); if (!w) { const e = new Error("no_workspace"); e.needsWorkspace = true; throw e; } return w; }
+const wsParams = (extra) => ({ params: { workspaceId: ws(), ...(extra || {}) } });
 const g = (p, extra) => superadminApi.get(`${B}${p}`, wsParams(extra)).then((r) => r.data);
 
 export const eiApi = {
@@ -36,8 +37,9 @@ export const eiApi = {
 };
 
 export function eiError(err) {
+  if (err?.needsWorkspace) return { disabled: true, message: "Select a workspace above to load its intelligence." };
   const status = err?.response?.status;
-  if (status === 404) return { disabled: true, message: "The Enterprise Intelligence Studio is not enabled for this workspace (or no workspace selected)." };
+  if (status === 404) return { disabled: true, message: "The Enterprise Intelligence Studio is not enabled for this workspace." };
   if (status === 403) return { forbidden: true, message: err?.response?.data?.error || "Not permitted." };
   return { message: err?.response?.data?.error || err?.message || "Request failed." };
 }
