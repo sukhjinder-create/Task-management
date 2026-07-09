@@ -30,6 +30,10 @@ import {
   Zap,
   Blocks,
   Gauge,
+  Microscope,
+  Network,
+  FlaskConical,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useFeature } from "../context/PlanContext";
@@ -153,6 +157,26 @@ export default function Sidebar({ collapsed, onToggle }) {
     { to: "/execution/executive",    label: "Executive",      icon: Brain,       show: isAdmin },
   ];
 
+  /** Enterprise Intelligence Studio (read-only) — admin. Self-guards server-side (404 when disabled). */
+  const intelligenceStudioItems = [
+    { to: "/intelligence-studio",                label: "EI Home",       icon: Brain,        show: isAdmin },
+    { to: "/intelligence-studio/evidence",       label: "Evidence",      icon: Microscope,   show: isAdmin },
+    { to: "/intelligence-studio/attributions",   label: "Attributions",  icon: GitBranch,    show: isAdmin },
+    { to: "/intelligence-studio/traces",         label: "Reasoning",     icon: Network,      show: isAdmin },
+    { to: "/intelligence-studio/predictions",    label: "Predictions",   icon: Activity,     show: isAdmin },
+    { to: "/intelligence-studio/recommendations", label: "Recommendations", icon: Sparkles,  show: isAdmin },
+    { to: "/intelligence-studio/executive",      label: "Executive",     icon: Brain,        show: isAdmin },
+    { to: "/intelligence-studio/outcomes",       label: "Outcomes",      icon: CheckSquare,  show: isAdmin },
+    { to: "/intelligence-studio/validation",     label: "Validation",    icon: Activity,     show: isAdmin },
+    { to: "/intelligence-studio/calibration",    label: "Calibration",   icon: Gauge,        show: isAdmin },
+    { to: "/intelligence-studio/learning",       label: "Learning",      icon: FlaskConical, show: isAdmin },
+    { to: "/intelligence-studio/experiments",    label: "Experiments",   icon: FlaskConical, show: isAdmin },
+    { to: "/intelligence-studio/memory",         label: "Memory",        icon: BookOpen,     show: isAdmin },
+    { to: "/intelligence-studio/health",         label: "Platform Health", icon: Activity,   show: isAdmin },
+    { to: "/intelligence-studio/graph",          label: "Graph",         icon: Network,      show: isAdmin },
+    { to: "/intelligence-studio/search",         label: "Search",        icon: Search,       show: isAdmin },
+  ];
+
   const linkClass = ({ isActive }) =>
     cn(
       "group relative flex items-center text-[13px] font-medium tracking-tight",
@@ -265,6 +289,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         {renderSection("Organization", orgItems)}
         {renderSection("Intelligence", intelligenceItems)}
         {renderSection("Execution Platform", executionItems)}
+        {renderSection("Intelligence Studio", intelligenceStudioItems)}
         {renderSection("Administration", adminItems)}
       </nav>
 

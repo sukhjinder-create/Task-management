@@ -80,6 +80,24 @@ const AutomationStudio = lazy(() => import("./pages/execution/AutomationStudio.j
 const WorkflowBuilder = lazy(() => import("./pages/execution/WorkflowBuilder.jsx"));
 const EnterpriseGraph = lazy(() => import("./pages/execution/EnterpriseGraph.jsx"));
 const ExecExecutiveDashboard = lazy(() => import("./pages/execution/ExecutiveDashboard.jsx"));
+
+// ---- Enterprise Intelligence Studio (read-only EI surface) ----
+const IntelligenceHome = lazy(() => import("./pages/intelligence-studio/IntelligenceHome.jsx"));
+const EvidenceExplorer = lazy(() => import("./pages/intelligence-studio/EvidenceExplorer.jsx"));
+const AttributionExplorer = lazy(() => import("./pages/intelligence-studio/AttributionExplorer.jsx"));
+const ReasoningTraceExplorer = lazy(() => import("./pages/intelligence-studio/ReasoningTraceExplorer.jsx"));
+const PredictionCenter = lazy(() => import("./pages/intelligence-studio/PredictionCenter.jsx"));
+const RecommendationCenter = lazy(() => import("./pages/intelligence-studio/RecommendationCenter.jsx"));
+const ExecutiveIntelligence = lazy(() => import("./pages/intelligence-studio/ExecutiveIntelligence.jsx"));
+const OutcomeCenter = lazy(() => import("./pages/intelligence-studio/OutcomeCenter.jsx"));
+const ValidationCenter = lazy(() => import("./pages/intelligence-studio/ValidationCenter.jsx"));
+const CalibrationStudio = lazy(() => import("./pages/intelligence-studio/CalibrationStudio.jsx"));
+const LearningStudio = lazy(() => import("./pages/intelligence-studio/LearningStudio.jsx"));
+const ExperimentCenter = lazy(() => import("./pages/intelligence-studio/ExperimentCenter.jsx"));
+const OrganizationalMemory = lazy(() => import("./pages/intelligence-studio/OrganizationalMemory.jsx"));
+const PlatformHealth = lazy(() => import("./pages/intelligence-studio/PlatformHealth.jsx"));
+const IntelligenceGraph = lazy(() => import("./pages/intelligence-studio/IntelligenceGraph.jsx"));
+const IntelligenceSearch = lazy(() => import("./pages/intelligence-studio/GlobalSearch.jsx"));
 const AIHub = lazy(() => import("./pages/AIHub.jsx"));
 
 // ---- Auth flow pages ----
@@ -205,6 +223,27 @@ export default function App() {
           <Route path="execution/workflows"  element={<ProtectedRoute allowedRoles={["admin"]}><WorkflowBuilder /></ProtectedRoute>} />
           <Route path="execution/graph"      element={<ProtectedRoute allowedRoles={["admin"]}><EnterpriseGraph /></ProtectedRoute>} />
           <Route path="execution/executive"  element={<ProtectedRoute allowedRoles={["admin"]}><ExecExecutiveDashboard /></ProtectedRoute>} />
+
+          {/* ---- Enterprise Intelligence Studio — admin (read-only) ---- */}
+          <Route path="intelligence-studio"                 element={<ProtectedRoute allowedRoles={["admin"]}><IntelligenceHome /></ProtectedRoute>} />
+          <Route path="intelligence-studio/evidence"        element={<ProtectedRoute allowedRoles={["admin"]}><EvidenceExplorer /></ProtectedRoute>} />
+          <Route path="intelligence-studio/attributions"    element={<ProtectedRoute allowedRoles={["admin"]}><AttributionExplorer /></ProtectedRoute>} />
+          <Route path="intelligence-studio/traces"          element={<ProtectedRoute allowedRoles={["admin"]}><ReasoningTraceExplorer /></ProtectedRoute>} />
+          <Route path="intelligence-studio/traces/:id"      element={<ProtectedRoute allowedRoles={["admin"]}><ReasoningTraceExplorer /></ProtectedRoute>} />
+          <Route path="intelligence-studio/predictions"     element={<ProtectedRoute allowedRoles={["admin"]}><PredictionCenter /></ProtectedRoute>} />
+          <Route path="intelligence-studio/predictions/:id" element={<ProtectedRoute allowedRoles={["admin"]}><PredictionCenter /></ProtectedRoute>} />
+          <Route path="intelligence-studio/recommendations"     element={<ProtectedRoute allowedRoles={["admin"]}><RecommendationCenter /></ProtectedRoute>} />
+          <Route path="intelligence-studio/recommendations/:id" element={<ProtectedRoute allowedRoles={["admin"]}><RecommendationCenter /></ProtectedRoute>} />
+          <Route path="intelligence-studio/executive"       element={<ProtectedRoute allowedRoles={["admin"]}><ExecutiveIntelligence /></ProtectedRoute>} />
+          <Route path="intelligence-studio/outcomes"        element={<ProtectedRoute allowedRoles={["admin"]}><OutcomeCenter /></ProtectedRoute>} />
+          <Route path="intelligence-studio/validation"      element={<ProtectedRoute allowedRoles={["admin"]}><ValidationCenter /></ProtectedRoute>} />
+          <Route path="intelligence-studio/calibration"     element={<ProtectedRoute allowedRoles={["admin"]}><CalibrationStudio /></ProtectedRoute>} />
+          <Route path="intelligence-studio/learning"        element={<ProtectedRoute allowedRoles={["admin"]}><LearningStudio /></ProtectedRoute>} />
+          <Route path="intelligence-studio/experiments"     element={<ProtectedRoute allowedRoles={["admin"]}><ExperimentCenter /></ProtectedRoute>} />
+          <Route path="intelligence-studio/memory"          element={<ProtectedRoute allowedRoles={["admin"]}><OrganizationalMemory /></ProtectedRoute>} />
+          <Route path="intelligence-studio/health"          element={<ProtectedRoute allowedRoles={["admin"]}><PlatformHealth /></ProtectedRoute>} />
+          <Route path="intelligence-studio/graph"           element={<ProtectedRoute allowedRoles={["admin"]}><IntelligenceGraph /></ProtectedRoute>} />
+          <Route path="intelligence-studio/search"          element={<ProtectedRoute allowedRoles={["admin"]}><IntelligenceSearch /></ProtectedRoute>} />
           <Route
             path="ai"
             element={
