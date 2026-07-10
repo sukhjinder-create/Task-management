@@ -48,6 +48,10 @@ export const superadminAiStudio = {
   upsertProvider: (body) => sp("/providers", body),
   upsertModel: (body) => sp("/models", body),
   upsertProfile: (body) => sp("/profiles", body),
+  // Per-feature prompt (show the hardcoded prompt, edit to override)
+  capabilityPrompt: (key) => sg(`/capabilities/${encodeURIComponent(key)}/prompt`),
+  saveCapabilityPrompt: (key, body) => sp(`/capabilities/${encodeURIComponent(key)}/prompt`, { body }),
+  resetCapabilityPrompt: (key) => sp(`/capabilities/${encodeURIComponent(key)}/prompt/reset`, {}),
 };
 
 // ── Workspace AI Studio ───────────────────────────────────────────────────────

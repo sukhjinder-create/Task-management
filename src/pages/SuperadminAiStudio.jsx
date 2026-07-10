@@ -15,18 +15,17 @@ import { superadminAiStudio as api } from "../services/aiStudioApi";
 import superadminApi from "../superadminApi";
 
 const TABS = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "providers", label: "Providers", icon: Server },
+  { key: "capabilities", label: "Features", icon: Boxes },
+  { key: "providers", label: "Providers & Keys", icon: Server },
   { key: "models", label: "Models", icon: Cpu },
-  { key: "capabilities", label: "Capabilities", icon: Boxes },
-  { key: "prompts", label: "Prompt Registry", icon: FileText },
-  { key: "profiles", label: "Runtime Profiles", icon: SlidersHorizontal },
-  { key: "playground", label: "Playground", icon: PlayCircle },
+  { key: "profiles", label: "Tokens & Temperature", icon: SlidersHorizontal },
+  { key: "prompts", label: "Prompt Library", icon: FileText },
+  { key: "playground", label: "Test (Playground)", icon: PlayCircle },
   { key: "usage", label: "Usage", icon: BarChart3 },
   { key: "cost", label: "Cost", icon: DollarSign },
   { key: "health", label: "Health", icon: HeartPulse },
-  { key: "audit", label: "Audit History", icon: ScrollText },
-  { key: "traces", label: "Trace Explorer", icon: RouteIcon },
+  { key: "audit", label: "Audit", icon: ScrollText },
+  { key: "overview", label: "Overview", icon: LayoutDashboard },
 ];
 
 // ── Shared UI (matches existing tokens) ───────────────────────────────────────
@@ -84,7 +83,7 @@ function StatCard({ label, value, hint }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function SuperadminAiStudio() {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("capabilities");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -341,6 +340,9 @@ function CapabilityConfig() {
   const [form, setForm] = useState({ provider: "", model: "", promptKey: "", runtimeProfile: "", lockLevel: "workspace_customizable" });
   const [busy, setBusy] = useState(false);
   const [bulk, setBulk] = useState({ provider: "", model: "" });
+  const [promptData, setPromptData] = useState(null);
+  const [promptBody, setPromptBody] = useState("");
+  const [promptBusy, setPromptBusy] = useState(false);
 
   const reloadSaved = async () => {
     try { const rows = await api.savedConfigs(); setSaved(Object.fromEntries((rows || []).map((r) => [r.capabilityKey, r]))); } catch { setSaved({}); }
@@ -355,10 +357,22 @@ function CapabilityConfig() {
     })();
   }, []);
 
-  const open = (key) => {
+  const open = async (key) => {
     setSel(key);
     const s = saved[key] || {};
     setForm({ provider: s.provider || "", model: s.model || "", promptKey: s.promptKey || "", runtimeProfile: s.runtimeProfile || "", lockLevel: s.lockLevel || "workspace_customizable" });
+    setPromptData(null); setPromptBody("");
+    try { const pd = await api.capabilityPrompt(key); setPromptData(pd); setPromptBody(pd?.override ?? pd?.fallback ?? ""); } catch { setPromptData({}); }
+  };
+  const savePrompt = async () => {
+    setPromptBusy(true);
+    try { const r = await api.saveCapabilityPrompt(sel, promptBody); if (r?.ok === false) return toast.error(r.reason === "empty_body" ? "Prompt is empty" : (r.reason || "Failed")); toast.success("Prompt saved — this feature now uses your prompt"); setPromptData(await api.capabilityPrompt(sel)); }
+    catch (e) { toast.error(e?.response?.data?.error || "Failed"); } finally { setPromptBusy(false); }
+  };
+  const resetPrompt = async () => {
+    setPromptBusy(true);
+    try { await api.resetCapabilityPrompt(sel); toast.success("Reverted to the built-in prompt"); const pd = await api.capabilityPrompt(sel); setPromptData(pd); setPromptBody(pd?.override ?? pd?.fallback ?? ""); }
+    catch (e) { toast.error(e?.response?.data?.error || "Failed"); } finally { setPromptBusy(false); }
   };
 
   const providerOpts = providers.map((p) => ({ value: p.key, label: p.displayName || p.key }));
@@ -427,12 +441,29 @@ function CapabilityConfig() {
               <p className="text-sm font-medium text-[color:var(--text)]">{caps.find((c) => c.key === sel)?.name || sel}</p>
               <Field label="Provider" value={form.provider} onChange={(v) => setForm((f) => ({ ...f, provider: v, model: "" }))} options={providerOpts} allowEmpty="Use platform/hardcoded default" />
               <Field label="Model" value={form.model} onChange={(v) => setForm((f) => ({ ...f, model: v }))} options={modelOpts(form.provider)} allowEmpty="Provider default" disabled={!form.provider} />
-              <Field label="Prompt" value={form.promptKey} onChange={(v) => setForm((f) => ({ ...f, promptKey: v }))} options={promptOpts} allowEmpty="Use hardcoded prompt" />
-              <Field label="Runtime profile" value={form.runtimeProfile} onChange={(v) => setForm((f) => ({ ...f, runtimeProfile: v }))} options={profileOpts} allowEmpty="Capability default" />
+              <Field label="Runtime profile (tokens / temperature)" value={form.runtimeProfile} onChange={(v) => setForm((f) => ({ ...f, runtimeProfile: v }))} options={profileOpts} allowEmpty="Capability default" />
               <Field label="Workspace override policy" value={form.lockLevel} onChange={(v) => setForm((f) => ({ ...f, lockLevel: v }))} options={LOCKS.map((l) => ({ value: l.v, label: l.l }))} allowEmpty={null} />
               <div className="flex items-center gap-2">
-                <button onClick={save} disabled={busy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{busy ? "Saving…" : "Save feature config"}</button>
-                <Help>Saved values override the hardcoded codebase defaults. Lock to stop workspaces overriding.</Help>
+                <button onClick={save} disabled={busy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{busy ? "Saving…" : "Save provider / model / profile"}</button>
+                <Help>Saved values override the hardcoded defaults. Lock to stop workspaces overriding.</Help>
+              </div>
+
+              {/* The feature's prompt — shown pre-filled with the built-in prompt, editable. */}
+              <div className="pt-3 border-t border-[color:var(--border)]">
+                <div className="flex items-center justify-between">
+                  <label className="text-[13px] font-medium text-[color:var(--text)]">Prompt for this feature {promptData?.usingCustom ? <span className="text-emerald-400 text-xs">· custom</span> : <span className={`${mutedText} text-xs`}>· built-in default</span>}</label>
+                  {promptData?.usingCustom && <button onClick={resetPrompt} disabled={promptBusy} className="text-[11px] text-amber-400">Reset to built-in</button>}
+                </div>
+                {promptData === null ? <Loading /> : (
+                  <>
+                    {!promptData?.hasFallback && !promptData?.usingCustom && <Help>This feature builds its prompt dynamically in code. A prompt you save here will override it.</Help>}
+                    <textarea value={promptBody} onChange={(e) => setPromptBody(e.target.value)} rows={12} placeholder="The prompt this feature uses…" className={`${inputCls} font-mono text-[12px] leading-relaxed`} />
+                    <div className="flex items-center gap-2 mt-2">
+                      <button onClick={savePrompt} disabled={promptBusy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{promptBusy ? "Saving…" : "Save & publish prompt"}</button>
+                      <Help>This is the exact prompt the feature uses. Edit to override the built-in one. Use {"{{variable}}"} for injected context.</Help>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

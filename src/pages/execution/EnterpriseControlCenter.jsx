@@ -26,7 +26,10 @@ export default function EnterpriseControlCenter() {
         actions={<Button size="sm" variant="secondary" onClick={query.reload}>Refresh</Button>}
       />
       <StudioWorkspacePicker onChange={() => query.reload()} />
-      <AsyncState query={query} empty="No activity recorded yet.">
+      <div className="mb-4 rounded-[10px] border border-[color:var(--border)] bg-[var(--surface-soft)] px-4 py-3 text-[12.5px] text-[color:var(--text-muted)]">
+        <b className="text-[color:var(--text)]">What this is:</b> the Execution Platform turns AI recommendations into <b>governed action</b> — Decision → Approval → Execution (create task, assign, notify, escalate…) → Verification → Outcome — plus Workflows, Policies and Automations, with a full audit log. Nothing changes real data until side‑effects are enabled; everything runs as a safe dry‑run by default.
+      </div>
+      <AsyncState query={query} empty="No activity recorded yet for this workspace.">
         {(data) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

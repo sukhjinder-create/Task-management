@@ -20,6 +20,9 @@ export default function IntelligenceHome() {
     <div>
       <PageHeader title="Enterprise Intelligence" subtitle="Everything the platform knows — evidence, reasoning, predictions, learning and memory — inspectable and explainable end to end." actions={<Button size="sm" variant="secondary" onClick={query.reload}>Refresh</Button>} />
       <StudioWorkspacePicker onChange={() => query.reload()} />
+      <div className="mb-4 rounded-[10px] border border-[color:var(--border)] bg-[var(--surface-soft)] px-4 py-3 text-[12.5px] text-[color:var(--text-muted)]">
+        <b className="text-[color:var(--text)]">What this is:</b> a read‑only, fully explainable view of everything the platform reasons about this workspace — Events → Evidence → Attribution → Reasoning → Prediction → Recommendation — plus Validation, Calibration, Learning, Organizational Memory and Platform Health. Every conclusion links back to the evidence that supports it.
+      </div>
       <AsyncState query={query} empty="No intelligence recorded yet for this workspace.">
         {(d) => {
           const c = d.counts || {};
