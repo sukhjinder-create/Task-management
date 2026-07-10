@@ -25,7 +25,7 @@ export default function EnterpriseControlCenter() {
         subtitle="Live health of decisions, execution, approvals and automation across the workspace."
         actions={<Button size="sm" variant="secondary" onClick={query.reload}>Refresh</Button>}
       />
-      <StudioWorkspacePicker onChange={() => query.reload()} />
+      <StudioWorkspacePicker feature="execution" onChange={() => query.reload()} />
       <div className="mb-4 rounded-[10px] border border-[color:var(--border)] bg-[var(--surface-soft)] px-4 py-3 text-[12.5px] text-[color:var(--text-muted)]">
         <b className="text-[color:var(--text)]">What this is:</b> the Execution Platform turns AI recommendations into <b>governed action</b> — Decision → Approval → Execution (create task, assign, notify, escalate…) → Verification → Outcome — plus Workflows, Policies and Automations, with a full audit log. Nothing changes real data until side‑effects are enabled; everything runs as a safe dry‑run by default.
       </div>

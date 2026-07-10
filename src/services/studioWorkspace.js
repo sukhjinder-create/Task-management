@@ -16,3 +16,13 @@ export async function listWorkspacesForPicker() {
     name: w.name || w.workspace_name || w.company_name || w.slug || w.title || w.id || w.workspace_id,
   })).filter((w) => w.id);
 }
+
+/** Per-workspace enablement of the Execution Platform / Enterprise Intelligence. */
+export async function getPlatformFeatures(workspaceId) {
+  const { data } = await superadminApi.get("/superadmin/platform-features", { params: { workspaceId } });
+  return data || {};
+}
+export async function setPlatformFeature(feature, workspaceId, enabled) {
+  const { data } = await superadminApi.post(`/superadmin/platform-features/${feature}`, { workspaceId, enabled });
+  return data;
+}
