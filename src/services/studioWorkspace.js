@@ -26,3 +26,9 @@ export async function setPlatformFeature(feature, workspaceId, enabled) {
   const { data } = await superadminApi.post(`/superadmin/platform-features/${feature}`, { workspaceId, enabled });
   return data;
 }
+
+/** EI pipeline runtime health (orchestrator run metrics). */
+export async function getOrchestratorStatus() {
+  const { data } = await superadminApi.get("/superadmin/platform-features/orchestrator/status");
+  return data;
+}

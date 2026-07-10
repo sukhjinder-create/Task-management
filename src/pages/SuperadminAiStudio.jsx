@@ -163,6 +163,7 @@ export default function SuperadminAiStudio() {
               <StatCard label="Total actual cost (this month)" value={`$${data?.totalActualUsd ?? 0}`} hint="Computed from recorded usage × model pricing." />
               <Table columns={["Capability", "Provider", "Estimated $", "Actual $", "Requests"]} rows={data?.rows || []}
                 render={(r) => [r.capability_key, r.provider_key, Number(r.estimated_usd).toFixed(6), Number(r.actual_usd).toFixed(6), r.requests]} />
+              <BudgetManager />
             </div>
           )}
 
@@ -310,6 +311,74 @@ function ProfileEditor() {
   );
 }
 
+// ── Budgets (enforced by the gateway when Hard) ─────────────────────────────────
+function BudgetManager() {
+  const [budgets, setBudgets] = useState(null);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [form, setForm] = useState({ scope: "workspace", workspaceId: "", period: "monthly", limitCostUsd: "", limitTokens: "", hardLimit: true, enabled: true });
+  const [busy, setBusy] = useState(false);
+  const load = () => api.budgets().then(setBudgets).catch(() => setBudgets([]));
+  useEffect(() => {
+    load();
+    superadminApi.get("/superadmin/workspaces").then((r) => {
+      const rows = Array.isArray(r.data) ? r.data : r.data?.workspaces || [];
+      setWorkspaces(rows.map((w) => ({ id: w.id || w.workspace_id, name: w.name || w.company_name || w.slug || w.id })));
+    }).catch(() => setWorkspaces([]));
+  }, []);
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r = await api.saveBudget({ scope: form.scope, workspaceId: form.scope === "workspace" ? form.workspaceId : null, period: form.period, limitCostUsd: form.limitCostUsd === "" ? null : Number(form.limitCostUsd), limitTokens: form.limitTokens === "" ? null : Number(form.limitTokens), hardLimit: form.hardLimit, enabled: form.enabled });
+      if (r?.ok === false) return toast.error(r.reason || "Failed");
+      toast.success(form.hardLimit ? "Budget saved — requests are blocked once the limit is reached" : "Budget saved (monitor only)");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.reason || e?.response?.data?.error || "Failed"); } finally { setBusy(false); }
+  };
+  const remove = async (id) => { try { await api.deleteBudget(id); toast.success("Budget removed"); load(); } catch { toast.error("Failed"); } };
+  const wsName = (id) => workspaces.find((w) => w.id === id)?.name || id || "—";
+  const pct = (b) => (b.limitCostUsd ? Math.min(100, Math.round((b.spentUsd / b.limitCostUsd) * 100)) : null);
+
+  return (
+    <div className={`${card} p-4 space-y-3`}>
+      <div>
+        <p className="text-sm font-medium text-[color:var(--text)]">Budgets & limits</p>
+        <Help>Cap AI spend per workspace or platform-wide. <b>Hard</b> budgets block further AI requests once the limit is reached this period; <b>monitor</b> budgets only track. Enforced centrally in the gateway.</Help>
+      </div>
+      {budgets === null ? <Loading /> : budgets.length === 0 ? <Empty label="No budgets configured — AI spend is currently uncapped." /> : (
+        <div className="space-y-1.5">
+          {budgets.map((b) => (
+            <div key={b.id} className="flex items-center gap-3 rounded-lg border border-[color:var(--border)] px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] text-[color:var(--text)] truncate">{b.scope === "global" ? "Entire platform" : wsName(b.workspaceId)} · {b.period}</p>
+                <p className={`text-[11px] ${mutedText}`}>
+                  ${b.spentUsd.toFixed(4)} spent{b.limitCostUsd != null && <> of ${b.limitCostUsd} ({pct(b)}%)</>}
+                  {b.limitTokens != null && <> · {b.tokens} / {b.limitTokens} tokens</>}
+                </p>
+                {b.limitCostUsd != null && (
+                  <div className="h-1.5 mt-1 rounded-full bg-[var(--surface-soft)] overflow-hidden">
+                    <div className={`h-full ${pct(b) >= 100 ? "bg-red-500" : pct(b) >= 80 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct(b)}%` }} />
+                  </div>
+                )}
+              </div>
+              <span className={`text-[11px] px-2 py-0.5 rounded shrink-0 ${b.hardLimit ? "text-red-400 bg-red-500/10" : "text-sky-400 bg-sky-500/10"}`}>{b.hardLimit ? "Hard — blocks" : "Monitor"}</span>
+              {!b.enabled && <span className={`text-[11px] ${mutedText}`}>disabled</span>}
+              <button onClick={() => remove(b.id)} className="text-[11px] text-red-400 shrink-0">Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="grid md:grid-cols-6 gap-2 items-end pt-2 border-t border-[color:var(--border)]">
+        <Field label="Scope" value={form.scope} onChange={(v) => setForm((f) => ({ ...f, scope: v }))} options={[{ value: "workspace", label: "One workspace" }, { value: "global", label: "Entire platform" }]} allowEmpty={null} />
+        {form.scope === "workspace" && <Field label="Workspace" value={form.workspaceId} onChange={(v) => setForm((f) => ({ ...f, workspaceId: v }))} options={workspaces.map((w) => ({ value: w.id, label: w.name }))} allowEmpty="Select…" />}
+        <Field label="Period" value={form.period} onChange={(v) => setForm((f) => ({ ...f, period: v }))} options={[{ value: "monthly", label: "Monthly" }, { value: "daily", label: "Daily" }]} allowEmpty={null} />
+        <Text label="Limit ($)" type="number" value={form.limitCostUsd} onChange={(v) => setForm((f) => ({ ...f, limitCostUsd: v }))} placeholder="50" />
+        <Field label="Mode" value={String(form.hardLimit)} onChange={(v) => setForm((f) => ({ ...f, hardLimit: v === "true" }))} options={[{ value: "true", label: "Hard — block over limit" }, { value: "false", label: "Monitor only" }]} allowEmpty={null} />
+        <button onClick={save} disabled={busy || (form.scope === "workspace" && !form.workspaceId)} className="h-[38px] px-3 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{busy ? "Saving…" : "Save budget"}</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Capability configuration (per-feature provider / model / prompt + lock) ────
 const inputCls = "w-full mt-1 bg-[var(--app-bg)] border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm text-[color:var(--text)]";
 const LOCKS = [
@@ -364,10 +433,23 @@ function CapabilityConfig() {
     setPromptData(null); setPromptBody("");
     try { const pd = await api.capabilityPrompt(key); setPromptData(pd); setPromptBody(pd?.override ?? pd?.fallback ?? ""); } catch { setPromptData({}); }
   };
-  const savePrompt = async () => {
+  const savePrompt = async (force = false) => {
     setPromptBusy(true);
-    try { const r = await api.saveCapabilityPrompt(sel, promptBody); if (r?.ok === false) return toast.error(r.reason === "empty_body" ? "Prompt is empty" : (r.reason || "Failed")); toast.success("Prompt saved — this feature now uses your prompt"); setPromptData(await api.capabilityPrompt(sel)); }
-    catch (e) { toast.error(e?.response?.data?.error || "Failed"); } finally { setPromptBusy(false); }
+    try {
+      const r = await api.saveCapabilityPrompt(sel, promptBody, force);
+      if (r?.ok === false) return toast.error(r.reason === "empty_body" ? "Prompt is empty" : (r.reason || "Failed"));
+      toast.success("Prompt saved — this feature now uses your prompt");
+      setPromptData(await api.capabilityPrompt(sel));
+    } catch (e) {
+      const d = e?.response?.data;
+      if (d?.reason === "missing_variables") {
+        // The custom prompt dropped context variables the feature injects — confirm before degrading it.
+        const ok = window.confirm(`Your prompt is missing these context variables the feature fills in:\n\n${(d.missing || []).map((v) => `{{${v}}}`).join("  ")}\n\nWithout them the feature loses that context. Save anyway?`);
+        if (ok) { setPromptBusy(false); return savePrompt(true); }
+      } else {
+        toast.error(d?.error || d?.reason || "Failed");
+      }
+    } finally { setPromptBusy(false); }
   };
   const resetPrompt = async () => {
     setPromptBusy(true);
@@ -457,9 +539,15 @@ function CapabilityConfig() {
                 {promptData === null ? <Loading /> : (
                   <>
                     {!promptData?.hasFallback && !promptData?.usingCustom && <Help>This feature builds its prompt dynamically in code. A prompt you save here will override it.</Help>}
+                    {promptData?.variables?.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap my-1.5">
+                        <span className={`text-[11px] ${mutedText}`}>Context variables this feature fills in — keep them in your prompt:</span>
+                        {promptData.variables.map((v) => <code key={v} className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--surface-soft)] border border-[color:var(--border)] text-[color:var(--primary)]">{`{{${v}}}`}</code>)}
+                      </div>
+                    )}
                     <textarea value={promptBody} onChange={(e) => setPromptBody(e.target.value)} rows={12} placeholder="The prompt this feature uses…" className={`${inputCls} font-mono text-[12px] leading-relaxed`} />
                     <div className="flex items-center gap-2 mt-2">
-                      <button onClick={savePrompt} disabled={promptBusy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{promptBusy ? "Saving…" : "Save & publish prompt"}</button>
+                      <button onClick={() => savePrompt(false)} disabled={promptBusy} className="px-3 py-1.5 rounded-lg text-sm bg-[color:var(--primary)] text-white disabled:opacity-50">{promptBusy ? "Saving…" : "Save & publish prompt"}</button>
                       <Help>This is the exact prompt the feature uses. Edit to override the built-in one. Use {"{{variable}}"} for injected context.</Help>
                     </div>
                   </>

@@ -50,8 +50,12 @@ export const superadminAiStudio = {
   upsertProfile: (body) => sp("/profiles", body),
   // Per-feature prompt (show the hardcoded prompt, edit to override)
   capabilityPrompt: (key) => sg(`/capabilities/${encodeURIComponent(key)}/prompt`),
-  saveCapabilityPrompt: (key, body) => sp(`/capabilities/${encodeURIComponent(key)}/prompt`, { body }),
+  saveCapabilityPrompt: (key, body, force = false) => sp(`/capabilities/${encodeURIComponent(key)}/prompt`, { body, force }),
   resetCapabilityPrompt: (key) => sp(`/capabilities/${encodeURIComponent(key)}/prompt/reset`, {}),
+  // Budgets (hard budgets are enforced by the gateway)
+  budgets: () => sg("/budgets"),
+  saveBudget: (body) => sp("/budgets", body),
+  deleteBudget: (id) => superadminApi.delete(`/superadmin/ai-studio/budgets/${id}`).then((r) => r.data),
 };
 
 // ── Workspace AI Studio ───────────────────────────────────────────────────────
