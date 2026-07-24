@@ -1,7 +1,7 @@
 // src/pages/ProjectTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
-import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, TrendingDown, Keyboard, Filter, EyeOff, Target } from "lucide-react";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, TrendingDown, Keyboard, Filter, EyeOff, Target, Share2 } from "lucide-react";
 import { useApi, API_BASE_URL } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -14,6 +14,7 @@ import TagPicker from "../components/TagPicker.jsx";
 import IssueLinkPanel from "../components/IssueLinkPanel.jsx";
 import TimeTrackingPanel from "../components/TimeTrackingPanel.jsx";
 import WatchersVotesBar from "../components/WatchersVotesBar.jsx";
+import ShareToChat from "../components/ShareToChat.jsx";
 import BurndownModal from "../components/BurndownModal.jsx";
 import SavedFiltersPanel from "../components/SavedFiltersPanel.jsx";
 import AdaptiveRecommendations from "../components/AdaptiveRecommendations.jsx";
@@ -2896,6 +2897,23 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
+                  <ShareToChat
+                    item={{
+                      kind: "task",
+                      title: selectedTaskDetails.task,
+                      linkLabel: selectedTaskDetails.display_id || undefined,
+                      url: `/projects/${projectId}?task=${selectedTaskDetails.id}`,
+                    }}
+                    trigger={(open) => (
+                      <button
+                        title="Share to chat"
+                        onClick={open}
+                        className="p-1.5 rounded hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)] transition-colors"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  />
                   <button
                     title="Copy link"
                     onClick={handleCopyTaskLink}

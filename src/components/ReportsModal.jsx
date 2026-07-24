@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useApi } from "../api";
 import toast from "react-hot-toast";
+import ShareToChat from "./ShareToChat";
 
 export default function ReportsModal({ open, onClose, context }) {
   const api = useApi();
@@ -160,13 +161,29 @@ export default function ReportsModal({ open, onClose, context }) {
         )}
 
         {/* Actions */}
-        <div className="mt-4 flex justify-between items-center">
-          <button
-            onClick={downloadCSV}
-            className="px-3 py-1 text-xs border border-[color:var(--border)] rounded text-[color:var(--text-muted)] hover:text-[color:var(--text)] hover:border-[color:var(--text-muted)] transition-colors"
-          >
-            Download CSV
-          </button>
+        <div className="mt-4 flex justify-between items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={downloadCSV}
+              className="px-3 py-1 text-xs border border-[color:var(--border)] rounded text-[color:var(--text-muted)] hover:text-[color:var(--text)] hover:border-[color:var(--text-muted)] transition-colors"
+            >
+              Download CSV
+            </button>
+
+            {!loading && report && !empty && (
+              <ShareToChat
+                size="sm"
+                variant="secondary"
+                item={{
+                  kind: "report",
+                  title: `Report — ${projectName}`,
+                  subtitle: summary
+                    ? `${fromDate} → ${toDate} · ${summary.completed}/${summary.totalTasks} completed`
+                    : `${fromDate} → ${toDate}`,
+                }}
+              />
+            )}
+          </div>
 
           <div className="text-xs text-[color:var(--text-muted)]">
             Powered by AI reports
