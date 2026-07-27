@@ -1,4 +1,7 @@
 const LOCAL_API_FALLBACK = "http://localhost:5000";
+// Production backend, used when no VITE_API_* env var is configured at build time
+// (env vars still override this when present).
+const PRODUCTION_API_FALLBACK = "https://api.asystence.com";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 
 function envValue(name) {
@@ -97,7 +100,7 @@ export function resolveApiBaseUrl() {
   }
 
   if (configured) return configured;
-  return isLocalBrowserRuntime() ? localFallback : "";
+  return isLocalBrowserRuntime() ? localFallback : PRODUCTION_API_FALLBACK;
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
