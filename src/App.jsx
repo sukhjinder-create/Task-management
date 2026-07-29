@@ -51,6 +51,7 @@ const SuperadminPlans = lazy(() => import("./pages/SuperadminPlans.jsx"));
 const SuperadminBackups = lazy(() => import("./pages/SuperadminBackups.jsx"));
 const SuperadminGrowthIntelligence = lazy(() => import("./pages/SuperadminGrowthIntelligence.jsx"));
 const SuperadminAdaptiveIntelligence = lazy(() => import("./pages/SuperadminAdaptiveIntelligence.jsx"));
+const SuperadminAiStudio = lazy(() => import("./pages/SuperadminAiStudio.jsx"));
 import ProtectedSuperadmin from "./components/ProtectedSuperadmin";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext";
 import GrowthTelemetry from "./components/GrowthTelemetry";
@@ -66,6 +67,37 @@ const Leave = lazy(() => import("./pages/Leave.jsx"));
 const OKR = lazy(() => import("./pages/OKR.jsx"));
 const Reviews = lazy(() => import("./pages/Reviews.jsx"));
 const AIFeatures = lazy(() => import("./pages/AIFeatures.jsx"));
+const WorkspaceAiSettings = lazy(() => import("./pages/WorkspaceAiSettings.jsx"));
+
+// ---- Enterprise Work Intelligence Platform V3 (execution) ----
+const EnterpriseControlCenter = lazy(() => import("./pages/execution/EnterpriseControlCenter.jsx"));
+const ExecDecisions = lazy(() => import("./pages/execution/Decisions.jsx"));
+const ExecApprovals = lazy(() => import("./pages/execution/Approvals.jsx"));
+const ExecutionDashboard = lazy(() => import("./pages/execution/ExecutionDashboard.jsx"));
+const CapabilityStudio = lazy(() => import("./pages/execution/CapabilityStudio.jsx"));
+const PolicyStudio = lazy(() => import("./pages/execution/PolicyStudio.jsx"));
+const AutomationStudio = lazy(() => import("./pages/execution/AutomationStudio.jsx"));
+const WorkflowBuilder = lazy(() => import("./pages/execution/WorkflowBuilder.jsx"));
+const EnterpriseGraph = lazy(() => import("./pages/execution/EnterpriseGraph.jsx"));
+const ExecExecutiveDashboard = lazy(() => import("./pages/execution/ExecutiveDashboard.jsx"));
+
+// ---- Enterprise Intelligence Studio (read-only EI surface) ----
+const IntelligenceHome = lazy(() => import("./pages/intelligence-studio/IntelligenceHome.jsx"));
+const EvidenceExplorer = lazy(() => import("./pages/intelligence-studio/EvidenceExplorer.jsx"));
+const AttributionExplorer = lazy(() => import("./pages/intelligence-studio/AttributionExplorer.jsx"));
+const ReasoningTraceExplorer = lazy(() => import("./pages/intelligence-studio/ReasoningTraceExplorer.jsx"));
+const PredictionCenter = lazy(() => import("./pages/intelligence-studio/PredictionCenter.jsx"));
+const RecommendationCenter = lazy(() => import("./pages/intelligence-studio/RecommendationCenter.jsx"));
+const ExecutiveIntelligence = lazy(() => import("./pages/intelligence-studio/ExecutiveIntelligence.jsx"));
+const OutcomeCenter = lazy(() => import("./pages/intelligence-studio/OutcomeCenter.jsx"));
+const ValidationCenter = lazy(() => import("./pages/intelligence-studio/ValidationCenter.jsx"));
+const CalibrationStudio = lazy(() => import("./pages/intelligence-studio/CalibrationStudio.jsx"));
+const LearningStudio = lazy(() => import("./pages/intelligence-studio/LearningStudio.jsx"));
+const ExperimentCenter = lazy(() => import("./pages/intelligence-studio/ExperimentCenter.jsx"));
+const OrganizationalMemory = lazy(() => import("./pages/intelligence-studio/OrganizationalMemory.jsx"));
+const PlatformHealth = lazy(() => import("./pages/intelligence-studio/PlatformHealth.jsx"));
+const IntelligenceGraph = lazy(() => import("./pages/intelligence-studio/IntelligenceGraph.jsx"));
+const IntelligenceSearch = lazy(() => import("./pages/intelligence-studio/GlobalSearch.jsx"));
 const AIHub = lazy(() => import("./pages/AIHub.jsx"));
 
 // ---- Auth flow pages ----
@@ -178,6 +210,10 @@ export default function App() {
           />
           <Route path="reviews"     element={<ProtectedRoute requiredFeature="performance_reviews"><Reviews /></ProtectedRoute>} />
           <Route path="ai-features" element={<ProtectedRoute requiredFeature="ai_hub"><AIFeatures /></ProtectedRoute>} />
+          <Route path="ai-settings" element={<WorkspaceAiSettings />} />
+
+          {/* Execution Platform + Enterprise Intelligence Studio are SUPER-ADMIN owned —
+              relocated to /execution and /intelligence-studio under superadmin protection. */}
           <Route
             path="ai"
             element={
@@ -333,7 +369,45 @@ export default function App() {
           <Route path="payments"   element={<SuperadminPayments />} />
           <Route path="settings"   element={<SuperadminSettings />} />
           <Route path="backups"    element={<SuperadminBackups />} />
+          <Route path="ai-studio"  element={<SuperadminAiStudio />} />
           <Route path="*"          element={<Navigate to="/superadmin/workspaces" replace />} />
+        </Route>
+
+        {/* Execution Platform — SUPER-ADMIN owned (same paths, superadmin-protected) */}
+        <Route path="/execution" element={<ProtectedSuperadmin><SuperAdminLayout><Outlet /></SuperAdminLayout></ProtectedSuperadmin>}>
+          <Route index element={<EnterpriseControlCenter />} />
+          <Route path="decisions" element={<ExecDecisions />} />
+          <Route path="approvals" element={<ExecApprovals />} />
+          <Route path="dashboard" element={<ExecutionDashboard />} />
+          <Route path="capabilities" element={<CapabilityStudio />} />
+          <Route path="policies" element={<PolicyStudio />} />
+          <Route path="automations" element={<AutomationStudio />} />
+          <Route path="workflows" element={<WorkflowBuilder />} />
+          <Route path="graph" element={<EnterpriseGraph />} />
+          <Route path="executive" element={<ExecExecutiveDashboard />} />
+        </Route>
+
+        {/* Enterprise Intelligence Studio — SUPER-ADMIN owned */}
+        <Route path="/intelligence-studio" element={<ProtectedSuperadmin><SuperAdminLayout><Outlet /></SuperAdminLayout></ProtectedSuperadmin>}>
+          <Route index element={<IntelligenceHome />} />
+          <Route path="evidence" element={<EvidenceExplorer />} />
+          <Route path="attributions" element={<AttributionExplorer />} />
+          <Route path="traces" element={<ReasoningTraceExplorer />} />
+          <Route path="traces/:id" element={<ReasoningTraceExplorer />} />
+          <Route path="predictions" element={<PredictionCenter />} />
+          <Route path="predictions/:id" element={<PredictionCenter />} />
+          <Route path="recommendations" element={<RecommendationCenter />} />
+          <Route path="recommendations/:id" element={<RecommendationCenter />} />
+          <Route path="executive" element={<ExecutiveIntelligence />} />
+          <Route path="outcomes" element={<OutcomeCenter />} />
+          <Route path="validation" element={<ValidationCenter />} />
+          <Route path="calibration" element={<CalibrationStudio />} />
+          <Route path="learning" element={<LearningStudio />} />
+          <Route path="experiments" element={<ExperimentCenter />} />
+          <Route path="memory" element={<OrganizationalMemory />} />
+          <Route path="health" element={<PlatformHealth />} />
+          <Route path="graph" element={<IntelligenceGraph />} />
+          <Route path="search" element={<IntelligenceSearch />} />
         </Route>
 
         {/* ============================

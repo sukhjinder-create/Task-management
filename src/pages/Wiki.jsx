@@ -6,8 +6,9 @@ import { useApi } from "../api";
 import toast from "react-hot-toast";
 import {
   BookOpen, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
-  Search, FileText, Save, X, Globe, Lock,
+  Search, FileText, Save, X, Globe, Lock, Share2,
 } from "lucide-react";
+import ShareToChat from "../components/ShareToChat.jsx";
 
 export default function Wiki() {
   const api = useApi();
@@ -242,6 +243,18 @@ export default function Wiki() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <ShareToChat
+                      item={{
+                        kind: "wiki page",
+                        title: activePage.title,
+                        url: `/wiki?page=${activePage.id}`,
+                      }}
+                      trigger={(open) => (
+                        <button onClick={open} title="Share to chat" className="p-2 border border-[color:var(--border)] rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--text)]">
+                          <Share2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    />
                     <button onClick={() => setEditing(true)} className="p-2 border border-[color:var(--border)] rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--text)]">
                       <Pencil className="w-4 h-4" />
                     </button>

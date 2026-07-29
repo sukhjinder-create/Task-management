@@ -1,7 +1,8 @@
 // src/pages/MyTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Edit2, Trash2, Link as LinkIcon, Upload, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, Hash, Layers, Flag, Plus, X, Filter } from "lucide-react";
+import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Edit2, Trash2, Link as LinkIcon, Upload, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, Hash, Layers, Flag, Plus, X, Filter, Share2 } from "lucide-react";
+import ShareToChat from "../components/ShareToChat.jsx";
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -1289,6 +1290,25 @@ export default function MyTasks() {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
+                  <ShareToChat
+                    item={{
+                      kind: "task",
+                      title: selectedTaskDetails.task,
+                      linkLabel: selectedTaskDetails.display_id || undefined,
+                      url: selectedTaskDetails.project_id
+                        ? `/projects/${selectedTaskDetails.project_id}?task=${selectedTaskDetails.id}`
+                        : `/my-tasks?task=${selectedTaskDetails.id}`,
+                    }}
+                    trigger={(open) => (
+                      <button
+                        title="Share to chat"
+                        onClick={open}
+                        className="p-1.5 rounded hover:bg-[var(--surface-soft)] text-[color:var(--text-muted)] transition-colors"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  />
                   <button
                     title="Copy link"
                     onClick={handleCopyTaskLink}

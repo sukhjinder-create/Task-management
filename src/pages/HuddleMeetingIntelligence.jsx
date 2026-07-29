@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { useApi } from "../api";
+import ShareToChat from "../components/ShareToChat.jsx";
 
 const TABS = [
   { id: "summary", label: "Overview", icon: Sparkles, group: "primary" },
@@ -1190,6 +1191,19 @@ export default function HuddleMeetingIntelligence() {
               <button type="button" onClick={shareMeetingIntelligence} className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]">
                 <Share2 size={15} /> Share
               </button>
+              <ShareToChat
+                item={{
+                  kind: "meeting summary",
+                  title: review.session.title,
+                  subtitle: review?.report?.executiveSummary?.purpose || undefined,
+                  url: `/huddles/${sessionId}/intelligence`,
+                }}
+                trigger={(open) => (
+                  <button type="button" onClick={open} className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]">
+                    <Share2 size={15} /> Share to chat
+                  </button>
+                )}
+              />
               <button type="button" onClick={() => copyText(summaryText, "Summary")} className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm transition-colors duration-150 hover:bg-[var(--surface-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]">
                 <ClipboardCopy size={15} /> Copy summary
               </button>

@@ -355,8 +355,8 @@ export default function SuperadminGrowthIntelligence() {
               <div className="divide-y divide-[color:var(--border)]">
                 {(discovery.friction?.session_flows || []).slice(0, 10).map((flow) => (
                   <div key={flow.session_id} className="grid gap-2 py-3 text-xs md:grid-cols-[minmax(140px,0.5fr)_minmax(220px,1fr)_repeat(3,auto)] md:items-center">
-                    <span className="truncate font-medium text-[color:var(--text)]">{String(flow.session_id).slice(0, 12)}?</span>
-                    <span className="truncate text-[color:var(--text-muted)]">{flow.path_sample?.join(" ? ") || "No path sample"}</span>
+                    <span className="truncate font-medium text-[color:var(--text)]">{String(flow.session_id).slice(0, 12)}…</span>
+                    <span className="truncate text-[color:var(--text-muted)]">{flow.path_sample?.join(" → ") || "No path sample"}</span>
                     <span className="text-[color:var(--text-soft)]">steps {formatNumber(flow.step_count)}</span>
                     <span className="text-[color:var(--text-soft)]">clicks {formatNumber(flow.click_count)}</span>
                     <span className="text-[color:var(--text-soft)]">friction {formatNumber(flow.friction_count)}</span>

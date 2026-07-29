@@ -24,6 +24,16 @@ import {
   Brain,
   Search,
   Lock,
+  Workflow,
+  GitBranch,
+  ShieldCheck,
+  Zap,
+  Blocks,
+  Gauge,
+  Microscope,
+  Network,
+  FlaskConical,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useFeature } from "../context/PlanContext";
@@ -124,6 +134,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
   /** Admin controls */
   const adminItems = [
+    { to: "/ai-settings",            label: "AI Settings",      icon: Sparkles,  show: isAdmin },
     { to: "/admin/workspace-search", label: "Workspace Search", icon: Search,    show: isAdmin, locked: !hasWorkspaceSearch },
     { to: "/admin/adaptive-intelligence", label: "AI Impact",   icon: Brain,     show: isAdmin, locked: !hasWsIntel },
     { to: "/admin/attendance",       label: "Attendance",       icon: Clock,     show: isAdmin, locked: !hasAttendance },
@@ -131,6 +142,40 @@ export default function Sidebar({ collapsed, onToggle }) {
     { to: "/admin/billing",          label: "Billing",          icon: CreditCard,show: isAdmin },
     { to: "/enterprise",             label: "Enterprise",       icon: Shield,    show: isAdmin, locked: !hasEnterprise },
     { to: "/admin/migrations",       label: "Migrations",       icon: Hash,      show: isAdmin, locked: !hasMigrations },
+  ];
+
+  /** Execution platform (EWIP V3) — admin. Self-guards server-side (404 when disabled). */
+  const executionItems = [
+    { to: "/execution",              label: "Control Center", icon: Gauge,       show: isAdmin },
+    { to: "/execution/decisions",    label: "Decisions",      icon: GitBranch,   show: isAdmin },
+    { to: "/execution/approvals",    label: "Approvals",      icon: ShieldCheck, show: isAdmin || role === "manager" },
+    { to: "/execution/dashboard",    label: "Execution",      icon: Gauge,       show: isAdmin },
+    { to: "/execution/workflows",    label: "Workflows",      icon: Workflow,    show: isAdmin },
+    { to: "/execution/capabilities", label: "Capabilities",   icon: Blocks,      show: isAdmin },
+    { to: "/execution/policies",     label: "Policies",       icon: ShieldCheck, show: isAdmin },
+    { to: "/execution/automations",  label: "Automations",    icon: Zap,         show: isAdmin },
+    { to: "/execution/graph",        label: "Enterprise Graph", icon: GitBranch, show: isAdmin },
+    { to: "/execution/executive",    label: "Executive",      icon: Brain,       show: isAdmin },
+  ];
+
+  /** Enterprise Intelligence Studio (read-only) — admin. Self-guards server-side (404 when disabled). */
+  const intelligenceStudioItems = [
+    { to: "/intelligence-studio",                label: "EI Home",       icon: Brain,        show: isAdmin },
+    { to: "/intelligence-studio/evidence",       label: "Evidence",      icon: Microscope,   show: isAdmin },
+    { to: "/intelligence-studio/attributions",   label: "Attributions",  icon: GitBranch,    show: isAdmin },
+    { to: "/intelligence-studio/traces",         label: "Reasoning",     icon: Network,      show: isAdmin },
+    { to: "/intelligence-studio/predictions",    label: "Predictions",   icon: Activity,     show: isAdmin },
+    { to: "/intelligence-studio/recommendations", label: "Recommendations", icon: Sparkles,  show: isAdmin },
+    { to: "/intelligence-studio/executive",      label: "Executive",     icon: Brain,        show: isAdmin },
+    { to: "/intelligence-studio/outcomes",       label: "Outcomes",      icon: CheckSquare,  show: isAdmin },
+    { to: "/intelligence-studio/validation",     label: "Validation",    icon: Activity,     show: isAdmin },
+    { to: "/intelligence-studio/calibration",    label: "Calibration",   icon: Gauge,        show: isAdmin },
+    { to: "/intelligence-studio/learning",       label: "Learning",      icon: FlaskConical, show: isAdmin },
+    { to: "/intelligence-studio/experiments",    label: "Experiments",   icon: FlaskConical, show: isAdmin },
+    { to: "/intelligence-studio/memory",         label: "Memory",        icon: BookOpen,     show: isAdmin },
+    { to: "/intelligence-studio/health",         label: "Platform Health", icon: Activity,   show: isAdmin },
+    { to: "/intelligence-studio/graph",          label: "Graph",         icon: Network,      show: isAdmin },
+    { to: "/intelligence-studio/search",         label: "Search",        icon: Search,       show: isAdmin },
   ];
 
   const linkClass = ({ isActive }) =>
@@ -244,6 +289,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         {renderSection("Workspace", workspaceItems)}
         {renderSection("Organization", orgItems)}
         {renderSection("Intelligence", intelligenceItems)}
+        {/* Execution Platform + Intelligence Studio are SUPER-ADMIN owned — not shown to workspace admins. */}
         {renderSection("Administration", adminItems)}
       </nav>
 
