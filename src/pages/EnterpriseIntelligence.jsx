@@ -118,6 +118,30 @@ function StatPill({ label, value, color = "gray" }) {
   );
 }
 
+/**
+ * AI/LLM-generated insight fields are occasionally returned as objects instead
+ * of strings when the model drifts from the requested shape. React can only
+ * render primitives, so every such field is coerced here before rendering —
+ * otherwise a single malformed field unmounts the whole page.
+ * Strings/numbers pass through unchanged, so existing behaviour is preserved.
+ */
+function asText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join(" · ");
+  if (typeof value === "object") {
+    const preferred =
+      asText(value.description) || asText(value.detail) || asText(value.text) ||
+      asText(value.message) || asText(value.summary) || asText(value.label) ||
+      asText(value.value);
+    if (preferred) return preferred;
+    const strings = Object.values(value).filter((v) => typeof v === "string" && v.trim());
+    return strings.length ? strings.join(" · ") : "";
+  }
+  return String(value);
+}
+
 function AIInsightCard({ insights, emptyMsg = "No AI insights available." }) {
   if (!insights || insights.length === 0) {
     return <p className="text-sm text-[color:var(--text-soft)] italic">{emptyMsg}</p>;
@@ -137,16 +161,16 @@ function AIInsightCard({ insights, emptyMsg = "No AI insights available." }) {
   return (
     <div className="space-y-3">
       {insights.map((ins, i) => {
-        const key = ins.priority || ins.urgency || ins.impact || ins.framing || "medium";
+        const key = asText(ins.priority || ins.urgency || ins.impact || ins.framing) || "medium";
         return (
           <div key={i} className="border border-[color:var(--border)] rounded-lg p-3">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-sm font-semibold text-[color:var(--text)]">{ins.title || ins.username}</p>
+              <p className="text-sm font-semibold text-[color:var(--text)]">{asText(ins.title) || asText(ins.username)}</p>
               <span className={`text-xs capitalize font-medium ${priorityColor[key] || "text-[color:var(--text-muted)]"}`}>
                 {key.replace(/_/g, " ")}
               </span>
             </div>
-            <p className="text-xs text-[color:var(--text-muted)] leading-relaxed">{ins.detail || ins.action}</p>
+            <p className="text-xs text-[color:var(--text-muted)] leading-relaxed">{asText(ins.detail) || asText(ins.action)}</p>
           </div>
         );
       })}
@@ -459,7 +483,7 @@ function ResignationRadar() {
                 <AlertTriangle size={14} className="text-[color:var(--primary)] mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs font-semibold text-[color:var(--text)]">{ins.username}</p>
-                  <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{ins.action}</p>
+                  <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{asText(ins.action)}</p>
                   <span className="text-xs capitalize font-medium text-[color:var(--primary)]">{ins.urgency?.replace(/_/g, " ")}</span>
                 </div>
               </div>
@@ -575,7 +599,7 @@ function GhostWorkDetection() {
                     <p className="text-xs font-semibold text-[color:var(--text)]">{ins.username}</p>
                     <span className={`text-xs capitalize font-medium ${framingTextColor}`}>{ins.framing?.replace(/_/g, " ")}</span>
                   </div>
-                  <p className="text-xs text-[color:var(--text-muted)]">{ins.action}</p>
+                  <p className="text-xs text-[color:var(--text-muted)]">{asText(ins.action)}</p>
                 </div>
               );
             })}
