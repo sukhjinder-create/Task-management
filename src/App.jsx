@@ -11,6 +11,7 @@ const ProjectTasks = lazy(() => import("./pages/ProjectTasks"));
 const UsersAdmin = lazy(() => import("./pages/UsersAdmin"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const MyTasks = lazy(() => import("./pages/MyTasks"));
+const TaskDetailPage = lazy(() => import("./pages/TaskDetailPage"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Chat = lazy(() => import("./pages/Chat"));
@@ -164,6 +165,7 @@ export default function App() {
           <Route path="projects" element={<Projects />} />
           <Route path="projects/:projectId" element={<ProjectTasks />} />
           <Route path="my-tasks" element={<MyTasks />} />
+          <Route path="tasks/:taskId" element={<TaskDetailPage />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="huddles/:sessionId/intelligence" element={<HuddleMeetingIntelligence />} />
           <Route path="profile" element={<Profile />} />

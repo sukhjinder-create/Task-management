@@ -1,6 +1,6 @@
 // src/pages/MyTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Edit2, Trash2, Link as LinkIcon, Upload, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, Hash, Layers, Flag, Plus, X, Filter, Share2 } from "lucide-react";
 import ShareToChat from "../components/ShareToChat.jsx";
 import { useApi } from "../api";
@@ -133,6 +133,7 @@ export default function MyTasks() {
   const user = auth.user;
   const role = user?.role;
   const location = useLocation();
+  const navigate = useNavigate();
 
   const canDrag = role === "admin" || role === "manager" || role === "user";
 
@@ -174,8 +175,6 @@ export default function MyTasks() {
 
   // Attachments
   const [attachments, setAttachments] = useState([]);
-  const [activityLogs, setActivityLogs] = useState([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -532,38 +531,12 @@ export default function MyTasks() {
     }
   };
 
-  const loadLogsForTask = async (taskId) => {
-    setLoadingLogs(true);
-    setActivityLogs([]);
-    try {
-      const res = await api.get(`/tasks/${taskId}/logs`);
-      setActivityLogs(res.data || []);
-    } catch (err) {
-      console.error("Failed to load activity logs:", err);
-      setActivityLogs([]);
-    } finally {
-      setLoadingLogs(false);
-    }
-  };
-
+  // Task details now open on their own page (/tasks/:taskId) instead of an
+  // in-place modal. The modal JSX and its handlers further down are kept
+  // as-is but are now unreachable (selectedTaskDetails is never set again) —
+  // left in place deliberately to keep this change small and low-risk.
   const handleCardClick = (task) => {
-    setSelectedTaskDetails(task);
-    setIsEditing(false);
-    setEditTask({
-      task: task.task || "",
-      status: task.status || "",
-      assigned_to: task.assigned_to || "",
-      due_date: task.due_date ? task.due_date.slice(0, 10) : "",
-      description: task.description || "",
-      project_name: task.project_name || "",
-      project_id: task.project_id || null,
-      priority: task.priority || "medium",
-      task_type: task.task_type || "task",
-      story_points: task.story_points != null ? String(task.story_points) : "",
-      is_blocked: task.is_blocked || false,
-    });
-    loadAttachmentsForTask(task.id);
-    loadLogsForTask(task.id);
+    navigate(`/tasks/${task.id}`);
   };
 
   const handleUploadAttachment = async () => {
@@ -733,72 +706,15 @@ export default function MyTasks() {
       return;
     }
 
-    handleCardClick(found);
+    // Old-style shared links (?task=<id>) now redirect to the task's own page.
     setInitialTaskOpened(true);
+    navigate(`/tasks/${found.id}`, { replace: true });
   }, [tasks, location.search, initialTaskOpened]);
 
   // Filter handlers
   const handleProjectFilterChange = (options) => {
     const values = (options || []).map((opt) => opt.value);
     setSelectedProjects(values);
-  };
-
-  const formatLogMessage = (log) => {
-    const user = log.actor_username || "Someone";
-
-    const parse = (value) => {
-      if (!value) return null;
-      try {
-        return typeof value === "string" ? JSON.parse(value) : value;
-      } catch {
-        return value;
-      }
-    };
-
-    const oldVal = parse(log.old_value);
-    const newVal = parse(log.new_value);
-
-    switch (log.action_type) {
-      case "STATUS_CHANGED": {
-        const oldStatus = oldVal?.status || oldVal;
-        const newStatus = newVal?.status || newVal;
-        return `Status changed from "${oldStatus}" to "${newStatus}" by ${user}`;
-      }
-
-      case "PRIORITY_CHANGED": {
-        const oldPriority = oldVal?.priority || oldVal;
-        const newPriority = newVal?.priority || newVal;
-        return `Priority changed from "${oldPriority}" to "${newPriority}" by ${user}`;
-      }
-
-      case "ASSIGNEE_CHANGED": {
-        const from = log.old_assignee_username || "Unassigned";
-        const to = log.new_assignee_username || "Unassigned";
-        const actor = log.actor_username || "Someone";
-        return `Assignee changed from "${from}" to "${to}" by ${actor}`;
-      }
-
-      case "DESCRIPTION_UPDATED":
-        return `Description updated by ${user}`;
-
-      case "TITLE_CHANGED": {
-        const oldTitle = oldVal?.task || oldVal;
-        const newTitle = newVal?.task || newVal;
-        return `Title changed from "${oldTitle}" to "${newTitle}" by ${user}`;
-      }
-
-      case "COMMENT_ADDED":
-        return `Comment added by ${user}`;
-
-      case "TASK_CREATED":
-        return `Task created by ${user}`;
-
-      case "TASK_DELETED":
-        return `Task deleted by ${user}`;
-
-      default:
-        return `${log.action_type} by ${user}`;
-    }
   };
 
   // Shared input class for edit form fields
@@ -1541,25 +1457,6 @@ export default function MyTasks() {
                     {uploading ? "Uploading..." : "Upload"}
                   </button>
                 </div>
-              </div>
-
-              {/* Activity Timeline */}
-              <div className="border-t border-[color:var(--border)] pt-3 mt-3">
-                <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">Activity Timeline</h3>
-                {loadingLogs ? (
-                  <p className="text-[11px] text-[color:var(--text-muted)]">Loading activity...</p>
-                ) : activityLogs.length === 0 ? (
-                  <p className="text-[11px] text-[color:var(--text-muted)]">No activity recorded.</p>
-                ) : (
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {activityLogs.map((log) => (
-                      <div key={log.id} className="border border-[color:var(--border)] rounded-lg px-3 py-2.5">
-                        <div className="text-[11px] font-medium text-[color:var(--text)]">{formatLogMessage(log)}</div>
-                        <div className="text-[10px] text-[color:var(--text-muted)] mt-1">{new Date(log.created_at).toLocaleString()}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Tags */}

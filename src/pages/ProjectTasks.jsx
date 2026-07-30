@@ -1,6 +1,6 @@
 // src/pages/ProjectTasks.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useLocation } from "react-router-dom";
+import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
 import { Calendar, User as UserIcon, AlertCircle, CheckCircle2, Plus, X, Edit2, Trash2, LinkIcon, Mic, MicOff, Sparkles, Layers, Play, Flag, Hash, Bug, Zap, Star, Wrench, ShieldAlert, BarChart2, TrendingDown, Keyboard, Filter, EyeOff, Target, Share2 } from "lucide-react";
 import { useApi, API_BASE_URL } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -202,6 +202,7 @@ function TaskTypeBadge({ type }) {
 export default function ProjectTasks() {
   const { projectId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const api = useApi();
   const { auth } = useAuth();
   const user = auth.user;
@@ -264,9 +265,6 @@ export default function ProjectTasks() {
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  // 🔹 Activity logs
-const [activityLogs, setActivityLogs] = useState([]);
-const [loadingLogs, setLoadingLogs] = useState(false);
 
   // admin edit
   const [isEditing, setIsEditing] = useState(false);
@@ -994,36 +992,12 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     }
   };
 
-  const loadLogsForTask = async (taskId) => {
-  setLoadingLogs(true);
-  setActivityLogs([]);
-  try {
-    const res = await api.get(`/tasks/${taskId}/logs`);
-    setActivityLogs(res.data || []);
-  } catch (err) {
-    console.error("Failed to load activity logs:", err);
-    setActivityLogs([]);
-  } finally {
-    setLoadingLogs(false);
-  }
-};
-
+  // Task details now open on their own page (/tasks/:taskId) instead of an
+  // in-place modal. The modal JSX and its handlers further down are kept
+  // as-is but are now unreachable (selectedTaskDetails is never set again) —
+  // left in place deliberately to keep this change small and low-risk.
   const handleCardClick = (task) => {
-    setSelectedTaskDetails(task);
-    setIsEditing(false);
-    setEditTask({
-      task: task.task || "",
-      status: task.status || "",
-      assigned_to: task.assigned_to || "",
-      due_date: task.due_date ? task.due_date.slice(0, 10) : "",
-      description: task.description || "",
-      priority: task.priority || "medium",
-      task_type: task.task_type || "task",
-      story_points: task.story_points != null ? String(task.story_points) : "",
-      is_blocked: task.is_blocked || false,
-    });
-    loadAttachmentsForTask(task.id);
-    loadLogsForTask(task.id);
+    navigate(`/tasks/${task.id}`);
   };
 
   const handleUploadAttachment = async () => {
@@ -1202,8 +1176,9 @@ const [loadingLogs, setLoadingLogs] = useState(false);
       return;
     }
 
-    handleCardClick(found);
+    // Old-style shared links (?task=<id>) now redirect to the task's own page.
     setInitialTaskOpened(true);
+    navigate(`/tasks/${found.id}`, { replace: true });
   }, [tasks, location.search, role, user?.id, initialTaskOpened]);
 
   // ─── KEYBOARD SHORTCUTS ───────────────────────────────────
@@ -1451,65 +1426,6 @@ const [loadingLogs, setLoadingLogs] = useState(false);
     await handleStatusOrderChange(source, newIndex + 2);
     setDraggingStatusId(null);
   };
-
-  const formatLogMessage = (log) => {
-  const user = log.actor_username || "Someone";
-
-  const parse = (value) => {
-    if (!value) return null;
-    try {
-      return typeof value === "string" ? JSON.parse(value) : value;
-    } catch {
-      return value;
-    }
-  };
-
-  const oldVal = parse(log.old_value);
-  const newVal = parse(log.new_value);
-
-  switch (log.action_type) {
-    case "STATUS_CHANGED": {
-      const oldStatus = oldVal?.status || oldVal;
-      const newStatus = newVal?.status || newVal;
-      return `Status changed from "${oldStatus}" to "${newStatus}" by ${user}`;
-    }
-
-    case "PRIORITY_CHANGED": {
-      const oldPriority = oldVal?.priority || oldVal;
-      const newPriority = newVal?.priority || newVal;
-      return `Priority changed from "${oldPriority}" to "${newPriority}" by ${user}`;
-    }
-
-    case "ASSIGNEE_CHANGED": {
-  const from = log.old_assignee_username || "Unassigned";
-  const to = log.new_assignee_username || "Unassigned";
-  const actor = log.actor_username || "Someone";
-
-  return `Assignee changed from "${from}" to "${to}" by ${actor}`;
-}
-
-    case "DESCRIPTION_UPDATED":
-      return `Description updated by ${user}`;
-
-    case "TITLE_CHANGED": {
-      const oldTitle = oldVal?.task || oldVal;
-      const newTitle = newVal?.task || newVal;
-      return `Title changed from "${oldTitle}" to "${newTitle}" by ${user}`;
-    }
-
-    case "COMMENT_ADDED":
-      return `Comment added by ${user}`;
-
-    case "TASK_CREATED":
-      return `Task created by ${user}`;
-
-    case "TASK_DELETED":
-      return `Task deleted by ${user}`;
-
-    default:
-      return `${log.action_type} by ${user}`;
-  }
-};
 
   // ─── SPRINT HANDLERS ──────────────────────────────────────
   const handleOpenCreateSprint = () => {
@@ -3216,39 +3132,6 @@ const [loadingLogs, setLoadingLogs] = useState(false);
                   </div>
                 )}
               </div>
-              {/* Activity Timeline */}
-<div className="mt-4 border-t border-[color:var(--border)] pt-3">
-  <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">
-    Activity Timeline
-  </h3>
-
-  {loadingLogs ? (
-    <p className="text-[11px] text-[color:var(--text-soft)]">
-      Loading activity...
-    </p>
-  ) : activityLogs.length === 0 ? (
-    <p className="text-[11px] text-[color:var(--text-soft)]">
-      No activity recorded.
-    </p>
-  ) : (
-    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-      {activityLogs.map((log) => (
-        <div
-          key={log.id}
-          className="border border-[color:var(--border)] rounded-lg px-2 py-2 text-[11px]"
-        >
-          <div className="font-medium text-[color:var(--text)]">
-  {formatLogMessage(log)}
-</div>
-
-<div className="text-[10px] text-[color:var(--text-soft)] mt-1">
-  {new Date(log.created_at).toLocaleString()}
-</div>
-        </div>
-      ))}
-    </div>
-  )}
-</div>
               {/* Tags */}
               <div className="mt-3 border-t border-[color:var(--border)] pt-3">
                 <h3 className="text-xs font-semibold mb-2 text-[color:var(--text)]">Tags</h3>
