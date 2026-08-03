@@ -163,7 +163,18 @@ function PlatformEditor({ platform, onBack }) {
     tasksItemsPath: platform?.endpoints?.tasks?.itemsPath || "",
     projectsPath: platform?.endpoints?.projects?.path || "",
     fieldMappings: platform?.fieldMappings || {},
+    // GraphQL APIs are a POST to one path with a query body; everything else
+    // reads the response the same way via itemsPath.
+    apiStyle: platform?.endpoints?.tasks?.method === "POST" ? "graphql" : "rest",
+    graphqlQuery:
+      typeof platform?.endpoints?.tasks?.body?.query === "string"
+        ? platform.endpoints.tasks.body.query
+        : "",
   });
+  // Whether we issue the secret or the platform signs with its own.
+  const [webhookMode, setWebhookMode] = useState("generate");
+  const [theirSecret, setTheirSecret] = useState("");
+  const [theirHeader, setTheirHeader] = useState("x-hub-signature-256");
   const [slug, setSlug] = useState(platform?.slug || null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -183,7 +194,13 @@ function PlatformEditor({ platform, onBack }) {
     authType: form.authType,
     authConfig: form.authConfig,
     endpoints: {
-      tasks: { path: form.tasksPath, itemsPath: form.tasksItemsPath || undefined },
+      tasks: {
+        path: form.tasksPath,
+        itemsPath: form.tasksItemsPath || undefined,
+        ...(form.apiStyle === "graphql"
+          ? { method: "POST", body: { query: form.graphqlQuery } }
+          : {}),
+      },
       ...(form.projectsPath ? { projects: { path: form.projectsPath } } : {}),
     },
     fieldMappings: form.fieldMappings,
@@ -240,7 +257,10 @@ function PlatformEditor({ platform, onBack }) {
     const savedSlug = slug || (await save());
     if (!savedSlug) return;
     try {
-      const res = await api.post(`/integrations/custom-providers/${savedSlug}/webhook`, {});
+      const body = webhookMode === "theirs"
+        ? { secret: theirSecret, signatureScheme: "hmac_sha256", signatureHeader: theirHeader }
+        : {};
+      const res = await api.post(`/integrations/custom-providers/${savedSlug}/webhook`, body);
       setWebhook(res.data?.endpoint || null);
     } catch (err) {
       setError(err.response?.data?.error || "Could not create the webhook endpoint.");
@@ -349,10 +369,48 @@ function PlatformEditor({ platform, onBack }) {
       {/* Step 2 — where the data lives */}
       <section className="border theme-border rounded-xl p-4 space-y-3">
         <h3 className="text-sm font-semibold theme-text">2. Where are the tasks?</h3>
-        <Field label="Tasks endpoint" required hint="Path relative to the base URL. Use {projectId} if it needs a project.">
+
+        <Field label="API type" hint={form.apiStyle === "graphql"
+          ? "GraphQL: one endpoint, and the query below decides what comes back."
+          : "REST: most tools. Each endpoint is a separate URL path."}>
+          <select className={inputCls} value={form.apiStyle} onChange={(e) => set("apiStyle", e.target.value)}>
+            <option value="rest">REST (most tools)</option>
+            <option value="graphql">GraphQL</option>
+          </select>
+        </Field>
+
+        {form.apiStyle === "graphql" && (
+          <Field
+            label="GraphQL query"
+            required
+            hint="Paste the query that returns your tasks. Use {projectId} to filter by project."
+          >
+            <textarea
+              className={`${inputCls} font-mono text-xs min-h-[110px]`}
+              value={form.graphqlQuery}
+              placeholder={"{ issues { id title state { name } } }"}
+              onChange={(e) => set("graphqlQuery", e.target.value)}
+            />
+          </Field>
+        )}
+
+        <Field label="Tasks endpoint" required hint={form.apiStyle === "graphql"
+          ? "Usually just / or /graphql — the single GraphQL endpoint."
+          : "Path relative to the base URL. Use {projectId} if it needs a project."}>
           <input className={inputCls} value={form.tasksPath} placeholder="/rest/issues"
             onChange={(e) => set("tasksPath", e.target.value)} />
         </Field>
+        <Field
+          label="Where the records are in the response"
+          hint={form.apiStyle === "graphql"
+            ? "Usually data.<something>.nodes — check your query's shape."
+            : "Optional. Leave blank unless the list is nested, e.g. results.items."}
+        >
+          <input className={inputCls} value={form.tasksItemsPath}
+            placeholder={form.apiStyle === "graphql" ? "data.issues.nodes" : "leave blank to detect"}
+            onChange={(e) => set("tasksItemsPath", e.target.value)} />
+        </Field>
+
         <Field label="Projects endpoint" hint="Optional — lets you import one project at a time.">
           <input className={inputCls} value={form.projectsPath} placeholder="/rest/projects"
             onChange={(e) => set("projectsPath", e.target.value)} />
@@ -455,9 +513,47 @@ function PlatformEditor({ platform, onBack }) {
               <span className="text-xs font-semibold theme-text">Keep it up to date</span>
             </div>
             <p className={hintCls}>
-              Generate a webhook URL to paste into your tool so changes appear immediately.
-              Without it, Asystence still refreshes on a schedule.
+              Get changes instantly instead of waiting for the next refresh.
             </p>
+
+            <div className="mt-2 space-y-2">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="radio" className="mt-0.5" checked={webhookMode === "generate"}
+                  onChange={() => setWebhookMode("generate")} />
+                <span className="text-xs theme-text">
+                  <span className="font-medium">Asystence creates the secret</span>
+                  <span className="block theme-text-muted text-[11px]">
+                    You paste our URL and secret into your tool. Works when the tool lets you set a custom header.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="radio" className="mt-0.5" checked={webhookMode === "theirs"}
+                  onChange={() => setWebhookMode("theirs")} />
+                <span className="text-xs theme-text">
+                  <span className="font-medium">My platform signs with its own secret</span>
+                  <span className="block theme-text-muted text-[11px]">
+                    For tools like GitHub, Stripe, Shopify or Trello that generate the secret themselves.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            {webhookMode === "theirs" && (
+              <div className="mt-2 space-y-2">
+                <Field label="Secret from your platform" required
+                  hint="Copy it from your tool's webhook settings.">
+                  <input type="password" className={inputCls} value={theirSecret}
+                    onChange={(e) => setTheirSecret(e.target.value)} />
+                </Field>
+                <Field label="Signature header your platform sends"
+                  hint="GitHub uses x-hub-signature-256; Shopify uses x-shopify-hmac-sha256.">
+                  <input className={inputCls} value={theirHeader}
+                    onChange={(e) => setTheirHeader(e.target.value)} />
+                </Field>
+              </div>
+            )}
+
             <button onClick={createWebhook}
               className="mt-2 inline-flex items-center gap-1.5 border theme-border text-xs font-semibold rounded-lg px-3 py-2 hover:bg-[var(--surface-soft)] theme-text">
               <Webhook size={13} /> {webhook ? "Regenerate" : "Generate"} webhook URL
@@ -467,11 +563,19 @@ function PlatformEditor({ platform, onBack }) {
               <div className="mt-2 space-y-2">
                 <CopyRow label="Webhook URL" value={webhook.url} />
                 <CopyRow label="Header name" value={webhook.headerName} />
-                <CopyRow label="Secret" value={webhook.secret} />
-                <p className="text-[11px] text-[color:var(--score-warning)] flex items-start gap-1">
-                  <Clock size={12} className="mt-0.5 shrink-0" />
-                  Copy the secret now — for security it isn't shown again.
-                </p>
+                {webhook.secret ? (
+                  <>
+                    <CopyRow label="Secret" value={webhook.secret} />
+                    <p className="text-[11px] text-[color:var(--score-warning)] flex items-start gap-1">
+                      <Clock size={12} className="mt-0.5 shrink-0" />
+                      Copy the secret now — for security it isn't shown again.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[11px] theme-text-muted">
+                    Saved. Asystence will verify incoming requests using your platform's own secret.
+                  </p>
+                )}
               </div>
             )}
           </div>
