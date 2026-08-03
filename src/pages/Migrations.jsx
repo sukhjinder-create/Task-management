@@ -6,8 +6,9 @@ import {
   Hash, CheckCircle, AlertCircle, ExternalLink, Loader2,
   ChevronRight, Users, MessageSquare, Trash2, Clock,
   FolderKanban, RefreshCw, ChevronDown, ChevronUp, ArrowLeft,
-  Search, ArrowRightLeft, Webhook, Copy,
+  Search, ArrowRightLeft, Webhook, Copy, Wand2,
 } from "lucide-react";
+import CustomPlatformPanel from "../components/CustomPlatformPanel.jsx";
 
 /* ─────────────────────────────────────────────
    SHARED: Mode Toggle (skip / replace)
@@ -1069,6 +1070,10 @@ const SOURCES = [
   { id: "slack",    label: "Slack",    icon: Hash,           color: "text-[color:var(--primary)]", Panel: SlackPanel },
   { id: "asana",   label: "Asana",    icon: FolderKanban,   color: "text-[color:var(--primary)]", Panel: AsanaPanel },
   { id: "youtrack",label: "YouTrack", icon: ArrowRightLeft,  color: "text-[color:var(--primary)]", Panel: YouTrackPanel },
+  // Admin-defined platforms. `standalone` because this panel owns its own
+  // multi-step flow (connect -> test -> map -> import) rather than the shared
+  // import/history sub-tabs the built-in providers use.
+  { id: "custom",  label: "Other platform", icon: Wand2,     color: "text-[color:var(--primary)]", Panel: CustomPlatformPanel, standalone: true },
 ];
 
 export default function Migrations() {
@@ -1112,14 +1117,16 @@ export default function Migrations() {
 
       {/* Panel content */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        {current && (
+        {current && (current.standalone ? (
+          <current.Panel key={activeSource} />
+        ) : (
           <SourceTab
             key={activeSource}
             source={activeSource}
             ImportPanel={current.Panel}
             autoConnect={connected && sourceParam === activeSource}
           />
-        )}
+        ))}
       </div>
     </div>
   );
