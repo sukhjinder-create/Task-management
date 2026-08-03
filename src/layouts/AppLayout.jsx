@@ -1,7 +1,7 @@
 // src/layout/AppLayout.jsx
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, Outlet, useLocation } from "react-router-dom";
-import { LogOut, Search, Command, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../api";
@@ -368,16 +368,6 @@ export default function AppLayout({ children }) {
 
           {/* RIGHT — global controls */}
           <div className="flex items-center gap-2">
-            {/* Search hint — pure UI hint, opens nothing yet (preserves current product behavior) */}
-            <div className="hidden md:inline-flex items-center gap-2 px-2.5 h-7 rounded-[6px] border border-[color:var(--border)] bg-[var(--surface-soft)] text-[color:var(--text-soft)] text-[11.5px]">
-              <Search className="w-3.5 h-3.5" />
-              <span>Search</span>
-              <span className="inline-flex items-center gap-0.5 ml-1">
-                <kbd className="kbd"><Command className="w-2.5 h-2.5" /></kbd>
-                <kbd className="kbd">K</kbd>
-              </span>
-            </div>
-
             <ThemeSwitcher compact />
 
             <Button
