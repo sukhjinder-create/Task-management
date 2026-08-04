@@ -1358,8 +1358,11 @@ useEffect(() => {
 
 const handleChatMessage = async (msg) => {
 
-// 🔥 REPORT MODAL TRIGGER (FIXED)
-if (msg?.textHtml?.startsWith("__REPORT_READY__")) {
+// 🔥 REPORT MODAL TRIGGER
+// 🔐 Only the assistant may drive this. The marker travels in message text, so
+// without the sender check any user could type "__REPORT_READY__{...}" and pop
+// the reports modal on every viewer's screen. Server-set flag, not user input.
+if (msg?.isAiMessage === true && msg?.textHtml?.startsWith("__REPORT_READY__")) {
   try {
     const payload = JSON.parse(
       msg.textHtml.replace("__REPORT_READY__", "")
