@@ -10,6 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import ThemeSwitcher from "../components/ThemeSwitcher";
+import InlineWorkspaceSignup from "../components/InlineWorkspaceSignup";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
 import {
   ArrowRight,
@@ -35,6 +36,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const [showInlineSignup, setShowInlineSignup] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -83,6 +85,19 @@ export default function Login() {
       }
     }
     navigate("/projects", { replace: true });
+  };
+
+  // Signup and login end in the same place: a token and a user. Routing the
+  // inline signup through completeLogin means the post-signup session is set up
+  // by exactly the same code as a normal sign-in, rather than a parallel path
+  // that could drift.
+  const handleInlineSignupComplete = (data) => {
+    if (!data?.token || !data?.user) {
+      toast.error("Workspace created, but sign-in failed. Please log in with your new details.");
+      setShowInlineSignup(false);
+      return;
+    }
+    completeLogin(data.token, data.user, data.refreshToken || null);
   };
 
   const handleSubmit = async (e) => {
@@ -353,10 +368,31 @@ export default function Login() {
                 <div className="mt-7 border-t border-[color:var(--border)] pt-6 text-center">
                   <p className="text-sm text-[color:var(--text-muted)]">
                     New to Asystence?{" "}
-                    <Link to="/signup" className="font-semibold text-[color:var(--primary)] transition hover:opacity-75">
+                    {/* Expands in place rather than routing to /signup: the
+                        visitor keeps their context, and because the account
+                        exists once this resolves they are signed straight in
+                        instead of being returned to this form. Still a real
+                        Link, so modified clicks and no-JS reach /signup. */}
+                    <Link
+                      to="/signup"
+                      onClick={(event) => {
+                        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                        event.preventDefault();
+                        setShowInlineSignup(true);
+                      }}
+                      aria-expanded={showInlineSignup}
+                      className="font-semibold text-[color:var(--primary)] transition hover:opacity-75"
+                    >
                       Create a workspace
                     </Link>
                   </p>
+
+                  {showInlineSignup && (
+                    <InlineWorkspaceSignup
+                      onClose={() => setShowInlineSignup(false)}
+                      onAuthenticated={handleInlineSignupComplete}
+                    />
+                  )}
                   <p className="mt-2 text-xs leading-5 text-[color:var(--text-soft)]">
                     Invited or imported? Use the email address that received your access link.
                   </p>
