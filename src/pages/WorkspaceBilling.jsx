@@ -1,8 +1,11 @@
 // src/pages/WorkspaceBilling.jsx
 // =============================================================================
-// Workspace admin billing page — Razorpay subscriptions
-// Flow: Pick plan → POST /payments/subscribe → Razorpay Checkout (UPI/Card/NACH)
-//       → ₹1 mandate verification → 7-day free trial → monthly auto-debit
+// Workspace admin billing page — Stripe / Razorpay subscriptions
+// Flow: Pick plan → POST /payments/subscribe → provider checkout
+//       → refundable card verification → free trial → recurring auto-debit
+//
+// Prices are quoted in the workspace's billing currency. Plans arrive from the
+// API already converted, in minor units, so nothing here divides by 100.
 // =============================================================================
 import { useEffect, useState, useCallback } from "react";
 import { useApi } from "../api";
@@ -14,6 +17,8 @@ import {
   BadgeCheck, Smartphone, Building, UserCheck, UserX,
   Info, Pencil, Trash2, X,
 } from "lucide-react";
+import CurrencySelector from "../components/CurrencySelector";
+import { formatMinor, getStoredCurrency, planCurrency, planPriceMinor } from "../utils/currency";
 
 // ── Load Razorpay script once ─────────────────────────────────────────────────
 function loadRazorpay() {
@@ -28,15 +33,14 @@ function loadRazorpay() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function rupees(paise) {
-  if (!paise) return "₹0";
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 })
-    .format(paise / 100);
+/** Amount is in minor units of `currency` (cents, paise, whole yen). */
+function money(minorAmount, currency = "USD") {
+  return formatMinor(minorAmount, currency);
 }
 
 function fmtDate(iso) {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
 }
 
 function daysLeft(iso) {
@@ -80,10 +84,13 @@ function IntervalToggle({ value, onChange }) {
 
 // ── Plan card ─────────────────────────────────────────────────────────────────
 function PlanCard({ plan, interval, isCurrent, isLoading, onSelect, memberCount }) {
-  const pricePaise = interval === "yearly" ? plan.price_yearly_paise : plan.price_monthly_paise;
-  const isFree  = !pricePaise;
+  const currency = planCurrency(plan);
+  const priceMinor = planPriceMinor(plan, interval);
+  const isFree  = !priceMinor;
   const features = Array.isArray(plan.features) ? plan.features : [];
-  const totalPaise = pricePaise && memberCount > 0 ? pricePaise * memberCount : null;
+  const totalMinor = priceMinor && memberCount > 0 ? priceMinor * memberCount : null;
+  const monthlyMinor = planPriceMinor(plan, "monthly");
+  const yearlyMinor = planPriceMinor(plan, "yearly");
 
   return (
     <div className={`relative flex flex-col rounded-2xl border transition-all ${
@@ -121,18 +128,18 @@ function PlanCard({ plan, interval, isCurrent, isLoading, onSelect, memberCount 
             ) : (
               <>
                 <p className="text-3xl font-black text-[color:var(--text)]">
-                  {rupees(pricePaise)}
+                  {money(priceMinor, currency)}
                   <span className="text-sm font-normal text-[color:var(--text-muted)]">/user/{interval === "yearly" ? "yr" : "mo"}</span>
                 </p>
-                {totalPaise && (
+                {totalMinor && (
                   <p className="text-sm font-semibold text-[color:var(--primary)] mt-0.5">
-                    Total: {rupees(totalPaise)}/{interval === "yearly" ? "yr" : "mo"}
+                    Total: {money(totalMinor, currency)}/{interval === "yearly" ? "yr" : "mo"}
                     <span className="text-xs font-normal text-[color:var(--text-muted)] ml-1">for {memberCount} users</span>
                   </p>
                 )}
-                {interval === "yearly" && plan.price_monthly_paise > 0 && (
+                {interval === "yearly" && monthlyMinor > 0 && monthlyMinor * 12 > yearlyMinor && (
                   <p className="text-xs text-[color:var(--primary)] font-semibold mt-0.5">
-                    Save {rupees((plan.price_monthly_paise * 12 - plan.price_yearly_paise) * (memberCount || 1))}/year
+                    Save {money((monthlyMinor * 12 - yearlyMinor) * (memberCount || 1), currency)}/year
                   </p>
                 )}
               </>
@@ -299,8 +306,8 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
         const options = {
           key:      order.keyId,
           order_id: order.orderId,
-          amount:   order.amountPaise,
-          currency: "INR",
+          amount:   order.amountMinor ?? order.amountPaise,
+          currency: String(order.currency || cost?.currency || "INR").toUpperCase(),
           name:     "Asystence",
           description: `Activate ${selected.length} user${selected.length > 1 ? "s" : ""} — ${cost.proRatedDays} days`,
           image:    "/asystence-logo.png",
@@ -347,10 +354,11 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
 
   if (loading) return null;
 
-  const users      = pendingData?.users || [];
-  const pricePaise = pendingData?.perUserPricePaise;
+  const users        = pendingData?.users || [];
+  const priceMinor   = pendingData?.perUserPriceMinor;
+  const billCurrency = pendingData?.currency || "USD";
 
-  if (users.length === 0 && !pricePaise) return null; // nothing to show
+  if (users.length === 0 && !priceMinor) return null; // nothing to show
 
   const allSelected = selected.length === users.length && users.length > 0;
 
@@ -376,10 +384,10 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
             </p>
           </div>
         </div>
-        {pricePaise && (
+        {priceMinor && (
           <span className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
             <Info className="w-3.5 h-3.5" />
-            {rupees(pricePaise)}/user/month
+            {money(priceMinor, billCurrency)}/user/month
           </span>
         )}
       </div>
@@ -415,7 +423,9 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
                     </span>
                   ) : cost ? (
                     <span>
-                      <span className="font-bold text-[color:var(--text)]">{rupees(cost.totalPaise)}</span>
+                      <span className="font-bold text-[color:var(--text)]">
+                        {cost.totalAmountDisplay || money(cost.totalAmount, cost.currency || billCurrency)}
+                      </span>
                       {" "}for {selected.length} user{selected.length > 1 ? "s" : ""}
                       {" · "}{cost.proRatedDays} days remaining in cycle
                     </span>
@@ -595,24 +605,40 @@ export default function WorkspaceBilling() {
   const [interval, setInterval] = useState("monthly");
   const [checking, setChecking] = useState(null); // planId being checked out
   const [cancelling, setCancelling] = useState(false);
+  const [currency, setCurrency] = useState(() => getStoredCurrency());
+  const [currencyOptions, setCurrencyOptions] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [plansRes, summaryRes] = await Promise.all([
-        api.get("/payments/plans"),
+      const [plansRes, summaryRes, currencyRes] = await Promise.all([
+        api.get("/payments/plans", { params: currency ? { currency } : undefined }),
         api.get("/payments/summary").catch(() => ({ data: null })),
+        api.get("/payments/currencies").catch(() => ({ data: null })),
       ]);
       setPlans(plansRes.data || []);
       setSummary(summaryRes.data || null);
+
+      if (currencyRes.data) {
+        setCurrencyOptions(currencyRes.data.currencies || []);
+        // Adopt the geo-detected currency only when the user hasn't picked one.
+        if (!currency && currencyRes.data.detected) setCurrency(currencyRes.data.detected);
+      }
     } catch (err) {
       toast.error(err?.response?.data?.error || "Failed to load billing");
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, currency]);
 
   useEffect(() => { load(); }, [load]);
+
+  // A workspace that is already subscribed is billed in a fixed currency, so
+  // switching the display currency would misrepresent what it pays.
+  const lockedCurrency = summary?.workspace?.billing_currency
+    ? String(summary.workspace.billing_currency).toUpperCase()
+    : null;
+  const displayCurrency = lockedCurrency || currency || "USD";
 
   // ── Razorpay checkout ──────────────────────────────────────────────────────
   async function handleSelectPlan(plan) {
@@ -626,7 +652,18 @@ export default function WorkspaceBilling() {
       const { data } = await api.post("/payments/subscribe", {
         planId: plan.id,
         interval,
+        currency: displayCurrency,
       });
+
+      // The provider may not settle the requested currency (Razorpay without
+      // International Payments); say so before the payment sheet opens.
+      if (data.currencyConverted && data.requestedCurrency) {
+        toast(
+          `${String(data.requestedCurrency).toUpperCase()} isn't supported by our payment ` +
+          `provider — you'll be charged in ${data.currencyDisplay}.`,
+          { icon: "ℹ️", duration: 7000 }
+        );
+      }
 
       // 3. Open Razorpay Checkout
       await new Promise((resolve, reject) => {
@@ -658,9 +695,12 @@ export default function WorkspaceBilling() {
                 planSlug:                 data.planSlug,
               });
 
+              const verification = data.verificationAmount
+                ? money(data.verificationAmount, data.currency || displayCurrency)
+                : "card verification";
               toast.success(
                 data.trialDays > 0
-                  ? `${data.trialDays}-day free trial started! Your ₹1 verification will be refunded within 3–5 days.`
+                  ? `${data.trialDays}-day free trial started! Your ${verification} charge will be refunded within 3–5 days.`
                   : `Subscribed to ${data.planName}! Welcome to Asystence.`,
                 { duration: 6000 }
               );
@@ -729,7 +769,20 @@ export default function WorkspaceBilling() {
           <h1 className="text-[26px] font-semibold tracking-tight text-[color:var(--text)] leading-tight">Billing &amp; Subscription</h1>
           <p className="text-sm text-[color:var(--text-muted)] mt-1">Manage your workspace plan. Cancel anytime.</p>
         </div>
-        <IntervalToggle value={interval} onChange={setInterval} />
+        <div className="flex items-center gap-3 flex-wrap">
+          {lockedCurrency ? (
+            <span className="text-xs text-[color:var(--text-muted)]">
+              Billed in <span className="font-semibold text-[color:var(--text)]">{lockedCurrency}</span>
+            </span>
+          ) : (
+            <CurrencySelector
+              value={displayCurrency}
+              onChange={setCurrency}
+              currencies={currencyOptions}
+            />
+          )}
+          <IntervalToggle value={interval} onChange={setInterval} />
+        </div>
       </div>
 
       {/* Current plan status banner */}
@@ -830,8 +883,8 @@ export default function WorkspaceBilling() {
           {[
             {
               icon: <Shield className="w-4 h-4 text-[color:var(--primary)]" />,
-              title: "₹1 mandate verification",
-              desc: "When you subscribe, ₹1 is charged to verify your payment method. This amount is automatically refunded within 3–5 business days.",
+              title: "Refundable card verification",
+              desc: `When you subscribe, a small charge in ${displayCurrency} verifies your payment method. It is refunded automatically within 3–5 business days.`,
             },
             {
               icon: <Zap className="w-4 h-4 text-[color:var(--primary)]" />,

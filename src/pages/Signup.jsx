@@ -9,6 +9,7 @@ import {
 } from "../config/runtime";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
+import { formatMinor, getStoredCurrency, planCurrency, planPriceMinor } from "../utils/currency";
 import {
   ArrowRight,
   Building2,
@@ -55,10 +56,13 @@ export default function Signup() {
   const [selectedPlan, setSelectedPlan] = useState(null);
 
   const isFreePlan = !!selectedPlan &&
-    (Number(selectedPlan.price_monthly) || 0) === 0 &&
-    (Number(selectedPlan.price_yearly) || 0) === 0;
+    planPriceMinor(selectedPlan, "monthly") === 0 &&
+    planPriceMinor(selectedPlan, "yearly") === 0;
   const selectedPlanName = selectedPlan?.name || "Pro";
   const selectedTrialDays = Number(selectedPlan?.trial_days) || 7;
+  // The backend prices the catalog in the visitor's own currency; keep whatever
+  // it returned so the quote and the charge agree.
+  const planCurrencyCode = selectedPlan ? planCurrency(selectedPlan) : (getStoredCurrency() || "USD");
 
   useEffect(() => {
     if (!selectedPlanSlug) {
@@ -68,7 +72,10 @@ export default function Signup() {
 
     let cancelled = false;
     setPlanLoading(true);
-    axios.get(`${API_BASE_URL}/public/billing/plans`)
+    const stored = getStoredCurrency();
+    axios.get(`${API_BASE_URL}/public/billing/plans`, {
+      params: stored ? { currency: stored } : undefined,
+    })
       .then(({ data }) => {
         if (cancelled) return;
         const match = (Array.isArray(data) ? data : []).find((plan) => plan.slug === selectedPlanSlug);
@@ -190,7 +197,7 @@ export default function Signup() {
       if (checkout.orderId) {
         options.order_id = checkout.orderId;
         options.amount = checkout.amount || checkout.verificationAmount;
-        options.currency = String(checkout.currency || "INR").toUpperCase();
+        options.currency = String(checkout.currency || planCurrencyCode).toUpperCase();
       } else {
         options.subscription_id = checkout.subscriptionId;
       }
@@ -239,6 +246,8 @@ export default function Signup() {
         email,
         password,
         interval,
+        // Charge in the same currency the plan was quoted in on this page.
+        currency: planCurrencyCode,
         consentAccepted,
         ...(selectedPlanSlug ? { plan: selectedPlanSlug } : {}),
       }, { headers: getGrowthContextHeaders() });
@@ -324,8 +333,11 @@ export default function Signup() {
                 ["No card", "Create directly"],
               ] : [
                 [`${selectedTrialDays} days`, "Full feature trial"],
-                ["INR 1", "Refunded verification"],
-                ["Razorpay", "Card billing consent"],
+                [
+                  selectedPlan ? formatMinor(planPriceMinor(selectedPlan, interval), planCurrencyCode) : "—",
+                  `Per user / ${interval === "yearly" ? "year" : "month"} after trial`,
+                ],
+                ["Refundable", "Card verification charge"],
               ]).map(([value, label]) => (
                 <div key={label} className="border border-[color:var(--border)] rounded-lg p-4">
                   <p className="text-lg font-semibold brand-orange-text">{value}</p>
@@ -476,7 +488,9 @@ export default function Signup() {
                   className="mt-1 h-4 w-4 accent-[var(--primary)]"
                 />
                 <span className="text-sm leading-6 text-[color:var(--text-muted)]">
-                  I authorize automatic billing after the free trial unless I cancel before it ends. I agree that Razorpay may charge INR 1.00 now to verify my card and refund it automatically after confirmation.
+                  I authorize automatic billing in {planCurrencyCode} after the free trial unless I cancel
+                  before it ends. I agree that a small card-verification charge may be made now and
+                  refunded automatically after confirmation.
                 </span>
               </label>}
 

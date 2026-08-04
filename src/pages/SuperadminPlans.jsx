@@ -5,8 +5,9 @@ import superadminApi from "../superadminApi";
 import {
   Plus, Pencil, Trash2, RefreshCw, CheckCircle,
   Zap, Crown, Users, Star, X, ChevronDown, ChevronUp,
-  Search, KeyRound, UserCog,
+  Search, KeyRound, UserCog, Globe,
 } from "lucide-react";
+import { currencySymbol, formatMinor, fromMinor } from "../utils/currency";
 
 const SUPPORT_LABELS = {
   community: "Community",
@@ -15,9 +16,12 @@ const SUPPORT_LABELS = {
   dedicated: "Dedicated Manager",
 };
 
-function rupees(paise) {
-  if (!paise) return "₹0";
-  return `₹${(paise / 100).toLocaleString("en-IN")}`;
+/**
+ * Plans are authored in a base currency (USD by default) and stored in minor
+ * units. Customers see this converted into their own currency at checkout.
+ */
+function planMoney(minorAmount, currency = "USD") {
+  return formatMinor(minorAmount, currency);
 }
 
 // ── Master feature catalog ─────────────────────────────────────────────────────
@@ -174,9 +178,161 @@ function toSlug(name) {
   return name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 }
 
+// Currencies a plan can be *authored* in. Everything else is derived from it.
+const BASE_CURRENCY_OPTIONS = ["USD", "EUR", "GBP", "INR", "AUD", "CAD", "SGD", "AED"];
+
+/**
+ * Published local prices for a plan. FX rows are generated from the base price
+ * and refreshed on demand; a pinned row is an exact amount the superadmin chose
+ * and is never overwritten by a refresh.
+ */
+function PriceBookPanel({ plan, baseCurrency }) {
+  const [rows, setRows] = useState([]);
+  const [preview, setPreview] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [pricesRes, previewRes] = await Promise.all([
+        superadminApi.get(`/superadmin/plans/${plan.id}/prices`),
+        superadminApi.get(`/superadmin/plans/${plan.id}/preview`).catch(() => ({ data: null })),
+      ]);
+      setRows(pricesRes.data || []);
+      setPreview(previewRes.data?.preview || []);
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Could not load local prices");
+    } finally {
+      setLoading(false);
+    }
+  }, [plan.id]);
+
+  useEffect(() => { if (open) load(); }, [open, load]);
+
+  async function pinPrice(currency, monthly, yearly) {
+    setBusy(true);
+    try {
+      await superadminApi.put(`/superadmin/plans/${plan.id}/prices/${currency}`, {
+        price_monthly: Number(monthly) || 0,
+        price_yearly: Number(yearly) || 0,
+      });
+      toast.success(`${currency} price pinned`);
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Could not pin price");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unpinPrice(currency) {
+    setBusy(true);
+    try {
+      await superadminApi.delete(`/superadmin/plans/${plan.id}/prices/${currency}`);
+      toast.success(`${currency} reverted to automatic pricing`);
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Could not remove pinned price");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="border border-[color:var(--border)] rounded-xl p-4 space-y-3">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 text-left"
+      >
+        <span className="text-xs font-bold text-[color:var(--text)] uppercase tracking-wider">
+          Local prices
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-[color:var(--text-muted)]" />
+              : <ChevronDown className="w-4 h-4 text-[color:var(--text-muted)]" />}
+      </button>
+
+      {!open ? (
+        <p className="text-[11px] text-[color:var(--text-muted)]">
+          What customers see in other currencies, derived from the {baseCurrency} price.
+        </p>
+      ) : loading ? (
+        <p className="text-xs text-[color:var(--text-muted)] flex items-center gap-2">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Loading…
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {preview.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold text-[color:var(--text-muted)] uppercase tracking-wide">
+                Preview
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {preview.map(row => (
+                  <div key={row.currency} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-[color:var(--border)] text-xs">
+                    <span className="font-semibold text-[color:var(--text)]">{row.currency}</span>
+                    <span className="text-[color:var(--text-muted)]">
+                      {row.price_monthly_display}/mo
+                      {row.source === "manual" && <span className="ml-1 text-[color:var(--primary)]">pinned</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {rows.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold text-[color:var(--text-muted)] uppercase tracking-wide">
+                Published
+              </p>
+              {rows.map(row => (
+                <div key={row.currency} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-[color:var(--border)] text-xs">
+                  <span className="font-semibold text-[color:var(--text)] uppercase">{row.currency}</span>
+                  <span className="text-[color:var(--text-muted)]">
+                    {row.price_monthly_display}/mo · {row.price_yearly_display}/yr
+                  </span>
+                  <span className={row.source === "manual" ? "text-[color:var(--primary)] font-semibold" : "text-[color:var(--text-muted)]"}>
+                    {row.source === "manual" ? "pinned" : "auto"}
+                  </span>
+                  {row.source === "manual" ? (
+                    <button type="button" disabled={busy}
+                      onClick={() => unpinPrice(row.currency)}
+                      className="text-[color:var(--text-muted)] hover:text-[color:var(--text)] disabled:opacity-50">
+                      unpin
+                    </button>
+                  ) : (
+                    <button type="button" disabled={busy}
+                      onClick={() => pinPrice(
+                        row.currency,
+                        fromMinor(row.price_monthly_minor, row.currency),
+                        fromMinor(row.price_yearly_minor, row.currency)
+                      )}
+                      className="text-[color:var(--text-muted)] hover:text-[color:var(--text)] disabled:opacity-50">
+                      pin
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-[11px] leading-5 text-[color:var(--text-muted)]">
+            Auto prices are generated from the {baseCurrency} price once and then frozen, so a
+            customer never sees the price move mid-checkout. Pin one to lock an exact local amount.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Plan modal (create / edit) ────────────────────────────────────────────────
 const EMPTY_FORM = {
   name: "", slug: "", tagline: "", description: "",
+  base_currency: "USD",
   price_monthly: "", price_yearly: "", yearly_discount_pct: 0,
   member_limit: 10, max_projects: "", max_integrations: "", storage_limit_gb: "",
   features: [], support_level: "email",
@@ -189,13 +345,14 @@ function PlanModal({ plan, onClose, onSaved }) {
   const [form, setForm] = useState(() =>
     isEdit ? {
       ...EMPTY_FORM,
-      // Only copy the fields we actually edit — never spread raw paise values into form
+      // Only copy the fields we actually edit — never spread raw minor units into form
       name:               plan.name || "",
       slug:               plan.slug || "",
       tagline:            plan.tagline || "",
       description:        plan.description || "",
-      price_monthly:      plan.price_monthly_paise ? plan.price_monthly_paise / 100 : "",
-      price_yearly:       plan.price_yearly_paise  ? plan.price_yearly_paise  / 100 : "",
+      base_currency:      (plan.base_currency || "USD").toUpperCase(),
+      price_monthly:      plan.price_monthly_minor ? fromMinor(plan.price_monthly_minor, plan.base_currency) : "",
+      price_yearly:       plan.price_yearly_minor  ? fromMinor(plan.price_yearly_minor,  plan.base_currency) : "",
       yearly_discount_pct: plan.yearly_discount_pct || 0,
       member_limit:       plan.member_limit || "",
       max_projects:       plan.max_projects || "",
@@ -328,23 +485,45 @@ function PlanModal({ plan, onClose, onSaved }) {
 
           {/* Pricing */}
           <div className="border border-[color:var(--border)] rounded-xl p-4 space-y-3">
-            <p className="text-xs font-bold text-[color:var(--text)] uppercase tracking-wider">Pricing per user (₹ Rupees)</p>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs font-bold text-[color:var(--text)] uppercase tracking-wider">
+                List price per user ({form.base_currency})
+              </p>
+              <label className="inline-flex items-center gap-1.5 text-xs">
+                <Globe className="w-3.5 h-3.5 text-[color:var(--text-muted)]" />
+                <select
+                  value={form.base_currency}
+                  onChange={e => set("base_currency", e.target.value)}
+                  className="bg-transparent font-semibold text-[color:var(--text)] outline-none cursor-pointer"
+                >
+                  {BASE_CURRENCY_OPTIONS.map(code => (
+                    <option key={code} value={code}>{code}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">Per User / Month (₹)</label>
-                <input type="text" inputMode="numeric" value={form.price_monthly}
-                  onChange={e => handlePriceChange("price_monthly", e.target.value.replace(/[^0-9]/g, ""))}
-                  placeholder="999"
+                <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">
+                  Per User / Month ({currencySymbol(form.base_currency)})
+                </label>
+                <input type="text" inputMode="decimal" value={form.price_monthly}
+                  onChange={e => handlePriceChange("price_monthly", e.target.value.replace(/[^0-9.]/g, ""))}
+                  placeholder="20"
                   className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">Per User / Year (₹)</label>
-                <input type="text" inputMode="numeric" value={form.price_yearly}
-                  onChange={e => handlePriceChange("price_yearly", e.target.value.replace(/[^0-9]/g, ""))}
-                  placeholder="9999"
+                <label className="block text-xs font-semibold text-[color:var(--text-muted)] mb-1">
+                  Per User / Year ({currencySymbol(form.base_currency)})
+                </label>
+                <input type="text" inputMode="decimal" value={form.price_yearly}
+                  onChange={e => handlePriceChange("price_yearly", e.target.value.replace(/[^0-9.]/g, ""))}
+                  placeholder="200"
                   className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] focus:outline-none focus:border-[color:var(--primary)]" />
               </div>
             </div>
+
             {/* Auto-calculated discount */}
             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-[color:var(--border)] text-xs transition-colors ${
               form.yearly_discount_pct > 0 ? "text-green-500" : "text-[color:var(--text-muted)]"
@@ -353,7 +532,15 @@ function PlanModal({ plan, onClose, onSaved }) {
                 ? <><CheckCircle className="w-3.5 h-3.5" /> Yearly saves <strong>{form.yearly_discount_pct}%</strong> vs monthly (auto-calculated)</>
                 : <>Fill both prices to auto-calculate yearly discount. Enter 0 for free plans.</>}
             </div>
+
+            <p className="text-[11px] leading-5 text-[color:var(--text-muted)]">
+              Customers are quoted in their own currency, converted from this price and rounded to a
+              clean local amount. Changing the price here retires the existing Stripe/Razorpay
+              objects — current subscribers keep their original amount, and new checkouts use the new one.
+            </p>
           </div>
+
+          {isEdit && <PriceBookPanel plan={plan} baseCurrency={form.base_currency} />}
 
           {/* Limits */}
           <div className="border border-[color:var(--border)] rounded-xl p-4 space-y-3">
@@ -588,7 +775,8 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onManageUsers }) {
   const [expanded, setExpanded]     = useState(false);
   const [wsExpanded, setWsExpanded] = useState(false);
 
-  const isFree = !plan.price_monthly_paise && !plan.price_yearly_paise;
+  const isFree = !plan.price_monthly_minor && !plan.price_yearly_minor;
+  const planBaseCurrency = (plan.base_currency || "USD").toUpperCase();
   const features = Array.isArray(plan.features) ? plan.features : [];
 
   return (
@@ -630,11 +818,11 @@ function PlanCard({ plan, workspaces = [], onEdit, onDelete, onManageUsers }) {
           ) : (
             <>
               <span className="text-2xl font-black text-[color:var(--text)]">
-                {rupees(plan.price_monthly_paise)}<span className="text-sm font-normal text-[color:var(--text-muted)]">/user/mo</span>
+                {planMoney(plan.price_monthly_minor, planBaseCurrency)}<span className="text-sm font-normal text-[color:var(--text-muted)]">/user/mo</span>
               </span>
-              {plan.price_yearly_paise > 0 && (
+              {plan.price_yearly_minor > 0 && (
                 <span className="text-sm text-[color:var(--text-muted)]">
-                  {rupees(plan.price_yearly_paise)}/user/yr
+                  {planMoney(plan.price_yearly_minor, planBaseCurrency)}/user/yr
                   {plan.yearly_discount_pct > 0 && (
                     <span className="ml-1.5 text-green-500 font-semibold">{plan.yearly_discount_pct}% off</span>
                   )}
@@ -786,7 +974,10 @@ export default function SuperadminPlans() {
 
   const active    = plans.filter(p => p.is_active);
   const totalSubs = plans.reduce((s, p) => s + (p.subscriber_count || 0), 0);
-  const mrrPaise  = plans.reduce((s, p) => s + ((p.price_monthly_paise || 0) * (p.subscriber_count || 0)), 0);
+  // MRR is summed in the catalog's base currency; workspaces billed in another
+  // currency were converted from this same list price.
+  const mrrCurrency = (plans[0]?.base_currency || "USD").toUpperCase();
+  const mrrMinor  = plans.reduce((s, p) => s + ((p.price_monthly_minor || 0) * (p.subscriber_count || 0)), 0);
 
   return (
     <div className="space-y-6">
@@ -814,7 +1005,7 @@ export default function SuperadminPlans() {
         {[
           { label: "Active Plans",    value: active.length,    sub: `${plans.length - active.length} inactive` },
           { label: "Total Workspaces", value: totalSubs,       sub: "across all plans" },
-          { label: "Est. MRR",        value: rupees(mrrPaise), sub: "based on monthly prices" },
+          { label: "Est. MRR", value: planMoney(mrrMinor, mrrCurrency), sub: `list prices, ${mrrCurrency}` },
         ].map(s => (
           <div key={s.label} className="border border-[color:var(--border)] rounded-xl px-5 py-4">
             <p className="text-2xl font-bold text-[color:var(--text)]">{s.value}</p>

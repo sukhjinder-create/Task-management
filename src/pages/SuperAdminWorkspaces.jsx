@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import superadminApi from "../superadminApi";
 import toast from "react-hot-toast";
+import { formatMinor } from "../utils/currency";
 import {
   Building2, Users, ShieldCheck, ShieldOff, Plus,
   MoreVertical, Pencil, Trash2, CheckCircle, XCircle,
@@ -322,7 +323,7 @@ function AssignPlanModal({ ws, axiosSuper, onClose, onSaved }) {
                       <p className="text-sm font-semibold text-[color:var(--text)]">{plan.name}</p>
                       {plan.tagline && <p className="text-xs text-[color:var(--text-muted)] mt-0.5">{plan.tagline}</p>}
                       <div className="flex items-center gap-3 mt-1 text-xs text-[color:var(--text-muted)]">
-                        <span>₹{((plan.price_monthly_paise || 0) / 100).toLocaleString("en-IN")}/mo</span>
+                        <span>{formatMinor(plan.price_monthly_minor, plan.base_currency || "USD")}/mo</span>
                         {plan.member_limit && <span>· {plan.member_limit} members</span>}
                         {Array.isArray(plan.features) && (
                           <span>· {plan.features.length} features</span>
