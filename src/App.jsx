@@ -67,6 +67,7 @@ const Wiki = lazy(() => import("./pages/Wiki.jsx"));
 const Leave = lazy(() => import("./pages/Leave.jsx"));
 const OKR = lazy(() => import("./pages/OKR.jsx"));
 const Outcomes = lazy(() => import("./pages/Outcomes.jsx"));
+const AssuranceCenter = lazy(() => import("./pages/AssuranceCenter.jsx"));
 const Reviews = lazy(() => import("./pages/Reviews.jsx"));
 const AIFeatures = lazy(() => import("./pages/AIFeatures.jsx"));
 const WorkspaceAiSettings = lazy(() => import("./pages/WorkspaceAiSettings.jsx"));
@@ -206,6 +207,10 @@ export default function App() {
           <Route
             path="outcomes"
             element={<ProtectedRoute requiredFeature="okr_goals"><Outcomes /></ProtectedRoute>}
+          />
+          <Route
+            path="outcomes/:section"
+            element={<ProtectedRoute requiredFeature="okr_goals"><AssuranceCenter /></ProtectedRoute>}
           />
           <Route
             path="okr"

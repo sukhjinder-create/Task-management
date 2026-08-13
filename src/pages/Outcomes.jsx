@@ -19,8 +19,9 @@ import {
 import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { Button, EmptyState, Modal, Spinner } from "../components/ui";
+import AssuranceNav from "../components/AssuranceNav";
 
-const MANAGER_ROLES = new Set(["admin", "owner", "manager"]);
+const MANAGER_ROLES = new Set(["admin", "manager"]);
 const STATE_META = {
   verified: { label: "Verified", tone: "text-[color:var(--score-good)]", dot: "bg-[color:var(--score-good)]" },
   on_track: { label: "On track", tone: "text-[color:var(--score-good)]", dot: "bg-[color:var(--score-good)]" },
@@ -168,7 +169,7 @@ function EvidenceTimeline({ detail }) {
             <div key={item.id} className="rounded-[7px] border border-[color:var(--border)] px-3 py-2">
               <p className="text-[12px] font-medium text-[color:var(--text)]">{item.label}</p>
               <p className="mt-1 text-[10px] text-[color:var(--text-soft)]">
-                {item.evidence_type} · {item.recorded_by_name || "Workspace member"} · {formatDate(item.recorded_at)}
+                {item.evidence_type} · {item.recorded_by_name || "Workspace user"} · {formatDate(item.recorded_at)}
               </p>
               {item.note && <p className="mt-1 text-[11px] leading-5 text-[color:var(--text-muted)]">{item.note}</p>}
             </div>
@@ -339,11 +340,17 @@ export default function Outcomes() {
     setBusyId(commitment.id);
     try {
       if (mode === "complete") {
-        await api.post(`/assurance/commitments/${commitment.id}/complete`, {
-          evidenceLabel: evidenceForm.label,
-          note: evidenceForm.note,
-        });
-        toast.success("Outcome completed with result evidence");
+        const payload = { evidenceLabel: evidenceForm.label, note: evidenceForm.note };
+        if (canManage) {
+          await api.post(`/assurance/commitments/${commitment.id}/complete`, payload);
+          toast.success("Outcome completed with result evidence");
+        } else {
+          await api.post(`/assurance/commitments/${commitment.id}/approval-requests`, {
+            ...payload,
+            actionType: "complete",
+          });
+          toast.success("Completion sent for approval");
+        }
       } else {
         await api.post(`/assurance/commitments/${commitment.id}/evidence`, {
           evidenceType: "result",
@@ -462,6 +469,8 @@ export default function Outcomes() {
         )}
       </header>
 
+      <AssuranceNav />
+
       {(showForm || showEmptyForm) && (
         <OutcomeForm
           form={form}
@@ -540,8 +549,8 @@ export default function Outcomes() {
                       {assurance.state !== "verified" && (
                         <Button size="sm" variant="secondary" onClick={() => openEvidence(commitment, "evidence")} leftIcon={<FileCheck2 className="h-3.5 w-3.5" />}>Add evidence</Button>
                       )}
-                      {canManage && assurance.state !== "verified" && (
-                        <Button size="sm" variant="ghost" onClick={() => openEvidence(commitment, "complete")}>Mark complete</Button>
+                      {assurance.state !== "verified" && (
+                        <Button size="sm" variant="ghost" onClick={() => openEvidence(commitment, "complete")}>{canManage ? "Mark complete" : "Request completion"}</Button>
                       )}
                       {canManage && assurance.state !== "verified" && (
                         <Button size="sm" variant="ghost" onClick={() => startEdit(commitment)}>Edit</Button>
@@ -574,7 +583,7 @@ export default function Outcomes() {
       <Modal isOpen={Boolean(evidenceDialog)} onClose={() => setEvidenceDialog(null)} size="sm">
         <Modal.Header>
           <div>
-            <Modal.Title>{evidenceDialog?.mode === "complete" ? "Complete with evidence" : "Record result evidence"}</Modal.Title>
+            <Modal.Title>{evidenceDialog?.mode === "complete" ? (canManage ? "Complete with evidence" : "Request completion") : "Record result evidence"}</Modal.Title>
             <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{evidenceDialog?.commitment?.title}</p>
           </div>
         </Modal.Header>
@@ -605,7 +614,7 @@ export default function Outcomes() {
           <Modal.Footer>
             <Button variant="ghost" onClick={() => setEvidenceDialog(null)}>Cancel</Button>
             <Button type="submit" loading={busyId === evidenceDialog?.commitment?.id}>
-              {evidenceDialog?.mode === "complete" ? "Complete outcome" : "Record evidence"}
+              {evidenceDialog?.mode === "complete" ? (canManage ? "Complete outcome" : "Send for approval") : "Record evidence"}
             </Button>
           </Modal.Footer>
         </form>

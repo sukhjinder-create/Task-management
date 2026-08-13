@@ -9,6 +9,8 @@ import { publishUnreadCount } from "../notificationBus";
 import { Bell, CheckCheck } from "lucide-react";
 
 const TYPE_META = {
+  assurance_attention: { label: "Outcome attention", icon: "!" },
+  assurance_decision:  { label: "Outcome decision",  icon: "OK" },
   huddle_intelligence_ready: { label: "Meeting intelligence", icon: "AI" },
   task_assigned:      { label: "Task assigned",     icon: "📋" },
   task_updated:       { label: "Task updated",       icon: "✏️" },
@@ -45,6 +47,7 @@ const ALL_TYPE_FILTERS = [
   { value: "comment_added",    label: "Comments",  roles: ["user", "manager", "admin"] },
   { value: "comment_mention",  label: "Mentions",  roles: ["user", "manager", "admin"] },
   { value: "leave",            label: "Leave",     roles: ["user", "manager", "admin"] },
+  { value: "assurance",        label: "Outcomes",  roles: ["user", "manager", "admin"] },
   { value: "project_assigned", label: "Projects",  roles: ["manager", "admin"] },
   { value: "autopilot_summary",label: "Autopilot", roles: ["admin"] },
   { value: "workspace_warning",label: "Warnings",  roles: ["admin"] },
@@ -165,6 +168,7 @@ export default function Notifications() {
   const filtered = notifications.filter((n) => {
     if (tab === "unread" && n.is_read) return false;
     if (typeFilter === "leave") return LEAVE_TYPES.has(n.type);
+    if (typeFilter === "assurance") return String(n.type || "").startsWith("assurance_");
     if (typeFilter !== "all" && n.type !== typeFilter) return false;
     return true;
   });
