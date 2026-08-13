@@ -71,10 +71,8 @@ export default function MobileLayout() {
   }, [auth?.token]);
 
   // ── Attendance state ────────────────────────────────────
-  const [attendanceStatus, setAttendanceStatus] = useState(() => {
-    try { return localStorage.getItem("attendanceStatus") || "offline"; }
-    catch { return "offline"; }
-  });
+  const [attendanceStatus, setAttendanceStatus] = useState("offline");
+  const [attendanceReady, setAttendanceReady] = useState(false);
 
   const [idleThresholdMs, setIdleThresholdMs] = useState(5 * 60 * 1000);
   const [lastActivityAt, setLastActivityAt] = useState(Date.now());
@@ -90,12 +88,40 @@ export default function MobileLayout() {
     }).catch(() => {});
   }, []);
 
+  // Keep the mobile header aligned with the same workspace-scoped attendance
+  // session used by Live Operations.
   useEffect(() => {
-    try { localStorage.setItem("attendanceStatus", attendanceStatus); } catch {}
-  }, [attendanceStatus]);
+    let active = true;
+    setAttendanceReady(false);
+    setAttendanceStatus("offline");
+    setIsIdle(false);
+
+    if (!auth?.token || !user?.id) {
+      setAttendanceReady(true);
+      return () => { active = false; };
+    }
+
+    api.get("/attendance/status")
+      .then((res) => {
+        if (!active) return;
+        const status = res.data?.status;
+        setAttendanceStatus(
+          ["available", "aws", "lunch"].includes(status) ? status : "offline"
+        );
+      })
+      .catch(() => {
+        if (active) setAttendanceStatus("offline");
+      })
+      .finally(() => {
+        if (active) setAttendanceReady(true);
+      });
+
+    return () => { active = false; };
+  }, [api, auth?.token, user?.id, user?.workspaceId, user?.workspace_id]);
 
   // Idle tracker
   useEffect(() => {
+    if (!attendanceReady) return;
     if (!auth?.token || attendanceStatus === "offline") return;
     const markActive = async () => {
       setLastActivityAt(Date.now());
@@ -118,18 +144,22 @@ export default function MobileLayout() {
       events.forEach((e) => window.removeEventListener(e, markActive));
       clearInterval(timer);
     };
-  }, [auth?.token, attendanceStatus, isIdle, lastActivityAt, idleThresholdMs]);
+  }, [api, auth?.token, attendanceReady, attendanceStatus, isIdle, lastActivityAt, idleThresholdMs]);
 
   const statusMeta = useMemo(() => {
+    if (!attendanceReady) {
+      return { label: "Checking...", dot: "bg-gray-400", color: "neutral" };
+    }
     switch (attendanceStatus) {
       case "available": return { label: "Available", dot: "bg-green-500",  color: "success" };
       case "aws":       return { label: "AWS",       dot: "bg-yellow-500", color: "warning" };
       case "lunch":     return { label: "Lunch",     dot: "brand-orange-bg", color: "warning" };
       default:          return { label: "Offline",   dot: "bg-gray-400",   color: "neutral" };
     }
-  }, [attendanceStatus]);
+  }, [attendanceReady, attendanceStatus]);
 
   const handleToggleSign = async () => {
+    if (!attendanceReady) return;
     try {
       setToggleLoading(true);
       setAttendanceOpen(false);
@@ -247,6 +277,7 @@ export default function MobileLayout() {
           <div className="relative">
             <button
               onClick={() => setAttendanceOpen((p) => !p)}
+              disabled={!attendanceReady}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                 attendanceStatus === "offline"
@@ -254,7 +285,7 @@ export default function MobileLayout() {
                   : "bg-red-500/15 text-red-500"
               )}
             >
-              {attendanceStatus === "offline" ? "Sign in" : "Sign off"}
+              {!attendanceReady ? "Checking..." : attendanceStatus === "offline" ? "Sign in" : "Sign off"}
             </button>
 
             {/* Attendance quick panel */}
@@ -266,7 +297,7 @@ export default function MobileLayout() {
                   <div className="p-1">
                     <button
                       onClick={handleToggleSign}
-                      disabled={toggleLoading}
+                      disabled={toggleLoading || !attendanceReady}
                       className={cn(
                         "w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors",
                         attendanceStatus === "offline"

@@ -32,6 +32,10 @@ export function AuthProvider({ children }) {
     try {
       const isSuperadminSurface = isSuperadminPath();
 
+      // Remove the legacy global attendance flag. Attendance is tied to the
+      // authenticated user's workspace session and is hydrated from the API.
+      localStorage.removeItem("attendanceStatus");
+
       // The platform console owns a dedicated auth/session boundary. A stored
       // workspace-user session must never redirect, hydrate, or open user
       // realtime/push services while this surface is loading.

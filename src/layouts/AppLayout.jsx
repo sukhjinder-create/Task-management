@@ -64,13 +64,8 @@ export default function AppLayout({ children }) {
     });
   };
 
-  const [attendanceStatus, setAttendanceStatus] = useState(() => {
-    try {
-      return localStorage.getItem("attendanceStatus") || "offline";
-    } catch {
-      return "offline";
-    }
-  });
+  const [attendanceStatus, setAttendanceStatus] = useState("offline");
+  const [attendanceReady, setAttendanceReady] = useState(false);
 
   const [idleThresholdMs, setIdleThresholdMs] = useState(5 * 60 * 1000);
 
@@ -89,10 +84,6 @@ export default function AppLayout({ children }) {
     return () => { mounted = false; };
   }, [api]);
 
-  useEffect(() => {
-    try { localStorage.setItem("attendanceStatus", attendanceStatus); } catch {}
-  }, [attendanceStatus]);
-
   const [awsLoading, setAwsLoading] = useState(false);
   const [availableLoading, setAvailableLoading] = useState(false);
   const [lunchLoading, setLunchLoading] = useState(false);
@@ -104,7 +95,41 @@ export default function AppLayout({ children }) {
   const [lastActivityAt, setLastActivityAt] = useState(Date.now());
   const [isIdle, setIsIdle] = useState(false);
 
+  // Attendance is server-owned. A browser flag can survive logout and make a
+  // different user or workspace appear signed in when no session exists.
+  useEffect(() => {
+    let active = true;
+    setAttendanceReady(false);
+    setAttendanceStatus("offline");
+    setIsIdle(false);
+
+    if (!auth?.token || !user?.id) {
+      setAttendanceReady(true);
+      return () => { active = false; };
+    }
+
+    api.get("/attendance/status")
+      .then((res) => {
+        if (!active) return;
+        const status = res.data?.status;
+        setAttendanceStatus(
+          ["available", "aws", "lunch"].includes(status) ? status : "offline"
+        );
+      })
+      .catch(() => {
+        if (active) setAttendanceStatus("offline");
+      })
+      .finally(() => {
+        if (active) setAttendanceReady(true);
+      });
+
+    return () => { active = false; };
+  }, [api, auth?.token, user?.id, user?.workspaceId, user?.workspace_id]);
+
   const statusMeta = useMemo(() => {
+    if (!attendanceReady) {
+      return { label: "Checking...", dot: "bg-[color:var(--text-soft)]", tone: "neutral" };
+    }
     switch (attendanceStatus) {
       case "available":
         return { label: "Available", dot: "bg-[color:var(--score-good)]", tone: "good" };
@@ -115,9 +140,10 @@ export default function AppLayout({ children }) {
       default:
         return { label: "Offline",   dot: "bg-[color:var(--text-soft)]", tone: "neutral" };
     }
-  }, [attendanceStatus]);
+  }, [attendanceReady, attendanceStatus]);
 
   const handleToggleSign = async () => {
+    if (!attendanceReady) return;
     try {
       setToggleLoading(true);
       if (attendanceStatus === "offline") {
@@ -194,6 +220,7 @@ export default function AppLayout({ children }) {
   // Idle / screen-on / screen-off tracking
   useEffect(() => {
     if (!auth?.token) return;
+    if (!attendanceReady) return;
     if (attendanceStatus === "offline") return;
     let idleTimer;
     const markActive = async () => {
@@ -219,7 +246,7 @@ export default function AppLayout({ children }) {
       events.forEach((e) => window.removeEventListener(e, markActive));
       clearInterval(idleTimer);
     };
-  }, [auth?.token, attendanceStatus, isIdle, lastActivityAt, idleThresholdMs, api]);
+  }, [auth?.token, attendanceReady, attendanceStatus, isIdle, lastActivityAt, idleThresholdMs, api]);
 
   return (
     <div className="flex h-screen overflow-hidden theme-bg theme-text">
@@ -293,12 +320,12 @@ export default function AppLayout({ children }) {
             <div className="flex items-center gap-1.5">
               <Button
                 onClick={handleToggleSign}
-                disabled={toggleLoading}
+                disabled={toggleLoading || !attendanceReady}
                 loading={toggleLoading}
                 variant={attendanceStatus === "offline" ? "primary" : "secondary"}
                 size="sm"
               >
-                {attendanceStatus === "offline" ? "Sign in" : "Sign off"}
+                {!attendanceReady ? "Checking..." : attendanceStatus === "offline" ? "Sign in" : "Sign off"}
               </Button>
 
               {attendanceStatus !== "offline" && (
