@@ -32,6 +32,7 @@ import {
 import { getUserProfilePath } from "../utils/userProfiles";
 import AdaptiveRecommendations from "../components/AdaptiveRecommendations";
 import AdaptiveControlPanel from "../components/AdaptiveControlPanel";
+import OutcomeAttention from "../components/OutcomeAttention";
 
 function isTaskOverdue(task) {
   if (!task.due_date) return false;
@@ -988,6 +989,7 @@ const autonomousInsight = useMemo(() => {
       </div>
     </header>
 
+    <OutcomeAttention />
     {liveAttendancePanel}
     <AdaptiveRecommendations limit={3} />
     <AdaptiveControlPanel />
