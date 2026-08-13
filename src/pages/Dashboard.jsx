@@ -1955,7 +1955,8 @@ const autonomousInsight = useMemo(() => {
 {/* Workspace Overview — merged task counts + org intelligence */}
 {isAdmin && (() => {
   const monthLabel = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
-  const avg = intelligence?.orgScore?.averageScore;
+  const orgScore = intelligence?.orgScore || null;
+  const avg = orgScore?.averageScore;
   const scoreColor = getScoreTextClass(avg);
   const scoreBg = getScoreSurfaceClass(avg);
 
@@ -1998,7 +1999,9 @@ const autonomousInsight = useMemo(() => {
     },
   ];
 
-  const intelligenceTiles = intelligence?.evidenceStatus?.hasEvidence !== false ? [
+  const intelligenceTiles = intelligence &&
+    intelligence.evidenceStatus?.hasEvidence !== false &&
+    orgScore ? [
     {
       label: "Org Avg Score",
       value: avg != null ? Number(avg).toFixed(1) : "—",
@@ -2010,7 +2013,7 @@ const autonomousInsight = useMemo(() => {
     },
     {
       label: "Total Members",
-      value: intelligence.orgScore.userCount,
+      value: orgScore.userCount,
       sub: "in workspace",
       icon: <Users className="w-4 h-4" />,
       valueClass: "text-[color:var(--primary)]",
@@ -2019,7 +2022,7 @@ const autonomousInsight = useMemo(() => {
     },
     {
       label: "High Performers",
-      value: intelligence.orgScore.highPerformers,
+      value: orgScore.highPerformers,
       sub: "score ≥ 80",
       icon: <TrendingUp className="w-4 h-4" />,
       valueClass: SCORE_TEXT.good,
@@ -2028,12 +2031,12 @@ const autonomousInsight = useMemo(() => {
     },
     {
       label: "At Risk",
-      value: intelligence.orgScore.atRiskUsers,
+      value: orgScore.atRiskUsers,
       sub: "need attention",
       icon: <AlertTriangle className="w-4 h-4" />,
-      valueClass: intelligence.orgScore.atRiskUsers > 0 ? SCORE_TEXT.danger : "theme-text-muted",
-      bg: intelligence.orgScore.atRiskUsers > 0 ? SCORE_SURFACE.danger : SCORE_SURFACE.neutral,
-      iconBg: intelligence.orgScore.atRiskUsers > 0 ? "bg-[color:var(--score-danger-bg)] text-[color:var(--score-danger)]" : "bg-[var(--surface-strong)] theme-text-muted",
+      valueClass: orgScore.atRiskUsers > 0 ? SCORE_TEXT.danger : "theme-text-muted",
+      bg: orgScore.atRiskUsers > 0 ? SCORE_SURFACE.danger : SCORE_SURFACE.neutral,
+      iconBg: orgScore.atRiskUsers > 0 ? "bg-[color:var(--score-danger-bg)] text-[color:var(--score-danger)]" : "bg-[var(--surface-strong)] theme-text-muted",
     },
   ] : [];
 
