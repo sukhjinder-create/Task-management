@@ -121,7 +121,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   const orgItems = [
     { to: "/wiki",             label: "Wiki / Docs",   icon: BookOpen,        show: true,                          locked: !hasWiki },
     { to: "/leave",            label: "Leave",         icon: CalendarDays,    show: true,                          locked: !hasLeave },
-    { to: "/okr",              label: "Goals",         icon: Target,          show: isAdmin,                       locked: !hasGoals },
+    { to: "/outcomes",         label: "Outcomes",      icon: Target,          show: true,                          locked: !hasGoals },
     { to: "/reviews",          label: "Reviews",       icon: Star,            show: true,                          locked: !hasReviews },
   ];
 

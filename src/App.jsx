@@ -66,6 +66,7 @@ const EnterpriseIntelligence = lazy(() => import("./pages/EnterpriseIntelligence
 const Wiki = lazy(() => import("./pages/Wiki.jsx"));
 const Leave = lazy(() => import("./pages/Leave.jsx"));
 const OKR = lazy(() => import("./pages/OKR.jsx"));
+const Outcomes = lazy(() => import("./pages/Outcomes.jsx"));
 const Reviews = lazy(() => import("./pages/Reviews.jsx"));
 const AIFeatures = lazy(() => import("./pages/AIFeatures.jsx"));
 const WorkspaceAiSettings = lazy(() => import("./pages/WorkspaceAiSettings.jsx"));
@@ -202,6 +203,10 @@ export default function App() {
           {/* ---- Enterprise Phase 1-4 routes ---- */}
           <Route path="wiki"   element={<ProtectedRoute requiredFeature="wiki_docs"><Wiki /></ProtectedRoute>} />
           <Route path="leave"  element={<ProtectedRoute requiredFeature="leave_management"><Leave /></ProtectedRoute>} />
+          <Route
+            path="outcomes"
+            element={<ProtectedRoute requiredFeature="okr_goals"><Outcomes /></ProtectedRoute>}
+          />
           <Route
             path="okr"
             element={
