@@ -8,56 +8,33 @@
 // by the time this resolves, they are signed straight in rather than being
 // handed back to a login form.
 //
-// Deliberately reuses the same endpoints and the same Razorpay handshake as the
-// standalone /signup route -- this is a second entry point to one flow, not a
-// second implementation of it.
+// Deliberately reuses the same no-card endpoint as the standalone /signup route:
+// this is a second entry point to one flow, not a second implementation of it.
 // =============================================================================
 import { useEffect, useRef, useState } from "react";
-import toast from "react-hot-toast";
 import axios from "axios";
 import { API_BASE_URL } from "../api";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
-import { formatMinor, planCurrency, planPriceMinor } from "../utils/currency";
 
-const RAZORPAY_SDK = "https://checkout.razorpay.com/v1/checkout.js";
-
-function loadRazorpay() {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const existing = document.querySelector(`script[src="${RAZORPAY_SDK}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve(true));
-      existing.addEventListener("error", () => resolve(false));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = RAZORPAY_SDK;
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
+const SELF_SERVE_TRIAL_DAYS = 7;
 
 export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
   const [plan, setPlan] = useState(null);
   const [planError, setPlanError] = useState("");
-  const [interval, setBillingInterval] = useState("monthly");
   const [workspaceName, setWorkspaceName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const panelRef = useRef(null);
   const firstFieldRef = useRef(null);
 
   const isFree = plan
-    ? planPriceMinor(plan, "monthly") === 0 && planPriceMinor(plan, "yearly") === 0
+    ? (Number(plan.price_monthly_minor) || 0) === 0 &&
+      (Number(plan.price_yearly_minor) || 0) === 0
     : false;
-  const trialDays = Number(plan?.trial_days) || 0;
-  const currency = plan ? planCurrency(plan) : "USD";
-  const chargedInterval = interval === "yearly" && planPriceMinor(plan, "yearly") > 0 ? "yearly" : "monthly";
+  const trialDays = SELF_SERVE_TRIAL_DAYS;
 
   useEffect(() => {
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -73,7 +50,11 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
       .then(({ data }) => {
         if (cancelled) return;
         const list = Array.isArray(data) ? data : [];
-        const eligible = list.filter((p) => !p.is_custom && Number(p.trial_days) > 0);
+        const eligible = list.filter((p) => {
+          const isPaid = (Number(p.price_monthly_minor) || 0) > 0 ||
+            (Number(p.price_yearly_minor) || 0) > 0;
+          return !p.is_custom && isPaid;
+        });
         const chosen =
           eligible.find((p) => p.is_popular) ||
           eligible.sort((a, b) => (Number(a.price_monthly) || 0) - (Number(b.price_monthly) || 0))[0] ||
@@ -88,49 +69,6 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
     return () => { cancelled = true; };
   }, []);
 
-  const completeRazorpay = async (checkout, response) => {
-    const { data } = await axios.post(
-      `${API_BASE_URL}/auth/signup/workspace/complete/razorpay`,
-      {
-        razorpay_payment_id: response.razorpay_payment_id,
-        razorpay_subscription_id: response.razorpay_subscription_id,
-        razorpay_order_id: response.razorpay_order_id,
-        razorpay_signature: response.razorpay_signature,
-        pendingSignupId: checkout.notes?.pending_signup_id || null,
-      },
-      { headers: getGrowthContextHeaders() }
-    );
-    return data;
-  };
-
-  const openRazorpay = (checkout) =>
-    new Promise((resolve, reject) => {
-      const options = {
-        key: checkout.keyId,
-        name: "Asystence",
-        description: `${checkout.planName || plan?.name} — ${chargedInterval}`,
-        prefill: { name: name.trim(), email: email.trim() },
-        theme: { color: "#f97316" },
-        modal: { ondismiss: () => reject(new Error("dismissed")) },
-        handler: async (response) => {
-          try { resolve(await completeRazorpay(checkout, response)); }
-          catch (err) { reject(err); }
-        },
-      };
-      if (checkout.orderId) {
-        options.order_id = checkout.orderId;
-        options.amount = checkout.amount || checkout.verificationAmount;
-        options.currency = String(checkout.currency || currency).toUpperCase();
-      } else {
-        options.subscription_id = checkout.subscriptionId;
-      }
-      const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", (resp) =>
-        reject(new Error(resp.error?.description || "Payment failed. Please try another card."))
-      );
-      rzp.open();
-    });
-
   const submit = async (event) => {
     event.preventDefault();
     setError("");
@@ -139,7 +77,6 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
     if (!name.trim()) return setError("Please enter your name.");
     if (!email.trim()) return setError("Please enter your work email.");
     if (password.length < 8) return setError("Password must be at least 8 characters.");
-    if (!isFree && !consent) return setError("Please accept the billing terms to continue.");
 
     setBusy(true);
     try {
@@ -151,29 +88,16 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
           email: email.trim(),
           password,
           plan: plan.slug,
-          interval: chargedInterval,
-          currency,
-          consentAccepted: true,
+          interval: "monthly",
+          currency: plan.currency,
         },
         { headers: getGrowthContextHeaders() }
       );
 
       if (data?.token && data?.user) return onAuthenticated(data);
-
-      if (data?.provider === "razorpay") {
-        const ready = await loadRazorpay();
-        if (!ready) throw new Error("Could not load the payment window. Check your connection.");
-        return onAuthenticated(await openRazorpay(data));
-      }
-
-      if (data?.url) return window.location.assign(data.url);
-      throw new Error("Could not start checkout. Please try again.");
+      throw new Error("Workspace creation completed without a usable session.");
     } catch (err) {
-      if (err?.message === "dismissed") {
-        toast("Payment cancelled. Your workspace was not created.", { icon: "ℹ️" });
-      } else {
-        setError(err?.response?.data?.error || err.message || "Could not create workspace.");
-      }
+      setError(err?.response?.data?.error || err.message || "Could not create workspace.");
     } finally {
       setBusy(false);
     }
@@ -192,8 +116,7 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
           </p>
           {plan && !isFree && (
             <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-              Free for {trialDays} days, then {formatMinor(planPriceMinor(plan, chargedInterval), currency)} per user
-              /{chargedInterval === "yearly" ? "year" : "month"}.
+              Full access for {trialDays} days with no card. Afterward, choose a paid plan or continue on Starter.
             </p>
           )}
         </div>
@@ -230,40 +153,16 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
         </div>
 
         {plan && !isFree && (
-          <div className="flex items-center gap-1 rounded-lg border border-[color:var(--border)] p-1">
-            {["monthly", "yearly"].map((v) => (
-              <button key={v} type="button" onClick={() => setBillingInterval(v)}
-                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
-                  interval === v ? "bg-[var(--primary)] text-white" : "text-[color:var(--text-muted)]"
-                }`}>
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {plan?.charge_currency_differs && !isFree && (
-          <p className="rounded-lg border border-[color:var(--border)] px-3 py-2 text-xs text-[color:var(--text-muted)]">
-            Shown in {plan.currency}; your card is charged the equivalent in {plan.charge_currency}.
+          <p className="rounded-lg border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[color:var(--text-muted)]">
+            No payment details are collected during signup. Your workspace is created immediately.
           </p>
-        )}
-
-        {plan && !isFree && (
-          <label className="flex items-start gap-2.5 rounded-lg border border-[color:var(--border)] p-3">
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-[var(--primary)]" />
-            <span className="text-xs leading-5 text-[color:var(--text-muted)]">
-              I authorize automatic billing after the {trialDays}-day trial unless I cancel first. A small
-              card-verification charge may be made now and refunded automatically.
-            </span>
-          </label>
         )}
 
         {error && <p className="text-sm text-red-400" role="alert">{error}</p>}
 
         <button type="submit" disabled={busy || !plan}
           className="w-full rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[color:var(--primary-contrast)] transition hover:bg-[var(--primary-hover)] disabled:opacity-50">
-          {busy ? "Working…" : plan && !isFree ? `Start ${trialDays}-day trial` : "Create workspace"}
+          {busy ? "Creating workspace…" : "Create workspace"}
         </button>
       </form>
     </div>

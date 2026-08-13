@@ -1,8 +1,8 @@
 // src/pages/WorkspaceBilling.jsx
 // =============================================================================
 // Workspace admin billing page — Stripe / Razorpay subscriptions
-// Flow: Pick plan → POST /payments/subscribe → provider checkout
-//       → refundable card verification → free trial → recurring auto-debit
+// Flow after the workspace-level no-card trial: pick plan → provider checkout
+// → verified subscription → recurring billing.
 //
 // Prices are quoted in the workspace's billing currency. Plans arrive from the
 // API already converted, in minor units, so nothing here divides by 100.
@@ -83,7 +83,7 @@ function IntervalToggle({ value, onChange }) {
 }
 
 // ── Plan card ─────────────────────────────────────────────────────────────────
-function PlanCard({ plan, interval, isCurrent, isLoading, onSelect, memberCount }) {
+function PlanCard({ plan, interval, isCurrent, isLoading, onSelect, memberCount, trialActive, trialConsumed }) {
   const currency = planCurrency(plan);
   const priceMinor = planPriceMinor(plan, interval);
   const isFree  = !priceMinor;
@@ -150,7 +150,7 @@ function PlanCard({ plan, interval, isCurrent, isLoading, onSelect, memberCount 
             <span className="inline-flex items-center gap-1 text-xs text-[color:var(--text-muted)]">
               <Users className="w-3 h-3" /> {plan.member_limit > 0 ? `${plan.member_limit} members` : "Unlimited members"}
             </span>
-            {plan.trial_days > 0 && (
+            {plan.trial_days > 0 && !trialActive && !trialConsumed && (
               <span className="inline-flex items-center gap-1 text-xs text-[color:var(--primary)] font-medium">
                 <Zap className="w-3 h-3" /> {plan.trial_days}-day free trial
               </span>
@@ -174,7 +174,11 @@ function PlanCard({ plan, interval, isCurrent, isLoading, onSelect, memberCount 
         </ul>
 
         {/* CTA */}
-        {isCurrent ? (
+        {trialActive ? (
+          <div className="w-full py-2.5 rounded-xl text-sm font-semibold text-center border border-[color:var(--border)] text-[color:var(--text-muted)]">
+            Available when trial ends
+          </div>
+        ) : isCurrent ? (
           <div className="w-full py-2.5 rounded-xl text-sm font-semibold text-center border border-[color:var(--primary)]/30 text-[color:var(--primary)] flex items-center justify-center gap-1.5">
             <BadgeCheck className="w-4 h-4" /> Active Plan
           </div>
@@ -190,7 +194,7 @@ function PlanCard({ plan, interval, isCurrent, isLoading, onSelect, memberCount 
                 : "bg-[var(--surface-soft)] hover:bg-[var(--primary-soft)] text-[color:var(--text)] hover:text-[color:var(--primary)] border border-[color:var(--border)]"
             }`}>
             {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            {plan.trial_days > 0 ? `Start ${plan.trial_days}-day Free Trial` : `Upgrade to ${plan.name}`}
+            {plan.trial_days > 0 && !trialConsumed ? `Start ${plan.trial_days}-day Free Trial` : `Set up ${plan.name} billing`}
           </button>
         )}
       </div>
@@ -633,6 +637,13 @@ export default function WorkspaceBilling() {
 
   useEffect(() => { load(); }, [load]);
 
+  const intendedTrialInterval = summary?.trial?.intent?.billingInterval;
+  useEffect(() => {
+    if (intendedTrialInterval === "monthly" || intendedTrialInterval === "yearly") {
+      setInterval(intendedTrialInterval);
+    }
+  }, [intendedTrialInterval]);
+
   // A workspace that is already subscribed is billed in a fixed currency, so
   // switching the display currency would misrepresent what it pays.
   const lockedCurrency = summary?.workspace?.billing_currency
@@ -744,10 +755,19 @@ export default function WorkspaceBilling() {
   }
 
   // ── Derived state ──────────────────────────────────────────────────────────
-  const currentPlan  = summary?.workspace?.billing_plan || summary?.workspace?.plan || "starter";
+  const workspaceTrial = summary?.trial || null;
+  const workspaceTrialActive = !!workspaceTrial?.onTrial;
+  const workspaceTrialConsumed = !!workspaceTrial?.trialCompleted;
+  const currentPlan  = workspaceTrialActive
+    ? workspaceTrial?.intent?.selectedPlanSlug || "trial"
+    : summary?.workspace?.billing_plan || summary?.workspace?.plan || "starter";
   const billingStatus = summary?.workspace?.billing_status;
   const sub          = summary?.subscription;
-  const trialLeft    = sub?.trial_ends_at ? daysLeft(sub.trial_ends_at) : null;
+  const trialLeft    = workspaceTrialActive
+    ? daysLeft(workspaceTrial.trialEndsAt)
+    : sub?.trial_ends_at
+      ? daysLeft(sub.trial_ends_at)
+      : null;
   const nextBilling  = sub?.next_billing_at || sub?.current_period_end;
   const razorpayEnabled = summary?.config?.enabled;
 
@@ -797,7 +817,14 @@ export default function WorkspaceBilling() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-bold text-[color:var(--text)] capitalize">{currentPlan} Plan</p>
+              <p className="font-bold text-[color:var(--text)] capitalize">
+                {workspaceTrialActive
+                  ? `${workspaceTrial?.intent?.selectedPlanName || currentPlan} Trial`
+                  : `${currentPlan} Plan`}
+              </p>
+              {workspaceTrialActive && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold border border-[color:var(--primary)]/30 text-[color:var(--primary)]">No card on file</span>
+              )}
               {billingStatus === "active" && (
                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold border border-[color:var(--primary)]/30 text-[color:var(--primary)]">Active</span>
               )}
@@ -810,12 +837,12 @@ export default function WorkspaceBilling() {
             </div>
 
             <div className="flex items-center gap-4 mt-1.5 flex-wrap text-xs text-[color:var(--text-muted)]">
-              {trialLeft !== null && trialLeft > 0 && (
+              {workspaceTrialActive && trialLeft !== null && trialLeft > 0 && (
                 <span className="flex items-center gap-1 text-[color:var(--primary)] font-medium">
-                  <Clock className="w-3.5 h-3.5" /> {trialLeft} days of free trial remaining
+                  <Clock className="w-3.5 h-3.5" /> {trialLeft} days of full access remaining
                 </span>
               )}
-              {trialLeft === 0 && nextBilling && (
+              {!workspaceTrialActive && trialLeft === 0 && nextBilling && (
                 <span className="flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" /> Next billing: {fmtDate(nextBilling)}
                 </span>
@@ -861,10 +888,12 @@ export default function WorkspaceBilling() {
             key={plan.id}
             plan={plan}
             interval={interval}
-            isCurrent={plan.slug === currentPlan}
+            isCurrent={!workspaceTrialActive && plan.slug === currentPlan}
             isLoading={checking === plan.id}
             onSelect={handleSelectPlan}
             memberCount={summary?.activeMemberCount || 0}
+            trialActive={workspaceTrialActive}
+            trialConsumed={workspaceTrialConsumed}
           />
         ))}
       </div>
@@ -883,23 +912,23 @@ export default function WorkspaceBilling() {
           {[
             {
               icon: <Shield className="w-4 h-4 text-[color:var(--primary)]" />,
-              title: "Refundable card verification",
-              desc: `When you subscribe, a small charge in ${displayCurrency} verifies your payment method. It is refunded automatically within 3–5 business days.`,
+              title: "No card during onboarding",
+              desc: "Your workspace trial starts at signup without a card, mandate, verification charge, or payment redirect.",
             },
             {
               icon: <Zap className="w-4 h-4 text-[color:var(--primary)]" />,
-              title: "Free trial period",
-              desc: "Paid plans include a free trial. Your first real charge happens only after the trial ends — no surprises.",
+              title: "Seven days of full access",
+              desc: "Use the product with your team first. Billing setup becomes available only after the workspace trial ends.",
             },
             {
               icon: <RefreshCw className="w-4 h-4 text-[color:var(--text-soft)]" />,
-              title: "Automatic monthly renewal",
-              desc: "After your trial, billing happens automatically each month (or year). You'll receive an email reminder 3 days before each charge.",
+              title: "Safe Starter fallback",
+              desc: "If you do not choose a paid plan after the trial, the workspace moves automatically to the free Starter plan without losing its data.",
             },
             {
               icon: <BadgeCheck className="w-4 h-4 text-[color:var(--primary)]" />,
-              title: "Cancel anytime",
-              desc: "Cancel at any time from this page. You keep full access until the end of your current billing period.",
+              title: "Billing stays in your control",
+              desc: `When you choose a paid plan, payment is handled securely in ${displayCurrency}. You can cancel future renewals from this page.`,
             },
           ].map(item => (
             <div key={item.title} className="flex items-start gap-4 px-6 py-4">

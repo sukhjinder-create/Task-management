@@ -10,6 +10,10 @@ import { useAuth } from "./AuthContext";
 const EMPTY_STATE = {
   features: [], plan: null, loaded: false,
   onTrial: false, trialEndsAt: null, trialExpired: false,
+  trialCompleted: false, trialDowngraded: false,
+  paymentSetupRequired: false, trialPlan: null,
+  trialPlanName: null, trialBillingInterval: null,
+  fallbackPlan: "starter",
 };
 
 const PlanContext = createContext(EMPTY_STATE);
@@ -43,6 +47,13 @@ export function PlanProvider({ children }) {
       onTrial:      data.on_trial      || false,
       trialEndsAt:  data.trial_ends_at || null,
       trialExpired: data.trial_expired || false,
+      trialCompleted: data.trial_completed || false,
+      trialDowngraded: data.trial_downgraded || false,
+      paymentSetupRequired: data.payment_setup_required || false,
+      trialPlan: data.trial_plan || null,
+      trialPlanName: data.trial_plan_name || null,
+      trialBillingInterval: data.trial_billing_interval || null,
+      fallbackPlan: data.fallback_plan || "starter",
     });
   }
 

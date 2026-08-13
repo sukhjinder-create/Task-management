@@ -9,12 +9,12 @@ import toast from "react-hot-toast";
 import GlobalHuddleWindow from "../huddle/GlobalHuddleWindow";
 import { Avatar, Button, Dropdown } from "../components/ui";
 import ThemeSwitcher from "../components/ThemeSwitcher";
-import { usePlan } from "../context/PlanContext";
 import { cn } from "../utils/cn";
 import { useIsMobile } from "../hooks/useIsMobile";
 import MobileLayout from "./MobileLayout";
 import HuddleIncomingCall from "../components/HuddleIncomingCall";
 import { useHuddle } from "../context/HuddleContext";
+import TrialStatusBanner from "../components/TrialStatusBanner";
 
 const SIDEBAR_KEY = "sidebarCollapsed";
 
@@ -27,12 +27,6 @@ export default function AppLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const api = useApi();
-  const { onTrial, trialEndsAt, trialExpired } = usePlan();
-
-  const trialDaysLeft = trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(trialEndsAt) - Date.now()) / 86400000))
-    : 0;
-
   const user = auth?.user;
 
   // Push notification tap → route
@@ -382,24 +376,7 @@ export default function AppLayout({ children }) {
           </div>
         </header>
 
-        {/* Trial Banner — flat, dense, scannable */}
-        {(onTrial || trialExpired) && (
-          <div
-            className={cn(
-              "px-4 py-1.5 text-[11.5px] font-medium flex items-center justify-center gap-2 border-b",
-              trialExpired
-                ? "bg-[color:var(--score-danger-bg)] text-[color:var(--score-danger)] border-[color:var(--score-danger-border)]"
-                : trialDaysLeft <= 2
-                ? "bg-[color:var(--score-warning-bg)] text-[color:var(--score-warning)] border-[color:var(--score-warning-border)]"
-                : "bg-[var(--primary-soft)] text-[color:var(--primary)] border-[color:color-mix(in_srgb,var(--primary)_28%,var(--border))]"
-            )}
-          >
-            <span className={cn("inline-block w-1.5 h-1.5 rounded-full", trialExpired ? "bg-[color:var(--score-danger)]" : trialDaysLeft <= 2 ? "bg-[color:var(--score-warning)]" : "bg-[color:var(--primary)]")} />
-            {trialExpired
-              ? "Free trial has expired. Contact your administrator to upgrade the workspace plan."
-              : `Free trial — ${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} remaining. Full access to all features.`}
-          </div>
-        )}
+        <TrialStatusBanner />
 
         {/* Main content — flat on canvas */}
         <main

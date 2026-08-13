@@ -20,6 +20,7 @@ import ThemeSwitcher from "../components/ThemeSwitcher";
 import { subscribeToUnreadCount } from "../notificationBus";
 import { getSocket, initSocket } from "../socket";
 import { cn } from "../utils/cn";
+import TrialStatusBanner from "../components/TrialStatusBanner";
 
 export default function MobileLayout() {
   const { auth, logout, updateUser } = useAuth();
@@ -319,6 +320,8 @@ export default function MobileLayout() {
           </div>
         </div>
       </header>
+
+      <TrialStatusBanner compact />
 
       {/* ── Scrollable page content ───────────────────────── */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden mobile-scroll"

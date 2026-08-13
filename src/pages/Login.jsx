@@ -35,6 +35,7 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const continuedFromLanding = searchParams.get("source") === "landing";
 
   const [showInlineSignup, setShowInlineSignup] = useState(false);
   const [email, setEmail] = useState("");
@@ -212,7 +213,11 @@ export default function Login() {
             <div className="mb-7 flex items-start justify-between gap-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--primary)]">
-                  {mfaRequired ? "Identity verification" : "Workspace sign in"}
+                  {mfaRequired
+                    ? "Identity verification"
+                    : continuedFromLanding
+                      ? "Continue to your workspace"
+                      : "Workspace sign in"}
                 </p>
                 <h2 className="mt-3 text-[30px] font-semibold leading-tight tracking-[-0.04em] text-[color:var(--text)] sm:text-[34px]">
                   {mfaRequired ? "Enter your security code" : "Welcome back"}
@@ -220,7 +225,9 @@ export default function Login() {
                 <p className="mt-2.5 text-sm leading-6 text-[color:var(--text-muted)]">
                   {mfaRequired
                     ? "Use the 6-digit code from your authenticator app."
-                    : "Sign in with your work account to continue."}
+                    : continuedFromLanding
+                      ? "You are now in the secure Asystence app. Sign in with your work account to continue."
+                      : "Sign in with your work account to continue."}
                 </p>
               </div>
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)]">

@@ -9,12 +9,11 @@ import {
 } from "../config/runtime";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
-import { formatMinor, getStoredCurrency, planCurrency, planPriceMinor } from "../utils/currency";
+import { getStoredCurrency } from "../utils/currency";
 import {
   ArrowRight,
   Building2,
   CheckCircle2,
-  CreditCard,
   Eye,
   EyeOff,
   Lock,
@@ -25,17 +24,7 @@ import {
 } from "lucide-react";
 
 const BACKEND_URL = API_BASE_URL;
-
-function loadRazorpayCheckout() {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
+const SELF_SERVE_TRIAL_DAYS = 7;
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -46,23 +35,20 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [interval, setBillingInterval] = useState(() =>
-    searchParams.get("interval") === "yearly" ? "yearly" : "monthly"
-  );
-  const [consentAccepted, setConsentAccepted] = useState(false);
+  const intendedInterval = searchParams.get("interval") === "yearly" ? "yearly" : "monthly";
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [planLoading, setPlanLoading] = useState(!!selectedPlanSlug);
   const [selectedPlan, setSelectedPlan] = useState(null);
 
   const isFreePlan = !!selectedPlan &&
-    planPriceMinor(selectedPlan, "monthly") === 0 &&
-    planPriceMinor(selectedPlan, "yearly") === 0;
+    (Number(selectedPlan.price_monthly_minor) || 0) === 0 &&
+    (Number(selectedPlan.price_yearly_minor) || 0) === 0;
   const selectedPlanName = selectedPlan?.name || "Pro";
-  const selectedTrialDays = Number(selectedPlan?.trial_days) || 7;
+  const selectedTrialDays = SELF_SERVE_TRIAL_DAYS;
   // The backend prices the catalog in the visitor's own currency; keep whatever
   // it returned so the quote and the charge agree.
-  const planCurrencyCode = selectedPlan ? planCurrency(selectedPlan) : (getStoredCurrency() || "USD");
+  const planCurrencyCode = selectedPlan?.currency || getStoredCurrency() || "USD";
 
   useEffect(() => {
     if (!selectedPlanSlug) {
@@ -93,15 +79,11 @@ export default function Signup() {
 
   useEffect(() => {
     const err = searchParams.get("error");
-    const cancelled = searchParams.get("cancelled");
-    if (cancelled) toast("Signup cancelled. Your workspace was not created.");
     if (!err || err === "google_cancelled") return;
     const message =
       err === "workspace_required"
         ? "Name your workspace before continuing with Google."
-        : err === "billing_consent_required"
-          ? "Accept the trial billing consent before continuing with Google."
-          : decodeURIComponent(err);
+        : decodeURIComponent(err);
     toast.error(message);
   }, [searchParams]);
 
@@ -109,11 +91,12 @@ export default function Signup() {
     const params = new URLSearchParams({
       mode: "signup",
       workspaceName: workspaceName.trim(),
-      trialBillingConsent: consentAccepted ? "1" : "0",
+      interval: intendedInterval,
+      currency: planCurrencyCode,
       ...(selectedPlanSlug ? { plan: selectedPlanSlug } : {}),
     });
     return `${BACKEND_URL}/auth/google?${params.toString()}`;
-  }, [workspaceName, consentAccepted, selectedPlanSlug]);
+  }, [workspaceName, intendedInterval, planCurrencyCode, selectedPlanSlug]);
 
   const safePersistAuth = (user, token, refreshToken = null) => {
     try {
@@ -138,7 +121,7 @@ export default function Signup() {
     toast.success(
       isFreePlan
         ? "Workspace created. Welcome to Asystence."
-        : "Workspace created. Your verification charge refund has been started."
+        : `Workspace ready. Your ${selectedTrialDays}-day trial started with no card required.`
     );
     const slug = user?.workspace_slug;
     if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
@@ -152,62 +135,6 @@ export default function Signup() {
       }
     }
     navigate("/projects", { replace: true });
-  };
-
-  const openRazorpaySignupCheckout = async (checkout) => {
-    const loaded = await loadRazorpayCheckout();
-    if (!loaded) throw new Error("Razorpay checkout could not be loaded. Please check your connection.");
-    if (!checkout?.keyId || (!checkout?.subscriptionId && !checkout?.orderId)) {
-      throw new Error("Razorpay checkout could not be started. Please try again.");
-    }
-
-    const pendingSignupId = checkout.notes?.pending_signup_id || checkout.pendingSignupId || null;
-    await new Promise((resolve, reject) => {
-      const options = {
-        key: checkout.keyId,
-        name: "Asystence",
-        description: `${checkout.trialDays || selectedTrialDays}-day ${checkout.planName || selectedPlanName} trial with refundable card verification`,
-        image: "/asystence-logo.png",
-        prefill: checkout.prefill || { name, email },
-        notes: {
-          pending_signup_id: pendingSignupId || "",
-          billing_plan: checkout.plan || selectedPlanSlug || "pro",
-          billing_interval: checkout.interval || interval,
-        },
-        theme: { color: "#f97316" },
-        modal: {
-          ondismiss: () => reject(new Error("dismissed")),
-        },
-        handler: async (response) => {
-          try {
-            const { data } = await axios.post(`${API_BASE_URL}/auth/signup/workspace/complete/razorpay`, {
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_subscription_id: response.razorpay_subscription_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature,
-              pendingSignupId,
-            }, { headers: getGrowthContextHeaders() });
-            completeSignup(data);
-            resolve();
-          } catch (err) {
-            reject(err);
-          }
-        },
-      };
-      if (checkout.orderId) {
-        options.order_id = checkout.orderId;
-        options.amount = checkout.amount || checkout.verificationAmount;
-        options.currency = String(checkout.currency || planCurrencyCode).toUpperCase();
-      } else {
-        options.subscription_id = checkout.subscriptionId;
-      }
-
-      const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", (response) => {
-        reject(new Error(response.error?.description || "Payment failed. Please try another card."));
-      });
-      rzp.open();
-    });
   };
 
   const validateRequired = () => {
@@ -227,10 +154,6 @@ export default function Signup() {
       toast.error("Password must be at least 8 characters");
       return false;
     }
-    if (!isFreePlan && !consentAccepted) {
-      toast.error("Please accept the trial billing consent to continue.");
-      return false;
-    }
     return true;
   };
 
@@ -245,31 +168,17 @@ export default function Signup() {
         name,
         email,
         password,
-        interval,
-        // Charge in the same currency the plan was quoted in on this page.
+        interval: intendedInterval,
         currency: planCurrencyCode,
-        consentAccepted,
         ...(selectedPlanSlug ? { plan: selectedPlanSlug } : {}),
       }, { headers: getGrowthContextHeaders() });
       if (res.data?.token && res.data?.user) {
         completeSignup(res.data);
         return;
       }
-      if (res.data?.provider === "razorpay") {
-        await openRazorpaySignupCheckout(res.data);
-        return;
-      }
-      if (res.data?.url) {
-        window.location.assign(res.data.url);
-        return;
-      }
-      toast.error("Payment checkout could not be started. Please try again.");
+      throw new Error("Workspace creation completed without a usable session.");
     } catch (err) {
-      if (err?.message === "dismissed") {
-        toast("Signup payment cancelled. Your workspace was not created.");
-      } else {
-        toast.error(err.response?.data?.error || err.message || "Could not create workspace");
-      }
+      toast.error(err.response?.data?.error || err.message || "Could not create workspace");
     } finally {
       setLoading(false);
     }
@@ -278,10 +187,6 @@ export default function Signup() {
   const handleGoogleSignup = () => {
     if (!workspaceName.trim()) {
       toast.error("Workspace name is required before Google signup");
-      return;
-    }
-    if (!isFreePlan && !consentAccepted) {
-      toast.error("Please accept the trial billing consent to continue.");
       return;
     }
     window.location.href = googleSignupUrl;
@@ -312,17 +217,17 @@ export default function Signup() {
               </div>
 
               <p className="text-[10px] uppercase tracking-[0.18em] brand-orange-text font-semibold mb-3">
-                {isFreePlan ? `${selectedPlanName} workspace` : "Card-required trial workspace"}
+                {isFreePlan ? `${selectedPlanName} workspace` : "No-card team trial"}
               </p>
               <h1 className="max-w-3xl text-[34px] sm:text-[44px] xl:text-[54px] font-semibold tracking-tight leading-[1.05] text-[color:var(--text)]">
                 {isFreePlan
                   ? `Create your ${selectedPlanName} workspace.`
-                  : "Create your workspace after Razorpay verifies the card."}
+                  : "Create your workspace and start working now."}
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-[color:var(--text-muted)]">
                 {isFreePlan
                   ? `Start with one admin account on the ${selectedPlanName} plan. No card or payment setup is required.`
-                  : `Start with one admin account, a ${selectedTrialDays}-day ${selectedPlanName} trial, and clear consent for automatic billing after the trial unless cancelled first.`}
+                  : `Your team gets ${selectedTrialDays} days of full access. No credit card, payment form, or checkout redirect is required.`}
               </p>
             </div>
 
@@ -333,11 +238,8 @@ export default function Signup() {
                 ["No card", "Create directly"],
               ] : [
                 [`${selectedTrialDays} days`, "Full feature trial"],
-                [
-                  selectedPlan ? formatMinor(planPriceMinor(selectedPlan, interval), planCurrencyCode) : "—",
-                  `Per user / ${interval === "yearly" ? "year" : "month"} after trial`,
-                ],
-                ["Refundable", "Card verification charge"],
+                ["No card", "Start immediately"],
+                ["Starter", "Automatic free fallback"],
               ]).map(([value, label]) => (
                 <div key={label} className="border border-[color:var(--border)] rounded-lg p-4">
                   <p className="text-lg font-semibold brand-orange-text">{value}</p>
@@ -353,12 +255,12 @@ export default function Signup() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[color:var(--text)]">
-                    {isFreePlan ? "No payment required" : "Razorpay-secured checkout"}
+                    No payment required today
                   </p>
                   <p className="text-xs text-[color:var(--text-muted)]">
                     {isFreePlan
                       ? "Your workspace is created directly on the selected free plan."
-                      : "The card verification charge is refunded automatically after confirmation, and billing can be cancelled before renewal."}
+                      : `After ${selectedTrialDays} days, choose a paid plan in Billing or continue automatically on the free Starter plan.`}
                   </p>
                 </div>
                 <CheckCircle2 className="ml-auto hidden sm:block h-5 w-5 brand-orange-text" />
@@ -372,14 +274,14 @@ export default function Signup() {
             <div className="mb-7 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-soft)] font-semibold">
-                  {isFreePlan ? `Start ${selectedPlanName}` : "Start card trial"}
+                  {isFreePlan ? `Start ${selectedPlanName}` : "Start your trial"}
                 </p>
                 <p className="mt-1 text-sm text-[color:var(--text-muted)]">
-                  {isFreePlan ? "No checkout required" : "Razorpay checkout"}
+                  No checkout required
                 </p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-lg border brand-orange-border">
-                <CreditCard className="h-4 w-4 brand-orange-text" />
+                <ShieldCheck className="h-4 w-4 brand-orange-text" />
               </div>
             </div>
 
@@ -458,42 +360,6 @@ export default function Signup() {
                 </div>
               </div>
 
-              {!isFreePlan && <div>
-                <label className="block text-sm font-medium text-[color:var(--text-muted)] mb-2 tracking-tight">
-                  Billing interval
-                </label>
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] p-1">
-                  {["monthly", "yearly"].map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setBillingInterval(value)}
-                      className={`h-11 rounded-md text-sm font-semibold transition-colors ${
-                        interval === value
-                          ? "bg-[var(--primary)] text-[color:var(--primary-contrast)]"
-                          : "text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
-                      }`}
-                    >
-                      {value === "monthly" ? "Monthly" : "Yearly"}
-                    </button>
-                  ))}
-                </div>
-              </div>}
-
-              {!isFreePlan && <label className="flex items-start gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] p-4">
-                <input
-                  type="checkbox"
-                  checked={consentAccepted}
-                  onChange={(event) => setConsentAccepted(event.target.checked)}
-                  className="mt-1 h-4 w-4 accent-[var(--primary)]"
-                />
-                <span className="text-sm leading-6 text-[color:var(--text-muted)]">
-                  I authorize automatic billing in {planCurrencyCode} after the free trial unless I cancel
-                  before it ends. I agree that a small card-verification charge may be made now and
-                  refunded automatically after confirmation.
-                </span>
-              </label>}
-
               <button
                 type="submit"
                 disabled={loading || planLoading}
@@ -502,8 +368,8 @@ export default function Signup() {
                 {planLoading
                   ? "Loading plan..."
                   : loading
-                    ? (isFreePlan ? "Creating workspace..." : "Opening Razorpay...")
-                    : (<>{isFreePlan ? "Create workspace" : "Continue to Razorpay"} <ArrowRight className="w-4 h-4" /></>)}
+                    ? "Creating workspace..."
+                    : (<>Create workspace <ArrowRight className="w-4 h-4" /></>)}
               </button>
             </form>
 
