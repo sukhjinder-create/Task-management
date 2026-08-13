@@ -607,6 +607,7 @@ export default function Chat() {
   const { auth } = useAuth();
   const api = useApi();
   const user = auth.user;
+  const currentWorkspaceId = user?.workspaceId || user?.workspace_id || null;
 
   // Mobile: two-screen nav ("list" = channel picker, "chat" = active conversation)
   const isMobile = useIsMobile();
@@ -1269,6 +1270,7 @@ useEffect(() => {
 
     const handleHistory = async (payload) => {
   if (!payload || !payload.channelId) return;
+  if (payload.workspaceId && String(payload.workspaceId) !== String(currentWorkspaceId)) return;
   const channelId = payload.channelId;
   const rawMessages = payload.messages || [];
 
@@ -1357,6 +1359,8 @@ useEffect(() => {
 };
 
 const handleChatMessage = async (msg) => {
+
+  if (msg?.workspaceId && String(msg.workspaceId) !== String(currentWorkspaceId)) return;
 
 // 🔥 REPORT MODAL TRIGGER
 // 🔐 Only the assistant may drive this. The marker travels in message text, so
@@ -1540,6 +1544,7 @@ if (
 
     const handlePresenceUpdate = (payload) => {
       if (!payload || !payload.userId) return;
+      if (payload.workspaceId && String(payload.workspaceId) !== String(currentWorkspaceId)) return;
       setPresenceMap((prev) => ({
         ...prev,
         [payload.userId]: {
@@ -1742,8 +1747,9 @@ if (
     socket.on("chat:messageDeleted", handleMessageDeleted);
 
     // Real-time unread badge bump (from server when a new message arrives in any channel)
-    const handleUnreadBump = ({ channelKey, fromUserId }) => {
+    const handleUnreadBump = ({ channelKey, fromUserId, workspaceId }) => {
       if (!channelKey || channelKey === activeChannelRef.current) return;
+      if (workspaceId && String(workspaceId) !== String(currentWorkspaceId)) return;
       // Ignore workspace-broadcast bumps for messages sent by this user
       if (fromUserId && String(fromUserId) === String(user.id)) return;
       setUnreadByChannel((prev) => ({ ...prev, [channelKey]: (prev[channelKey] || 0) + 1 }));
@@ -1769,7 +1775,7 @@ if (
       socket.off("chat:messageDeleted", handleMessageDeleted);
       socket.off("chat:unread-bump", handleUnreadBump);
     };
-  }, [auth.token, user.id, setActiveHuddle, rtc, usersWithKeys]);
+  }, [auth.token, user.id, currentWorkspaceId, setActiveHuddle, rtc, usersWithKeys]);
 
   // JOIN / LEAVE main channel
 useEffect(() => {

@@ -638,6 +638,10 @@ useEffect(() => {
     workspaceScoreCalculation?.userScoreBalancePropagation ||
     workspaceScoreExplanation?.userScoreBalancePropagation ||
     null;
+  const workspaceHealthHasEvidence =
+    workspaceHealth?.evidenceStatus?.hasEvidence ??
+    dashboardOverview?.workspaceEvidenceStatus?.hasEvidence ??
+    healthScore != null;
   const adminScoringGroups = Object.values(scoringDraft?.groups || {})
     .filter((group) => group?.key === "userFinalBalance");
 
@@ -1389,7 +1393,18 @@ const autonomousInsight = useMemo(() => {
 {/* ================================
     MY PERFORMANCE SNAPSHOT
 ================================ */}
-{myPerformance && (() => {
+{myPerformance?.evidenceStatus?.hasEvidence === false && (
+  <Card>
+    <Card.Content className="py-6">
+      <div className="text-xs theme-text-muted font-bold uppercase tracking-wide">My Performance</div>
+      <div className="mt-2 text-lg font-semibold theme-text">Awaiting work activity</div>
+      <p className="mt-1 max-w-2xl text-xs leading-relaxed theme-text-muted">
+        A performance score will appear after you have assigned work or attendance activity. No baseline score is shown without evidence.
+      </p>
+    </Card.Content>
+  </Card>
+)}
+{myPerformance && myPerformance.evidenceStatus?.hasEvidence !== false && myPerformance.score != null && (() => {
   const score = myPerformance.score ?? 0;
   const risk = myPerformance.intelligence?.risk;
   const dims = myPerformance.intelligence?.dimensions || {};
@@ -1983,7 +1998,7 @@ const autonomousInsight = useMemo(() => {
     },
   ];
 
-  const intelligenceTiles = intelligence ? [
+  const intelligenceTiles = intelligence?.evidenceStatus?.hasEvidence !== false ? [
     {
       label: "Org Avg Score",
       value: avg != null ? Number(avg).toFixed(1) : "—",
@@ -2043,13 +2058,13 @@ const autonomousInsight = useMemo(() => {
           <p className="text-xs theme-text-muted mt-0.5">{monthLabel}</p>
         </div>
         <span className="text-[10px] px-2 py-1 rounded-full text-[color:var(--primary)] font-semibold border border-[color:var(--primary)]/20">
-          {intelligence ? "Intelligence" : "Live"}
+          {intelligence?.evidenceStatus?.hasEvidence ? "Intelligence" : "Live"}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {taskTiles.map(renderTile)}
       </div>
-      {intelligence && (
+      {intelligenceTiles.length > 0 && (
         <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-[var(--border)]">
           {intelligenceTiles.map(renderTile)}
         </div>
@@ -2330,26 +2345,28 @@ const autonomousInsight = useMemo(() => {
     </div>
     <span
   className={`text-xs font-semibold ${
-    healthScore === null
+    !workspaceHealthHasEvidence || healthScore === null
       ? "theme-text-muted"
       : getScoreTextClass(healthScore)
   }`}
 >
-  {healthScore === null ? "Analyzing…" : `${Math.round(healthScore)}%`}
+  {!workspaceHealthHasEvidence ? "Awaiting activity" : healthScore === null ? "Analyzing…" : `${Math.round(healthScore)}%`}
 </span>
   </div>
 
   <div className="w-full theme-surface-soft rounded-full h-2 overflow-hidden">
     <div
-      className={`h-2 rounded-full transition-all duration-700 ${healthScore === null ? SCORE_BG.neutral : getScoreBgClass(healthScore)}`}
+      className={`h-2 rounded-full transition-all duration-700 ${!workspaceHealthHasEvidence || healthScore === null ? SCORE_BG.neutral : getScoreBgClass(healthScore)}`}
       style={{
-        width: `${healthScore ?? 0}%`,
+        width: `${workspaceHealthHasEvidence ? healthScore ?? 0 : 0}%`,
       }}
     />
   </div>
 
   <p className="text-[11px] theme-text-muted mt-2">
-    Live organizational health refreshed through canonical enterprise intelligence.
+    {workspaceHealthHasEvidence
+      ? "Live organizational health refreshed through canonical enterprise intelligence."
+      : "Workspace health will appear after projects, tasks, or attendance activity create enough evidence."}
   </p>
 </section>
 )}
