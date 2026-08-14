@@ -157,9 +157,11 @@ function SummaryCard({ label, value, note }) {
   );
 }
 
-function EvidenceTimeline({ detail }) {
+function EvidenceTimeline({ detail, canManage, currentUserId, busyId, onStartExperiment, onRecordExperiment }) {
   const evidence = detail?.evidence || [];
   const decisions = detail?.decisions || [];
+  const materialDecisions = detail?.operating?.decisions || [];
+  const experiments = detail?.operating?.experiments || [];
   return (
     <div className="mt-4 grid gap-4 border-t border-[color:var(--border)] pt-4 lg:grid-cols-2">
       <div>
@@ -190,6 +192,35 @@ function EvidenceTimeline({ detail }) {
           )) : <p className="text-[12px] text-[color:var(--text-muted)]">No intervention has been requested.</p>}
         </div>
       </div>
+      <div>
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-soft)]">Decision memory</h4>
+        <div className="mt-2 space-y-2">
+          {materialDecisions.length ? materialDecisions.map((item) => (
+            <div key={item.id} className="rounded-[7px] border border-[color:var(--border)] px-3 py-2">
+              <p className="text-[12px] font-medium text-[color:var(--text)]">{item.question}</p>
+              <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">Chose: {item.selected_option}</p>
+              <p className="mt-1 text-[10px] text-[color:var(--text-soft)]">{item.reversibility?.replaceAll("_", " ")} · {item.latest_review_id ? `observed result: ${item.latest_effectiveness}` : "awaiting observed-result review"}</p>
+            </div>
+          )) : <p className="text-[12px] text-[color:var(--text-muted)]">No material decision has been recorded.</p>}
+        </div>
+      </div>
+      <div>
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-soft)]">Reversible experiments</h4>
+        <div className="mt-2 space-y-2">
+          {experiments.length ? experiments.map((item) => {
+            const canUpdate = canManage || String(item.owner_id) === String(currentUserId);
+            return (
+              <div key={item.id} className="rounded-[7px] border border-[color:var(--border)] px-3 py-2">
+                <div className="flex items-center justify-between gap-3"><p className="text-[12px] font-medium text-[color:var(--text)]">{item.title}</p><span className="text-[10px] font-semibold uppercase text-[color:var(--text-soft)]">{item.status}</span></div>
+                <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{item.smallest_test}</p>
+                {canUpdate && item.status === "planned" && <Button className="mt-2" size="sm" variant="ghost" loading={busyId === item.id} onClick={() => onStartExperiment(item)}>Start test</Button>}
+                {canUpdate && item.status === "active" && <Button className="mt-2" size="sm" variant="ghost" onClick={() => onRecordExperiment(item)}>Record result</Button>}
+                {item.status === "completed" && <p className="mt-2 text-[10px] font-semibold text-[color:var(--score-good)]">{item.result_status}: {item.observed_result}</p>}
+              </div>
+            );
+          }) : <p className="text-[12px] text-[color:var(--text-muted)]">No experiment is active.</p>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -214,6 +245,8 @@ export default function Outcomes() {
   const [evidenceForm, setEvidenceForm] = useState({ label: "", note: "" });
   const [connectDialog, setConnectDialog] = useState(null);
   const [connectProjectId, setConnectProjectId] = useState("");
+  const [experimentDialog, setExperimentDialog] = useState(null);
+  const [experimentForm, setExperimentForm] = useState({ resultStatus: "supported", observedResult: "" });
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
@@ -312,8 +345,11 @@ export default function Outcomes() {
   const loadDetail = useCallback(async (id) => {
     setDetailLoading(id);
     try {
-      const response = await api.get(`/assurance/commitments/${id}`);
-      setDetail((current) => ({ ...current, [id]: response.data }));
+      const [response, operating] = await Promise.all([
+        api.get(`/assurance/commitments/${id}`),
+        api.get(`/assurance/commitments/${id}/operating-record`),
+      ]);
+      setDetail((current) => ({ ...current, [id]: { ...response.data, operating: operating.data } }));
     } catch (error) {
       toast.error(error.response?.data?.error || "Could not load outcome evidence");
     } finally {
@@ -412,6 +448,37 @@ export default function Outcomes() {
       await load();
     } catch (error) {
       toast.error(error.response?.data?.error || "Could not create recovery task");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const startExperiment = async (experiment) => {
+    setBusyId(experiment.id);
+    try {
+      await api.patch(`/assurance/experiments/${experiment.id}`, { status: "active" });
+      toast.success("Experiment started");
+      await loadDetail(experiment.goal_id);
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Could not start the experiment");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const completeExperiment = async (event) => {
+    event.preventDefault();
+    if (!experimentDialog) return;
+    setBusyId(experimentDialog.id);
+    try {
+      await api.patch(`/assurance/experiments/${experimentDialog.id}`, { status: "completed", ...experimentForm });
+      toast.success("Experiment result recorded");
+      const goalId = experimentDialog.goal_id;
+      setExperimentDialog(null);
+      setExperimentForm({ resultStatus: "supported", observedResult: "" });
+      await Promise.all([load(), loadDetail(goalId)]);
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Could not record the experiment result");
     } finally {
       setBusyId(null);
     }
@@ -564,7 +631,17 @@ export default function Outcomes() {
                   </button>
                   {expanded && (detailLoading === commitment.id
                     ? <div className="flex justify-center py-6"><Spinner size="sm" /></div>
-                    : <EvidenceTimeline detail={detail[commitment.id]} />)}
+                    : <EvidenceTimeline
+                        detail={detail[commitment.id]}
+                        canManage={canManage}
+                        currentUserId={auth.user?.id}
+                        busyId={busyId}
+                        onStartExperiment={startExperiment}
+                        onRecordExperiment={(experiment) => {
+                          setExperimentDialog(experiment);
+                          setExperimentForm({ resultStatus: "supported", observedResult: "" });
+                        }}
+                      />)}
                 </article>
               );
             })}
@@ -657,6 +734,33 @@ export default function Outcomes() {
             {projects.length > 0 && (
               <Button type="submit" loading={busyId === connectDialog?.id} disabled={!connectProjectId}>Connect project</Button>
             )}
+          </Modal.Footer>
+        </form>
+      </Modal>
+
+      <Modal isOpen={Boolean(experimentDialog)} onClose={() => setExperimentDialog(null)} size="sm">
+        <Modal.Header>
+          <div>
+            <Modal.Title>Record experiment result</Modal.Title>
+            <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{experimentDialog?.title}</p>
+          </div>
+        </Modal.Header>
+        <form onSubmit={completeExperiment}>
+          <Modal.Body className="space-y-4">
+            <Field label="What did the test show?">
+              <select className={inputClass} value={experimentForm.resultStatus} onChange={(event) => setExperimentForm((value) => ({ ...value, resultStatus: event.target.value }))}>
+                <option value="supported">Supported the hypothesis</option>
+                <option value="refuted">Refuted the hypothesis</option>
+                <option value="inconclusive">Inconclusive</option>
+              </select>
+            </Field>
+            <Field label="Observed result">
+              <textarea className={`${inputClass} h-24 resize-none py-3`} value={experimentForm.observedResult} onChange={(event) => setExperimentForm((value) => ({ ...value, observedResult: event.target.value }))} required autoFocus maxLength={4000} />
+            </Field>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="ghost" onClick={() => setExperimentDialog(null)}>Cancel</Button>
+            <Button type="submit" loading={busyId === experimentDialog?.id}>Record result</Button>
           </Modal.Footer>
         </form>
       </Modal>

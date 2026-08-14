@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { BellRing, BriefcaseBusiness, FileBarChart, ListChecks, Settings2 } from "lucide-react";
+import { BellRing, BriefcaseBusiness, FileBarChart, FlaskConical, ListChecks, Settings2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const MANAGER_ROLES = new Set(["admin", "manager"]);
@@ -11,6 +11,7 @@ export default function AssuranceNav() {
   const links = [
     { to: "/outcomes", label: "Outcomes", icon: ListChecks, show: true, end: true },
     { to: "/outcomes/inbox", label: "Decisions", icon: BellRing, show: true },
+    { to: "/outcomes/lab", label: "Decision lab", icon: FlaskConical, show: MANAGER_ROLES.has(role) },
     { to: "/outcomes/portfolio", label: "Portfolio", icon: BriefcaseBusiness, show: MANAGER_ROLES.has(role) },
     { to: "/outcomes/insights", label: "Executive view", icon: FileBarChart, show: MANAGER_ROLES.has(role) },
     { to: "/outcomes/policy", label: "Policy", icon: Settings2, show: CONFIGURE_ROLES.has(role) },
