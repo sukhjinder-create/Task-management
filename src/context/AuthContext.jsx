@@ -3,9 +3,13 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import {
   API_BASE_URL,
-  buildWorkspaceRedirectUrl,
   isConfiguredPrimaryAppHost,
 } from "../config/runtime";
+import {
+  buildWorkspaceHandoffUrl,
+  consumeWorkspaceHandoff,
+  hasPendingHandoff,
+} from "../auth/workspaceHandoff";
 import { initPush, teardownPush } from "../utils/pushNotifications";
 
 const AuthContext = createContext(null);
@@ -53,32 +57,34 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      // Check for token passed via URL (cross-subdomain redirect)
-      const params = new URLSearchParams(window.location.search);
-      const urlToken = params.get("_t");
-      const urlRefreshToken = params.get("_r");
+      // A session arriving from a workspace-subdomain redirect. The URL carries
+      // a single-use code, not the tokens -- see auth/workspaceHandoff.js for
+      // why. Redeeming it also returns the user, so no follow-up /users/me.
+      if (hasPendingHandoff()) {
+        consumeWorkspaceHandoff()
+          .then((session) => {
+            if (!session) {
+              // Expired, already spent, or refused. Fall through to the login
+              // screen rather than stranding the user on a blank app.
+              setAuth((prev) => ({ ...prev, isReady: true }));
+              return;
+            }
 
-      if (urlToken) {
-        window.__AUTH_TOKEN__ = urlToken;
-        // Clean token from URL immediately
-        params.delete("_t");
-        params.delete("_r");
-        params.delete("_u");
-        const newSearch = params.toString();
-        const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
-        window.history.replaceState({}, "", newUrl);
-
-        // Fetch user from API using the token
-        fetch(`${API_BASE_URL}/users/me`, {
-          headers: { Authorization: `Bearer ${urlToken}` },
-        })
-          .then((r) => r.json())
-          .then((user) => {
-            const authData = { token: urlToken, user, refreshToken: urlRefreshToken || null };
+            const authData = {
+              token: session.token,
+              user: session.user,
+              refreshToken: session.refreshToken,
+            };
             localStorage.setItem("auth", JSON.stringify(authData));
-            window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || null;
-            window.dispatchEvent(new CustomEvent("auth:updated", { detail: { user, token: urlToken } }));
-            setAuth({ user, token: urlToken, isReady: true });
+            window.__AUTH_TOKEN__ = session.token;
+            window.__WORKSPACE_ID__ =
+              session.user?.workspaceId || session.user?.workspace_id || null;
+            window.dispatchEvent(
+              new CustomEvent("auth:updated", {
+                detail: { user: session.user, token: session.token },
+              })
+            );
+            setAuth({ user: session.user, token: session.token, isReady: true });
           })
           .catch(() => setAuth((prev) => ({ ...prev, isReady: true })));
         return;
@@ -95,14 +101,17 @@ export function AuthProvider({ children }) {
         const user = parsed?.user;
         const slug = user?.workspace_slug;
         const hostname = window.location.hostname;
+        // Move an existing session onto its workspace subdomain. Arranging the
+        // handoff needs a round trip, so unlike the old synchronous redirect we
+        // carry on setting the session up locally and navigate away only if it
+        // succeeds. A failed handoff therefore costs the user nothing: they
+        // stay signed in on this host instead of being stranded mid-redirect.
         if (slug && isConfiguredPrimaryAppHost(hostname)) {
-          const targetUrl = buildWorkspaceRedirectUrl(slug, window.location.pathname, {
-            _t: parsed.token,
-          });
-          if (targetUrl) {
-            window.location.href = targetUrl;
-            return;
-          }
+          buildWorkspaceHandoffUrl(slug, window.location.pathname, parsed.token)
+            .then((targetUrl) => {
+              if (targetUrl) window.location.href = targetUrl;
+            })
+            .catch(() => {});
         }
 
         // Initialize socket immediately so huddle/chat works on any page (not just Chat)

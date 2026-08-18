@@ -10,9 +10,9 @@ import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { API_BASE_URL } from "../api";
 import {
-  buildWorkspaceRedirectUrl,
   isConfiguredWorkspaceDomainHost,
 } from "../config/runtime";
+import { buildWorkspaceHandoffUrl } from "../auth/workspaceHandoff";
 
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -39,13 +39,13 @@ export default function AuthCallback() {
     }
   };
 
-  const redirectToWorkspace = (user, token, refreshToken = null) => {
+  const redirectToWorkspace = async (user, token) => {
     const slug = user?.workspace_slug;
+    // The session moves as a single-use code, never as the tokens themselves --
+    // see auth/workspaceHandoff.js. A handoff that cannot be arranged leaves
+    // the user signed in here rather than failing the flow.
     if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
-      const targetUrl = buildWorkspaceRedirectUrl(slug, "/projects", {
-        _t: token,
-        ...(refreshToken ? { _r: refreshToken } : {}),
-      });
+      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects", token);
       if (targetUrl) {
         window.location.href = targetUrl;
         return;
@@ -74,7 +74,7 @@ export default function AuthCallback() {
           login(user, urlToken, urlRefreshToken || null);
           setStatus(isSignupFlow ? "Workspace ready. Opening Asystence…" : "Sign-in complete. Opening Asystence…");
           toast.success(isSignupFlow ? `Welcome to your workspace, ${user.username}.` : `Welcome, ${user.username}!`);
-          redirectToWorkspace(user, urlToken, urlRefreshToken || null);
+          await redirectToWorkspace(user, urlToken);
           return;
         }
 
@@ -88,7 +88,7 @@ export default function AuthCallback() {
           safePersistAuth(user, token, refreshToken);
           login(user, token, refreshToken);
           toast.success(`Welcome, ${user.username}! You're now logged in.`);
-          redirectToWorkspace(user, token, refreshToken);
+          await redirectToWorkspace(user, token);
           return;
         }
 

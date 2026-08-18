@@ -4,9 +4,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "../api";
 import {
-  buildWorkspaceRedirectUrl,
   isConfiguredWorkspaceDomainHost,
 } from "../config/runtime";
+import { buildWorkspaceHandoffUrl } from "../auth/workspaceHandoff";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
 import { getStoredCurrency } from "../utils/currency";
@@ -112,7 +112,7 @@ export default function Signup() {
     }
   };
 
-  const completeSignup = (data) => {
+  const completeSignup = async (data) => {
     const token = data?.token;
     const user = data?.user;
     if (!token || !user) throw new Error("Signup completed but the login token was missing.");
@@ -124,11 +124,11 @@ export default function Signup() {
         : `Workspace ready. Your ${selectedTrialDays}-day trial started with no card required.`
     );
     const slug = user?.workspace_slug;
+    // The session moves as a single-use code, never as the tokens themselves --
+    // see auth/workspaceHandoff.js. A handoff that cannot be arranged leaves
+    // the user signed in here rather than failing the flow.
     if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
-      const targetUrl = buildWorkspaceRedirectUrl(slug, "/projects", {
-        _t: token,
-        ...(data.refreshToken ? { _r: data.refreshToken } : {}),
-      });
+      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects", token);
       if (targetUrl) {
         window.location.href = targetUrl;
         return;

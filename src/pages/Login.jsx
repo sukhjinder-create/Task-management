@@ -3,9 +3,9 @@ import axios from "axios";
 import { API_BASE_URL } from "../api";
 import {
   AUTH_DEV_MODE_ENABLED,
-  buildWorkspaceRedirectUrl,
   isConfiguredWorkspaceDomainHost,
 } from "../config/runtime";
+import { buildWorkspaceHandoffUrl } from "../auth/workspaceHandoff";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -70,16 +70,18 @@ export default function Login() {
     }
   };
 
-  const completeLogin = (token, user, refreshToken = null) => {
+  const completeLogin = async (token, user, refreshToken = null) => {
     safePersistAuth(user, token, refreshToken);
     try { login(user, token, refreshToken); } catch (err) { console.warn("AuthContext.login threw:", err); }
     toast.success(`Logged in as ${user.username}`);
+
+    // Send the user to their workspace subdomain if one is configured. The
+    // session moves as a single-use code, never as the tokens themselves --
+    // see auth/workspaceHandoff.js. If the handoff cannot be arranged we stay
+    // on this host, which is fully functional, rather than failing the login.
     const slug = user?.workspace_slug;
     if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
-      const targetUrl = buildWorkspaceRedirectUrl(slug, "/projects", {
-        _t: token,
-        ...(refreshToken ? { _r: refreshToken } : {}),
-      });
+      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects", token);
       if (targetUrl) {
         window.location.href = targetUrl;
         return;
