@@ -5,8 +5,57 @@
 # every workspace host serves this same SPA, and the SPA rewrite answers 200 on
 # every path, so an indexable app presents a crawler with an infinite URL set.
 #
+# Why each crawler is named instead of relying on `User-agent: *`:
+# Cloudflare's managed robots.txt prepends its own `User-agent: *` group
+# containing `Allow: /`. Crawlers merge groups sharing a user-agent, and an
+# Allow beats a Disallow of equal specificity -- so a lone `User-agent: *`
+# stanza here is cancelled out before it does anything. A group naming the
+# crawler directly is more specific than `*`, and a crawler that finds its own
+# name uses that group and ignores the `*` group entirely.
+#
 # The public marketing site is a separate deployment on the apex domain and has
-# its own robots.txt — this file does not affect its indexing.
+# its own robots.txt -- this file does not affect its indexing.
 
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Googlebot-Image
+Disallow: /
+
+User-agent: bingbot
+Disallow: /
+
+User-agent: Slurp
+Disallow: /
+
+User-agent: DuckDuckBot
+Disallow: /
+
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: YandexBot
+Disallow: /
+
+User-agent: Applebot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+# Fallback for anything not named above. Cloudflare's managed block may
+# override this one; the named groups above are the ones that bind.
 User-agent: *
 Disallow: /
