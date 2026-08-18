@@ -1,0 +1,12 @@
+# Asystence application (app.asystence.com and *.asystence.com workspace hosts).
+#
+# Everything here is behind authentication, so there is nothing to index. This
+# file exists mainly to stop crawlers walking the wildcard subdomain space:
+# every workspace host serves this same SPA, and the SPA rewrite answers 200 on
+# every path, so an indexable app presents a crawler with an infinite URL set.
+#
+# The public marketing site is a separate deployment on the apex domain and has
+# its own robots.txt — this file does not affect its indexing.
+
+User-agent: *
+Disallow: /
