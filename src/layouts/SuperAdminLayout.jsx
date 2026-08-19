@@ -1,7 +1,7 @@
 // src/layouts/SuperAdminLayout.jsx
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import ThemeSwitcher from "../components/ThemeSwitcher";
-import { BrainCircuit, Building2, CreditCard, Settings, LogOut, LayoutList, Database, TrendingUp, Bot, Gauge, Network } from "lucide-react";
+import { BrainCircuit, Building2, CreditCard, Settings, LogOut, LayoutList, Database, TrendingUp, Bot, Gauge, Network, Newspaper } from "lucide-react";
 import AppBrand from "../components/AppBrand";
 import { useSuperadminAuth } from "../context/SuperadminAuthContext";
 
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: "/superadmin/ai-studio",  label: "AI Studio",  icon: <Bot        className="w-4 h-4" /> },
   { to: "/execution",             label: "Execution Platform", icon: <Gauge   className="w-4 h-4" /> },
   { to: "/intelligence-studio",   label: "Intelligence Studio", icon: <Network className="w-4 h-4" /> },
+  { to: "/superadmin/blog",       label: "Insights",   icon: <Newspaper  className="w-4 h-4" /> },
   { to: "/superadmin/plans",      label: "Plans",      icon: <LayoutList className="w-4 h-4" /> },
   { to: "/superadmin/payments",   label: "Payments",   icon: <CreditCard className="w-4 h-4" /> },
   { to: "/superadmin/backups",    label: "Backups",    icon: <Database   className="w-4 h-4" /> },

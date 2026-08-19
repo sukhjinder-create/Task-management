@@ -34,6 +34,7 @@ import {
   Network,
   FlaskConical,
   Activity,
+  Newspaper,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useFeature } from "../context/PlanContext";
@@ -135,6 +136,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   /** Admin controls */
   const adminItems = [
     { to: "/ai-settings",            label: "AI Settings",      icon: Sparkles,  show: isAdmin },
+    { to: "/insights-blog",          label: "Insights Blog",    icon: Newspaper, show: isAdmin },
     { to: "/admin/workspace-search", label: "Workspace Search", icon: Search,    show: isAdmin, locked: !hasWorkspaceSearch },
     { to: "/admin/adaptive-intelligence", label: "AI Impact",   icon: Brain,     show: isAdmin, locked: !hasWsIntel },
     { to: "/admin/attendance",       label: "Attendance",       icon: Clock,     show: isAdmin, locked: !hasAttendance },

@@ -53,6 +53,7 @@ const SuperadminBackups = lazy(() => import("./pages/SuperadminBackups.jsx"));
 const SuperadminGrowthIntelligence = lazy(() => import("./pages/SuperadminGrowthIntelligence.jsx"));
 const SuperadminAdaptiveIntelligence = lazy(() => import("./pages/SuperadminAdaptiveIntelligence.jsx"));
 const SuperadminAiStudio = lazy(() => import("./pages/SuperadminAiStudio.jsx"));
+const SuperadminBlog = lazy(() => import("./pages/SuperadminBlog.jsx"));
 import ProtectedSuperadmin from "./components/ProtectedSuperadmin";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext";
 import GrowthTelemetry from "./components/GrowthTelemetry";
@@ -71,6 +72,7 @@ const AssuranceCenter = lazy(() => import("./pages/AssuranceCenter.jsx"));
 const Reviews = lazy(() => import("./pages/Reviews.jsx"));
 const AIFeatures = lazy(() => import("./pages/AIFeatures.jsx"));
 const WorkspaceAiSettings = lazy(() => import("./pages/WorkspaceAiSettings.jsx"));
+const WorkspaceBlog = lazy(() => import("./pages/WorkspaceBlog.jsx"));
 
 // ---- Enterprise Work Intelligence Platform V3 (execution) ----
 const EnterpriseControlCenter = lazy(() => import("./pages/execution/EnterpriseControlCenter.jsx"));
@@ -223,6 +225,15 @@ export default function App() {
           <Route path="reviews"     element={<ProtectedRoute requiredFeature="performance_reviews"><Reviews /></ProtectedRoute>} />
           <Route path="ai-features" element={<ProtectedRoute requiredFeature="ai_hub"><AIFeatures /></ProtectedRoute>} />
           <Route path="ai-settings" element={<WorkspaceAiSettings />} />
+          {/* Authoring only — publishing lives in the Super Admin console. */}
+          <Route
+            path="insights-blog"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <WorkspaceBlog />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Execution Platform + Enterprise Intelligence Studio are SUPER-ADMIN owned —
               relocated to /execution and /intelligence-studio under superadmin protection. */}
@@ -382,6 +393,7 @@ export default function App() {
           <Route path="settings"   element={<SuperadminSettings />} />
           <Route path="backups"    element={<SuperadminBackups />} />
           <Route path="ai-studio"  element={<SuperadminAiStudio />} />
+          <Route path="blog"       element={<SuperadminBlog />} />
           <Route path="*"          element={<Navigate to="/superadmin/workspaces" replace />} />
         </Route>
 
