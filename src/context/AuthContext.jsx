@@ -9,6 +9,7 @@ import {
   buildWorkspaceHandoffUrl,
   consumeWorkspaceHandoff,
   hasPendingHandoff,
+  isOnWrongWorkspaceHost,
 } from "../auth/workspaceHandoff";
 import { initPush, teardownPush } from "../utils/pushNotifications";
 
@@ -106,7 +107,17 @@ export function AuthProvider({ children }) {
         // carry on setting the session up locally and navigate away only if it
         // succeeds. A failed handoff therefore costs the user nothing: they
         // stay signed in on this host instead of being stranded mid-redirect.
-        if (slug && isConfiguredPrimaryAppHost(hostname)) {
+        // Two cases move a session: arriving on the primary host with a
+        // workspace to go to, and sitting on the WRONG workspace host. The
+        // second happens via an old bookmark or a shared link, and while the
+        // data is never at risk -- the API scopes every request from the JWT,
+        // never the hostname -- the address bar names someone else's workspace,
+        // which is alarming and looks exactly like a leak.
+        const needsMove =
+          slug &&
+          (isConfiguredPrimaryAppHost(hostname) || isOnWrongWorkspaceHost(slug, hostname));
+
+        if (needsMove) {
           buildWorkspaceHandoffUrl(slug, window.location.pathname, parsed.token)
             .then((targetUrl) => {
               if (targetUrl) window.location.href = targetUrl;
