@@ -22,12 +22,29 @@ import {
 import api from "../api";
 import BlogEditor, { CATEGORY_LABELS } from "../components/BlogEditor";
 
+// Pill tints are mixed from the theme's own status colours rather than fixed
+// -100 shades, so they stay legible on all seven themes instead of only light.
 const STATUS_STYLES = {
-  draft: { label: "Draft", className: "bg-gray-100 text-gray-700" },
-  in_review: { label: "In review", className: "bg-amber-100 text-amber-800" },
-  changes_requested: { label: "Changes requested", className: "bg-orange-100 text-orange-800" },
-  published: { label: "Published", className: "bg-emerald-100 text-emerald-800" },
-  archived: { label: "Unpublished", className: "bg-slate-100 text-slate-600" },
+  draft: {
+    label: "Draft",
+    className: "bg-[var(--surface-strong)] text-[color:var(--text-muted)]",
+  },
+  in_review: {
+    label: "In review",
+    className: "bg-[var(--score-warning-bg)] text-[color:var(--score-warning)]",
+  },
+  changes_requested: {
+    label: "Changes requested",
+    className: "bg-[var(--score-danger-bg)] text-[color:var(--score-danger)]",
+  },
+  published: {
+    label: "Published",
+    className: "bg-[var(--score-good-bg)] text-[color:var(--score-good)]",
+  },
+  archived: {
+    label: "Unpublished",
+    className: "bg-[var(--surface-soft)] text-[color:var(--text-soft)]",
+  },
 };
 
 function StatusPill({ status }) {
@@ -157,17 +174,17 @@ export default function WorkspaceBlog() {
       <div className="mx-auto max-w-4xl p-6">
         <button
           onClick={() => { setSelected(null); load(); }}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-[color:var(--text-muted)] hover:text-[color:var(--text)]"
         >
           <ArrowLeft className="h-4 w-4" /> All articles
         </button>
 
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">{selected.title}</h1>
+            <h1 className="text-xl font-semibold text-[color:var(--text)]">{selected.title}</h1>
             <div className="mt-1 flex items-center gap-2">
               <StatusPill status={selected.status} />
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-[color:var(--text-soft)]">
                 {CATEGORY_LABELS[selected.category]} &middot; rev {selected.revision}
               </span>
             </div>
@@ -177,7 +194,7 @@ export default function WorkspaceBlog() {
               href={`https://asystence.com${selected.public_url}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--primary)] hover:text-[color:var(--primary-hover)]"
             >
               View live <ExternalLink className="h-3.5 w-3.5" />
             </a>
@@ -185,21 +202,21 @@ export default function WorkspaceBlog() {
         </div>
 
         {selected.status === "changes_requested" && selected.review_note && (
-          <div className="mb-5 rounded-lg border border-orange-200 bg-orange-50 p-4">
-            <p className="text-sm font-semibold text-orange-900">A Super Admin requested changes</p>
-            <p className="mt-1 text-sm text-orange-800">{selected.review_note}</p>
+          <div className="mb-5 rounded-lg border border-[color:var(--score-warning-border)] bg-[var(--score-warning-bg)] p-4">
+            <p className="text-sm font-semibold text-[color:var(--score-warning)]">A Super Admin requested changes</p>
+            <p className="mt-1 text-sm text-[color:var(--score-warning)]">{selected.review_note}</p>
           </div>
         )}
 
         {selected.status === "in_review" && (
-          <div className="mb-5 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="mb-5 flex items-center gap-2 rounded-lg border border-[color:var(--score-warning-border)] bg-[var(--score-warning-bg)] p-4 text-sm text-[color:var(--score-warning)]">
             <Clock className="h-4 w-4 shrink-0" />
             Awaiting Super Admin review. Withdraw it to make further edits.
           </div>
         )}
 
         {selected.status === "published" && (
-          <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="mb-5 rounded-lg border border-[color:var(--score-good-border)] bg-[var(--score-good-bg)] p-4 text-sm text-[color:var(--score-good)]">
             This article is live. Further edits are made by a Super Admin.
           </div>
         )}
@@ -217,7 +234,7 @@ export default function WorkspaceBlog() {
                   type="button"
                   onClick={submit}
                   disabled={busy}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--score-good)] px-4 py-2 text-sm font-medium text-[color:var(--primary-contrast)] hover:opacity-90 disabled:opacity-50"
                 >
                   <Send className="h-4 w-4" /> Submit for review
                 </button>
@@ -227,7 +244,7 @@ export default function WorkspaceBlog() {
                   type="button"
                   onClick={withdraw}
                   disabled={busy}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--border-strong)] px-4 py-2 text-sm font-medium text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)] disabled:opacity-50"
                 >
                   <Undo2 className="h-4 w-4" /> Withdraw
                 </button>
@@ -244,22 +261,22 @@ export default function WorkspaceBlog() {
     <div className="mx-auto max-w-5xl p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Asystence Insights</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-semibold text-[color:var(--text)]">Asystence Insights</h1>
+          <p className="mt-1 text-sm text-[color:var(--text-muted)]">
             Write articles for the public publication. A Super Admin reviews and publishes them.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={load}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--border-strong)] px-3 py-2 text-sm text-[color:var(--text-muted)] hover:bg-[var(--surface-soft)]"
           >
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button
             onClick={createDraft}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[color:var(--primary-contrast)] hover:bg-[var(--primary-hover)] disabled:opacity-50"
           >
             <Plus className="h-4 w-4" /> New article
           </button>
@@ -267,22 +284,22 @@ export default function WorkspaceBlog() {
       </div>
 
       {loading ? (
-        <p className="py-16 text-center text-sm text-gray-500">Loading…</p>
+        <p className="py-16 text-center text-sm text-[color:var(--text-soft)]">Loading…</p>
       ) : posts.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 py-16 text-center">
-          <FileText className="mx-auto h-8 w-8 text-gray-300" />
-          <p className="mt-3 text-sm font-medium text-gray-700">No articles yet</p>
-          <p className="mt-1 text-sm text-gray-500">
+        <div className="rounded-lg border border-dashed border-[color:var(--border-strong)] py-16 text-center">
+          <FileText className="mx-auto h-8 w-8 text-[color:var(--text-soft)]" />
+          <p className="mt-3 text-sm font-medium text-[color:var(--text-muted)]">No articles yet</p>
+          <p className="mt-1 text-sm text-[color:var(--text-soft)]">
             Start a draft and submit it when it meets the publication standard.
           </p>
         </div>
       ) : (
-        <div className="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
+        <div className="divide-y divide-[color:var(--border)] rounded-lg border border-[color:var(--border)] bg-[var(--surface)]">
           {posts.map((post) => (
-            <div key={post.id} className="flex items-center gap-4 p-4 hover:bg-gray-50">
+            <div key={post.id} className="flex items-center gap-4 p-4 hover:bg-[var(--surface-soft)]">
               <button onClick={() => openPost(post.id)} className="min-w-0 flex-1 text-left">
-                <p className="truncate text-sm font-medium text-gray-900">{post.title}</p>
-                <p className="mt-1 truncate text-xs text-gray-500">
+                <p className="truncate text-sm font-medium text-[color:var(--text)]">{post.title}</p>
+                <p className="mt-1 truncate text-xs text-[color:var(--text-soft)]">
                   {CATEGORY_LABELS[post.category]} &middot; {post.reading_minutes} min read
                   {post.published_at && ` · published ${new Date(post.published_at).toLocaleDateString()}`}
                 </p>
@@ -291,7 +308,7 @@ export default function WorkspaceBlog() {
               {post.status !== "published" && (
                 <button
                   onClick={() => remove(post)}
-                  className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  className="rounded p-1.5 text-[color:var(--text-soft)] hover:bg-[var(--danger-bg)] hover:text-[color:var(--danger-text)]"
                   title="Delete"
                 >
                   <Trash2 className="h-4 w-4" />

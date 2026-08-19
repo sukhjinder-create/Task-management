@@ -25,6 +25,40 @@ const CATEGORY_LABELS = {
   governance: "AI and governance",
 };
 
+// Every colour goes through the theme tokens in index.css. The app ships seven
+// themes, so a literal gray-300 or amber-50 is not "the light variant" — it is
+// a value that is wrong in six of them. The utility shim in index.css rescues
+// bare .bg-gray-50 and .text-gray-700, but not borders, not opacity variants
+// like bg-gray-50/60, and not the amber/emerald status panels, which is exactly
+// how this editor ended up unreadable on the dark theme.
+const T = {
+  text: "text-[color:var(--text)]",
+  muted: "text-[color:var(--text-muted)]",
+  soft: "text-[color:var(--text-soft)]",
+  border: "border-[color:var(--border)]",
+  borderStrong: "border-[color:var(--border-strong)]",
+  surface: "bg-[var(--surface)]",
+  surfaceSoft: "bg-[var(--surface-soft)]",
+  primary: "text-[color:var(--primary)]",
+  hover: "hover:bg-[var(--surface-soft)]",
+};
+
+const inputClass =
+  `mt-1 w-full rounded-[var(--radius-sm)] border ${T.borderStrong} ${T.surface} ${T.text} ` +
+  "px-3 py-2 text-sm placeholder:text-[color:var(--text-soft)] " +
+  "focus:outline-none focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)] " +
+  "transition-[border-color,box-shadow] duration-150";
+
+const iconButtonClass =
+  `rounded p-1 ${T.soft} hover:bg-[var(--surface-strong)] hover:text-[color:var(--text)] ` +
+  "disabled:opacity-30 transition-colors";
+
+const dangerIconButtonClass =
+  `rounded p-1 ${T.soft} hover:bg-[var(--danger-bg)] hover:text-[color:var(--danger-text)] transition-colors`;
+
+const linkButtonClass =
+  `inline-flex items-center gap-1 text-xs font-medium ${T.primary} hover:text-[color:var(--primary-hover)]`;
+
 const EMPTY_POST = {
   title: "",
   slug: "",
@@ -58,23 +92,24 @@ function Field({ label, hint, children, counter }) {
   return (
     <label className="block">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <span className={`text-sm font-medium ${T.muted}`}>{label}</span>
         {counter}
       </div>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
+      {hint && <p className={`mt-1 text-xs ${T.soft}`}>{hint}</p>}
     </label>
   );
 }
-
-const inputClass =
-  "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 
 function CharCounter({ value, min, max }) {
   const length = (value || "").length;
   const ok = (!min || length >= min) && (!max || length <= max);
   return (
-    <span className={`text-xs tabular-nums ${ok ? "text-gray-400" : "text-amber-600"}`}>
+    <span
+      className={`text-xs tabular-nums ${
+        ok ? T.soft : "text-[color:var(--score-warning)]"
+      }`}
+    >
       {length}
       {max ? ` / ${max}` : ""}
     </span>
@@ -106,36 +141,36 @@ function SectionEditor({ section, index, total, onChange, onRemove, onMove }) {
   const update = (patch) => onChange({ ...section, ...patch });
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50/60">
+    <div className={`rounded-[var(--radius-md)] border ${T.border} ${T.surfaceSoft}`}>
       <div className="flex items-center gap-2 px-3 py-2">
-        <GripVertical className="h-4 w-4 shrink-0 text-gray-400" />
+        <GripVertical className={`h-4 w-4 shrink-0 ${T.soft}`} />
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="flex-1 truncate text-left text-sm font-medium text-gray-800"
+          className={`flex-1 truncate text-left text-sm font-medium ${T.text}`}
         >
           {section.title || `Section ${index + 1}`}
         </button>
         <button type="button" onClick={() => onMove(index, -1)} disabled={index === 0}
-          className="rounded p-1 text-gray-400 hover:bg-gray-200 disabled:opacity-30" title="Move up">
+          className={iconButtonClass} title="Move up">
           <ChevronUp className="h-4 w-4" />
         </button>
         <button type="button" onClick={() => onMove(index, 1)} disabled={index === total - 1}
-          className="rounded p-1 text-gray-400 hover:bg-gray-200 disabled:opacity-30" title="Move down">
+          className={iconButtonClass} title="Move down">
           <ChevronDown className="h-4 w-4" />
         </button>
         <button type="button" onClick={() => onRemove(index)}
-          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Remove section">
+          className={dangerIconButtonClass} title="Remove section">
           <Trash2 className="h-4 w-4" />
         </button>
         <button type="button" onClick={() => setOpen((value) => !value)}
-          className="rounded p-1 text-gray-400 hover:bg-gray-200">
+          className={iconButtonClass} title={open ? "Collapse" : "Expand"}>
           {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
       </div>
 
       {open && (
-        <div className="space-y-3 border-t border-gray-200 p-3">
+        <div className={`space-y-3 border-t ${T.border} p-3`}>
           <Field label="Heading">
             <input
               className={inputClass}
@@ -160,7 +195,7 @@ function SectionEditor({ section, index, total, onChange, onRemove, onMove }) {
                   />
                   <button
                     type="button"
-                    className="self-start rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                    className="self-start rounded p-1 text-[color:var(--text-soft)] hover:bg-[var(--danger-bg)] hover:text-[color:var(--danger-text)]"
                     onClick={() =>
                       update({ paragraphs: section.paragraphs.filter((_, i) => i !== paragraphIndex) })
                     }
@@ -172,7 +207,7 @@ function SectionEditor({ section, index, total, onChange, onRemove, onMove }) {
               ))}
               <button
                 type="button"
-                className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--primary)] hover:text-[color:var(--primary-hover)]"
                 onClick={() => update({ paragraphs: [...(section.paragraphs || []), ""] })}
               >
                 <Plus className="h-3.5 w-3.5" /> Add paragraph
@@ -281,10 +316,10 @@ export default function BlogEditor({
           </Field>
 
           <div className="flex items-end pb-1">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <label className="inline-flex items-center gap-2 text-sm text-[color:var(--text-muted)]">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-[color:var(--border-strong)]"
                 checked={Boolean(draft.featured)}
                 onChange={(event) => set({ featured: event.target.checked })}
               />
@@ -294,8 +329,8 @@ export default function BlogEditor({
         </div>
 
         {/* ── Search ───────────────────────────────────────────────── */}
-        <div className="rounded-lg border border-gray-200 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-gray-900">Search appearance</h3>
+        <div className="rounded-lg border border-[color:var(--border)] p-4">
+          <h3 className="mb-3 text-sm font-semibold text-[color:var(--text)]">Search appearance</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="SEO title" counter={<CharCounter value={draft.seo_title} max={70} />}>
               <input
@@ -339,7 +374,7 @@ export default function BlogEditor({
                 />
                 <button
                   type="button"
-                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  className="rounded p-1 text-[color:var(--text-soft)] hover:bg-[var(--danger-bg)] hover:text-[color:var(--danger-text)]"
                   onClick={() => set({ takeaways: draft.takeaways.filter((_, i) => i !== index) })}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -348,7 +383,7 @@ export default function BlogEditor({
             ))}
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--primary)] hover:text-[color:var(--primary-hover)]"
               onClick={() => set({ takeaways: [...(draft.takeaways || []), ""] })}
             >
               <Plus className="h-3.5 w-3.5" /> Add takeaway
@@ -359,8 +394,8 @@ export default function BlogEditor({
         {/* ── Body ─────────────────────────────────────────────────── */}
         <div>
           <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-sm font-semibold text-gray-900">Article body</h3>
-            <span className="text-xs text-gray-500 tabular-nums">
+            <h3 className="text-sm font-semibold text-[color:var(--text)]">Article body</h3>
+            <span className="text-xs text-[color:var(--text-soft)] tabular-nums">
               {words} words &middot; {minutes} min read
             </span>
           </div>
@@ -384,7 +419,7 @@ export default function BlogEditor({
             ))}
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:border-indigo-400 hover:text-indigo-600"
+              className="inline-flex items-center gap-1 rounded-lg border border-dashed border-[color:var(--border-strong)] px-3 py-2 text-xs font-medium text-[color:var(--text-muted)] hover:border-[color:var(--primary)] hover:text-[color:var(--primary)]"
               onClick={() =>
                 set({ sections: [...(draft.sections || []), { title: "", paragraphs: [""], bullets: [] }] })
               }
@@ -396,8 +431,8 @@ export default function BlogEditor({
 
         {/* ── Sources ──────────────────────────────────────────────── */}
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-gray-900">Sources</h3>
-          <p className="mb-2 text-xs text-gray-500">
+          <h3 className="mb-2 text-sm font-semibold text-[color:var(--text)]">Sources</h3>
+          <p className="mb-2 text-xs text-[color:var(--text-soft)]">
             At least one. URLs must be HTTPS or they are dropped on save.
           </p>
           <div className="space-y-2">
@@ -421,7 +456,7 @@ export default function BlogEditor({
                     sources[index] = { ...source, url: event.target.value };
                     set({ sources });
                   }} />
-                <button type="button" className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                <button type="button" className="rounded p-1 text-[color:var(--text-soft)] hover:bg-[var(--danger-bg)] hover:text-[color:var(--danger-text)]"
                   onClick={() => set({ sources: draft.sources.filter((_, i) => i !== index) })}>
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -429,7 +464,7 @@ export default function BlogEditor({
             ))}
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--primary)] hover:text-[color:var(--primary-hover)]"
               onClick={() => set({ sources: [...(draft.sources || []), { title: "", publisher: "", url: "" }] })}
             >
               <Plus className="h-3.5 w-3.5" /> Add source
@@ -450,28 +485,28 @@ export default function BlogEditor({
 
       {/* ── Readiness ──────────────────────────────────────────────── */}
       {readiness.length > 0 ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+        <div className="rounded-lg border border-[color:var(--score-warning-border)] bg-[var(--score-warning-bg)] p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-[color:var(--score-warning)]">
             <AlertTriangle className="h-4 w-4" /> Not ready to publish
           </div>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-800">
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[color:var(--score-warning)]">
             {readiness.map((problem) => <li key={problem}>{problem}</li>)}
           </ul>
         </div>
       ) : (
         post?.id && (
-          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <div className="flex items-center gap-2 rounded-lg border border-[color:var(--score-good-border)] bg-[var(--score-good-bg)] p-3 text-sm text-[color:var(--score-good)]">
             <CheckCircle2 className="h-4 w-4" /> Meets the publication standard.
           </div>
         )
       )}
 
       {!readOnly && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-4">
+        <div className="flex flex-wrap items-center gap-2 border-t border-[color:var(--border)] pt-4">
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[color:var(--primary-contrast)] hover:bg-[var(--primary-hover)] disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save"}
           </button>
