@@ -163,6 +163,12 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("auth:token-refreshed", handler);
   }, []);
 
+  useEffect(() => {
+    const handler = () => setAuth({ user: null, token: null, isReady: true });
+    window.addEventListener("auth:logout", handler);
+    return () => window.removeEventListener("auth:logout", handler);
+  }, []);
+
   /* ---------------------------------------------
      3. Login handler → stores auth everywhere
         refreshToken is optional (Google SSO skips it)

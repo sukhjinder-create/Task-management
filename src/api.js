@@ -118,6 +118,14 @@ api.interceptors.response.use(
   async (err) => {
     const status = err?.response?.status;
     const message = err?.response?.data?.error || "";
+    const code = err?.response?.data?.code;
+
+    if (status === 401 && code === "EMAIL_VERIFICATION_REQUIRED") {
+      try { localStorage.removeItem("auth"); } catch { /* storage can be unavailable */ }
+      try { window.__AUTH_TOKEN__ = null; } catch { /* optional compatibility bridge */ }
+      window.dispatchEvent(new Event("auth:logout"));
+      return Promise.reject(err);
+    }
 
     /* ------------------------------------------
        WORKSPACE ENFORCEMENT (Backend authority)
