@@ -8,6 +8,7 @@ import {
 } from "../config/runtime";
 import { buildWorkspaceHandoffUrl } from "../auth/workspaceHandoff";
 import ThemeSwitcher from "../components/ThemeSwitcher";
+import Turnstile from "../components/Turnstile";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
 import { getStoredCurrency } from "../utils/currency";
 import {
@@ -25,6 +26,7 @@ import {
 
 const BACKEND_URL = API_BASE_URL;
 const SELF_SERVE_TRIAL_DAYS = 7;
+const turnstileEnabled = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY);
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -40,6 +42,9 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [planLoading, setPlanLoading] = useState(!!selectedPlanSlug);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
+  const [verificationPending, setVerificationPending] = useState(null);
 
   const isFreePlan = !!selectedPlan &&
     (Number(selectedPlan.price_monthly_minor) || 0) === 0 &&
@@ -78,6 +83,10 @@ export default function Signup() {
   }, [selectedPlanSlug]);
 
   useEffect(() => {
+    if (searchParams.get("verification") === "pending") {
+      setVerificationPending({ email: null, delivered: true });
+      return;
+    }
     const err = searchParams.get("error");
     if (!err || err === "google_cancelled") return;
     const message =
@@ -160,6 +169,10 @@ export default function Signup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateRequired()) return;
+    if (turnstileEnabled && !turnstileToken) {
+      toast.error("Please wait a moment for the security check to finish.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -171,7 +184,15 @@ export default function Signup() {
         interval: intendedInterval,
         currency: planCurrencyCode,
         ...(selectedPlanSlug ? { plan: selectedPlanSlug } : {}),
+        ...(turnstileToken ? { turnstileToken } : {}),
       }, { headers: getGrowthContextHeaders() });
+      if (res.data?.verificationRequired) {
+        setVerificationPending({
+          email: res.data.email || email.trim(),
+          delivered: res.data.emailDelivered !== false,
+        });
+        return;
+      }
       if (res.data?.token && res.data?.user) {
         completeSignup(res.data);
         return;
@@ -179,6 +200,8 @@ export default function Signup() {
       throw new Error("Workspace creation completed without a usable session.");
     } catch (err) {
       toast.error(err.response?.data?.error || err.message || "Could not create workspace");
+      setTurnstileToken("");
+      setTurnstileReset((value) => value + 1);
     } finally {
       setLoading(false);
     }
@@ -191,6 +214,10 @@ export default function Signup() {
     }
     window.location.href = googleSignupUrl;
   };
+
+  if (verificationPending) {
+    return <VerificationPending {...verificationPending} />;
+  }
 
   return (
     <div className="min-h-screen bg-[var(--app-bg)] text-[color:var(--text)] relative overflow-hidden">
@@ -371,6 +398,10 @@ export default function Signup() {
                     ? "Creating workspace..."
                     : (<>Create workspace <ArrowRight className="w-4 h-4" /></>)}
               </button>
+              <Turnstile
+                onToken={setTurnstileToken}
+                resetKey={turnstileReset}
+              />
             </form>
 
             <>
@@ -401,6 +432,53 @@ export default function Signup() {
           </div>
         </aside>
       </main>
+    </div>
+  );
+}
+
+function VerificationPending({ email, delivered }) {
+  const [resending, setResending] = useState(false);
+
+  const resend = async () => {
+    setResending(true);
+    try {
+      await axios.post(`${API_BASE_URL}/auth/email-verification/resend`, { email });
+      toast.success("If the account is awaiting verification, a new email has been sent.");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Could not resend the verification email.");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[var(--app-bg)] text-[color:var(--text)] flex items-center justify-center p-6">
+      <div className="w-full max-w-md rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-8 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[color:var(--border)] text-[color:var(--primary)]">
+          <Mail className="h-5 w-5" />
+        </div>
+        <h1 className="mt-5 text-2xl font-semibold">Check your email</h1>
+        <p className="mt-3 text-sm leading-6 text-[color:var(--text-muted)]">
+          {delivered
+            ? email
+              ? <>We sent a secure link to <strong className="text-[color:var(--text)]">{email}</strong>. One click verifies the address and signs you in.</>
+              : <>We sent a secure link to your email address. One click verifies the address and signs you in.</>
+            : <>Your workspace is reserved, but the email could not be delivered. Retry below or contact support.</>}
+        </p>
+        {email && (
+          <button
+            type="button"
+            onClick={resend}
+            disabled={resending}
+            className="mt-6 w-full rounded-lg border border-[color:var(--border)] px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-soft)] disabled:opacity-50"
+          >
+            {resending ? "Sending..." : "Resend verification email"}
+          </button>
+        )}
+        <Link to="/login" className="mt-5 inline-block text-sm text-[color:var(--primary)] hover:opacity-80">
+          Back to sign in
+        </Link>
+      </div>
     </div>
   );
 }

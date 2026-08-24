@@ -6,7 +6,8 @@ import { formatMinor } from "../utils/currency";
 import {
   Building2, Users, ShieldCheck, ShieldOff, Plus,
   MoreVertical, Pencil, Trash2, CheckCircle, XCircle,
-  Crown, Calendar, X, KeyRound, UserCog, CreditCard
+  Crown, Calendar, X, KeyRound, UserCog, CreditCard,
+  BadgeCheck, FolderKanban, MapPin
 } from "lucide-react";
 
 const PLAN_COLOR = {
@@ -29,6 +30,15 @@ function relativeDate(iso) {
   if (d < 30) return `${d}d ago`;
   if (d < 365) return `${Math.floor(d / 30)}mo ago`;
   return `${Math.floor(d / 365)}y ago`;
+}
+
+function countryName(code) {
+  if (!code) return "Unknown country";
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(String(code).toUpperCase());
+  } catch {
+    return String(code).toUpperCase();
+  }
 }
 
 export default function SuperAdminWorkspaces() {
@@ -143,7 +153,13 @@ export default function SuperAdminWorkspaces() {
                 {/* Main info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-[color:var(--text)] truncate">{ws.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => setDetailWs(ws)}
+                      className="font-semibold text-[color:var(--text)] truncate hover:text-[color:var(--primary)] transition-colors text-left"
+                    >
+                      {ws.name}
+                    </button>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${PLAN_COLOR[ws.billing_plan || ws.plan] || PLAN_COLOR.basic}`}>
                       {ws.billing_plan || ws.plan || "basic"}
                     </span>
@@ -163,6 +179,12 @@ export default function SuperAdminWorkspaces() {
                     <span className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
                       <Calendar className="w-3 h-3" /> {relativeDate(ws.created_at)}
                     </span>
+                    <span className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {countryName(ws.signup_country_code)}
+                    </span>
+                    <span className="text-xs text-[color:var(--text-muted)] flex items-center gap-1">
+                      <FolderKanban className="w-3 h-3" /> {ws.project_count ?? 0} projects
+                    </span>
                   </div>
                 </div>
 
@@ -177,7 +199,7 @@ export default function SuperAdminWorkspaces() {
 
                   {menuId === ws.id && (
                     <div className="absolute right-0 top-9 z-20 w-44 bg-[var(--surface)] rounded-lg border border-[color:var(--border)] py-1">
-                      <MenuItem icon={<UserCog className="w-3.5 h-3.5" />} label="View Users"
+                      <MenuItem icon={<UserCog className="w-3.5 h-3.5" />} label="View details"
                         onClick={() => { setDetailWs(ws); setMenuId(null); }} />
                       <MenuItem icon={<Pencil className="w-3.5 h-3.5" />} label="Edit"
                         onClick={() => { setEditWs(ws); setMenuId(null); }} />
@@ -361,20 +383,27 @@ function AssignPlanModal({ ws, axiosSuper, onClose, onSaved }) {
 // ─── Workspace Detail Modal ───────────────────────────────────────────────────
 function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
   const [users, setUsers]             = useState([]);
+  const [projects, setProjects]       = useState([]);
   const [loading, setLoading]         = useState(true);
   const [action, setAction]           = useState(null);
   const [newPassword, setNewPassword] = useState("");
   const [editForm, setEditForm]       = useState({ username: "", email: "", role: "" });
   const [saving, setSaving]           = useState(false);
 
-  const loadUsers = () => {
-    axiosSuper.get(`/superadmin/workspaces/${ws.id}/users`)
-      .then(r => setUsers(r.data || []))
-      .catch(() => toast.error("Failed to load users"))
+  const loadDetails = () => {
+    Promise.all([
+      axiosSuper.get(`/superadmin/workspaces/${ws.id}/users`),
+      axiosSuper.get(`/superadmin/workspaces/${ws.id}/projects`),
+    ])
+      .then(([usersResponse, projectsResponse]) => {
+        setUsers(usersResponse.data || []);
+        setProjects(projectsResponse.data || []);
+      })
+      .catch(() => toast.error("Failed to load workspace details"))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadUsers(); }, [ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadDetails(); }, [ws.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openReset = (u) => { setAction({ type: "reset", user: u }); setNewPassword(""); };
   const openEdit  = (u) => { setAction({ type: "edit",  user: u }); setEditForm({ username: u.username, email: u.email, role: u.role }); };
@@ -427,6 +456,20 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
     }
   };
 
+  const handleRequireEmailVerification = async (u) => {
+    if (!window.confirm(`Require ${u.email} to verify ownership? Their active sessions will be revoked.`)) return;
+    try {
+      const { data } = await axiosSuper.post(
+        `/superadmin/workspaces/${ws.id}/users/${u.id}/require-email-verification`
+      );
+      setUsers(prev => prev.map(user => user.id === u.id ? { ...user, ...data.user } : user));
+      if (data.emailDelivered) toast.success(`Verification email sent to ${u.email}`);
+      else toast.error("Verification is now required, but the email could not be delivered.");
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Could not require email verification");
+    }
+  };
+
   const ROLE_COLOR = {
     admin: "border border-[color:var(--border)] text-[color:var(--primary)]",
     owner: "border border-[color:var(--border)] text-[color:var(--text-muted)]",
@@ -434,7 +477,19 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
   };
 
   return (
-    <Modal title={`${ws.name} — Users (${users.length}${(ws.max_members ?? ws.member_limit) > 0 ? ` / ${ws.max_members ?? ws.member_limit}` : ""})`} onClose={onClose}>
+    <Modal title={ws.name} onClose={onClose} wide>
+      <div className="mb-4 flex flex-wrap gap-2 text-xs text-[color:var(--text-muted)]">
+        <span className="inline-flex items-center gap-1 rounded border border-[color:var(--border)] px-2 py-1">
+          <MapPin className="h-3 w-3" /> {countryName(ws.signup_country_code)}
+        </span>
+        <span className="inline-flex items-center gap-1 rounded border border-[color:var(--border)] px-2 py-1">
+          <FolderKanban className="h-3 w-3" /> {projects.length} projects
+        </span>
+        <span className="inline-flex items-center gap-1 rounded border border-[color:var(--border)] px-2 py-1">
+          <Users className="h-3 w-3" /> {users.length} users
+        </span>
+      </div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--text-soft)]">Users</p>
       {loading ? (
         <div className="py-8 text-center text-sm text-[color:var(--text-muted)]">Loading…</div>
       ) : users.length === 0 ? (
@@ -445,11 +500,32 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
             <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[color:var(--border)] hover:bg-[var(--surface-soft)] transition-colors">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-[color:var(--text)] truncate">{u.username}</p>
-                <p className="text-xs text-[color:var(--text-muted)] truncate">{u.email}</p>
+                <p className="text-xs text-[color:var(--text-muted)] truncate flex items-center gap-1">
+                  {u.email}
+                  {u.email_verified_at && !["legacy", "superadmin"].includes(u.email_verification_method) && (
+                    <BadgeCheck className="h-3.5 w-3.5 text-green-500" aria-label="Verified email" />
+                  )}
+                </p>
+                <p className="text-[10px] text-[color:var(--text-soft)]">
+                  {u.email_verification_method === "legacy"
+                    ? "Legacy account — mailbox not re-verified"
+                    : u.email_verification_method === "superadmin"
+                      ? "Admin-created account"
+                      : u.email_verified_at
+                        ? `Verified via ${(u.email_verification_method || "unknown").replaceAll("_", " ")}`
+                        : "Email not verified"}
+                </p>
               </div>
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${ROLE_COLOR[u.role] || ROLE_COLOR.user}`}>
                 {u.role}
               </span>
+              {u.role !== "system" && (!u.email_verified_at || ["legacy", "superadmin"].includes(u.email_verification_method)) && (
+                <button onClick={() => handleRequireEmailVerification(u)}
+                  className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-green-500 shrink-0"
+                  title="Require email verification">
+                  <BadgeCheck className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button onClick={() => openEdit(u)}
                 className="p-1.5 rounded-lg hover:bg-[var(--surface-soft)] text-[color:var(--primary)] shrink-0"
                 title="Edit user">
@@ -467,6 +543,30 @@ function WorkspaceDetailModal({ ws, onClose, axiosSuper }) {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {!loading && (
+        <div className="mt-5 border-t border-[color:var(--border)] pt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--text-soft)]">Projects</p>
+          {projects.length === 0 ? (
+            <p className="py-4 text-center text-sm text-[color:var(--text-muted)]">No projects in this workspace</p>
+          ) : (
+            <div className="grid max-h-64 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+              {projects.map((project) => (
+                <div key={project.id} className="rounded-lg border border-[color:var(--border)] px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-sm font-medium text-[color:var(--text)]">{project.name}</p>
+                    {project.project_code && <span className="text-[10px] text-[color:var(--text-soft)]">{project.project_code}</span>}
+                  </div>
+                  <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                    {project.task_count ?? 0} tasks · added {relativeDate(project.created_at)}
+                    {project.added_by_name ? ` by ${project.added_by_name}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -665,10 +765,10 @@ function EditModal({ ws, onClose, onSaved, axiosSuper }) {
 }
 
 // ─── Shared components ────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, wide = false }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[var(--surface)] rounded-xl border border-[color:var(--border)] w-full max-w-lg">
+      <div className={`bg-[var(--surface)] rounded-xl border border-[color:var(--border)] w-full ${wide ? "max-w-3xl" : "max-w-lg"}`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)]">
           <h3 className="font-semibold text-[color:var(--text)]">{title}</h3>
           <button onClick={onClose} className="text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors">

@@ -144,6 +144,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/auth/magic" element={<AuthCallback />} />
+        <Route path="/verify-email" element={<AuthCallback />} />
         <Route path="/superadmin/login" element={<SuperadminLogin />} />
         <Route path="/superadmin/forgot-password" element={<SuperadminForgotPassword />} />
         <Route path="/superadmin/reset-password" element={<SuperadminResetPassword />} />

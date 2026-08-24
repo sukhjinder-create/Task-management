@@ -42,6 +42,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
 
   // MFA second step
   const [mfaRequired, setMfaRequired] = useState(false);
@@ -106,6 +107,7 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) { toast.error("Email and password are required"); return; }
+    setVerificationEmail("");
     setLoading(true);
     try {
       const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password }, { headers: getGrowthContextHeaders() });
@@ -116,7 +118,24 @@ export default function Login() {
       }
       completeLogin(res.data.token, res.data.user, res.data.refreshToken || null);
     } catch (err) {
+      if (err.response?.data?.code === "EMAIL_VERIFICATION_REQUIRED") {
+        setVerificationEmail(email.trim());
+      }
       toast.error(err.response?.data?.error || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/auth/email-verification/resend`, {
+        email: verificationEmail,
+      });
+      toast.success(res.data?.message || "Verification email sent");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Could not resend verification email");
     } finally {
       setLoading(false);
     }
@@ -372,6 +391,17 @@ export default function Login() {
                   >
                     {loading ? "Signing in…" : <>Sign in to workspace <ArrowRight className="h-4 w-4" /></>}
                   </button>
+
+                  {verificationEmail && (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={loading}
+                      className="w-full text-center text-sm font-semibold text-[color:var(--primary)] transition hover:opacity-75 disabled:opacity-55"
+                    >
+                      Resend verification email
+                    </button>
+                  )}
                 </form>
 
                 <div className="mt-7 border-t border-[color:var(--border)] pt-6 text-center">

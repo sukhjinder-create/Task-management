@@ -15,8 +15,10 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../api";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
+import Turnstile from "./Turnstile";
 
 const SELF_SERVE_TRIAL_DAYS = 7;
+const turnstileEnabled = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY);
 
 export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
   const [plan, setPlan] = useState(null);
@@ -27,6 +29,9 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
+  const [verificationSent, setVerificationSent] = useState(false);
   const panelRef = useRef(null);
   const firstFieldRef = useRef(null);
 
@@ -77,6 +82,7 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
     if (!name.trim()) return setError("Please enter your name.");
     if (!email.trim()) return setError("Please enter your work email.");
     if (password.length < 8) return setError("Password must be at least 8 characters.");
+    if (turnstileEnabled && !turnstileToken) return setError("Please wait for the security check to finish.");
 
     setBusy(true);
     try {
@@ -90,14 +96,21 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
           plan: plan.slug,
           interval: "monthly",
           currency: plan.currency,
+          ...(turnstileToken ? { turnstileToken } : {}),
         },
         { headers: getGrowthContextHeaders() }
       );
 
+      if (data?.verificationRequired) {
+        setVerificationSent(true);
+        return;
+      }
       if (data?.token && data?.user) return onAuthenticated(data);
       throw new Error("Workspace creation completed without a usable session.");
     } catch (err) {
       setError(err?.response?.data?.error || err.message || "Could not create workspace.");
+      setTurnstileToken("");
+      setTurnstileReset((value) => value + 1);
     } finally {
       setBusy(false);
     }
@@ -106,6 +119,17 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
   const field =
     "w-full rounded-lg border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[color:var(--text)] outline-none focus:border-[color:var(--primary)]";
   const label = "mb-1.5 block text-xs font-semibold text-[color:var(--text-muted)]";
+
+  if (verificationSent) {
+    return (
+      <div ref={panelRef} className="mt-6 rounded-2xl border border-[color:var(--border)] p-6 text-center">
+        <p className="text-sm font-bold text-[color:var(--text)]">Check your email</p>
+        <p className="mt-2 text-xs leading-5 text-[color:var(--text-muted)]">
+          We sent a secure link to {email.trim()}. One click verifies your address and signs you in.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div ref={panelRef} className="mt-6 rounded-2xl border border-[color:var(--border)] p-5 text-left">
@@ -159,6 +183,8 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
         )}
 
         {error && <p className="text-sm text-red-400" role="alert">{error}</p>}
+
+        <Turnstile onToken={setTurnstileToken} resetKey={turnstileReset} />
 
         <button type="submit" disabled={busy || !plan}
           className="w-full rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[color:var(--primary-contrast)] transition hover:bg-[var(--primary-hover)] disabled:opacity-50">

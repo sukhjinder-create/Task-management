@@ -22,7 +22,8 @@ export default function AuthCallback() {
   // Query support keeps old emailed/deep links working; new web callbacks use
   // the fragment so credentials are not sent in the HTTP request or referrer.
   const callbackParam = (key) => fragmentParams.get(key) || searchParams.get(key);
-  const isSignupFlow = callbackParam("flow") === "signup";
+  const isEmailVerificationPath = window.location.pathname.endsWith("/verify-email");
+  const isSignupFlow = callbackParam("flow") === "signup" || isEmailVerificationPath;
   const [status, setStatus] = useState(
     isSignupFlow ? "Connecting your new workspace…" : "Signing you in…"
   );
@@ -61,6 +62,20 @@ export default function AuthCallback() {
         const isMagicPath = window.location.pathname.endsWith("/auth/magic");
         const urlToken = callbackParam("token");
         const urlRefreshToken = callbackParam("refreshToken");
+
+        if (isEmailVerificationPath && urlToken) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          const res = await axios.post(`${API_BASE_URL}/auth/email-verification/confirm`, {
+            token: urlToken,
+          });
+          const { token, user, refreshToken = null } = res.data;
+          safePersistAuth(user, token, refreshToken);
+          login(user, token, refreshToken);
+          setStatus("Email verified. Opening your workspace...");
+          toast.success("Email verified. Welcome to Asystence.");
+          await redirectToWorkspace(user, token);
+          return;
+        }
 
         if (urlToken && !isMagicPath) {
           // Credentials are single-use callback inputs. Remove them from the
