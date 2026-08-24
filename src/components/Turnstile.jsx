@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const SITE_KEY = String(import.meta.env.VITE_TURNSTILE_SITE_KEY || "").trim();
 let scriptPromise;
@@ -21,6 +21,7 @@ function loadTurnstile() {
 
 export default function Turnstile({ onToken, resetKey = 0 }) {
   const containerRef = useRef(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!SITE_KEY) return undefined;
@@ -35,9 +36,20 @@ export default function Turnstile({ onToken, resetKey = 0 }) {
           action: "signup",
           appearance: "interaction-only",
           size: "flexible",
-          callback: (token) => onToken(token),
+          retry: "auto",
+          "retry-interval": 3000,
+          callback: (token) => {
+            setError("");
+            onToken(token);
+          },
           "expired-callback": () => onToken(""),
-          "error-callback": () => onToken(""),
+          "error-callback": (code) => {
+            onToken("");
+            setError(String(code).startsWith("600")
+              ? "Security check is retrying. Disable VPN or ad-blocking for this page if it continues."
+              : "Security check is retrying. Please wait a moment.");
+            return false;
+          },
         });
       })
       .catch(() => onToken(""));
@@ -48,5 +60,10 @@ export default function Turnstile({ onToken, resetKey = 0 }) {
     };
   }, [onToken, resetKey]);
 
-  return SITE_KEY ? <div ref={containerRef} className="min-h-0" /> : null;
+  return SITE_KEY ? (
+    <div>
+      <div ref={containerRef} className="min-h-0" />
+      {error && <p className="mt-2 text-xs text-amber-400" role="status">{error}</p>}
+    </div>
+  ) : null;
 }
