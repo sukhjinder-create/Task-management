@@ -5,7 +5,7 @@ import { useApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { Skeleton } from "./ui";
 
-const MANAGER_ROLES = new Set(["admin", "owner", "manager"]);
+const MANAGER_ROLES = new Set(["admin", "manager"]);
 
 export default function OutcomeAttention() {
   const api = useApi();
@@ -16,7 +16,7 @@ export default function OutcomeAttention() {
 
   useEffect(() => {
     let active = true;
-    api.get("/assurance/overview")
+    api.get("/assurance/inbox")
       .then((response) => {
         if (active) setState({ loading: false, data: response.data || null });
       })
@@ -33,8 +33,20 @@ export default function OutcomeAttention() {
   }
   if (!state.data) return null;
 
-  const { summary, attention = [] } = state.data;
-  if (summary?.total === 0) {
+  const { summary, attention = [], approvals = [], decisionsNeedingReview = [], experimentsNeedingAttention = [] } = state.data;
+  const items = [
+    ...approvals.map((item) => ({
+      id: `approval:${item.id}`,
+      title: item.goal_title,
+      reason: item.payload?.evidenceLabel || `${item.requested_by_name || "Workspace user"} requested ${item.action_type === "complete" ? "completion verification" : "recovery"}.`,
+      actionLabel: item.canApprove ? "Review approval" : "View request",
+      to: "/outcomes/inbox",
+    })),
+    ...decisionsNeedingReview.map((item) => ({ id: `decision:${item.id}`, title: item.goal_title, reason: item.selected_option, actionLabel: "Review decision result", to: `/outcomes/lab?outcome=${item.goal_id}` })),
+    ...experimentsNeedingAttention.map((item) => ({ id: `experiment:${item.id}`, title: item.title, reason: `${item.goal_title} needs an experiment result.`, actionLabel: "Record result", to: canManage ? `/outcomes/lab?outcome=${item.goal_id}` : `/outcomes#outcome-${item.goal_id}` })),
+    ...attention.map((item) => ({ ...item, to: `/outcomes#outcome-${item.commitmentId}` })),
+  ];
+  if (summary?.outcomeTotal === 0) {
     if (!canManage) return null;
     return (
       <section className="rounded-lg border border-[color:var(--border)] bg-[var(--surface)] p-5">
@@ -56,7 +68,7 @@ export default function OutcomeAttention() {
     );
   }
 
-  if (!attention.length) {
+  if (!items.length) {
     return (
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] px-5 py-4">
         <div>
@@ -73,13 +85,13 @@ export default function OutcomeAttention() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--primary)]">Needs your attention</p>
-          <h2 className="mt-1 text-sm font-bold text-[color:var(--text)]">{attention.length} outcome{attention.length === 1 ? "" : "s"} with a clear next action</h2>
+          <h2 className="mt-1 text-sm font-bold text-[color:var(--text)]">{items.length} outcome item{items.length === 1 ? "" : "s"} with a clear next action</h2>
         </div>
         <Link to="/outcomes" className="flex items-center gap-1.5 text-[12px] font-semibold text-[color:var(--primary)]">Open outcomes <ArrowRight className="h-3.5 w-3.5" /></Link>
       </div>
       <div className="mt-4 grid gap-2 lg:grid-cols-3">
-        {attention.slice(0, 3).map((item) => (
-          <Link key={item.id} to={`/outcomes#outcome-${item.commitmentId}`} className="rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)] p-3 hover:border-[color:var(--border-strong)]">
+        {items.slice(0, 3).map((item) => (
+          <Link key={item.id} to={item.to} className="rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)] p-3 hover:border-[color:var(--border-strong)]">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--score-warning)]" />
               <div className="min-w-0">

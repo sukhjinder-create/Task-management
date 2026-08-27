@@ -68,7 +68,7 @@ export default function MobileBottomNav({ unreadCount = 0 }) {
   ];
 
   const moreItems = [
-    { to: "/okr",          icon: Target,       label: "Goals",            show: isAdmin,               locked: !hasGoals },
+    { to: "/outcomes",     icon: Target,       label: "Outcomes",         show: true,                  locked: !hasGoals },
     { to: "/admin/workspace-search", icon: Command, label: "Workspace Search", show: isAdmin, locked: !hasWorkspaceSearch },
     { to: "/wiki",         icon: BookOpen,     label: "Wiki / Docs",      show: true,                  locked: !hasWiki },
     { to: "/leave",        icon: CalendarDays, label: "Leave",            show: true,                  locked: !hasLeave },

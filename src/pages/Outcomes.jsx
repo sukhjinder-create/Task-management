@@ -43,6 +43,7 @@ const EMPTY_FORM = {
   targetDate: dateAfter(30),
   ownerId: "",
   primaryProjectId: "",
+  sprintIds: [],
 };
 
 function formatDate(value) {
@@ -69,7 +70,8 @@ function Field({ label, hint, children }) {
 
 const inputClass = "h-11 w-full rounded-[8px] border border-[color:var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[color:var(--text)] outline-none placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]";
 
-function OutcomeForm({ form, setForm, owners, projects, saving, onSubmit, onCancel, editing = false }) {
+function OutcomeForm({ form, setForm, owners, projects, sprints, saving, onSubmit, onCancel, editing = false }) {
+  const projectSprints = sprints.filter((sprint) => sprint.project_id === form.primaryProjectId);
   return (
     <form id="outcome-form" onSubmit={onSubmit} className="rounded-[10px] border border-[color:var(--border)] bg-[var(--surface-soft)] p-5">
       <div className="mb-5">
@@ -129,12 +131,35 @@ function OutcomeForm({ form, setForm, owners, projects, saving, onSubmit, onCanc
             <select
               className={inputClass}
               value={form.primaryProjectId}
-              onChange={(event) => setForm((current) => ({ ...current, primaryProjectId: event.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, primaryProjectId: event.target.value, sprintIds: [] }))}
             >
               <option value="">I will connect work later</option>
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </Field>
+          {form.primaryProjectId && projectSprints.length > 0 && (
+            <fieldset className="mt-3 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface)] p-3">
+              <legend className="px-1 text-[11px] font-semibold text-[color:var(--text)]">Delivery sprints <span className="font-normal text-[color:var(--text-soft)]">Optional</span></legend>
+              <p className="mb-2 text-[10px] text-[color:var(--text-muted)]">Select the sprints that deliver this outcome. Leave all clear only when the whole project contributes.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {projectSprints.map((sprint) => (
+                  <label key={sprint.id} className="flex items-center gap-2 text-[11px] text-[color:var(--text-muted)]">
+                    <input
+                      type="checkbox"
+                      checked={form.sprintIds.includes(sprint.id)}
+                      onChange={(event) => setForm((current) => ({
+                        ...current,
+                        sprintIds: event.target.checked
+                          ? [...current.sprintIds, sprint.id]
+                          : current.sprintIds.filter((id) => id !== sprint.id),
+                      }))}
+                    />
+                    <span>{sprint.name} · {sprint.status}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
         </div>
       </div>
 
@@ -245,6 +270,7 @@ export default function Outcomes() {
   const [evidenceForm, setEvidenceForm] = useState({ label: "", note: "" });
   const [connectDialog, setConnectDialog] = useState(null);
   const [connectProjectId, setConnectProjectId] = useState("");
+  const [connectSprintIds, setConnectSprintIds] = useState([]);
   const [experimentDialog, setExperimentDialog] = useState(null);
   const [experimentForm, setExperimentForm] = useState({ resultStatus: "supported", observedResult: "" });
   const [busyId, setBusyId] = useState(null);
@@ -337,6 +363,7 @@ export default function Outcomes() {
       targetDate: commitment.target_date || dateAfter(30),
       ownerId: commitment.owner_id || "",
       primaryProjectId: commitment.primary_project_id || "",
+      sprintIds: commitment.linked_sprint_ids || [],
     });
     setShowForm(true);
     scrollToForm();
@@ -377,7 +404,7 @@ export default function Outcomes() {
     try {
       if (mode === "complete") {
         const payload = { evidenceLabel: evidenceForm.label, note: evidenceForm.note };
-        if (canManage) {
+        if (canApproveCompletion) {
           await api.post(`/assurance/commitments/${commitment.id}/complete`, payload);
           toast.success("Outcome completed with result evidence");
         } else {
@@ -413,6 +440,7 @@ export default function Outcomes() {
   const openConnect = (commitment) => {
     setConnectDialog(commitment);
     setConnectProjectId(commitment.primary_project_id || "");
+    setConnectSprintIds(commitment.linked_sprint_ids || []);
   };
 
   const connectWork = async (event) => {
@@ -422,6 +450,7 @@ export default function Outcomes() {
     try {
       await api.patch(`/assurance/commitments/${connectDialog.id}`, {
         primaryProjectId: connectProjectId || null,
+        sprintIds: connectSprintIds,
       });
       toast.success(connectProjectId ? "Project connected" : "Project connection removed");
       setConnectDialog(null);
@@ -442,9 +471,14 @@ export default function Outcomes() {
   const createRecoveryTask = async (commitment) => {
     setBusyId(commitment.id);
     try {
-      const response = await api.post(`/assurance/commitments/${commitment.id}/recovery-task`);
-      const reference = response.data?.displayId || response.data?.createdTaskId;
-      toast.success(reference ? `Recovery task ${reference} created` : "Recovery task created");
+      if (canApproveRecovery) {
+        const response = await api.post(`/assurance/commitments/${commitment.id}/recovery-task`);
+        const reference = response.data?.displayId || response.data?.createdTaskId;
+        toast.success(reference ? `Recovery task ${reference} created` : "Recovery task created");
+      } else {
+        await api.post(`/assurance/commitments/${commitment.id}/approval-requests`, { actionType: "recovery" });
+        toast.success("Recovery task sent for approval");
+      }
       await load();
     } catch (error) {
       toast.error(error.response?.data?.error || "Could not create recovery task");
@@ -486,8 +520,13 @@ export default function Outcomes() {
 
   const owners = data?.options?.owners || [];
   const projects = data?.options?.projects || [];
-  const commitments = data?.commitments || [];
+  const sprints = data?.options?.sprints || [];
+  const commitments = useMemo(() => data?.commitments || [], [data?.commitments]);
   const summary = data?.summary || { total: 0, needsAttention: 0, verified: 0, pendingDecisions: 0 };
+  const canRequestCompletion = data?.capabilities?.canRequestCompletion ?? canManage;
+  const canApproveCompletion = data?.capabilities?.canApproveCompletion ?? canManage;
+  const canRequestRecovery = data?.capabilities?.canRequestRecovery ?? canManage;
+  const canApproveRecovery = data?.capabilities?.canApproveRecovery ?? canManage;
   const showEmptyForm = canManage && commitments.length === 0;
   const attentionByCommitment = useMemo(
     () => new Map((data?.attention || []).map((item) => [item.commitmentId, item])),
@@ -496,11 +535,15 @@ export default function Outcomes() {
 
   useEffect(() => {
     if (loading || !commitments.length || !location.hash.startsWith("#outcome-")) return undefined;
+    const id = location.hash.slice("#outcome-".length);
+    if (!commitments.some((item) => String(item.id) === id)) return undefined;
+    setExpandedId(id);
+    if (!detail[id]) loadDetail(id);
     const frame = window.requestAnimationFrame(() => {
-      document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById(`outcome-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [commitments.length, loading, location.hash]);
+  }, [commitments, detail, loadDetail, loading, location.hash]);
 
   if (loading) {
     return <div className="flex min-h-[420px] items-center justify-center"><Spinner size="lg" /></div>;
@@ -544,6 +587,7 @@ export default function Outcomes() {
           setForm={setForm}
           owners={owners}
           projects={projects}
+          sprints={sprints}
           saving={saving}
           onSubmit={saveOutcome}
           onCancel={commitments.length ? closeForm : null}
@@ -567,6 +611,7 @@ export default function Outcomes() {
               const attention = attentionByCommitment.get(commitment.id);
               const progress = assurance.taskProgress ?? commitment.progress;
               const expanded = expandedId === commitment.id;
+              const canUpdateOutcome = canManage || String(commitment.owner_id) === String(auth.user?.id);
               return (
                 <article key={commitment.id} id={`outcome-${commitment.id}`} className="rounded-[10px] border border-[color:var(--border)] bg-[var(--surface)] p-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
@@ -584,7 +629,7 @@ export default function Outcomes() {
                     <div className="grid min-w-[210px] gap-1 text-[11px] text-[color:var(--text-muted)]">
                       <span className="flex items-center gap-2"><User className="h-3.5 w-3.5" /> {commitment.owner_name || "No owner"}</span>
                       <span className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5" /> {formatDate(commitment.target_date)}</span>
-                      <span className="flex items-center gap-2"><FolderKanban className="h-3.5 w-3.5" /> {commitment.project_name || "Work not connected"}</span>
+                      <span className="flex items-center gap-2"><FolderKanban className="h-3.5 w-3.5" /> {commitment.project_name || "Work not connected"}{commitment.linked_sprints?.length ? ` · ${commitment.linked_sprints.length} sprint${commitment.linked_sprints.length === 1 ? "" : "s"}` : ""}</span>
                     </div>
                   </div>
 
@@ -605,19 +650,19 @@ export default function Outcomes() {
                       <span>{assurance.explanation}</span>
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {canManage && attention?.action === "create_recovery_task" && (
-                        <Button size="sm" loading={busyId === commitment.id} onClick={() => createRecoveryTask(commitment)}>Create recovery task</Button>
+                      {canManage && canRequestRecovery && attention?.action === "create_recovery_task" && (
+                        <Button size="sm" loading={busyId === commitment.id} onClick={() => createRecoveryTask(commitment)}>{canApproveRecovery ? "Create recovery task" : "Request recovery task"}</Button>
                       )}
                       {canManage && attention?.action === "connect_work" && (
                         <Button size="sm" variant="secondary" onClick={() => openConnect(commitment)} leftIcon={<Link2 className="h-3.5 w-3.5" />}>
                           Connect work
                         </Button>
                       )}
-                      {assurance.state !== "verified" && (
+                      {canUpdateOutcome && assurance.state !== "verified" && (
                         <Button size="sm" variant="secondary" onClick={() => openEvidence(commitment, "evidence")} leftIcon={<FileCheck2 className="h-3.5 w-3.5" />}>Add evidence</Button>
                       )}
-                      {assurance.state !== "verified" && (
-                        <Button size="sm" variant="ghost" onClick={() => openEvidence(commitment, "complete")}>{canManage ? "Mark complete" : "Request completion"}</Button>
+                      {canUpdateOutcome && canRequestCompletion && assurance.state !== "verified" && (
+                        <Button size="sm" variant="ghost" onClick={() => openEvidence(commitment, "complete")}>{canApproveCompletion ? "Mark complete" : "Request completion"}</Button>
                       )}
                       {canManage && assurance.state !== "verified" && (
                         <Button size="sm" variant="ghost" onClick={() => startEdit(commitment)}>Edit</Button>
@@ -660,7 +705,7 @@ export default function Outcomes() {
       <Modal isOpen={Boolean(evidenceDialog)} onClose={() => setEvidenceDialog(null)} size="sm">
         <Modal.Header>
           <div>
-            <Modal.Title>{evidenceDialog?.mode === "complete" ? (canManage ? "Complete with evidence" : "Request completion") : "Record result evidence"}</Modal.Title>
+            <Modal.Title>{evidenceDialog?.mode === "complete" ? (canApproveCompletion ? "Complete with evidence" : "Request completion") : "Record result evidence"}</Modal.Title>
             <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{evidenceDialog?.commitment?.title}</p>
           </div>
         </Modal.Header>
@@ -691,7 +736,7 @@ export default function Outcomes() {
           <Modal.Footer>
             <Button variant="ghost" onClick={() => setEvidenceDialog(null)}>Cancel</Button>
             <Button type="submit" loading={busyId === evidenceDialog?.commitment?.id}>
-              {evidenceDialog?.mode === "complete" ? (canManage ? "Complete outcome" : "Send for approval") : "Record evidence"}
+              {evidenceDialog?.mode === "complete" ? (canApproveCompletion ? "Complete outcome" : "Send for approval") : "Record evidence"}
             </Button>
           </Modal.Footer>
         </form>
@@ -711,7 +756,7 @@ export default function Outcomes() {
                 <select
                   className={inputClass}
                   value={connectProjectId}
-                  onChange={(event) => setConnectProjectId(event.target.value)}
+                  onChange={(event) => { setConnectProjectId(event.target.value); setConnectSprintIds([]); }}
                   required
                   autoFocus
                 >
@@ -727,6 +772,26 @@ export default function Outcomes() {
                   Go to projects <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
+            )}
+            {connectProjectId && sprints.some((sprint) => sprint.project_id === connectProjectId) && (
+              <fieldset className="rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)] p-3">
+                <legend className="px-1 text-[11px] font-semibold text-[color:var(--text)]">Delivery sprints <span className="font-normal text-[color:var(--text-soft)]">Optional</span></legend>
+                <p className="mb-2 text-[10px] text-[color:var(--text-muted)]">Selected sprints make progress outcome-specific. Leave all clear only when every task in the project contributes.</p>
+                <div className="space-y-2">
+                  {sprints.filter((sprint) => sprint.project_id === connectProjectId).map((sprint) => (
+                    <label key={sprint.id} className="flex items-center gap-2 text-[11px] text-[color:var(--text-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={connectSprintIds.includes(sprint.id)}
+                        onChange={(event) => setConnectSprintIds((current) => event.target.checked
+                          ? [...current, sprint.id]
+                          : current.filter((id) => id !== sprint.id))}
+                      />
+                      <span>{sprint.name} · {sprint.status}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
             )}
           </Modal.Body>
           <Modal.Footer>

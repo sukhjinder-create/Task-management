@@ -78,6 +78,8 @@ function useRemote(load) {
 
 function InboxView() {
   const api = useApi();
+  const { auth } = useAuth();
+  const canManage = MANAGER_ROLES.has(String(auth.user?.role || "").toLowerCase());
   const load = useCallback(async () => (await api.get("/assurance/inbox")).data, [api]);
   const state = useRemote(load);
   const [busy, setBusy] = useState(null);
@@ -108,7 +110,13 @@ function InboxView() {
           <div className="space-y-2">
             {approvals.map((item) => (
               <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-4">
-                <div><p className="text-[13px] font-semibold text-[color:var(--text)]">{item.goal_title}</p><p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{item.requested_by_name || "Workspace user"} requested {item.action_type === "complete" ? "completion verification" : "a recovery task"}.</p></div>
+                <div className="max-w-2xl">
+                  <p className="text-[13px] font-semibold text-[color:var(--text)]">{item.goal_title}</p>
+                  <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{item.requested_by_name || "Workspace user"} requested {item.action_type === "complete" ? "completion verification" : "a recovery task"}.</p>
+                  {item.payload?.evidenceLabel && <p className="mt-2 rounded-[7px] bg-[var(--surface-soft)] px-3 py-2 text-[11px] text-[color:var(--text)]"><span className="font-semibold">Observed result:</span> {item.payload.evidenceLabel}</p>}
+                  {item.payload?.note && <p className="mt-1 text-[10px] leading-4 text-[color:var(--text-soft)]">{item.payload.note}</p>}
+                  <Link to={`/outcomes#outcome-${item.goal_id}`} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[color:var(--primary)]">Review outcome evidence <ArrowRight className="h-3 w-3" /></Link>
+                </div>
                 {item.canApprove ? <div className="flex gap-2"><Button size="sm" variant="ghost" disabled={busy === item.id} onClick={() => decide(item, "rejected")}>Reject</Button><Button size="sm" loading={busy === item.id} onClick={() => decide(item, "approved")}>Approve</Button></div> : <span className="text-[11px] text-[color:var(--text-soft)]">Waiting for an approver</span>}
               </article>
             ))}
@@ -124,7 +132,7 @@ function InboxView() {
       {experimentsNeedingAttention.length > 0 && (
         <section>
           <h2 className="mb-2 text-[12px] font-semibold text-[color:var(--text)]">Experiments due for a result</h2>
-          <div className="space-y-2">{experimentsNeedingAttention.map((item) => <Link key={item.id} to={`/outcomes/lab?outcome=${item.goal_id}`} className="flex items-center justify-between gap-3 rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-4 hover:border-[color:var(--border-strong)]"><div><p className="text-[13px] font-semibold text-[color:var(--text)]">{item.title}</p><p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{item.goal_title}</p></div><span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-[color:var(--primary)]">Record result <ArrowRight className="h-3.5 w-3.5" /></span></Link>)}</div>
+          <div className="space-y-2">{experimentsNeedingAttention.map((item) => <Link key={item.id} to={canManage ? `/outcomes/lab?outcome=${item.goal_id}` : `/outcomes#outcome-${item.goal_id}`} className="flex items-center justify-between gap-3 rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-4 hover:border-[color:var(--border-strong)]"><div><p className="text-[13px] font-semibold text-[color:var(--text)]">{item.title}</p><p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{item.goal_title}</p></div><span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-[color:var(--primary)]">Record result <ArrowRight className="h-3.5 w-3.5" /></span></Link>)}</div>
         </section>
       )}
       {attention.length > 0 && (
@@ -172,7 +180,24 @@ function PortfolioView() {
         <form onSubmit={link} className="rounded-[9px] border border-[color:var(--border)] bg-[var(--surface-soft)] p-4"><p className="text-[12px] font-semibold text-[color:var(--text)]">Add an outcome</p><div className="mt-3 space-y-2"><select className={inputClass} value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} required><option value="">Choose portfolio</option>{manageablePortfolios.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select className={inputClass} value={goalId} onChange={(e) => setGoalId(e.target.value)} required><option value="">Choose outcome</option>{commitments.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select><Button type="submit" size="sm" loading={busy} disabled={!manageablePortfolios.length}>Add</Button></div></form>
         <form onSubmit={depend} className="rounded-[9px] border border-[color:var(--border)] bg-[var(--surface-soft)] p-4"><p className="text-[12px] font-semibold text-[color:var(--text)]">Connect a dependency</p><div className="mt-3 space-y-2"><select className={inputClass} value={predecessorGoalId} onChange={(e) => setPredecessorGoalId(e.target.value)} required><option value="">Must finish first</option>{commitments.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select><select className={inputClass} value={successorGoalId} onChange={(e) => setSuccessorGoalId(e.target.value)} required><option value="">Outcome it blocks</option>{commitments.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select><Button type="submit" size="sm" loading={busy} leftIcon={<GitBranch className="h-3.5 w-3.5" />}>Connect</Button></div></form>
       </section>
-      <section className="grid gap-3 lg:grid-cols-2">{portfolios.map((portfolio) => <article key={portfolio.id} className="rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[14px] font-semibold text-[color:var(--text)]">{portfolio.name}</p><p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{portfolio.summary.verified}/{portfolio.summary.total} verified · {portfolio.summary.needsAttention} need attention</p></div><span className="text-[10px] text-[color:var(--text-soft)]">{portfolio.owner_name || "No owner"}</span></div><div className="mt-3 space-y-1.5">{portfolio.commitments.length ? portfolio.commitments.map((item) => <Link key={item.id} to={`/outcomes#outcome-${item.id}`} className="flex items-center justify-between rounded-[7px] bg-[var(--surface-soft)] px-3 py-2 text-[11px]"><span className="truncate font-medium text-[color:var(--text)]">{item.title}</span><span className="ml-3 shrink-0 text-[color:var(--text-muted)]">{item.assurance.state.replaceAll("_", " ")}</span></Link>) : <p className="text-[11px] text-[color:var(--text-soft)]">No outcomes in this portfolio yet.</p>}</div></article>)}</section>
+      <section className="grid gap-3 lg:grid-cols-2">
+        {portfolios.map((portfolio) => (
+          <article key={portfolio.id} className="rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-4">
+            <div className="flex items-start justify-between gap-3"><div><p className="text-[14px] font-semibold text-[color:var(--text)]">{portfolio.name}</p><p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{portfolio.summary.verified}/{portfolio.summary.total} verified · {portfolio.summary.needsAttention} need attention</p></div><span className="text-[10px] text-[color:var(--text-soft)]">{portfolio.owner_name || "No owner"}</span></div>
+            <div className="mt-3 space-y-1.5">
+              {portfolio.commitments.length ? portfolio.commitments.map((item) => (
+                <div key={item.id} className="flex items-center gap-2 rounded-[7px] bg-[var(--surface-soft)] px-3 py-2 text-[11px]">
+                  <Link to={`/outcomes#outcome-${item.id}`} className="flex min-w-0 flex-1 items-center justify-between">
+                    <span className="truncate font-medium text-[color:var(--text)]">{item.title}</span>
+                    <span className="ml-3 shrink-0 text-[color:var(--text-muted)]">{item.assurance.state.replaceAll("_", " ")}</span>
+                  </Link>
+                  {portfolio.canManage && <button type="button" className="text-[color:var(--text-soft)] hover:text-[color:var(--score-danger)]" onClick={() => run(() => api.delete(`/assurance/portfolios/${portfolio.id}/commitments/${item.id}`), "Outcome removed from portfolio")} aria-label={`Remove ${item.title} from ${portfolio.name}`}><Trash2 className="h-3.5 w-3.5" /></button>}
+                </div>
+              )) : <p className="text-[11px] text-[color:var(--text-soft)]">No outcomes in this portfolio yet.</p>}
+            </div>
+          </article>
+        ))}
+      </section>
       {dependencies.length > 0 && <section><h2 className="mb-2 text-[12px] font-semibold text-[color:var(--text)]">Cross-project dependencies</h2><div className="space-y-2">{dependencies.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface)] p-3"><p className="text-[11px] text-[color:var(--text-muted)]"><span className="font-semibold text-[color:var(--text)]">{item.predecessor_title}</span> blocks <span className="font-semibold text-[color:var(--text)]">{item.successor_title}</span></p><button className="text-[color:var(--text-soft)] hover:text-[color:var(--score-danger)]" onClick={() => run(() => api.delete(`/assurance/dependencies/${item.id}`), "Dependency removed")} aria-label="Remove dependency"><Trash2 className="h-3.5 w-3.5" /></button></div>)}</div></section>}
     </div>
   );

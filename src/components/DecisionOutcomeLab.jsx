@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
@@ -326,6 +326,7 @@ export default function DecisionOutcomeLab() {
                 <p className="mt-2 text-[10px] text-[color:var(--text-soft)]">Confidence: {recommendation?.confidence || "not available"}. No work or policy changes automatically.</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                {["connect_work", "add_evidence", "review_dependency"].includes(recommendation?.action) && <Link to={`/outcomes#outcome-${selectedId}`} className="inline-flex h-9 items-center rounded-[8px] border border-[color:var(--primary)] bg-[var(--primary)] px-3.5 text-sm font-medium text-[color:var(--primary-contrast)] hover:bg-[var(--primary-hover)]">Open outcome</Link>}
                 {recommendation?.experimentDraft && <Button loading={busy === "suggested-experiment"} onClick={startSuggestedExperiment} leftIcon={<FlaskConical className="h-4 w-4" />}>Start suggested test</Button>}
                 <Button variant="secondary" onClick={() => setExperimentOpen(true)} leftIcon={<FlaskConical className="h-4 w-4" />}>Design a test</Button>
                 <Button variant="secondary" onClick={() => setDecisionOpen(true)} leftIcon={<Scale className="h-4 w-4" />}>Record decision</Button>
