@@ -69,6 +69,7 @@ const Leave = lazy(() => import("./pages/Leave.jsx"));
 const OKR = lazy(() => import("./pages/OKR.jsx"));
 const Outcomes = lazy(() => import("./pages/Outcomes.jsx"));
 const AssuranceCenter = lazy(() => import("./pages/AssuranceCenter.jsx"));
+const ClientPortal = lazy(() => import("./pages/ClientPortal.jsx"));
 const Reviews = lazy(() => import("./pages/Reviews.jsx"));
 const AIFeatures = lazy(() => import("./pages/AIFeatures.jsx"));
 const WorkspaceAiSettings = lazy(() => import("./pages/WorkspaceAiSettings.jsx"));
@@ -149,6 +150,8 @@ export default function App() {
         <Route path="/superadmin/forgot-password" element={<SuperadminForgotPassword />} />
         <Route path="/superadmin/reset-password" element={<SuperadminResetPassword />} />
         <Route path="/sla" element={<SLA />} />
+        <Route path="/client-portal" element={<ClientPortal />} />
+        <Route path="/client-portal/access" element={<ClientPortal />} />
         <Route path="/gradient-demo" element={<GradientDemo />} />
 
         {/* ============================

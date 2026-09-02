@@ -12,6 +12,7 @@ import {
   FolderKanban,
   Link2,
   Plus,
+  Send,
   ShieldCheck,
   Target,
   User,
@@ -29,6 +30,8 @@ const STATE_META = {
   off_track: { label: "Off track", tone: "text-[color:var(--score-danger)]", dot: "bg-[color:var(--score-danger)]" },
   needs_evidence: { label: "Add evidence", tone: "text-[color:var(--score-warning)]", dot: "bg-[color:var(--score-warning)]" },
   insufficient_evidence: { label: "Connect work", tone: "text-[color:var(--text-muted)]", dot: "bg-[color:var(--text-soft)]" },
+  awaiting_client_acceptance: { label: "Awaiting client", tone: "text-[color:var(--score-warning)]", dot: "bg-[color:var(--score-warning)]" },
+  client_changes_requested: { label: "Client requested changes", tone: "text-[color:var(--score-danger)]", dot: "bg-[color:var(--score-danger)]" },
 };
 
 function dateAfter(days) {
@@ -44,6 +47,12 @@ const EMPTY_FORM = {
   ownerId: "",
   primaryProjectId: "",
   sprintIds: [],
+  isClientFacing: false,
+  clientId: "",
+  clientName: "",
+  clientApproverContactId: "",
+  clientApproverName: "",
+  clientApproverEmail: "",
 };
 
 function formatDate(value) {
@@ -70,8 +79,22 @@ function Field({ label, hint, children }) {
 
 const inputClass = "h-11 w-full rounded-[8px] border border-[color:var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[color:var(--text)] outline-none placeholder:text-[color:var(--text-soft)] focus:border-[color:var(--primary)] focus:shadow-[0_0_0_3px_var(--ring)]";
 
-function OutcomeForm({ form, setForm, owners, projects, sprints, saving, onSubmit, onCancel, editing = false }) {
+function OutcomeForm({ form, setForm, owners, projects, sprints, clients, saving, onSubmit, onCancel, editing = false }) {
   const projectSprints = sprints.filter((sprint) => sprint.project_id === form.primaryProjectId);
+  const selectedClient = clients.find((client) => String(client.id) === String(form.clientId));
+  const activeContacts = (selectedClient?.contacts || []).filter((contact) => contact.status === "active");
+  const selectClient = (clientId) => {
+    const selected = clients.find((client) => client.id === clientId);
+    const contact = selected?.contacts?.find((item) => item.status === "active");
+    setForm((current) => ({
+      ...current,
+      clientName: selected?.name || "",
+      clientId: selected?.id || "",
+      clientApproverContactId: contact?.id || "",
+      clientApproverName: contact?.name || "",
+      clientApproverEmail: contact?.email || "",
+    }));
+  };
   return (
     <form id="outcome-form" onSubmit={onSubmit} className="rounded-[10px] border border-[color:var(--border)] bg-[var(--surface-soft)] p-5">
       <div className="mb-5">
@@ -161,6 +184,67 @@ function OutcomeForm({ form, setForm, owners, projects, sprints, saving, onSubmi
             </fieldset>
           )}
         </div>
+        <div className="md:col-span-2 rounded-[8px] border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={form.isClientFacing}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                isClientFacing: event.target.checked,
+                ...(!event.target.checked ? {
+                  clientId: "",
+                  clientName: "",
+                  clientApproverContactId: "",
+                  clientApproverName: "",
+                  clientApproverEmail: "",
+                } : {}),
+              }))}
+            />
+            <span><span className="block text-[12px] font-semibold text-[color:var(--text)]">Client-facing outcome</span><span className="mt-0.5 block text-[11px] leading-5 text-[color:var(--text-muted)]">After internal completion, send a client-safe result for acceptance. The approver uses a passwordless Client Portal account across every shared project.</span></span>
+          </label>
+          {form.isClientFacing && (
+            <div className="mt-4 grid gap-4 border-t border-[color:var(--border)] pt-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Field label="Client company">
+                  <select className={inputClass} value={form.clientId} onChange={(event) => selectClient(event.target.value)}>
+                    <option value="">Add a new client company</option>
+                    {clients.filter((client) => client.status === "active").map((client) => <option key={client.id} value={client.id}>{client.name}{client.contacts?.[0]?.email ? ` · ${client.contacts[0].email}` : ""}</option>)}
+                  </select>
+                </Field>
+              </div>
+              {!selectedClient && <div className="md:col-span-2"><Field label="New client company"><input className={inputClass} value={form.clientName} onChange={(event) => setForm((current) => ({ ...current, clientName: event.target.value }))} placeholder="Acme Corporation" maxLength={200} autoComplete="organization" required /></Field></div>}
+              {selectedClient && activeContacts.length ? (
+                <>
+                  <div className="md:col-span-2"><Field label="Client approver account">
+                    <select className={inputClass} value={form.clientApproverContactId} onChange={(event) => {
+                      const contact = activeContacts.find((item) => item.id === event.target.value);
+                      setForm((current) => ({ ...current, clientApproverContactId: contact?.id || "", clientApproverName: contact?.name || "", clientApproverEmail: contact?.email || "" }));
+                    }}>
+                      <option value="">Add another approver</option>
+                      {activeContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name} · {contact.email}</option>)}
+                    </select>
+                  </Field></div>
+                  {form.clientApproverContactId ? (
+                    <div className="md:col-span-2"><Field label="Secure link account"><input className={inputClass} value={form.clientApproverEmail} readOnly aria-readonly="true" /></Field></div>
+                  ) : (
+                    <>
+                      <Field label="New client approver"><input className={inputClass} value={form.clientApproverName} onChange={(event) => setForm((current) => ({ ...current, clientApproverName: event.target.value }))} placeholder="Jordan Lee" maxLength={200} autoComplete="name" required /></Field>
+                      <Field label="Secure link account"><input type="email" className={inputClass} value={form.clientApproverEmail} onChange={(event) => setForm((current) => ({ ...current, clientApproverEmail: event.target.value }))} placeholder="jordan@client.com" maxLength={320} autoComplete="email" required /></Field>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Field label="Client approver"><input className={inputClass} value={form.clientApproverName} onChange={(event) => setForm((current) => ({ ...current, clientApproverContactId: "", clientApproverName: event.target.value }))} placeholder="Jordan Lee" maxLength={200} autoComplete="name" required /></Field>
+                  <Field label="Secure link account"><input type="email" className={inputClass} value={form.clientApproverEmail} onChange={(event) => setForm((current) => ({ ...current, clientApproverContactId: "", clientApproverEmail: event.target.value }))} placeholder="jordan@client.com" maxLength={320} autoComplete="email" required /></Field>
+                </>
+              )}
+              <p className="md:col-span-2 text-[11px] leading-5 text-[color:var(--text-soft)]">The secure link is delivered only to this email. Client accounts never receive workspace membership or access to internal tasks, evidence history, or scores.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -187,6 +271,7 @@ function EvidenceTimeline({ detail, canManage, currentUserId, busyId, onStartExp
   const decisions = detail?.decisions || [];
   const materialDecisions = detail?.operating?.decisions || [];
   const experiments = detail?.operating?.experiments || [];
+  const clientReviews = detail?.clientReviews || [];
   return (
     <div className="mt-4 grid gap-4 border-t border-[color:var(--border)] pt-4 lg:grid-cols-2">
       <div>
@@ -246,6 +331,22 @@ function EvidenceTimeline({ detail, canManage, currentUserId, busyId, onStartExp
           }) : <p className="text-[12px] text-[color:var(--text-muted)]">No experiment is active.</p>}
         </div>
       </div>
+      {detail?.commitment?.is_client_facing && (
+        <div className="lg:col-span-2">
+          <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-soft)]">Client acceptance</h4>
+          <div className="mt-2 space-y-2">
+            {clientReviews.length ? clientReviews.map((review) => (
+              <div key={review.id} className="rounded-[7px] border border-[color:var(--border)] px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[12px] font-medium text-[color:var(--text)]">{review.contact_name} · {review.contact_email}</p><span className="text-[10px] font-semibold uppercase text-[color:var(--text-soft)]">{review.status.replaceAll("_", " ")}</span></div>
+                <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{review.snapshot?.resultSummary}</p>
+                <p className="mt-1 text-[10px] text-[color:var(--text-soft)]">Delivery: {review.delivery_status}{review.last_delivered_at ? ` · ${formatDate(review.last_delivered_at)}` : ""}</p>
+                {review.decision_note && <p className="mt-2 text-[11px] leading-5 text-[color:var(--text-muted)]">{review.decision_note}</p>}
+                {review.delivery_error && <p className="mt-2 text-[11px] text-[color:var(--score-danger)]">{review.delivery_error}</p>}
+              </div>
+            )) : <p className="text-[12px] text-[color:var(--text-muted)]">The evidenced result has not been sent to the client yet.</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -273,6 +374,8 @@ export default function Outcomes() {
   const [connectSprintIds, setConnectSprintIds] = useState([]);
   const [experimentDialog, setExperimentDialog] = useState(null);
   const [experimentForm, setExperimentForm] = useState({ resultStatus: "supported", observedResult: "" });
+  const [clientReviewDialog, setClientReviewDialog] = useState(null);
+  const [clientReviewForm, setClientReviewForm] = useState({ resultSummary: "", message: "" });
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
@@ -364,6 +467,12 @@ export default function Outcomes() {
       ownerId: commitment.owner_id || "",
       primaryProjectId: commitment.primary_project_id || "",
       sprintIds: commitment.linked_sprint_ids || [],
+      isClientFacing: Boolean(commitment.is_client_facing),
+      clientId: commitment.client_id || "",
+      clientName: commitment.client_name || "",
+      clientApproverContactId: commitment.client_approver_contact_id || "",
+      clientApproverName: commitment.client_approver_name || "",
+      clientApproverEmail: commitment.client_approver_email || "",
     });
     setShowForm(true);
     scrollToForm();
@@ -405,8 +514,13 @@ export default function Outcomes() {
       if (mode === "complete") {
         const payload = { evidenceLabel: evidenceForm.label, note: evidenceForm.note };
         if (canApproveCompletion) {
-          await api.post(`/assurance/commitments/${commitment.id}/complete`, payload);
-          toast.success("Outcome completed with result evidence");
+          const response = await api.post(`/assurance/commitments/${commitment.id}/complete`, payload);
+          toast.success(commitment.is_client_facing ? "Outcome completed. Client acceptance is ready to send." : "Outcome completed with result evidence");
+          if (commitment.is_client_facing) {
+            const completed = response.data?.commitment || commitment;
+            setClientReviewDialog(completed);
+            setClientReviewForm({ resultSummary: evidenceForm.label, message: "" });
+          }
         } else {
           await api.post(`/assurance/commitments/${commitment.id}/approval-requests`, {
             ...payload,
@@ -487,6 +601,48 @@ export default function Outcomes() {
     }
   };
 
+  const openClientReview = (commitment) => {
+    setClientReviewDialog(commitment);
+    setClientReviewForm({
+      resultSummary: commitment.latest_result_evidence_label || "",
+      message: "",
+    });
+  };
+
+  const sendClientReview = async (event) => {
+    event.preventDefault();
+    if (!clientReviewDialog) return;
+    setBusyId(clientReviewDialog.id);
+    try {
+      await api.post(`/assurance/commitments/${clientReviewDialog.id}/client-review`, clientReviewForm);
+      toast.success(clientReviewDialog.client_review_status === "pending" ? "A new secure link was sent" : "Client acceptance request sent");
+      setClientReviewDialog(null);
+      setDetail((current) => { const next = { ...current }; delete next[clientReviewDialog.id]; return next; });
+      await load();
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Could not send the client acceptance request");
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const cancelClientReview = async () => {
+    if (!clientReviewDialog) return;
+    setBusyId(clientReviewDialog.id);
+    try {
+      await api.post(`/assurance/commitments/${clientReviewDialog.id}/client-review/cancel`);
+      toast.success("Client review withdrawn and unused links revoked");
+      setClientReviewDialog(null);
+      setDetail((current) => { const next = { ...current }; delete next[clientReviewDialog.id]; return next; });
+      await load();
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Could not withdraw the client review");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const startExperiment = async (experiment) => {
     setBusyId(experiment.id);
     try {
@@ -521,6 +677,7 @@ export default function Outcomes() {
   const owners = data?.options?.owners || [];
   const projects = data?.options?.projects || [];
   const sprints = data?.options?.sprints || [];
+  const clients = data?.options?.clients || [];
   const commitments = useMemo(() => data?.commitments || [], [data?.commitments]);
   const summary = data?.summary || { total: 0, needsAttention: 0, verified: 0, pendingDecisions: 0 };
   const canRequestCompletion = data?.capabilities?.canRequestCompletion ?? canManage;
@@ -588,6 +745,7 @@ export default function Outcomes() {
           owners={owners}
           projects={projects}
           sprints={sprints}
+          clients={clients}
           saving={saving}
           onSubmit={saveOutcome}
           onCancel={commitments.length ? closeForm : null}
@@ -629,6 +787,7 @@ export default function Outcomes() {
                     <div className="grid min-w-[210px] gap-1 text-[11px] text-[color:var(--text-muted)]">
                       <span className="flex items-center gap-2"><User className="h-3.5 w-3.5" /> {commitment.owner_name || "No owner"}</span>
                       <span className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5" /> {formatDate(commitment.target_date)}</span>
+                      {commitment.is_client_facing && <span className="flex items-center gap-2"><Send className="h-3.5 w-3.5" /> {commitment.client_name} · {commitment.client_approver_email}</span>}
                       <span className="flex items-center gap-2"><FolderKanban className="h-3.5 w-3.5" /> {commitment.project_name || "Work not connected"}{commitment.linked_sprints?.length ? ` · ${commitment.linked_sprints.length} sprint${commitment.linked_sprints.length === 1 ? "" : "s"}` : ""}</span>
                     </div>
                   </div>
@@ -658,13 +817,19 @@ export default function Outcomes() {
                           Connect work
                         </Button>
                       )}
-                      {canUpdateOutcome && assurance.state !== "verified" && (
+                      {canUpdateOutcome && assurance.state !== "verified" && commitment.client_review_status !== "pending" && (
                         <Button size="sm" variant="secondary" onClick={() => openEvidence(commitment, "evidence")} leftIcon={<FileCheck2 className="h-3.5 w-3.5" />}>Add evidence</Button>
                       )}
-                      {canUpdateOutcome && canRequestCompletion && assurance.state !== "verified" && (
+                      {canUpdateOutcome && canRequestCompletion && assurance.state !== "verified" && commitment.status !== "done" && (
                         <Button size="sm" variant="ghost" onClick={() => openEvidence(commitment, "complete")}>{canApproveCompletion ? "Mark complete" : "Request completion"}</Button>
                       )}
-                      {canManage && assurance.state !== "verified" && (
+                      {canManage && commitment.is_client_facing && commitment.status === "done" && assurance.counts?.resultEvidence > 0 && assurance.state !== "verified" && !(
+                        commitment.client_review_status === "changes_requested"
+                        && new Date(commitment.latest_result_evidence_at).getTime() <= new Date(commitment.client_review_decided_at).getTime()
+                      ) && (
+                        <Button size="sm" onClick={() => openClientReview(commitment)} leftIcon={<Send className="h-3.5 w-3.5" />}>{commitment.client_review_status === "pending" ? "Resend secure link" : "Request client acceptance"}</Button>
+                      )}
+                      {canManage && assurance.state !== "verified" && commitment.client_review_status !== "pending" && (
                         <Button size="sm" variant="ghost" onClick={() => startEdit(commitment)}>Edit</Button>
                       )}
                     </div>
@@ -738,6 +903,43 @@ export default function Outcomes() {
             <Button type="submit" loading={busyId === evidenceDialog?.commitment?.id}>
               {evidenceDialog?.mode === "complete" ? (canApproveCompletion ? "Complete outcome" : "Send for approval") : "Record evidence"}
             </Button>
+          </Modal.Footer>
+        </form>
+      </Modal>
+
+      <Modal isOpen={Boolean(clientReviewDialog)} onClose={() => setClientReviewDialog(null)} size="sm">
+        <Modal.Header>
+          <div>
+            <Modal.Title>{clientReviewDialog?.client_review_status === "pending" ? "Resend secure client link" : "Request client acceptance"}</Modal.Title>
+            <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{clientReviewDialog?.title}</p>
+          </div>
+        </Modal.Header>
+        <form onSubmit={sendClientReview}>
+          <Modal.Body className="space-y-4">
+            <div className="rounded-[8px] border border-[color:var(--border)] bg-[var(--surface-soft)] p-3">
+              <p className="text-[12px] font-semibold text-[color:var(--text)]">{clientReviewDialog?.client_approver_name}</p>
+              <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">Secure link account: {clientReviewDialog?.client_approver_email}</p>
+              <p className="mt-1 text-[10px] text-[color:var(--text-soft)]">Client: {clientReviewDialog?.client_name}</p>
+            </div>
+            {clientReviewDialog?.client_review_status === "pending" ? (
+              <p className="text-[11px] leading-5 text-[color:var(--text-muted)]">The original client-safe result remains unchanged. The previous unused link will be revoked and a fresh 20-minute link will be emailed.</p>
+            ) : (
+              <>
+                <Field label="Client-safe result summary">
+                  <textarea className={`${inputClass} h-24 resize-none py-3`} value={clientReviewForm.resultSummary} onChange={(event) => setClientReviewForm((current) => ({ ...current, resultSummary: event.target.value }))} maxLength={500} required autoFocus />
+                </Field>
+                <Field label="Message to the client" hint="Optional">
+                  <textarea className={`${inputClass} h-24 resize-none py-3`} value={clientReviewForm.message} onChange={(event) => setClientReviewForm((current) => ({ ...current, message: event.target.value }))} placeholder="What was delivered or what you would like the client to verify" maxLength={2000} />
+                </Field>
+                <p className="text-[11px] leading-5 text-[color:var(--text-soft)]">Only the outcome, agreed success measure, target date, project name, and this result package are shared. Internal execution data stays private.</p>
+              </>
+            )}
+            {clientReviewDialog?.client_review_delivery_error && <p role="alert" className="text-[11px] text-[color:var(--score-danger)]">{clientReviewDialog.client_review_delivery_error}</p>}
+          </Modal.Body>
+          <Modal.Footer>
+            {clientReviewDialog?.client_review_status === "pending" && <Button type="button" variant="danger" loading={busyId === clientReviewDialog?.id} onClick={cancelClientReview}>Withdraw request</Button>}
+            <Button variant="ghost" onClick={() => setClientReviewDialog(null)}>Cancel</Button>
+            <Button type="submit" loading={busyId === clientReviewDialog?.id} rightIcon={<Send className="h-3.5 w-3.5" />}>{clientReviewDialog?.client_review_status === "pending" ? "Resend link" : "Send for acceptance"}</Button>
           </Modal.Footer>
         </form>
       </Modal>

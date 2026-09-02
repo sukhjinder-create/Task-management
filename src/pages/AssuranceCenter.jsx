@@ -247,16 +247,18 @@ function PolicyView() {
   const { auth } = useAuth();
   const canConfigure = CONFIGURE_ROLES.has(String(auth.user?.role || "").toLowerCase());
   const load = useCallback(async () => {
-    const [policy, adaptive] = await Promise.all([
+    const [policy, adaptive, clients] = await Promise.all([
       api.get("/assurance/policy"),
       api.get("/assurance/adaptive-policy-proposals"),
+      api.get("/assurance/clients"),
     ]);
-    return { policy: policy.data.policy, adaptive: adaptive.data };
+    return { policy: policy.data.policy, adaptive: adaptive.data, clients: clients.data.clients || [] };
   }, [api]);
   const state = useRemote(load);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [proposalBusy, setProposalBusy] = useState("");
+  const [contactBusy, setContactBusy] = useState("");
   useEffect(() => { if (state.data?.policy) setForm(state.data.policy); }, [state.data]);
   const toggleRole = (action, permission, role) => {
     setForm((current) => {
@@ -301,6 +303,16 @@ function PolicyView() {
     } catch (error) { toast.error(error.response?.data?.error || "Could not review the policy proposal"); }
     finally { setProposalBusy(""); }
   };
+  const setContactStatus = async (clientId, contactId, status) => {
+    if (status === "revoked" && !window.confirm("Revoke this client account? Active sessions and unused links will close, and any pending review will be withdrawn.")) return;
+    setContactBusy(contactId);
+    try {
+      await api.patch(`/assurance/clients/${clientId}/contacts/${contactId}`, { status });
+      toast.success(status === "revoked" ? "Client access revoked" : "Client access restored");
+      await state.reload();
+    } catch (error) { toast.error(error.response?.data?.error || "Could not update client access"); }
+    finally { setContactBusy(""); }
+  };
   if (state.loading) return <Spinner size="lg" />;
   if (!state.data) return <EmptyState icon={<AlertTriangle className="h-5 w-5" />} title="Policy could not load" description={state.error} action={<Button onClick={state.reload}>Try again</Button>} />;
   if (!form) return <Spinner size="lg" />;
@@ -308,6 +320,24 @@ function PolicyView() {
     <form onSubmit={save} className="space-y-5">
       <section className="grid gap-4 rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-5 md:grid-cols-3"><label className="text-[12px] font-semibold text-[color:var(--text)]">Warn before target date<span className="mt-1 block text-[11px] font-normal text-[color:var(--text-muted)]">Days before an unfinished outcome needs review.</span><input type="number" min="1" max="90" disabled={!canConfigure} className={`${inputClass} mt-2`} value={form.riskWindowDays} onChange={(e) => setForm((v) => ({ ...v, riskWindowDays: Number(e.target.value) }))} /></label><label className="text-[12px] font-semibold text-[color:var(--text)]">Learning threshold<span className="mt-1 block text-[11px] font-normal text-[color:var(--text-muted)]">Verified outcomes required before a pattern is published.</span><input type="number" min="3" max="100" disabled={!canConfigure} className={`${inputClass} mt-2`} value={form.minimumPatternSample} onChange={(e) => setForm((v) => ({ ...v, minimumPatternSample: Number(e.target.value) }))} /></label><label className="text-[12px] font-semibold text-[color:var(--text)]">Decision review window<span className="mt-1 block text-[11px] font-normal text-[color:var(--text-muted)]">Days before a recorded decision asks for its observed result.</span><input type="number" min="1" max="180" disabled={!canConfigure} className={`${inputClass} mt-2`} value={form.decisionReviewDays} onChange={(e) => setForm((v) => ({ ...v, decisionReviewDays: Number(e.target.value) }))} /></label></section>
       <section className="space-y-3 rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-5"><p className="text-[12px] font-semibold text-[color:var(--text)]">Evidence and alerts</p><div className="flex items-start gap-3 rounded-[8px] bg-[var(--surface-soft)] p-3"><ShieldCheck className="mt-0.5 h-4 w-4 text-[color:var(--score-good)]" /><span><span className="block text-[12px] font-medium text-[color:var(--text)]">Result evidence is always required</span><span className="mt-0.5 block text-[11px] text-[color:var(--text-muted)]">An outcome cannot be verified from a status change alone. This assurance safeguard cannot be disabled.</span></span></div>{[["automaticExternalEvidence", "Capture evidence from connected enterprise systems", "Completed and blocked external work is retained with provider provenance."], ["notifyOnStateChange", "Notify owners when assurance state changes", "Actionable transitions appear in the unified notification inbox."]].map(([key, title, description]) => <label key={key} className="flex items-start gap-3 rounded-[8px] bg-[var(--surface-soft)] p-3"><input type="checkbox" className="mt-0.5" disabled={!canConfigure} checked={Boolean(form[key])} onChange={(e) => setForm((v) => ({ ...v, [key]: e.target.checked }))} /><span><span className="block text-[12px] font-medium text-[color:var(--text)]">{title}</span><span className="mt-0.5 block text-[11px] text-[color:var(--text-muted)]">{description}</span></span></label>)}</section>
+      <section className="rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-5">
+        <p className="text-[12px] font-semibold text-[color:var(--text)]">Client Portal access</p>
+        <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">Client contacts are passwordless external accounts, not workspace members. Revocation closes active sessions, unused links, and pending reviews immediately.</p>
+        <div className="mt-4 space-y-3">
+          {(state.data.clients || []).map((client) => (
+            <div key={client.id} className="rounded-[8px] bg-[var(--surface-soft)] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[12px] font-semibold text-[color:var(--text)]">{client.name}</p><span className="text-[10px] text-[color:var(--text-soft)]">{client.outcome_count} shared outcome{client.outcome_count === 1 ? "" : "s"}</span></div>
+              <div className="mt-2 space-y-2">{client.contacts.map((contact) => (
+                <div key={contact.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[7px] border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2">
+                  <div><p className="text-[11px] font-medium text-[color:var(--text)]">{contact.name}</p><p className="mt-0.5 text-[10px] text-[color:var(--text-soft)]">{contact.email} · {contact.status}</p></div>
+                  <Button type="button" size="xs" variant={contact.status === "active" ? "danger" : "secondary"} loading={contactBusy === contact.id} onClick={() => setContactStatus(client.id, contact.id, contact.status === "active" ? "revoked" : "active")}>{contact.status === "active" ? "Revoke access" : "Restore access"}</Button>
+                </div>
+              ))}</div>
+            </div>
+          ))}
+          {!(state.data.clients || []).length && <p className="text-[11px] text-[color:var(--text-soft)]">Client accounts are created only when an outcome is explicitly marked client-facing.</p>}
+        </div>
+      </section>
       <section className="rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-5">
         <p className="text-[12px] font-semibold text-[color:var(--text)]">Approval matrix</p>
         <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">Choose which leadership roles may verify completion or authorize recovery. At least one approver is always retained.</p>
