@@ -169,6 +169,23 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("auth:logout", handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (event) => {
+      const { userId, role } = event.detail || {};
+      setAuth((prev) => {
+        if (!prev.user || String(prev.user.id) !== String(userId) || !role) return prev;
+        const user = { ...prev.user, role };
+        try {
+          const stored = JSON.parse(localStorage.getItem("auth")) || {};
+          localStorage.setItem("auth", JSON.stringify({ ...stored, user }));
+        } catch { /* storage can be unavailable */ }
+        return { ...prev, user };
+      });
+    };
+    window.addEventListener("auth:role-updated", handler);
+    return () => window.removeEventListener("auth:role-updated", handler);
+  }, []);
+
   /* ---------------------------------------------
      3. Login handler → stores auth everywhere
         refreshToken is optional (Google SSO skips it)

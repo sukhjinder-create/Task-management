@@ -63,6 +63,10 @@ function createSocket() {
     window.dispatchEvent(new CustomEvent("plan:updated", { detail: data }));
   });
 
+  socket.on("user:role_updated", (data) => {
+    window.dispatchEvent(new CustomEvent("auth:role-updated", { detail: data }));
+  });
+
   return socket;
 }
 

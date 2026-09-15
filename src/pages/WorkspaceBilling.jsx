@@ -265,9 +265,6 @@ function PendingUsersSection({ api, user, razorpayEnabled }) {
   async function handleEditSave(e) {
     e.preventDefault();
     if (!editForm.username.trim() || !editForm.email.trim()) return toast.error("Username and email are required");
-    if (editForm.role === "manager" && editForm.projects.length === 0) {
-      return toast.error("Assign at least one project to a manager");
-    }
     setSaving(true);
     try {
       await api.put(`/users/${editingUser.id}`, editForm);
