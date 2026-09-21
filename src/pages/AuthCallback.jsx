@@ -1,7 +1,8 @@
 // pages/AuthCallback.jsx
 // Handles two flows:
-//   1. Google SSO redirect  → /auth/callback?token=...&user=...
-//   2. Magic link click     → /auth/magic?token=...  (fetches token from backend)
+//   1. SAML/OIDC redirect   → /auth/callback?code=... (single-use exchange)
+//   2. Google SSO redirect  → /auth/callback#token=...
+//   3. Magic link click     → /auth/magic?token=...  (fetches token from backend)
 
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -62,6 +63,19 @@ export default function AuthCallback() {
         const isMagicPath = window.location.pathname.endsWith("/auth/magic");
         const urlToken = callbackParam("token");
         const urlRefreshToken = callbackParam("refreshToken");
+        const handoffCode = !isMagicPath ? searchParams.get("code") : null;
+
+        if (handoffCode) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          const res = await axios.post(`${API_BASE_URL}/auth/handoff/exchange`, { code: handoffCode });
+          const { token, user, refreshToken = null } = res.data;
+          safePersistAuth(user, token, refreshToken);
+          login(user, token, refreshToken);
+          setStatus("Secure sign-in complete. Opening Asystence…");
+          toast.success(`Welcome, ${user.username}!`);
+          await redirectToWorkspace(user, token);
+          return;
+        }
 
         if (isEmailVerificationPath && urlToken) {
           window.history.replaceState({}, document.title, window.location.pathname);

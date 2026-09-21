@@ -266,8 +266,9 @@ function SummaryCard({ label, value, note }) {
   );
 }
 
-function EvidenceTimeline({ detail, canManage, currentUserId, busyId, onStartExperiment, onRecordExperiment }) {
+function EvidenceTimeline({ detail, canManage, currentUserId, busyId, onStartExperiment, onRecordExperiment, onAddObligation, onLinkObligationEvidence, onUpdateObligation }) {
   const evidence = detail?.evidence || [];
+  const obligations = detail?.obligations || [];
   const decisions = detail?.decisions || [];
   const materialDecisions = detail?.operating?.decisions || [];
   const experiments = detail?.operating?.experiments || [];
@@ -331,6 +332,12 @@ function EvidenceTimeline({ detail, canManage, currentUserId, busyId, onStartExp
           }) : <p className="text-[12px] text-[color:var(--text-muted)]">No experiment is active.</p>}
         </div>
       </div>
+      <div className="lg:col-span-2">
+        <div className="flex items-center justify-between gap-3"><h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-soft)]">Contract and control obligations</h4>{canManage && <Button size="sm" variant="ghost" onClick={onAddObligation}>Add obligation</Button>}</div>
+        <div className="mt-2 grid gap-2 lg:grid-cols-2">
+          {obligations.length ? obligations.map((item) => <div key={item.id} className="rounded-[7px] border border-[color:var(--border)] px-3 py-2"><div className="flex items-start justify-between gap-2"><div><p className="text-[12px] font-medium text-[color:var(--text)]">{item.title}</p><p className="mt-1 text-[10px] text-[color:var(--text-soft)]">{item.obligation_type} · {item.severity}{item.control_reference ? ` · ${item.control_reference}` : ""}</p></div><span className="text-[10px] font-semibold uppercase text-[color:var(--text-soft)]">{item.status}</span></div>{canManage && item.status === "open" && <div className="mt-2 flex flex-wrap gap-2">{evidence.length > 0 && <select aria-label={`Link evidence to ${item.title}`} className="h-8 rounded border border-[color:var(--border)] bg-[var(--surface)] px-2 text-[11px]" defaultValue="" onChange={(event) => { if (event.target.value) onLinkObligationEvidence(item, event.target.value); event.target.value = ""; }}><option value="">Link evidence…</option>{evidence.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select>}<Button size="sm" variant="ghost" disabled={!item.evidence?.length} onClick={() => onUpdateObligation(item, "satisfied")}>Mark satisfied</Button><Button size="sm" variant="ghost" onClick={() => onUpdateObligation(item, "waived")}>Waive</Button></div>}<p className="mt-1 text-[10px] text-[color:var(--text-soft)]">{item.evidence?.length || 0} linked evidence item(s)</p></div>) : <p className="text-[12px] text-[color:var(--text-muted)]">No contractual or control obligations recorded.</p>}
+        </div>
+      </div>
       {detail?.commitment?.is_client_facing && (
         <div className="lg:col-span-2">
           <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-soft)]">Client acceptance</h4>
@@ -375,7 +382,9 @@ export default function Outcomes() {
   const [experimentDialog, setExperimentDialog] = useState(null);
   const [experimentForm, setExperimentForm] = useState({ resultStatus: "supported", observedResult: "" });
   const [clientReviewDialog, setClientReviewDialog] = useState(null);
-  const [clientReviewForm, setClientReviewForm] = useState({ resultSummary: "", message: "" });
+  const [clientReviewForm, setClientReviewForm] = useState({ resultSummary: "", message: "", contactIds: [], requiredApprovals: 1 });
+  const [obligationDialog, setObligationDialog] = useState(null);
+  const [obligationForm, setObligationForm] = useState({ title: "", type: "contractual", severity: "medium", controlReference: "", dueDate: "" });
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
@@ -519,7 +528,7 @@ export default function Outcomes() {
           if (commitment.is_client_facing) {
             const completed = response.data?.commitment || commitment;
             setClientReviewDialog(completed);
-            setClientReviewForm({ resultSummary: evidenceForm.label, message: "" });
+            setClientReviewForm({ resultSummary: evidenceForm.label, message: "", contactIds: [], requiredApprovals: 1 });
           }
         } else {
           await api.post(`/assurance/commitments/${commitment.id}/approval-requests`, {
@@ -606,6 +615,8 @@ export default function Outcomes() {
     setClientReviewForm({
       resultSummary: commitment.latest_result_evidence_label || "",
       message: "",
+      contactIds: [],
+      requiredApprovals: 1,
     });
   };
 
@@ -643,6 +654,42 @@ export default function Outcomes() {
     }
   };
 
+  const createObligation = async (event) => {
+    event.preventDefault();
+    setBusyId(obligationDialog?.id);
+    try {
+      await api.post(`/assurance/commitments/${obligationDialog.id}/obligations`, obligationForm);
+      toast.success("Obligation added");
+      const id = obligationDialog.id;
+      setObligationDialog(null);
+      setObligationForm({ title: "", type: "contractual", severity: "medium", controlReference: "", dueDate: "" });
+      await loadDetail(id);
+    } catch (error) { toast.error(error.response?.data?.error || "Could not add obligation"); }
+    finally { setBusyId(null); }
+  };
+
+  const linkObligationEvidence = async (commitmentId, obligation, evidenceId) => {
+    setBusyId(obligation.id);
+    try {
+      await api.post(`/assurance/obligations/${obligation.id}/evidence/${evidenceId}`);
+      toast.success("Evidence linked");
+      await loadDetail(commitmentId);
+    } catch (error) { toast.error(error.response?.data?.error || "Could not link evidence"); }
+    finally { setBusyId(null); }
+  };
+
+  const updateObligation = async (commitmentId, obligation, status) => {
+    const waiverReason = status === "waived" ? window.prompt("Why is this obligation being waived?") : undefined;
+    if (status === "waived" && !waiverReason) return;
+    setBusyId(obligation.id);
+    try {
+      await api.patch(`/assurance/obligations/${obligation.id}`, { status, waiverReason });
+      toast.success(status === "satisfied" ? "Obligation satisfied" : "Waiver recorded");
+      await loadDetail(commitmentId);
+    } catch (error) { toast.error(error.response?.data?.error || "Could not update obligation"); }
+    finally { setBusyId(null); }
+  };
+
   const startExperiment = async (experiment) => {
     setBusyId(experiment.id);
     try {
@@ -678,6 +725,8 @@ export default function Outcomes() {
   const projects = data?.options?.projects || [];
   const sprints = data?.options?.sprints || [];
   const clients = data?.options?.clients || [];
+  const activeReviewContacts = (clients.find((client) => String(client.id) === String(clientReviewDialog?.client_id))?.contacts || [])
+    .filter((contact) => contact.status === "active" && String(contact.id) !== String(clientReviewDialog?.client_approver_contact_id));
   const commitments = useMemo(() => data?.commitments || [], [data?.commitments]);
   const summary = data?.summary || { total: 0, needsAttention: 0, verified: 0, pendingDecisions: 0 };
   const canRequestCompletion = data?.capabilities?.canRequestCompletion ?? canManage;
@@ -847,6 +896,9 @@ export default function Outcomes() {
                         currentUserId={auth.user?.id}
                         busyId={busyId}
                         onStartExperiment={startExperiment}
+                        onAddObligation={() => setObligationDialog(commitment)}
+                        onLinkObligationEvidence={(obligation, evidenceId) => linkObligationEvidence(commitment.id, obligation, evidenceId)}
+                        onUpdateObligation={(obligation, status) => updateObligation(commitment.id, obligation, status)}
                         onRecordExperiment={(experiment) => {
                           setExperimentDialog(experiment);
                           setExperimentForm({ resultStatus: "supported", observedResult: "" });
@@ -907,6 +959,19 @@ export default function Outcomes() {
         </form>
       </Modal>
 
+      <Modal isOpen={Boolean(obligationDialog)} onClose={() => setObligationDialog(null)} size="sm">
+        <Modal.Header><div><Modal.Title>Add an obligation</Modal.Title><p className="mt-1 text-[11px] text-[color:var(--text-muted)]">{obligationDialog?.title}</p></div></Modal.Header>
+        <form onSubmit={createObligation}>
+          <Modal.Body className="space-y-4">
+            <Field label="Obligation"><input className={inputClass} value={obligationForm.title} onChange={(event) => setObligationForm((current) => ({ ...current, title: event.target.value }))} placeholder="Security review must be approved" maxLength={300} required autoFocus /></Field>
+            <div className="grid grid-cols-2 gap-3"><Field label="Type"><select className={inputClass} value={obligationForm.type} onChange={(event) => setObligationForm((current) => ({ ...current, type: event.target.value }))}>{["contractual", "regulatory", "security", "operational"].map((value) => <option key={value}>{value}</option>)}</select></Field><Field label="Severity"><select className={inputClass} value={obligationForm.severity} onChange={(event) => setObligationForm((current) => ({ ...current, severity: event.target.value }))}>{["low", "medium", "high", "critical"].map((value) => <option key={value}>{value}</option>)}</select></Field></div>
+            <Field label="Control reference" hint="Optional"><input className={inputClass} value={obligationForm.controlReference} onChange={(event) => setObligationForm((current) => ({ ...current, controlReference: event.target.value }))} placeholder="SOC 2 CC7.2" maxLength={200} /></Field>
+            <Field label="Due date" hint="Optional"><input type="date" className={inputClass} value={obligationForm.dueDate} onChange={(event) => setObligationForm((current) => ({ ...current, dueDate: event.target.value }))} /></Field>
+          </Modal.Body>
+          <Modal.Footer><Button variant="ghost" onClick={() => setObligationDialog(null)}>Cancel</Button><Button type="submit" loading={busyId === obligationDialog?.id}>Add obligation</Button></Modal.Footer>
+        </form>
+      </Modal>
+
       <Modal isOpen={Boolean(clientReviewDialog)} onClose={() => setClientReviewDialog(null)} size="sm">
         <Modal.Header>
           <div>
@@ -931,6 +996,7 @@ export default function Outcomes() {
                 <Field label="Message to the client" hint="Optional">
                   <textarea className={`${inputClass} h-24 resize-none py-3`} value={clientReviewForm.message} onChange={(event) => setClientReviewForm((current) => ({ ...current, message: event.target.value }))} placeholder="What was delivered or what you would like the client to verify" maxLength={2000} />
                 </Field>
+                {activeReviewContacts.length > 0 && <fieldset className="rounded-[8px] border border-[color:var(--border)] p-3"><legend className="px-1 text-[11px] font-semibold text-[color:var(--text)]">Additional approvers <span className="font-normal text-[color:var(--text-soft)]">Optional</span></legend><div className="space-y-2">{activeReviewContacts.map((contact) => <label key={contact.id} className="flex items-center gap-2 text-[11px] text-[color:var(--text-muted)]"><input type="checkbox" checked={clientReviewForm.contactIds.includes(contact.id)} onChange={(event) => setClientReviewForm((current) => { const contactIds = event.target.checked ? [...current.contactIds, contact.id] : current.contactIds.filter((id) => id !== contact.id); return { ...current, contactIds, requiredApprovals: Math.min(current.requiredApprovals, contactIds.length + 1) }; })} />{contact.name} · {contact.email}</label>)}</div>{clientReviewForm.contactIds.length > 0 && <Field label="Approvals required"><input type="number" className={inputClass} min="1" max={clientReviewForm.contactIds.length + 1} value={clientReviewForm.requiredApprovals} onChange={(event) => setClientReviewForm((current) => ({ ...current, requiredApprovals: Number(event.target.value) }))} /></Field>}</fieldset>}
                 <p className="text-[11px] leading-5 text-[color:var(--text-soft)]">Only the outcome, agreed success measure, target date, project name, and this result package are shared. Internal execution data stays private.</p>
               </>
             )}

@@ -26,13 +26,14 @@ import {
   sendReaction,
 } from "../socket";
 import { useHuddle } from "../context/HuddleContext";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 import { MessageSquare, Send, Hash, Lock, Users, Settings, Plus, Smile, Menu, X as XIcon, Phone, ChevronLeft, Paperclip, Eye, Download } from "lucide-react";
 import { Avatar, FetchImg, Button, Badge, Card } from "../components/ui";
 import { useIsMobile } from "../hooks/useIsMobile";
 import UserProfileLink from "../components/UserProfileLink";
 import { buildUserLookup, linkifyUserMentionsInHtml } from "../utils/userProfiles";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 import CreateChannelModal from "../components/CreateChannelModal";
 import ChannelSettingsModal from "../components/ChannelSettingsModal";
@@ -1020,7 +1021,7 @@ useEffect(() => {
   const usersByUsername = useMemo(() => buildUserLookup(users), [users]);
 
   const getLinkedMessageHtml = (html) =>
-    linkifyUserMentionsInHtml(html || "", usersByUsername, user.id);
+    sanitizeHtml(linkifyUserMentionsInHtml(html || "", usersByUsername, user.id));
 
   const isHuddleActiveHere =
     activeHuddle && activeHuddle.channelId === activeChannelKey;

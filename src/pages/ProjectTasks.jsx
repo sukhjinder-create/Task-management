@@ -7,8 +7,8 @@ import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import CommentsSection from "../components/CommentsSection.jsx";
 import Subtasks from "../components/Subtasks.jsx";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 import { Card, Badge, Button, Modal, Input, Select as SelectUI, Avatar } from "../components/ui";
 import TagPicker from "../components/TagPicker.jsx";
 import IssueLinkPanel from "../components/IssueLinkPanel.jsx";
@@ -18,6 +18,7 @@ import ShareToChat from "../components/ShareToChat.jsx";
 import BurndownModal from "../components/BurndownModal.jsx";
 import SavedFiltersPanel from "../components/SavedFiltersPanel.jsx";
 import AdaptiveRecommendations from "../components/AdaptiveRecommendations.jsx";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 function statusLabel(status) {
   if (status === "backlog") return "Backlog";
@@ -2862,7 +2863,7 @@ export default function ProjectTasks() {
                       className="prose prose-sm max-w-none text-xs text-[color:var(--text-muted)]"
                       dangerouslySetInnerHTML={{
                         __html:
-                          selectedTaskDetails.description,
+                          sanitizeHtml(selectedTaskDetails.description),
                       }}
                     />
                   ) : (

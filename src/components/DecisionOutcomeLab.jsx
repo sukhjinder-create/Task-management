@@ -258,6 +258,7 @@ export default function DecisionOutcomeLab() {
         includePeople: false,
         includeEvidenceNotes: false,
         includeDecisionRationale: true,
+        publish: true,
       });
       const receipt = created.data.receipt;
       const response = await api.get(`/assurance/receipts/${receipt.id}`, { responseType: "blob" });
@@ -267,7 +268,8 @@ export default function DecisionOutcomeLab() {
       link.download = `outcome-receipt-v${receipt.version}.json`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success("Tamper-evident outcome receipt downloaded");
+      if (receipt.verificationUrl) await navigator.clipboard.writeText(receipt.verificationUrl);
+      toast.success(receipt.verificationUrl ? "Signed receipt downloaded and verification link copied" : "Signed outcome receipt downloaded");
       await refresh();
     } catch (requestError) {
       toast.error(requestError.response?.data?.error || "Could not generate the receipt");
@@ -361,7 +363,7 @@ export default function DecisionOutcomeLab() {
 
             <div className="rounded-[9px] border border-[color:var(--border)] bg-[var(--surface)] p-5">
               <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[color:var(--primary)]" /><h2 className="text-[13px] font-semibold text-[color:var(--text)]">Proof-of-execution receipt</h2></div>
-              <p className="mt-1 text-[11px] leading-5 text-[color:var(--text-muted)]">Download the outcome, evidence, decisions, experiments, and approvals as an immutable SHA-256 package. People and evidence notes are excluded by default.</p>
+              <p className="mt-1 text-[11px] leading-5 text-[color:var(--text-muted)]">Download a signed evidence package and copy a public verification link. People and evidence notes are excluded by default.</p>
               <div className="mt-4 flex items-center justify-between gap-3">
                 <span className="text-[10px] text-[color:var(--text-soft)]">{record.receipts?.length || 0} receipt version(s)</span>
                 <div className="flex flex-wrap justify-end gap-2">

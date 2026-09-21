@@ -173,6 +173,38 @@ function ChangePassword() {
   );
 }
 
+function DataPrivacy() {
+  const api = useApi();
+  const [busy, setBusy] = useState("");
+
+  const download = async () => {
+    setBusy("download");
+    try {
+      const response = await api.get("/gdpr/my-data");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(response.data, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `asystence-personal-data-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Your data export is ready");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not export your data"); }
+    finally { setBusy(""); }
+  };
+
+  const requestErasure = async () => {
+    if (!window.confirm("Submit an account erasure request? Your administrator will review legal and business retention requirements first.")) return;
+    setBusy("erasure");
+    try {
+      await api.post("/gdpr/erasure");
+      toast.success("Erasure request submitted");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not submit the request"); }
+    finally { setBusy(""); }
+  };
+
+  return <div className="border border-[color:var(--border)] rounded-lg p-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-[var(--surface-soft)] flex items-center justify-center"><Shield className="w-4 h-4 text-[color:var(--text-muted)]" /></div><div><p className="text-sm font-semibold text-[color:var(--text)]">Data and privacy</p><p className="text-xs text-[color:var(--text-muted)]">Export your personal data or ask for account erasure.</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={download} disabled={Boolean(busy)} className="px-3 py-2 rounded-lg border border-[color:var(--border)] text-sm text-[color:var(--text)] disabled:opacity-50">{busy === "download" ? "Preparing…" : "Download my data"}</button><button onClick={requestErasure} disabled={Boolean(busy)} className="px-3 py-2 rounded-lg border border-[color:var(--score-danger)]/40 text-sm text-[color:var(--score-danger)] disabled:opacity-50">{busy === "erasure" ? "Submitting…" : "Request erasure"}</button></div></div>;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Profile() {
@@ -334,6 +366,8 @@ export default function Profile() {
 
         {/* Change password */}
         {!loading && profile && <ChangePassword />}
+
+        {!loading && profile && <DataPrivacy />}
 
         {/* Notification preferences */}
         {!loading && profile && (

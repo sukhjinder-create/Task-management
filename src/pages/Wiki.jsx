@@ -9,6 +9,7 @@ import {
   Search, FileText, Save, X, Globe, Lock, Share2,
 } from "lucide-react";
 import ShareToChat from "../components/ShareToChat.jsx";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 export default function Wiki() {
   const api = useApi();
@@ -266,7 +267,7 @@ export default function Wiki() {
                 {activePage.content ? (
                   <div
                     className="prose prose-sm max-w-none text-[color:var(--text)]"
-                    dangerouslySetInnerHTML={{ __html: activePage.content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(activePage.content) }}
                   />
                 ) : (
                   <div className="text-center py-12">

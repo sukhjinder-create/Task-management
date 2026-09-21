@@ -10,7 +10,7 @@ import { HuddleProvider } from "./context/HuddleContext.jsx";
 import { SuperadminAuthProvider } from "./context/SuperadminAuthContext.jsx";
 import { PlanProvider } from "./context/PlanContext.jsx";
 import { Toaster } from "react-hot-toast";
-import "react-quill/dist/quill.snow.css";
+import "react-quill-new/dist/quill.snow.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

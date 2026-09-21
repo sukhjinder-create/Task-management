@@ -12,7 +12,9 @@ import {
 
 const TABS = [
   { id: "mfa",     label: "MFA / 2FA",     icon: Key },
-  { id: "sso",     label: "SSO / SAML",    icon: Globe },
+  { id: "sso",     label: "Identity",      icon: Globe },
+  { id: "security",label: "Security",      icon: Shield },
+  { id: "privacy", label: "Privacy",       icon: Shield },
   { id: "audit",   label: "Audit Logs",    icon: FileText },
   { id: "apikeys", label: "API Keys",      icon: Shield },
   { id: "webhooks",label: "Webhooks",      icon: Webhook },
@@ -43,7 +45,7 @@ export default function Enterprise() {
       </header>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-[color:var(--border)] mb-6">
+      <div className="flex gap-1 overflow-x-auto border-b border-[color:var(--border)] mb-6">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -61,6 +63,8 @@ export default function Enterprise() {
 
       {tab === "mfa"      && <MfaTab />}
       {tab === "sso"      && <SsoTab />}
+      {tab === "security" && <SecurityTab />}
+      {tab === "privacy"  && <PrivacyTab />}
       {tab === "audit"    && <AuditTab />}
       {tab === "apikeys"  && <ApiKeysTab />}
       {tab === "webhooks" && <WebhooksTab />}
@@ -168,20 +172,30 @@ function MfaTab() {
 function SsoTab() {
   const api = useApi();
   const [config, setConfig] = useState(null);
-  const [form, setForm] = useState({ enabled: false, provider: "saml", entry_point: "", issuer: "", cert: "", force_sso: false });
+  const [form, setForm] = useState({ enabled: false, provider: "saml", entry_point: "", issuer: "", cert: "", force_sso: false, jit_enabled: true, allowed_domains: "", oidc_scopes: "openid email profile" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.get("/auth/sso/config").then(r => {
       setConfig(r.data);
-      setForm(f => ({ ...f, ...r.data }));
+      setForm(f => ({
+        ...f,
+        ...r.data,
+        allowed_domains: (r.data.allowed_domains || []).join(", "),
+        oidc_scopes: (r.data.oidc_scopes || ["openid", "email", "profile"]).join(" "),
+      }));
     }).catch(() => {});
   }, []);
 
   const save = async () => {
     setSaving(true);
     try {
-      const r = await api.put("/auth/sso/config", form);
+      const payload = {
+        ...form,
+        allowed_domains: String(form.allowed_domains || "").split(",").map(value => value.trim()).filter(Boolean),
+        oidc_scopes: String(form.oidc_scopes || "").split(/\s+/).filter(Boolean),
+      };
+      const r = await api.put("/auth/sso/config", payload);
       setConfig(r.data);
       toast.success("SSO configuration saved");
     } catch (err) { toast.error(err.response?.data?.error || "Failed"); }
@@ -190,15 +204,23 @@ function SsoTab() {
 
   return (
     <div className="border border-[color:var(--border)] rounded-lg p-6 space-y-4">
-      <h2 className="font-semibold text-[color:var(--text)]">SAML SSO Configuration</h2>
-      <p className="text-sm text-[color:var(--text-muted)]">Connect your Identity Provider (IdP) so team members can sign in using your company's SSO.</p>
+      <h2 className="font-semibold text-[color:var(--text)]">Enterprise identity</h2>
+      <p className="text-sm text-[color:var(--text-muted)]">Connect your identity provider with SAML or OpenID Connect. Existing sign-in stays available until you enforce SSO.</p>
+
+      <div>
+        <label className="block text-sm font-medium text-[color:var(--text)] mb-1">Protocol</label>
+        <select value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)]">
+          <option value="saml">SAML 2.0</option>
+          <option value="oidc">OpenID Connect</option>
+        </select>
+      </div>
 
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} className="w-4 h-4 rounded" />
         <span className="text-sm text-[color:var(--text)] font-medium">Enable SSO for this workspace</span>
       </label>
 
-      {[
+      {form.provider === "saml" && [
         { key: "entry_point", label: "IdP SSO URL (Entry Point)", placeholder: "https://idp.example.com/sso/saml" },
         { key: "issuer", label: "SP Entity ID / Issuer", placeholder: "https://yourapp.com/auth/saml" },
         { key: "sp_callback_url", label: "ACS URL (Callback)", placeholder: "https://yourapp.com/auth/sso/saml/callback" },
@@ -216,7 +238,7 @@ function SsoTab() {
         </div>
       ))}
 
-      <div>
+      {form.provider === "saml" && <div>
         <label className="block text-sm font-medium text-[color:var(--text)] mb-1">IdP Certificate (PEM)</label>
         <textarea
           value={form.cert || ""}
@@ -226,7 +248,31 @@ function SsoTab() {
           className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)] font-mono"
         />
         {config?.cert_snippet && <p className="text-xs text-[color:var(--text-muted)] mt-1">Current: {config.cert_snippet}</p>}
+      </div>}
+
+      {form.provider === "oidc" && [
+        { key: "oidc_issuer_url", label: "Issuer URL", placeholder: "https://login.example.com" },
+        { key: "oidc_client_id", label: "Client ID", placeholder: "asystence-production" },
+        { key: "oidc_client_secret", label: "Client secret", placeholder: config?.oidc_client_secret_configured ? "Configured — leave blank to keep it" : "Client secret" },
+        { key: "sp_callback_url", label: "Callback URL", placeholder: "https://api.example.com/auth/sso/oidc/callback" },
+        { key: "oidc_scopes", label: "Scopes", placeholder: "openid email profile" },
+      ].map(({ key, label, placeholder }) => (
+        <div key={key}>
+          <label className="block text-sm font-medium text-[color:var(--text)] mb-1">{label}</label>
+          <input type={key === "oidc_client_secret" ? "password" : "text"} value={form[key] || ""} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)]" />
+        </div>
+      ))}
+
+      <div>
+        <label className="block text-sm font-medium text-[color:var(--text)] mb-1">Allowed email domains</label>
+        <input value={form.allowed_domains || ""} onChange={e => setForm(f => ({ ...f, allowed_domains: e.target.value }))} placeholder="example.com, subsidiary.com" className="w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm text-[color:var(--text)]" />
+        <p className="mt-1 text-xs text-[color:var(--text-muted)]">Optional. Separate domains with commas.</p>
       </div>
+
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" checked={form.jit_enabled !== false} onChange={e => setForm(f => ({ ...f, jit_enabled: e.target.checked }))} className="w-4 h-4 rounded" />
+        <span className="text-sm text-[color:var(--text)]">Create users on first approved SSO sign-in</span>
+      </label>
 
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={form.force_sso || false} onChange={e => setForm(f => ({ ...f, force_sso: e.target.checked }))} className="w-4 h-4 rounded" />
@@ -241,6 +287,221 @@ function SsoTab() {
 }
 
 // ─── Audit helpers ────────────────────────────────────────────────────────────
+
+function SecurityTab() {
+  const api = useApi();
+  const [policy, setPolicy] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [domains, setDomains] = useState([]);
+  const [domain, setDomain] = useState("");
+  const [dnsRecord, setDnsRecord] = useState(null);
+  const [scimTokens, setScimTokens] = useState([]);
+  const [serviceAccounts, setServiceAccounts] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [permissions, setPermissions] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [roleForm, setRoleForm] = useState({ name: "", base_role: "user", permissions: ["read:tasks"] });
+  const [credentials, setCredentials] = useState(null);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [aiSafety, setAiSafety] = useState(null);
+
+  const load = async () => {
+    try {
+      const [policyRes, sessionsRes, domainsRes, scimRes, accountsRes, rolesRes, permissionsRes, usersRes] = await Promise.all([
+        api.get("/enterprise-security/policy"), api.get("/enterprise-security/sessions"),
+        api.get("/enterprise-security/domains"), api.get("/enterprise-security/scim-tokens"),
+        api.get("/enterprise-security/service-accounts"),
+        api.get("/enterprise-security/roles"), api.get("/enterprise-security/permissions"), api.get("/users"),
+      ]);
+      setPolicy({ ...policyRes.data, allowed_ip_cidrs: (policyRes.data.allowed_ip_cidrs || []).join("\n") });
+      setSessions(sessionsRes.data || []);
+      setDomains(domainsRes.data || []);
+      setScimTokens(scimRes.data || []);
+      setServiceAccounts(accountsRes.data?.serviceAccounts || []);
+      setRoles(rolesRes.data || []);
+      setPermissions(permissionsRes.data || []);
+      setUsers(Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || []);
+    } catch (error) { toast.error(error.response?.data?.error || "Could not load security settings"); }
+  };
+
+  useEffect(() => {
+    load();
+    api.get("/ai-studio/safety").then(response => setAiSafety(response.data)).catch(() => {});
+  }, []);
+
+  const savePolicy = async () => {
+    setSaving(true);
+    try {
+      const payload = { ...policy, allowed_ip_cidrs: String(policy.allowed_ip_cidrs || "").split(/[\n,]/).map(value => value.trim()).filter(Boolean) };
+      const response = await api.put("/enterprise-security/policy", payload);
+      setPolicy({ ...response.data, allowed_ip_cidrs: (response.data.allowed_ip_cidrs || []).join("\n") });
+      toast.success("Security policy saved");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not save policy"); }
+    setSaving(false);
+  };
+
+  const addDomain = async () => {
+    if (!domain.trim()) return;
+    try {
+      const response = await api.post("/enterprise-security/domains", { domain });
+      setDomains(current => [response.data, ...current.filter(item => item.id !== response.data.id)]);
+      setDnsRecord(response.data.dns_record);
+      setDomain("");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not add domain"); }
+  };
+
+  const verifyDomain = async (id) => {
+    try {
+      const response = await api.post(`/enterprise-security/domains/${id}/verify`);
+      setDomains(current => current.map(item => item.id === id ? { ...item, ...response.data } : item));
+      toast.success("Domain verified");
+    } catch (error) { toast.error(error.response?.data?.error || "TXT record was not found"); }
+  };
+
+  const createCredential = async (kind) => {
+    if (!name.trim()) return toast.error("Name is required");
+    try {
+      const response = kind === "scim"
+        ? await api.post("/enterprise-security/scim-tokens", { name })
+        : await api.post("/enterprise-security/service-accounts", { name, scopes: ["read:tasks", "write:tasks"] });
+      setCredentials({ kind, ...response.data });
+      setName("");
+      await load();
+    } catch (error) { toast.error(error.response?.data?.error || "Could not create credential"); }
+  };
+
+  const revoke = async (resource, id) => {
+    try {
+      await api.delete(`/enterprise-security/${resource}/${id}`);
+      await load();
+      toast.success("Access revoked");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not revoke access"); }
+  };
+
+  const createRole = async () => {
+    if (!roleForm.name.trim()) return toast.error("Role name is required");
+    try {
+      await api.post("/enterprise-security/roles", roleForm);
+      setRoleForm({ name: "", base_role: "user", permissions: ["read:tasks"] });
+      await load();
+      toast.success("Custom role created");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not create role"); }
+  };
+
+  const saveAiSafety = async () => {
+    try {
+      const response = await api.put("/ai-studio/safety", aiSafety);
+      setAiSafety(response.data);
+      toast.success("AI safety policy saved");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not save AI safety policy"); }
+  };
+
+  const assignRole = async (roleId, userId) => {
+    if (!userId) return;
+    try {
+      await api.put(`/enterprise-security/roles/${roleId}/members/${userId}`);
+      await load();
+      toast.success("Role assigned");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not assign role"); }
+  };
+
+  if (!policy) return <p className="text-sm text-[color:var(--text-muted)]">Loading security settings…</p>;
+
+  return (
+    <div className="space-y-6">
+      <section className="border border-[color:var(--border)] rounded-lg p-5 space-y-4">
+        <div><h2 className="font-semibold text-[color:var(--text)]">Workspace security policy</h2><p className="text-sm text-[color:var(--text-muted)]">Defaults stay user-friendly. Turn on stronger controls when your organization is ready.</p></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[["session_max_age_minutes", "Maximum session (minutes)"], ["idle_timeout_minutes", "Idle timeout (minutes)"], ["api_key_max_age_days", "Credential lifetime (days)"], ["audit_retention_days", "Audit retention (days)"], ["data_retention_days", "Data retention (days, optional)"]].map(([key, label]) => (
+            <label key={key} className="text-sm text-[color:var(--text)]">{label}<input type="number" min="1" value={policy[key] ?? ""} onChange={event => setPolicy(current => ({ ...current, [key]: event.target.value === "" ? null : Number(event.target.value) }))} className="mt-1 w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)]" /></label>
+          ))}
+        </div>
+        <label className="block text-sm text-[color:var(--text)]">Allowed IP ranges (one CIDR per line)<textarea value={policy.allowed_ip_cidrs || ""} onChange={event => setPolicy(current => ({ ...current, allowed_ip_cidrs: event.target.value }))} rows={3} placeholder="203.0.113.0/24" className="mt-1 w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] font-mono text-xs" /></label>
+        <div className="flex flex-wrap gap-4">
+          {[["require_mfa", "Require MFA"], ["enforce_sso", "Require SSO"], ["guest_access_enabled", "Allow guest access"]].map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm text-[color:var(--text)]"><input type="checkbox" checked={Boolean(policy[key])} onChange={event => setPolicy(current => ({ ...current, [key]: event.target.checked }))} />{label}</label>)}
+        </div>
+        <button onClick={savePolicy} disabled={saving} className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm font-medium disabled:opacity-60">{saving ? "Saving…" : "Save policy"}</button>
+      </section>
+
+      {aiSafety && <section className="border border-[color:var(--border)] rounded-lg p-5 space-y-3"><div><h2 className="font-semibold text-[color:var(--text)]">AI data safety</h2><p className="text-sm text-[color:var(--text-muted)]">Apply workspace-wide protection without changing how people ask for help.</p></div><div className="grid gap-3 sm:grid-cols-3"><label className="text-sm text-[color:var(--text)]">Enforcement<select value={aiSafety.enforcementMode} onChange={event => setAiSafety(current => ({ ...current, enforcementMode: event.target.value }))} className="mt-1 w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)]"><option value="off">Off</option><option value="variables">Protect variables</option><option value="strict">Strict</option></select></label><label className="text-sm text-[color:var(--text)]">PII redaction<select value={aiSafety.piiRedaction} onChange={event => setAiSafety(current => ({ ...current, piiRedaction: event.target.value }))} className="mt-1 w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)]"><option value="off">Off</option><option value="input">Inputs</option><option value="output">Outputs</option><option value="both">Inputs and outputs</option></select></label><label className="text-sm text-[color:var(--text)]">Structured output<select value={aiSafety.outputSchemaMode} onChange={event => setAiSafety(current => ({ ...current, outputSchemaMode: event.target.value }))} className="mt-1 w-full px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)]"><option value="advisory">Advisory</option><option value="enforce">Enforce schemas</option></select></label></div><button onClick={saveAiSafety} className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm">Save AI safety</button></section>}
+
+      <section className="border border-[color:var(--border)] rounded-lg p-5 space-y-3">
+        <h2 className="font-semibold text-[color:var(--text)]">Verified domains</h2>
+        <div className="flex gap-2"><input value={domain} onChange={event => setDomain(event.target.value)} placeholder="example.com" className="flex-1 px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm" /><button onClick={addDomain} className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm">Add</button></div>
+        {dnsRecord && <div className="rounded-lg bg-[var(--surface-soft)] p-3 text-xs text-[color:var(--text)]"><p>Add this DNS record, then verify:</p><code className="break-all">{dnsRecord.type} {dnsRecord.name} {dnsRecord.value}</code></div>}
+        {domains.map(item => <div key={item.id} className="flex items-center gap-3 py-2 border-t border-[color:var(--border)] text-sm"><span className="flex-1 text-[color:var(--text)]">{item.domain}</span><span className={item.status === "verified" ? "text-[color:var(--score-good)]" : "text-[color:var(--text-muted)]"}>{item.status}</span>{item.status !== "verified" && <button onClick={() => verifyDomain(item.id)} className="text-[color:var(--primary)]">Verify</button>}<button onClick={() => revoke("domains", item.id)} aria-label={`Remove ${item.domain}`} className="text-[color:var(--score-danger)]"><Trash2 className="w-4 h-4" /></button></div>)}
+      </section>
+
+      <section className="border border-[color:var(--border)] rounded-lg p-5 space-y-3">
+        <h2 className="font-semibold text-[color:var(--text)]">Provisioning and machine access</h2>
+        <p className="text-sm text-[color:var(--text-muted)]">Use SCIM for your directory, or OAuth client credentials for server-to-server integrations.</p>
+        {credentials && <div className="rounded-lg border border-[color:var(--score-good)] p-3 text-sm text-[color:var(--text)]"><p className="font-medium">Copy now — this secret will not be shown again.</p><code className="block mt-2 break-all text-xs">{credentials.token || `${credentials.client_id}:${credentials.client_secret}`}</code><button onClick={() => navigator.clipboard.writeText(credentials.token || `${credentials.client_id}:${credentials.client_secret}`)} className="mt-2 text-[color:var(--primary)]">Copy credential</button></div>}
+        <div className="flex flex-wrap gap-2"><input value={name} onChange={event => setName(event.target.value)} placeholder="Credential name" className="flex-1 min-w-48 px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm" /><button onClick={() => createCredential("scim")} className="px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)]">Create SCIM token</button><button onClick={() => createCredential("oauth")} className="px-3 py-2 bg-[var(--primary)] text-white rounded-lg text-sm">Create service account</button></div>
+        {[...scimTokens.map(item => ({ ...item, kind: "SCIM", resource: "scim-tokens" })), ...serviceAccounts.map(item => ({ ...item, kind: "OAuth", resource: "service-accounts" }))].map(item => <div key={`${item.kind}-${item.id}`} className="flex items-center gap-3 py-2 border-t border-[color:var(--border)] text-sm"><span className="rounded bg-[var(--surface-soft)] px-2 py-0.5 text-xs text-[color:var(--text-muted)]">{item.kind}</span><span className="flex-1 text-[color:var(--text)]">{item.name}</span><code className="hidden sm:block text-xs text-[color:var(--text-muted)]">{item.token_prefix || item.client_id}</code><button onClick={() => revoke(item.resource, item.id)} className="text-[color:var(--score-danger)]">Revoke</button></div>)}
+      </section>
+
+      <details className="border border-[color:var(--border)] rounded-lg p-5">
+        <summary className="cursor-pointer font-semibold text-[color:var(--text)]">Custom roles</summary>
+        <p className="mt-2 text-sm text-[color:var(--text-muted)]">Start from a familiar base role, then grant only the capabilities this team needs.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2"><input value={roleForm.name} onChange={event => setRoleForm(current => ({ ...current, name: event.target.value }))} placeholder="Role name" className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm" /><select value={roleForm.base_role} onChange={event => setRoleForm(current => ({ ...current, base_role: event.target.value }))} className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select></div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{permissions.map(permission => <label key={permission} className="flex items-center gap-2 text-xs text-[color:var(--text-muted)]"><input type="checkbox" checked={roleForm.permissions.includes(permission)} onChange={event => setRoleForm(current => ({ ...current, permissions: event.target.checked ? [...current.permissions, permission] : current.permissions.filter(item => item !== permission) }))} />{permission}</label>)}</div>
+        <button onClick={createRole} className="mt-3 px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm">Create role</button>
+        <div className="mt-4 space-y-2">{roles.map(role => <div key={role.id} className="flex flex-wrap items-center gap-2 border-t border-[color:var(--border)] pt-3 text-sm"><div className="min-w-40 flex-1"><p className="font-medium text-[color:var(--text)]">{role.name}</p><p className="text-xs text-[color:var(--text-muted)]">{role.base_role} · {role.member_count} member(s)</p></div><select aria-label={`Assign ${role.name}`} defaultValue="" onChange={event => { assignRole(role.id, event.target.value); event.target.value = ""; }} className="px-2 py-1.5 rounded border border-[color:var(--border)] bg-[var(--surface)] text-xs"><option value="">Assign member…</option>{users.filter(user => !["owner", "system"].includes(user.role)).map(user => <option key={user.id} value={user.id}>{user.username || user.email}</option>)}</select><button onClick={() => revoke("roles", role.id)} aria-label={`Delete ${role.name}`} className="text-[color:var(--score-danger)]"><Trash2 className="w-4 h-4" /></button></div>)}</div>
+      </details>
+
+      <section className="border border-[color:var(--border)] rounded-lg p-5 space-y-2">
+        <h2 className="font-semibold text-[color:var(--text)]">Active sessions</h2>
+        {sessions.map(session => <div key={session.id} className="flex items-center gap-3 py-2 border-t border-[color:var(--border)] text-sm"><div className="flex-1"><p className="text-[color:var(--text)]">{session.username || session.email}</p><p className="text-xs text-[color:var(--text-muted)]">{session.ip_address || "Unknown IP"} · {new Date(session.last_seen_at || session.created_at).toLocaleString()}</p></div><button onClick={() => revoke("sessions", session.id)} className="text-[color:var(--score-danger)]">Revoke</button></div>)}
+        {!sessions.length && <p className="text-sm text-[color:var(--text-muted)]">No active sessions.</p>}
+      </section>
+    </div>
+  );
+}
+
+function PrivacyTab() {
+  const api = useApi();
+  const [requests, setRequests] = useState([]);
+  const [holds, setHolds] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({ user_id: "", reason: "", reference: "" });
+
+  const load = async () => {
+    try {
+      const [requestResponse, holdResponse, userResponse] = await Promise.all([api.get("/gdpr/erasure-requests"), api.get("/gdpr/legal-holds"), api.get("/users")]);
+      setRequests(requestResponse.data || []);
+      setHolds(holdResponse.data || []);
+      setUsers(Array.isArray(userResponse.data) ? userResponse.data : userResponse.data?.users || []);
+    } catch (error) { toast.error(error.response?.data?.error || "Could not load privacy requests"); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const processRequest = async (id, status) => {
+    if (status === "completed" && !window.confirm("Execute irreversible account anonymization? Records required for audit and legal obligations will be retained.")) return;
+    try {
+      await api.patch(`/gdpr/erasure-requests/${id}`, { status, ...(status === "completed" ? { confirm: "ERASE" } : {}) });
+      await load();
+      toast.success(status === "completed" ? "Erasure completed" : "Request is being processed");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not process the request"); }
+  };
+
+  const addHold = async (event) => {
+    event.preventDefault();
+    try {
+      await api.post("/gdpr/legal-holds", form);
+      setForm({ user_id: "", reason: "", reference: "" });
+      await load();
+      toast.success("Legal hold applied");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not apply legal hold"); }
+  };
+
+  const releaseHold = async (id) => {
+    try { await api.post(`/gdpr/legal-holds/${id}/release`); await load(); toast.success("Legal hold released"); }
+    catch (error) { toast.error(error.response?.data?.error || "Could not release legal hold"); }
+  };
+
+  return <div className="space-y-6"><section className="border border-[color:var(--border)] rounded-lg p-5"><h2 className="font-semibold text-[color:var(--text)]">Erasure requests</h2><p className="mt-1 text-sm text-[color:var(--text-muted)]">Exports are self-service. Erasure stays reviewable and legal holds always win.</p><div className="mt-3 space-y-2">{requests.map(item => <div key={item.id} className="flex flex-wrap items-center gap-2 border-t border-[color:var(--border)] py-3 text-sm"><div className="min-w-48 flex-1"><p className="font-medium text-[color:var(--text)]">{item.username || item.email || item.user_id}</p><p className="text-xs text-[color:var(--text-muted)]">Requested {new Date(item.requested_at).toLocaleString()} · {item.status}</p></div>{item.status === "pending" && <button onClick={() => processRequest(item.id, "processing")} className="text-[color:var(--primary)]">Start review</button>}{["pending", "processing"].includes(item.status) && <button onClick={() => processRequest(item.id, "completed")} className="text-[color:var(--score-danger)]">Complete erasure</button>}</div>)}{!requests.length && <p className="mt-3 text-sm text-[color:var(--text-muted)]">No erasure requests.</p>}</div></section><section className="border border-[color:var(--border)] rounded-lg p-5"><h2 className="font-semibold text-[color:var(--text)]">Legal holds</h2><form onSubmit={addHold} className="mt-3 grid gap-2 sm:grid-cols-3"><select value={form.user_id} onChange={event => setForm(current => ({ ...current, user_id: event.target.value }))} className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm" required><option value="">Choose user</option>{users.map(user => <option key={user.id} value={user.id}>{user.username || user.email}</option>)}</select><input value={form.reason} onChange={event => setForm(current => ({ ...current, reason: event.target.value }))} placeholder="Reason" className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm" required /><input value={form.reference} onChange={event => setForm(current => ({ ...current, reference: event.target.value }))} placeholder="Case reference (optional)" className="px-3 py-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] text-sm" /><button className="w-fit px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm">Apply hold</button></form><div className="mt-3 space-y-2">{holds.map(item => <div key={item.id} className="flex items-center gap-3 border-t border-[color:var(--border)] py-3 text-sm"><div className="flex-1"><p className="font-medium text-[color:var(--text)]">{item.username || item.email}</p><p className="text-xs text-[color:var(--text-muted)]">{item.reason}{item.reference ? ` · ${item.reference}` : ""}</p></div><span className="text-xs text-[color:var(--text-muted)]">{item.active ? "Active" : "Released"}</span>{item.active && <button onClick={() => releaseHold(item.id)} className="text-[color:var(--score-danger)]">Release</button>}</div>)}</div></section></div>;
+}
 
 function describeAudit(log) {
   const m   = log.metadata  || {};
@@ -404,6 +665,25 @@ function AuditTab() {
 
   useEffect(() => { load(); }, [page, pageSize, filters.action, filters.entityType]);
 
+  const verifyIntegrity = async () => {
+    try {
+      const response = await api.get("/audit/integrity");
+      response.data.valid ? toast.success(`Audit chain verified (${response.data.checked || 0} entries)`) : toast.error("Audit chain verification failed");
+    } catch (error) { toast.error(error.response?.data?.error || "Could not verify audit chain"); }
+  };
+
+  const exportLogs = async (format) => {
+    try {
+      const response = await api.get(`/audit/export?format=${format}`, { responseType: "blob" });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `asystence-audit.${format === "jsonl" ? "jsonl" : "csv"}`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) { toast.error(error.response?.data?.error || "Could not export audit logs"); }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const startRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endRow = Math.min(page * pageSize, total);
@@ -460,6 +740,9 @@ function AuditTab() {
         <button onClick={load} className="px-3 py-2 bg-[var(--primary)] text-white rounded-lg text-sm flex items-center gap-1 hover:opacity-90">
           <RefreshCw className="w-4 h-4" /> Refresh
         </button>
+        <button onClick={verifyIntegrity} className="px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)]">Verify chain</button>
+        <button onClick={() => exportLogs("csv")} className="px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)]">Export CSV</button>
+        <button onClick={() => exportLogs("jsonl")} className="px-3 py-2 border border-[color:var(--border)] rounded-lg text-sm text-[color:var(--text)]">Export JSONL</button>
         <span className="text-sm text-[color:var(--text-muted)] self-center">{total} total entries</span>
       </div>
 
@@ -548,12 +831,18 @@ function AuditTab() {
 function ApiKeysTab() {
   const api = useApi();
   const [keys, setKeys] = useState([]);
+  const [scopeOptions, setScopeOptions] = useState([]);
   const [form, setForm] = useState({ name: "", scopes: ["read:tasks","write:tasks"] });
   const [newKey, setNewKey] = useState(null);
   const [showKey, setShowKey] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => { api.get("/api-keys").then(r => setKeys(r.data || [])).catch(() => {}); }, []);
+  useEffect(() => {
+    Promise.all([api.get("/api-keys"), api.get("/api-keys/scopes")]).then(([keysResponse, scopesResponse]) => {
+      setKeys(keysResponse.data || []);
+      setScopeOptions(scopesResponse.data || []);
+    }).catch(() => {});
+  }, []);
 
   const create = async () => {
     if (!form.name) return toast.error("Name is required");
@@ -608,6 +897,7 @@ function ApiKeysTab() {
             <Plus className="w-4 h-4" /> Create Key
           </button>
         </div>
+        <div className="mt-3 flex flex-wrap gap-2">{scopeOptions.map(scope => <label key={scope} className="flex items-center gap-1.5 rounded-full border border-[color:var(--border)] px-2 py-1 text-xs text-[color:var(--text-muted)]"><input type="checkbox" checked={form.scopes.includes(scope)} onChange={event => setForm(current => ({ ...current, scopes: event.target.checked ? [...current.scopes, scope] : current.scopes.filter(item => item !== scope) }))} />{scope}</label>)}</div>
       </div>
 
       <div className="space-y-2">

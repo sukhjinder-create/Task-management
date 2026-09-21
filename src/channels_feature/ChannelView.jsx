@@ -3,6 +3,7 @@ import api from "../api";
 import { sendChatMessage, sendTyping } from "../socket";
 import { setupChannelSocket } from "./chatSocket";
 import ThreadView from "./ThreadView";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 function normalizeMessage(m) {
   if (!m) return null;
@@ -222,7 +223,7 @@ export default function ChannelView({ channelKey, channel, currentUserId }) {
                   <div
                     className="text-slate-900"
                     dangerouslySetInnerHTML={{
-                      __html: m.textHtml || "",
+                      __html: sanitizeHtml(m.textHtml),
                     }}
                   />
                 )}

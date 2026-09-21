@@ -10,6 +10,7 @@ import {
 import { useApi, API_BASE_URL } from '../api';
 import toast from 'react-hot-toast';
 import { Card, Button, Badge } from '../components/ui';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 const BACKEND_URL = API_BASE_URL || 'http://localhost:5000';
 
@@ -413,9 +414,9 @@ function AskTab() {
     return answer.split('\n').map((line, idx) => {
       const bold = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       if (line.trim().startsWith('•') || line.trim().startsWith('-'))
-        return <li key={idx} className="ml-4 mb-1" dangerouslySetInnerHTML={{ __html: bold }} />;
+        return <li key={idx} className="ml-4 mb-1" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bold) }} />;
       if (line.trim())
-        return <p key={idx} className="mb-2" dangerouslySetInnerHTML={{ __html: bold }} />;
+        return <p key={idx} className="mb-2" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bold) }} />;
       return <br key={idx} />;
     });
   };

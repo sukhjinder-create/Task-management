@@ -1,5 +1,6 @@
 // src/channels_feature/ThreadView.jsx
 import React, { useRef, useState, useEffect } from "react";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 /**
  * ThreadView
@@ -58,7 +59,7 @@ export default function ThreadView({ root, messages, onClose, onSendReply }) {
         </div>
         <div
           className="text-slate-900 text-sm"
-          dangerouslySetInnerHTML={{ __html: root.textHtml || "" }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(root.textHtml) }}
         />
       </div>
 
@@ -81,7 +82,7 @@ export default function ThreadView({ root, messages, onClose, onSendReply }) {
               </div>
               <div
                 className="text-slate-900"
-                dangerouslySetInnerHTML={{ __html: m.textHtml || "" }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(m.textHtml) }}
               />
             </div>
           ))

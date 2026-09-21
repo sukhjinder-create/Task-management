@@ -17,13 +17,14 @@ import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import CommentsSection from "../components/CommentsSection.jsx";
 import Subtasks from "../components/Subtasks.jsx";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 import TagPicker from "../components/TagPicker.jsx";
 import IssueLinkPanel from "../components/IssueLinkPanel.jsx";
 import TimeTrackingPanel from "../components/TimeTrackingPanel.jsx";
 import WatchersVotesBar from "../components/WatchersVotesBar.jsx";
 import ShareToChat from "../components/ShareToChat.jsx";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 function statusLabel(status) {
   if (status === "backlog") return "Backlog";
@@ -515,7 +516,7 @@ export default function TaskDetailPage() {
                 {task.description ? (
                   <div
                     className="prose prose-sm max-w-none text-xs text-[color:var(--text-muted)]"
-                    dangerouslySetInnerHTML={{ __html: task.description }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }}
                   />
                 ) : (
                   <p className="text-[11px] text-[color:var(--text-soft)]">No description provided.</p>

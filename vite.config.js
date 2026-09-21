@@ -14,7 +14,7 @@ function packageNameFromId(id) {
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    include: ["react-quill"],
+    include: ["react-quill-new"],
   },
   build: {
     rollupOptions: {
@@ -56,7 +56,7 @@ export default defineConfig({
           if (packageName === "react-select") {
             return "vendor-select";
           }
-          if (["react-quill", "quill", "parchment"].includes(packageName)) {
+          if (["react-quill-new", "quill", "parchment", "quill-delta", "lodash-es"].includes(packageName)) {
             return "vendor-editor";
           }
           return "vendor";
