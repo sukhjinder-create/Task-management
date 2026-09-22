@@ -6,10 +6,9 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import axios from "axios";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
-import { API_BASE_URL } from "../api";
+import api from "../api";
 import {
   isConfiguredWorkspaceDomainHost,
 } from "../config/runtime";
@@ -30,24 +29,13 @@ export default function AuthCallback() {
   );
   const [failed, setFailed] = useState(false);
 
-  const safePersistAuth = (user, token, refreshToken = null) => {
-    try {
-      localStorage.setItem("auth", JSON.stringify({ token, user, refreshToken }));
-      window.__AUTH_TOKEN__    = token;
-      window.__WORKSPACE_ID__  = user?.workspaceId || user?.workspace_id || "GLOBAL";
-      window.dispatchEvent(new Event("auth:updated"));
-    } catch (error) {
-      console.warn("Failed to persist the authenticated session:", error);
-    }
-  };
-
-  const redirectToWorkspace = async (user, token) => {
+  const redirectToWorkspace = async (user) => {
     const slug = user?.workspace_slug;
     // The session moves as a single-use code, never as the tokens themselves --
     // see auth/workspaceHandoff.js. A handoff that cannot be arranged leaves
     // the user signed in here rather than failing the flow.
     if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
-      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects", token);
+      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects");
       if (targetUrl) {
         window.location.href = targetUrl;
         return;
@@ -63,31 +51,40 @@ export default function AuthCallback() {
         const isMagicPath = window.location.pathname.endsWith("/auth/magic");
         const urlToken = callbackParam("token");
         const urlRefreshToken = callbackParam("refreshToken");
+        const cookieSession = callbackParam("session") === "cookie";
         const handoffCode = !isMagicPath ? searchParams.get("code") : null;
 
         if (handoffCode) {
           window.history.replaceState({}, document.title, window.location.pathname);
-          const res = await axios.post(`${API_BASE_URL}/auth/handoff/exchange`, { code: handoffCode });
-          const { token, user, refreshToken = null } = res.data;
-          safePersistAuth(user, token, refreshToken);
-          login(user, token, refreshToken);
+          const res = await api.post("/auth/handoff/exchange", { code: handoffCode });
+          const { user } = res.data;
+          login(user);
           setStatus("Secure sign-in complete. Opening Asystence…");
           toast.success(`Welcome, ${user.username}!`);
-          await redirectToWorkspace(user, token);
+          await redirectToWorkspace(user);
           return;
         }
 
         if (isEmailVerificationPath && urlToken) {
           window.history.replaceState({}, document.title, window.location.pathname);
-          const res = await axios.post(`${API_BASE_URL}/auth/email-verification/confirm`, {
+          const res = await api.post("/auth/email-verification/confirm", {
             token: urlToken,
           });
-          const { token, user, refreshToken = null } = res.data;
-          safePersistAuth(user, token, refreshToken);
-          login(user, token, refreshToken);
+          const { user } = res.data;
+          login(user);
           setStatus("Email verified. Opening your workspace...");
           toast.success("Email verified. Welcome to Asystence.");
-          await redirectToWorkspace(user, token);
+          await redirectToWorkspace(user);
+          return;
+        }
+
+        if (cookieSession) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          const { data: user } = await api.get("/auth/me");
+          login(user);
+          setStatus(isSignupFlow ? "Workspace ready. Opening Asystenceâ€¦" : "Sign-in complete. Opening Asystenceâ€¦");
+          toast.success(isSignupFlow ? `Welcome to your workspace, ${user.username}.` : `Welcome, ${user.username}!`);
+          await redirectToWorkspace(user);
           return;
         }
 
@@ -95,29 +92,27 @@ export default function AuthCallback() {
           // Credentials are single-use callback inputs. Remove them from the
           // visible URL/history before making any further network request.
           window.history.replaceState({}, document.title, window.location.pathname);
-          const meRes = await axios.get(`${API_BASE_URL}/users/me`, {
-            headers: { Authorization: `Bearer ${urlToken}` },
-          });
-          const user = meRes.data;
-          safePersistAuth(user, urlToken, urlRefreshToken || null);
-          login(user, urlToken, urlRefreshToken || null);
+          const session = urlRefreshToken
+            ? await api.post("/auth/refresh", { refreshToken: urlRefreshToken })
+            : await api.post("/auth/browser-session", {}, { headers: { Authorization: `Bearer ${urlToken}` } });
+          const user = session.data.user;
+          login(user);
           setStatus(isSignupFlow ? "Workspace ready. Opening Asystence…" : "Sign-in complete. Opening Asystence…");
           toast.success(isSignupFlow ? `Welcome to your workspace, ${user.username}.` : `Welcome, ${user.username}!`);
-          await redirectToWorkspace(user, urlToken);
+          await redirectToWorkspace(user);
           return;
         }
 
         // ── Flow 2: Magic link (token is query param, exchange with backend) ──
         const magicToken = isMagicPath ? searchParams.get("token") : null;
         if (magicToken) {
-          const res = await axios.get(`${API_BASE_URL}/auth/magic`, {
+          const res = await api.get("/auth/magic", {
             params: { token: magicToken },
           });
-          const { token, user, refreshToken = null } = res.data;
-          safePersistAuth(user, token, refreshToken);
-          login(user, token, refreshToken);
+          const { user } = res.data;
+          login(user);
           toast.success(`Welcome, ${user.username}! You're now logged in.`);
-          await redirectToWorkspace(user, token);
+          await redirectToWorkspace(user);
           return;
         }
 

@@ -15,6 +15,8 @@
 
 import { API_BASE_URL, WORKSPACE_DOMAIN, buildWorkspaceRedirectUrl } from "../config/runtime";
 
+const COOKIE_AUTH_HEADERS = { "Content-Type": "application/json", "X-Auth-Mode": "cookie" };
+
 // Deliberately not named like the old `_t`: anything still producing those is a
 // bug, and a distinct name makes that obvious rather than silently compatible.
 const HANDOFF_PARAM = "_hc";
@@ -28,8 +30,8 @@ const HANDOFF_PARAM = "_hc";
  * should cost the user nothing. Falling back to putting tokens in the URL
  * would trade a minor inconvenience for the exact leak this exists to avoid.
  */
-export async function buildWorkspaceHandoffUrl(slug, path, token) {
-  if (!slug || !token) return null;
+export async function buildWorkspaceHandoffUrl(slug, path) {
+  if (!slug) return null;
 
   // Cheap early exit: if no workspace domain is configured there is nowhere to
   // send anyone, and we should not spend a round trip finding that out.
@@ -38,10 +40,8 @@ export async function buildWorkspaceHandoffUrl(slug, path, token) {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/handoff`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      credentials: "include",
+      headers: COOKIE_AUTH_HEADERS,
     });
     if (!response.ok) return null;
 
@@ -82,7 +82,7 @@ function scrubHandoffParam() {
 /**
  * Redeem the code in the URL for a session.
  *
- * Returns { user, token, refreshToken } on success, or null if there was no
+ * Returns the authenticated user on success, or null if there was no
  * code or it could not be redeemed -- in which case the caller should carry on
  * with whatever session it already had, which is normally none, leaving the
  * user at the login screen.
@@ -97,15 +97,14 @@ export async function consumeWorkspaceHandoff() {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/handoff/exchange`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: COOKIE_AUTH_HEADERS,
       body: JSON.stringify({ code }),
     });
     if (!response.ok) return null;
 
     const data = await response.json();
-    if (!data?.token || !data?.user) return null;
-
-    return { user: data.user, token: data.token, refreshToken: data.refreshToken || null };
+    return data?.user ? { user: data.user } : null;
   } catch {
     return null;
   }

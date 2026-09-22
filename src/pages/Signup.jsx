@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { API_BASE_URL } from "../api";
+import api, { API_BASE_URL } from "../api";
 import {
   isConfiguredWorkspaceDomainHost,
 } from "../config/runtime";
@@ -11,6 +11,7 @@ import ThemeSwitcher from "../components/ThemeSwitcher";
 import Turnstile from "../components/Turnstile";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
 import { getStoredCurrency } from "../utils/currency";
+import { useAuth } from "../context/AuthContext";
 import {
   ArrowRight,
   Building2,
@@ -29,6 +30,7 @@ const SELF_SERVE_TRIAL_DAYS = 7;
 const turnstileEnabled = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY);
 
 export default function Signup() {
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const selectedPlanSlug = String(searchParams.get("plan") || "").trim().toLowerCase();
@@ -99,6 +101,7 @@ export default function Signup() {
   const googleSignupUrl = useMemo(() => {
     const params = new URLSearchParams({
       mode: "signup",
+      authMode: "cookie",
       workspaceName: workspaceName.trim(),
       interval: intendedInterval,
       currency: planCurrencyCode,
@@ -107,26 +110,11 @@ export default function Signup() {
     return `${BACKEND_URL}/auth/google?${params.toString()}`;
   }, [workspaceName, intendedInterval, planCurrencyCode, selectedPlanSlug]);
 
-  const safePersistAuth = (user, token, refreshToken = null) => {
-    try {
-      const payload = { token, user, refreshToken };
-      localStorage.setItem("auth", JSON.stringify(payload));
-      try {
-        window.__AUTH_TOKEN__ = token;
-        window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || "GLOBAL";
-      } catch { /* runtime globals are an optional compatibility bridge */ }
-      window.dispatchEvent(new Event("auth:updated"));
-    } catch (err) {
-      console.warn("Failed to persist auth to localStorage:", err);
-    }
-  };
-
   const completeSignup = async (data) => {
-    const token = data?.token;
     const user = data?.user;
-    if (!token || !user) throw new Error("Signup completed but the login token was missing.");
+    if (!user) throw new Error("Signup completed but the user session was missing.");
 
-    safePersistAuth(user, token, data.refreshToken || null);
+    login(user);
     toast.success(
       isFreePlan
         ? "Workspace created. Welcome to Asystence."
@@ -137,7 +125,7 @@ export default function Signup() {
     // see auth/workspaceHandoff.js. A handoff that cannot be arranged leaves
     // the user signed in here rather than failing the flow.
     if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
-      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects", token);
+      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects");
       if (targetUrl) {
         window.location.href = targetUrl;
         return;
@@ -176,7 +164,7 @@ export default function Signup() {
 
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/signup/workspace`, {
+      const res = await api.post("/auth/signup/workspace", {
         workspaceName,
         name,
         email,
@@ -193,7 +181,7 @@ export default function Signup() {
         });
         return;
       }
-      if (res.data?.token && res.data?.user) {
+      if (res.data?.user) {
         completeSignup(res.data);
         return;
       }
@@ -442,7 +430,7 @@ function VerificationPending({ email, delivered }) {
   const resend = async () => {
     setResending(true);
     try {
-      await axios.post(`${API_BASE_URL}/auth/email-verification/resend`, { email });
+      await api.post("/auth/email-verification/resend", { email });
       toast.success("If the account is awaiting verification, a new email has been sent.");
     } catch (err) {
       toast.error(err.response?.data?.error || "Could not resend the verification email.");

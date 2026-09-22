@@ -9,10 +9,11 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
 }
 
-async function fetchVapidKey(authToken) {
+async function fetchVapidKey() {
   try {
     const response = await fetch(`${API_BASE_URL}/push/vapid-key`, {
-      headers: { Authorization: `Bearer ${authToken}` },
+      credentials: "include",
+      headers: { "X-Auth-Mode": "cookie" },
     });
     if (!response.ok) return null;
     const { key } = await response.json();
@@ -22,10 +23,10 @@ async function fetchVapidKey(authToken) {
   }
 }
 
-async function subscribeWebPush(authToken) {
+async function subscribeWebPush() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
-  const vapidKey = await fetchVapidKey(authToken);
+  const vapidKey = await fetchVapidKey();
   if (!vapidKey) return;
 
   try {
@@ -55,9 +56,10 @@ async function subscribeWebPush(authToken) {
     const json = subscription.toJSON();
     await fetch(`${API_BASE_URL}/push/subscribe`, {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
+        "X-Auth-Mode": "cookie",
       },
       body: JSON.stringify({
         platform: "web",
@@ -71,12 +73,11 @@ async function subscribeWebPush(authToken) {
   }
 }
 
-export async function initPush(authToken) {
-  if (!authToken) return;
-  await subscribeWebPush(authToken);
+export async function initPush() {
+  await subscribeWebPush();
 }
 
-export async function teardownPush(authToken) {
+export async function teardownPush() {
   if (!("serviceWorker" in navigator)) return;
   try {
     const registration = await navigator.serviceWorker.getRegistration("/sw.js");
@@ -85,16 +86,12 @@ export async function teardownPush(authToken) {
     if (!subscription) return;
     const endpoint = subscription.endpoint;
     await subscription.unsubscribe();
-    if (authToken) {
-      await fetch(`${API_BASE_URL}/push/unsubscribe`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ endpoint }),
-      }).catch(() => {});
-    }
+    await fetch(`${API_BASE_URL}/push/unsubscribe`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-Auth-Mode": "cookie" },
+      body: JSON.stringify({ endpoint }),
+    }).catch(() => {});
   } catch {
     // Push cleanup should never block logout.
   }

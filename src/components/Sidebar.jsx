@@ -93,7 +93,7 @@ export default function Sidebar({ collapsed, onToggle }) {
     loadNotificationsCount();
 
     let socket = getSocket();
-    if (!socket && auth.token) socket = initSocket(auth.token);
+    if (!socket && auth.token) socket = initSocket();
 
     let offSocket = () => {};
     if (socket) {

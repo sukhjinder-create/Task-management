@@ -146,16 +146,8 @@ function acquisitionContext(path, search) {
 }
 
 function authHeaders() {
-  try {
-    const auth = JSON.parse(localStorage.getItem("auth") || "null");
-    const workspaceId = auth?.user?.workspaceId || auth?.user?.workspace_id;
-    return {
-      ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
-      ...(workspaceId ? { "x-workspace-id": String(workspaceId) } : {}),
-    };
-  } catch {
-    return {};
-  }
+  const workspaceId = window.__WORKSPACE_ID__;
+  return workspaceId ? { "x-workspace-id": String(workspaceId) } : {};
 }
 
 function cleanPath(path) {

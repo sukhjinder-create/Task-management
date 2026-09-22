@@ -13,7 +13,7 @@
 // =============================================================================
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { API_BASE_URL } from "../api";
+import api, { API_BASE_URL } from "../api";
 import { getGrowthContextHeaders } from "../services/growthTelemetry";
 import Turnstile from "./Turnstile";
 
@@ -86,8 +86,8 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
 
     setBusy(true);
     try {
-      const { data } = await axios.post(
-        `${API_BASE_URL}/auth/signup/workspace`,
+      const { data } = await api.post(
+        "/auth/signup/workspace",
         {
           workspaceName: workspaceName.trim(),
           name: name.trim(),
@@ -105,7 +105,7 @@ export default function InlineWorkspaceSignup({ onClose, onAuthenticated }) {
         setVerificationSent(true);
         return;
       }
-      if (data?.token && data?.user) return onAuthenticated(data);
+      if (data?.user) return onAuthenticated(data);
       throw new Error("Workspace creation completed without a usable session.");
     } catch (err) {
       setError(err?.response?.data?.error || err.message || "Could not create workspace.");

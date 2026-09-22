@@ -661,9 +661,8 @@ function AsanaPanel({ onImportDone, autoConnect }) {
   useEffect(() => { if (autoConnect) checkConnection(); }, [autoConnect, checkConnection]);
 
   function connectOAuth() {
-    const token = auth?.token || window.__AUTH_TOKEN__;
-    if (!token) { alert("Not authenticated"); return; }
-    window.location.href = `${API_BASE_URL}/oauth/asana/connect?token=${token}`;
+    if (!auth?.token) { alert("Not authenticated"); return; }
+    window.location.href = `${API_BASE_URL}/oauth/asana/connect`;
   }
 
   async function loadTasks(project, pg = 1, q = "") {

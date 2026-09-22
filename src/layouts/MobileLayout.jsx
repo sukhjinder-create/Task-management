@@ -225,7 +225,7 @@ export default function MobileLayout() {
       if (!cancelled) setUnreadCount((res.data || []).filter((n) => !n.is_read).length);
     }).catch(() => {});
     let socket = getSocket();
-    if (!socket && auth.token) socket = initSocket(auth.token);
+    if (!socket && auth.token) socket = initSocket();
     let off = () => {};
     if (socket) {
       const onNotif = () => { if (!cancelled) setUnreadCount((p) => p + 1); };

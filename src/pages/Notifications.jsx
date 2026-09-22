@@ -85,7 +85,7 @@ export default function Notifications() {
 
   useEffect(() => {
     if (!auth.token) return;
-    const socket = getSocket() || initSocket(auth.token);
+    const socket = getSocket() || initSocket();
     if (!socket) return;
 
     const onConnect    = () => setSocketConnected(true);

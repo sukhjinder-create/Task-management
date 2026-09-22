@@ -230,7 +230,7 @@ export default function Profile() {
 
   useEffect(() => {
     let socket = getSocket();
-    if (!socket && auth.token) socket = initSocket(auth.token);
+    if (!socket && auth.token) socket = initSocket();
     if (!socket || !auth.user?.id) return;
     const handler = (payload) => {
       if (!payload || payload.userId !== auth.user.id) return;

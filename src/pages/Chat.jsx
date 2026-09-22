@@ -432,13 +432,13 @@ function EncryptedAttachmentViewer({ att, senderId, currentUserId, usersWithKeys
         const encKeyEntry = att.encryptedKeys?.[String(currentUserId)];
         if (!encKeyEntry) throw new Error("No key for current user");
 
-        const token = window.__AUTH_TOKEN__;
         const fetchUrl = att.url
           ? `${_BACKEND}/upload/proxy?url=${encodeURIComponent(att.url)}`
           : null;
         if (!fetchUrl) throw new Error("No attachment URL");
         const res = await fetch(fetchUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: "include",
+          headers: { "X-Auth-Mode": "cookie" },
         });
         if (res.status === 410 || res.status === 404) {
           setFailReason("gone");
@@ -1245,7 +1245,7 @@ useEffect(() => {
   useEffect(() => {
     let socket = getSocket();
     if (!socket && auth.token) {
-      socket = initSocket(auth.token);
+      socket = initSocket();
     }
 
     if (!socket) {

@@ -30,14 +30,9 @@ export function getWebDeviceId() {
 }
 
 /**
- * Create / re-create socket with JWT token from global window.__AUTH_TOKEN__
- *
- * Note: server authenticates by JWT token only. Workspace is taken from the token
- * payload server-side (we also set window.__WORKSPACE_ID__ for frontend convenience).
+ * Create or re-create a socket authenticated by the HttpOnly browser session.
  */
 function createSocket() {
-  if (!window.__AUTH_TOKEN__) return null;
-
   // keep previous socket closed
   if (socket) {
     try {
@@ -49,7 +44,7 @@ function createSocket() {
   }
 
   socket = io(BACKEND_URL, {
-    auth: { token: window.__AUTH_TOKEN__, deviceId: getWebDeviceId() },
+    auth: { deviceId: getWebDeviceId() },
     transports: ["websocket", "polling"],
     withCredentials: true,
     timeout: 10000,
@@ -73,12 +68,7 @@ function createSocket() {
 /* -------------------------------------------------
    Initialize socket manually (first login load)
 ------------------------------------------------- */
-export function initSocket(token) {
-  if (token) {
-    window.__AUTH_TOKEN__ = token;
-    // If token included workspace in stored auth, window.__WORKSPACE_ID__ may already be set.
-  }
-
+export function initSocket() {
   // close previous
   if (socket) {
     try {
@@ -119,7 +109,6 @@ window.addEventListener("auth:logout", () => {
     }
   }
   socket = null;
-  window.__AUTH_TOKEN__ = null;
   window.__WORKSPACE_ID__ = null;
 });
 

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { API_BASE_URL } from "../api";
+import api, { API_BASE_URL } from "../api";
 import {
   AUTH_DEV_MODE_ENABLED,
   isConfiguredWorkspaceDomainHost,
@@ -46,7 +45,6 @@ export default function Login() {
 
   // MFA second step
   const [mfaRequired, setMfaRequired] = useState(false);
-  const [mfaToken, setMfaToken] = useState("");
   const [mfaCode, setMfaCode] = useState("");
 
   useEffect(() => {
@@ -55,25 +53,8 @@ export default function Login() {
     if (err) toast.error(decodeURIComponent(err));
   }, [searchParams]);
 
-  const safePersistAuth = (user, token, refreshToken = null) => {
-    try {
-      const payload = { token, user, refreshToken };
-      localStorage.setItem("auth", JSON.stringify(payload));
-      try {
-        window.__AUTH_TOKEN__ = token;
-        window.__WORKSPACE_ID__ = user?.workspaceId || user?.workspace_id || "GLOBAL";
-      } catch {
-        // Runtime globals are an optional compatibility bridge.
-      }
-      window.dispatchEvent(new Event("auth:updated"));
-    } catch (err) {
-      console.warn("Failed to persist auth to localStorage:", err);
-    }
-  };
-
-  const completeLogin = async (token, user, refreshToken = null) => {
-    safePersistAuth(user, token, refreshToken);
-    try { login(user, token, refreshToken); } catch (err) { console.warn("AuthContext.login threw:", err); }
+  const completeLogin = async (user) => {
+    try { login(user); } catch (err) { console.warn("AuthContext.login threw:", err); }
     toast.success(`Logged in as ${user.username}`);
 
     // Send the user to their workspace subdomain if one is configured. The
@@ -82,7 +63,7 @@ export default function Login() {
     // on this host, which is fully functional, rather than failing the login.
     const slug = user?.workspace_slug;
     if (slug && isConfiguredWorkspaceDomainHost(window.location.hostname)) {
-      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects", token);
+      const targetUrl = await buildWorkspaceHandoffUrl(slug, "/projects");
       if (targetUrl) {
         window.location.href = targetUrl;
         return;
@@ -96,12 +77,12 @@ export default function Login() {
   // by exactly the same code as a normal sign-in, rather than a parallel path
   // that could drift.
   const handleInlineSignupComplete = (data) => {
-    if (!data?.token || !data?.user) {
+    if (!data?.user) {
       toast.error("Workspace created, but sign-in failed. Please log in with your new details.");
       setShowInlineSignup(false);
       return;
     }
-    completeLogin(data.token, data.user, data.refreshToken || null);
+    completeLogin(data.user);
   };
 
   const handleSubmit = async (e) => {
@@ -110,13 +91,12 @@ export default function Login() {
     setVerificationEmail("");
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password }, { headers: getGrowthContextHeaders() });
+      const res = await api.post("/auth/login", { email, password }, { headers: getGrowthContextHeaders() });
       if (res.data.mfa_required) {
-        setMfaToken(res.data.mfa_session_token);
         setMfaRequired(true);
         return;
       }
-      completeLogin(res.data.token, res.data.user, res.data.refreshToken || null);
+      completeLogin(res.data.user);
     } catch (err) {
       if (err.response?.data?.code === "EMAIL_VERIFICATION_REQUIRED") {
         setVerificationEmail(email.trim());
@@ -130,7 +110,7 @@ export default function Login() {
   const handleResendVerification = async () => {
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/email-verification/resend`, {
+      const res = await api.post("/auth/email-verification/resend", {
         email: verificationEmail,
       });
       toast.success(res.data?.message || "Verification email sent");
@@ -146,17 +126,15 @@ export default function Login() {
     if (!mfaCode) { toast.error("Enter your 6-digit code"); return; }
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/mfa/verify`, {
-        mfa_session_token: mfaToken,
+      const res = await api.post("/auth/mfa/verify", {
         code: mfaCode,
       }, { headers: getGrowthContextHeaders() });
-      completeLogin(res.data.token, res.data.user, res.data.refreshToken || null);
+      completeLogin(res.data.user);
     } catch (err) {
       const msg = err.response?.data?.error || "Invalid code";
       toast.error(msg);
       if (msg.includes("expired")) {
         setMfaRequired(false);
-        setMfaToken("");
         setMfaCode("");
       }
     } finally {
@@ -167,8 +145,8 @@ export default function Login() {
   const handleDevLogin = async () => {
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/dev-login`, {}, { headers: getGrowthContextHeaders() });
-      completeLogin(res.data.token, res.data.user, res.data.refreshToken || null);
+      const res = await api.post("/auth/dev-login", {}, { headers: getGrowthContextHeaders() });
+      completeLogin(res.data.user);
     } catch (err) {
       toast.error(err.response?.data?.error || "Developer login is not available");
     } finally {
@@ -290,7 +268,7 @@ export default function Login() {
 
                 <button
                   type="button"
-                  onClick={() => { setMfaRequired(false); setMfaToken(""); setMfaCode(""); }}
+                  onClick={() => { setMfaRequired(false); setMfaCode(""); }}
                   className="w-full text-center text-sm font-medium text-[color:var(--text-muted)] transition hover:text-[color:var(--text)]"
                 >
                   Back to sign in
@@ -300,7 +278,7 @@ export default function Login() {
               <>
                 <>
                     <a
-                      href={`${BACKEND_URL}/auth/google`}
+                      href={`${BACKEND_URL}/auth/google?authMode=cookie`}
                       className="flex h-13 min-h-[52px] w-full items-center justify-center gap-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--app-bg)] px-4 text-sm font-semibold text-[color:var(--text)] transition hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-soft)]"
                     >
                       <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
