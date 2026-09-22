@@ -88,18 +88,27 @@ api.interceptors.response.use(
 
     const lower = String(message).toLowerCase();
     const requestUrl = String(error?.config?.url || "").toLowerCase();
-    const isAuthEndpoint =
+    const isPublicAuthEndpoint =
       requestUrl.includes("/auth/login") ||
+      requestUrl.includes("/auth/dev-login") ||
+      requestUrl.includes("/auth/mfa/") ||
       requestUrl.includes("/auth/register") ||
+      requestUrl.includes("/auth/signup/") ||
       requestUrl.includes("/auth/refresh") ||
       requestUrl.includes("/auth/forgot") ||
-      requestUrl.includes("/auth/reset");
+      requestUrl.includes("/auth/reset") ||
+      requestUrl.includes("/auth/magic") ||
+      requestUrl.includes("/auth/email-verification/") ||
+      requestUrl.includes("/auth/handoff/exchange") ||
+      requestUrl.includes("/auth/browser-session");
+    if (isPublicAuthEndpoint) return Promise.reject(error);
+
     const isSessionFailure =
       lower.includes("expired") ||
       lower.includes("invalid") ||
       lower.includes("no token") ||
       lower.includes("unauthenticated") ||
-      (!isAuthEndpoint && lower.includes("unauthorized"));
+      lower.includes("unauthorized");
 
     if (!isSessionFailure) return Promise.reject(error);
 
